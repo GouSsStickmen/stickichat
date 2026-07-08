@@ -1,0 +1,18 @@
+appId: com.stickmen.stickichat
+productName: StickiChat
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+publish:
+  provider: github
+  owner: GouSsStickmen
+  repo: stickichat
+  releaseType: release

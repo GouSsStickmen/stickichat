@@ -1,0 +1,133 @@
+import { ipcMain, safeStorage, shell, app, BrowserWindow } from 'electron'
+import { join } from 'path'
+import { readConfig, writeConfig } from './storage'
+
+function createChildWindow(hash: string, opts: { width: number; height: number; title?: string }): BrowserWindow {
+  const win = new BrowserWindow({
+    width: opts.width,
+    height: opts.height,
+    minWidth: 320,
+    minHeight: 240,
+    autoHideMenuBar: true,
+    backgroundColor: '#0e0e10',
+    title: opts.title ?? 'StickiChat',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      // these are secondary windows the user tabs away from constantly (typing in the main
+      // window while a picker sits unfocused) — without this Chromium throttles their timers
+      // and repaints, which looks exactly like "content stops updating until I reopen it"
+      backgroundThrottling: false
+    }
+  })
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://') || url.startsWith('http://')) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${hash}`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash })
+  }
+  return win
+}
+
+export function registerIpc(): void {
+  ipcMain.handle('secure:encrypt', (_e, plain: string): string => {
+    if (!safeStorage.isEncryptionAvailable()) return 'plain:' + Buffer.from(plain, 'utf8').toString('base64')
+    return 'enc:' + safeStorage.encryptString(plain).toString('base64')
+  })
+
+  ipcMain.handle('secure:decrypt', (_e, stored: string): string | null => {
+    try {
+      if (stored.startsWith('plain:')) return Buffer.from(stored.slice(6), 'base64').toString('utf8')
+      if (stored.startsWith('enc:')) return safeStorage.decryptString(Buffer.from(stored.slice(4), 'base64'))
+      return null
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('config:get', () => readConfig())
+  ipcMain.handle('config:set', (_e, cfg: unknown) => writeConfig(cfg))
+
+  ipcMain.handle('app:openExternal', (_e, url: string) => {
+    if (url.startsWith('https://') || url.startsWith('http://')) shell.openExternal(url)
+  })
+
+  ipcMain.handle('app:version', () => app.getVersion())
+
+  // detached window asks to move its tab back — forward to the other (main) windows
+  ipcMain.handle('app:reattach', (e, payload: string) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w.webContents.id !== e.sender.id) w.webContents.send('app:reattach', payload)
+    }
+  })
+
+  // opens a detached chat window (same app, hash tells the renderer what to show)
+  ipcMain.handle('app:detach', (_e, hash: string) => {
+    createChildWindow(hash, { width: 900, height: 720 })
+  })
+
+  // standalone emote picker window
+  ipcMain.handle('app:openEmotePicker', (_e, hash: string) => {
+    createChildWindow(hash, { width: 420, height: 580, title: 'StickiChat — Emotes' })
+  })
+
+  // standalone settings window
+  ipcMain.handle('app:openSettings', (_e, hash: string) => {
+    createChildWindow(hash, { width: 980, height: 680, title: 'StickiChat — Settings' })
+  })
+
+  // an emote picked in the standalone picker window needs to land in the main window's input
+  ipcMain.handle('app:sendEmotePick', (e, payload: string) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w.webContents.id !== e.sender.id) w.webContents.send('app:emotePicked', payload)
+    }
+  })
+
+  // any window that just saved config tells the others to reload it from disk
+  ipcMain.handle('app:notifyConfigChanged', (e) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w.webContents.id !== e.sender.id) w.webContents.send('app:configChanged')
+    }
+  })
+
+  ipcMain.handle('window:setAlwaysOnTop', (e, flag: boolean) => {
+    BrowserWindow.fromWebContents(e.sender)?.setAlwaysOnTop(flag)
+  })
+
+  ipcMain.handle('window:close', (e) => {
+    BrowserWindow.fromWebContents(e.sender)?.close()
+  })
+
+  // All HTTP goes through the main process so the renderer never hits CORS walls
+  ipcMain.handle(
+    'net:fetch',
+    async (
+      _e,
+      url: string,
+      options?: { method?: string; headers?: Record<string, string>; body?: string }
+    ) => {
+      try {
+        const res = await fetch(url, {
+          method: options?.method ?? 'GET',
+          headers: options?.headers,
+          body: options?.body
+        })
+        const text = await res.text()
+        let json: unknown = null
+        try {
+          json = JSON.parse(text)
+        } catch {
+          /* not json */
+        }
+        return { ok: res.ok, status: res.status, json, text }
+      } catch (err) {
+        return { ok: false, status: 0, json: null, text: String(err) }
+      }
+    }
+  )
+}
