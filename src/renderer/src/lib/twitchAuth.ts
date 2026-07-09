@@ -1,6 +1,10 @@
 import { httpForm, httpGet } from './http'
 import { Account } from '../types'
 import { useAccountsStore } from '../store/accounts'
+import { useSettingsStore } from '../store/settings'
+import { useUiStore } from '../store/ui'
+import { translate } from '../i18n'
+import { persistAccountTokens } from '../services/config'
 
 export const TWITCH_SCOPES = [
   'chat:read',
@@ -78,7 +82,7 @@ export async function refreshTokens(clientId: string, refreshToken: string): Pro
     grant_type: 'refresh_token',
     refresh_token: refreshToken
   })
-  if (!res.ok) throw new Error(`refresh failed: ${res.status}`)
+  if (!res.ok) throw new Error(`refresh failed: ${res.status} ${JSON.stringify(res.json ?? res.text)}`)
   return res.json as TokenPair
 }
 
@@ -102,12 +106,69 @@ export async function validateToken(token: string): Promise<ValidateInfo | null>
 const lastValidatedAt = new Map<string, number>()
 const VALIDATE_INTERVAL_MS = 20 * 60 * 1000
 
+// Twitch rotates refresh tokens: once one refresh succeeds, the old refresh_token is dead.
+// Several Helix calls firing at once (e.g. global + per-channel badges on connect) would each
+// see a 401 and independently race to refresh with the same now-stale token — only the first
+// succeeds, the rest get a 400. Dedupe concurrent refreshes per account into one shared call.
+const refreshInFlight = new Map<string, Promise<string>>()
+const reauthToastAt = new Map<string, number>()
+
+/** the refresh token itself was rejected — only a full re-authorization can fix this */
+function notifyReauthNeeded(account: Account): void {
+  const now = Date.now()
+  if (now - (reauthToastAt.get(account.id) ?? 0) < 5 * 60 * 1000) return
+  reauthToastAt.set(account.id, now)
+  const lang = useSettingsStore.getState().settings.language
+  useUiStore.getState().toast(translate(lang, 'auth.reauthNeeded', { login: account.login }), 'error')
+}
+
+async function refreshAndPersist(clientId: string, account: Account): Promise<string> {
+  const existing = refreshInFlight.get(account.id)
+  if (existing) return existing
+
+  const run = (async (): Promise<string> => {
+    const fresh = useAccountsStore.getState().accounts.find((a) => a.id === account.id) ?? account
+    if (!fresh._refreshToken) {
+      notifyReauthNeeded(account)
+      throw new Error('no refresh token')
+    }
+    let pair: TokenPair
+    try {
+      pair = await refreshTokens(clientId, fresh._refreshToken)
+    } catch (e) {
+      if (String(e).includes('Invalid refresh token')) notifyReauthNeeded(account)
+      throw e
+    }
+    const accessTokenEnc = await window.sticki.encrypt(pair.access_token)
+    const refreshTokenEnc = await window.sticki.encrypt(pair.refresh_token)
+    useAccountsStore.getState().updateAccount(account.id, {
+      _accessToken: pair.access_token,
+      _refreshToken: pair.refresh_token,
+      accessTokenEnc,
+      refreshTokenEnc
+    })
+    lastValidatedAt.set(account.id, Date.now())
+    // Twitch just invalidated the old refresh token — write the new one to disk NOW,
+    // from any window. Utility windows have no store persistence, and even the main
+    // window's debounced save can be lost to a crash, leaving a dead token on disk.
+    await persistAccountTokens(account.id)
+    return pair.access_token
+  })()
+
+  refreshInFlight.set(account.id, run)
+  try {
+    return await run
+  } finally {
+    refreshInFlight.delete(account.id)
+  }
+}
+
 /**
  * Returns a valid access token for the account, refreshing (and persisting) if needed.
  * Throws if refresh fails — the account then needs re-authorization.
  */
 export async function ensureFreshToken(clientId: string, account: Account): Promise<string> {
-  if (account._accessToken) {
+  if (account._accessToken && !refreshInFlight.has(account.id)) {
     const lastCheck = lastValidatedAt.get(account.id) ?? 0
     if (Date.now() - lastCheck < VALIDATE_INTERVAL_MS) return account._accessToken
     const info = await validateToken(account._accessToken)
@@ -116,16 +177,10 @@ export async function ensureFreshToken(clientId: string, account: Account): Prom
       return account._accessToken
     }
   }
-  if (!account._refreshToken) throw new Error('no refresh token')
-  const pair = await refreshTokens(clientId, account._refreshToken)
-  const accessTokenEnc = await window.sticki.encrypt(pair.access_token)
-  const refreshTokenEnc = await window.sticki.encrypt(pair.refresh_token)
-  useAccountsStore.getState().updateAccount(account.id, {
-    _accessToken: pair.access_token,
-    _refreshToken: pair.refresh_token,
-    accessTokenEnc,
-    refreshTokenEnc
-  })
-  lastValidatedAt.set(account.id, Date.now())
-  return pair.access_token
+  return refreshAndPersist(clientId, account)
+}
+
+/** Refreshes (deduped across concurrent callers) and returns the new access token. */
+export async function refreshAccountToken(clientId: string, account: Account): Promise<string> {
+  return refreshAndPersist(clientId, account)
 }

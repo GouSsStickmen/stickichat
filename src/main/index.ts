@@ -3,6 +3,14 @@ import { join } from 'path'
 import { registerIpc } from './ipc'
 import { initAutoUpdater } from './updater'
 
+// The dev build and the installed app resolve to the SAME userData dir (Windows paths are
+// case-insensitive), and two Electron instances fight over Chromium's cache locks — the loser
+// runs with NO http cache at all ("Unable to create cache: Access is denied"), so every emote
+// image re-downloads constantly. Keep the config file shared, but give dev its own session dir.
+if (!app.isPackaged) {
+  app.setPath('sessionData', join(app.getPath('userData'), 'dev-session'))
+}
+
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {

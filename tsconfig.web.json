@@ -10,7 +10,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "useDefineForClassFields": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "resolveJsonModule": true
   },
   "include": ["src/renderer/src/**/*", "src/preload/index.d.ts"]
 }

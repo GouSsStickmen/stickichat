@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Account, Emote, EmoteProvider, FavoriteEmote } from '../types'
+import { Account, Emote, EmoteProvider, FavoriteEmote, Settings } from '../types'
 import type { TwitchUserEmote } from '../lib/helix'
 import { useEmotesStore } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
@@ -19,6 +19,8 @@ interface Props {
   onClose: () => void
   /** rendered as a full standalone window instead of a popover anchored to an input */
   standalone?: boolean
+  /** centered fixed overlay — for contexts where an anchored popover would get clipped */
+  fixed?: boolean
 }
 
 type Tab = 'favorites' | 'twitch' | 'thirdparty' | 'emoji'
@@ -46,8 +48,18 @@ function groupByProvider(map: Map<string, Emote> | undefined): Map<EmoteProvider
   return groups
 }
 
-function PinButton(): React.JSX.Element {
-  const [pinned, setPinned] = useState(false)
+export function PinButton({ settingKey }: { settingKey: 'emotePickerPinned' | 'settingsPinned' }): React.JSX.Element {
+  const remember = useSettingsStore((s) => s.settings.rememberPinState)
+  const saved = useSettingsStore((s) => s.settings[settingKey])
+  const set = useSettingsStore((s) => s.setSettings)
+  const [pinned, setPinned] = useState(remember && saved)
+
+  // restore the remembered pin as soon as the window opens
+  useEffect(() => {
+    if (remember && saved) window.sticki.setAlwaysOnTop(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <button
       className={`picker-pin-btn ${pinned ? 'active' : ''}`}
@@ -56,6 +68,7 @@ function PinButton(): React.JSX.Element {
         const next = !pinned
         setPinned(next)
         window.sticki.setAlwaysOnTop(next)
+        if (remember) set({ [settingKey]: next } as Partial<Settings>)
       }}
     >
       📌
@@ -69,7 +82,8 @@ export default function EmotePicker({
   account,
   onPick,
   onClose,
-  standalone
+  standalone,
+  fixed
 }: Props): React.JSX.Element {
   const t = useT()
   const emoteVersion = useEmotesStore((s) => s.version)
@@ -131,7 +145,9 @@ export default function EmotePicker({
       if (keyB === '0') return -1
       return a.label.localeCompare(b.label)
     })
-    return entries.map(([, g]) => g)
+    // keep the ownerId as the React key: while owner names are still resolving every label
+    // is '…', and duplicate keys across sections corrupt React's reconciliation (frozen UI)
+    return entries.map(([key, g]) => ({ key, ...g }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [twitchEmotes, channelId, ownerNames])
 
@@ -180,16 +196,20 @@ export default function EmotePicker({
     </button>
   )
 
-  const section = (title: string, emotes: (Emote | FavoriteEmote)[]): React.JSX.Element | null =>
+  const section = (title: string, emotes: (Emote | FavoriteEmote)[], key?: string): React.JSX.Element | null =>
     emotes.length === 0 ? null : (
-      <div key={title}>
+      <div key={key ?? title}>
         <div className="picker-section">{title}</div>
         <div className="picker-grid">{emotes.map(cell)}</div>
       </div>
     )
 
   return (
-    <div className={`emote-picker ${standalone ? 'emote-picker-standalone' : ''}`} ref={ref} draggable={false}>
+    <div
+      className={`emote-picker ${standalone ? 'emote-picker-standalone' : ''} ${fixed ? 'emote-picker-fixed' : ''}`}
+      ref={ref}
+      draggable={false}
+    >
       <div className="picker-tabs">
         {(
           [
@@ -205,7 +225,7 @@ export default function EmotePicker({
         ))}
         {standalone && (
           <>
-            <PinButton />
+            <PinButton settingKey="emotePickerPinned" />
             <button className="ghost picker-close-btn" title={t('misc.close')} onClick={() => window.close()}>
               ✕
             </button>
@@ -236,7 +256,7 @@ export default function EmotePicker({
           twitchEmotes.length === 0 ? (
             <div className="picker-empty">{account ? '…' : t('picker.empty')}</div>
           ) : (
-            <>{twitchGroups.map((g) => section(g.label, g.emotes))}</>
+            <>{twitchGroups.map((g) => section(g.label, g.emotes, g.key))}</>
           )
         ) : tab === 'thirdparty' ? (
           <>

@@ -25,6 +25,7 @@ export const en = {
   'auth.success': 'Account added!',
   'auth.cancel': 'Cancel',
   'auth.error': 'Authorization failed',
+  'auth.reauthNeeded': 'Session for {login} has expired — re-authorize it in Settings → Accounts',
 
   // Tabs / panes
   'tab.new': 'New tab',
@@ -112,7 +113,9 @@ export const en = {
   'set.caseSensitiveNicks': 'Case-sensitive nickname matching',
   'set.charCounter': 'Show character counter (500 limit)',
   'set.emotePickerAsWindow': 'Open emote picker as a separate window',
+  'set.settingsAsWindow': 'Open settings as a separate window',
   'set.alwaysOnTop': 'Always on top',
+  'set.rememberPin': 'Remember the 📌 always-on-top state of separate windows',
   'set.highlightSidebar': 'Show a sidebar with highlighted messages',
   'highlights.title': 'Highlights',
   'highlights.empty': 'Nothing highlighted yet',

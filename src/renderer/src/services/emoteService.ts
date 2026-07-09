@@ -8,9 +8,11 @@ import {
   mergeEmotes
 } from '../lib/emoteProviders'
 import { getChannelBadges, getGlobalBadges, getUserEmotes, getUsers } from '../lib/helix'
+import type { TwitchUserEmote } from '../lib/helix'
 import { Account } from '../types'
 import { useAccountsStore } from '../store/accounts'
 import { useEmotesStore } from '../store/emotes'
+import { useChatStore } from '../store/chat'
 
 let globalLoaded = false
 const channelLoaded = new Set<string>()
@@ -40,7 +42,13 @@ export async function loadGlobalBadges(): Promise<void> {
   const account = useAccountsStore.getState().accounts[0]
   if (!account) return
   globalBadgesLoaded = true
-  useEmotesStore.getState().setGlobalBadges(await getGlobalBadges(account))
+  const map = await getGlobalBadges(account)
+  if (Object.keys(map).length === 0) {
+    // failed (expired token etc.) — don't cache the failure, allow a retry later
+    globalBadgesLoaded = false
+    return
+  }
+  useEmotesStore.getState().setGlobalBadges(map)
 }
 
 export async function loadChannelBadges(channel: string, twitchId: string): Promise<void> {
@@ -48,21 +56,92 @@ export async function loadChannelBadges(channel: string, twitchId: string): Prom
   const account = useAccountsStore.getState().accounts[0]
   if (!account) return
   channelBadgesLoaded.add(channel)
-  useEmotesStore.getState().setChannelBadges(channel, await getChannelBadges(account, twitchId))
+  const map = await getChannelBadges(account, twitchId)
+  if (Object.keys(map).length === 0) {
+    channelBadgesLoaded.delete(channel)
+    return
+  }
+  useEmotesStore.getState().setChannelBadges(channel, map)
+}
+
+/** Re-fetch all badges (global + every known channel). Called after a (re-)authorization. */
+export function reloadAllBadges(): void {
+  globalBadgesLoaded = false
+  channelBadgesLoaded.clear()
+  loadGlobalBadges()
+  const { channelIds } = useChatStore.getState()
+  for (const [channel, id] of Object.entries(channelIds)) {
+    if (id) loadChannelBadges(channel, id)
+  }
 }
 
 const twitchEmotesLoading = new Set<string>()
+const twitchEmotesLoaded = new Set<string>()
 const ownerNamesLoading = new Set<string>()
+
+// The user-emote list takes dozens of sequential Helix pages (~seconds). Every new window is a
+// fresh renderer with empty stores, so without a cross-window cache the standalone picker
+// re-downloads everything on each open. localStorage is shared by all windows of the app.
+const TWITCH_EMOTES_TTL = 60 * 60 * 1000
+const twitchEmotesCacheKey = (accountId: string): string => `sticki:twitchEmotes:${accountId}`
+
+interface TwitchEmotesCache {
+  at: number
+  list: TwitchUserEmote[]
+  names: Record<string, string>
+}
+
+function readTwitchEmotesCache(accountId: string): TwitchEmotesCache | null {
+  try {
+    const raw = localStorage.getItem(twitchEmotesCacheKey(accountId))
+    const parsed = raw ? (JSON.parse(raw) as TwitchEmotesCache) : null
+    return parsed?.list?.length ? parsed : null
+  } catch {
+    return null
+  }
+}
 
 /** lazily loads all twitch emotes usable by the account (incl. sub emotes) */
 export async function loadTwitchUserEmotes(account: Account): Promise<void> {
-  const st = useEmotesStore.getState()
-  if (st.twitchByAccount[account.id] || twitchEmotesLoading.has(account.id)) return
+  // guard on a "fully loaded" flag, not store presence: pages stream into the store while
+  // loading, and a mid-way failure must stay retryable instead of freezing a partial list
+  if (twitchEmotesLoaded.has(account.id) || twitchEmotesLoading.has(account.id)) return
   twitchEmotesLoading.add(account.id)
   try {
-    const list = await getUserEmotes(account)
+    const cached = readTwitchEmotesCache(account.id)
+    if (cached) {
+      useEmotesStore.getState().setTwitchEmotes(account.id, cached.list)
+      useEmotesStore.getState().setOwnerNames(cached.names ?? {})
+      if (Date.now() - cached.at < TWITCH_EMOTES_TTL) {
+        twitchEmotesLoaded.add(account.id)
+        return
+      }
+      // stale: keep showing the cached list, silently re-fetch below
+    }
+    const list = await getUserEmotes(account, (partial) => {
+      // stream pages in so the picker fills progressively — but never shrink an
+      // already-shown cached list down to a partial page
+      if (!cached) {
+        useEmotesStore.getState().setTwitchEmotes(account.id, partial)
+        loadEmoteOwnerNames(account, partial.map((e) => e.ownerId))
+      }
+    })
+    if (list.length === 0) return // failed — keep cache/partial state, retry later
     useEmotesStore.getState().setTwitchEmotes(account.id, list)
+    twitchEmotesLoaded.add(account.id)
     await loadEmoteOwnerNames(account, list.map((e) => e.ownerId))
+    try {
+      localStorage.setItem(
+        twitchEmotesCacheKey(account.id),
+        JSON.stringify({
+          at: Date.now(),
+          list,
+          names: useEmotesStore.getState().ownerNames
+        } satisfies TwitchEmotesCache)
+      )
+    } catch {
+      /* storage full/unavailable — cache is best-effort */
+    }
   } finally {
     twitchEmotesLoading.delete(account.id)
   }

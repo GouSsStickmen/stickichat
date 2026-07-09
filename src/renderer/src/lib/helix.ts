@@ -1,8 +1,7 @@
 import { HttpResponse, httpGet, httpJson } from './http'
 import { Account } from '../types'
 import { useSettingsStore } from '../store/settings'
-import { ensureFreshToken, refreshTokens } from './twitchAuth'
-import { useAccountsStore } from '../store/accounts'
+import { ensureFreshToken, refreshAccountToken } from './twitchAuth'
 
 const BASE = 'https://api.twitch.tv/helix'
 
@@ -35,20 +34,12 @@ async function helixRequest(
   let token = account._accessToken ?? ''
   let res = token ? await doCall(token) : { ok: false, status: 401, json: null, text: '' }
   if (res.status === 401) {
-    // token expired mid-session — refresh and retry once
-    const fresh = useAccountsStore.getState().accounts.find((a) => a.id === account.id) ?? account
-    if (fresh._refreshToken) {
-      const pair = await refreshTokens(clientId, fresh._refreshToken)
-      const accessTokenEnc = await window.sticki.encrypt(pair.access_token)
-      const refreshTokenEnc = await window.sticki.encrypt(pair.refresh_token)
-      useAccountsStore.getState().updateAccount(account.id, {
-        _accessToken: pair.access_token,
-        _refreshToken: pair.refresh_token,
-        accessTokenEnc,
-        refreshTokenEnc
-      })
-      token = pair.access_token
+    // token expired mid-session — refresh (deduped across any other concurrent callers) and retry once
+    try {
+      token = await refreshAccountToken(clientId, account)
       res = await doCall(token)
+    } catch (e) {
+      console.warn('[helix] token refresh failed, keeping original 401', e)
     }
   }
   return res
@@ -271,8 +262,12 @@ export interface Chatter {
 }
 
 /** live viewer list; requires the account to be a mod in the channel */
-export async function getChatters(account: Account, broadcasterId: string): Promise<Chatter[]> {
+export async function getChatters(
+  account: Account,
+  broadcasterId: string
+): Promise<{ list: Chatter[]; total: number }> {
   const out: Chatter[] = []
+  let total = 0
   let cursor: string | undefined
   for (let i = 0; i < 10; i++) {
     const res = await helixRequest(account, 'GET', '/chat/chatters', {
@@ -282,12 +277,13 @@ export async function getChatters(account: Account, broadcasterId: string): Prom
       after: cursor
     })
     if (!res.ok) break
-    const j = res.json as { data: Chatter[]; pagination?: { cursor?: string } }
+    const j = res.json as { data: Chatter[]; total?: number; pagination?: { cursor?: string } }
     out.push(...(j.data ?? []))
+    if (j.total) total = j.total
     cursor = j.pagination?.cursor
     if (!cursor) break
   }
-  return out
+  return { list: out, total: total || out.length }
 }
 
 export interface TwitchUserEmote {
@@ -298,8 +294,15 @@ export interface TwitchUserEmote {
   emoteType: string
 }
 
-/** all emotes the account can use, including sub emotes (paginated) */
-export async function getUserEmotes(account: Account): Promise<TwitchUserEmote[]> {
+/**
+ * All emotes the account can use, including sub emotes. Twitch pages this endpoint in small
+ * chunks, so a full load is many sequential round-trips — `onPage` streams partial results
+ * after every page so the UI can fill up progressively instead of staring at a spinner.
+ */
+export async function getUserEmotes(
+  account: Account,
+  onPage?: (partial: TwitchUserEmote[]) => void
+): Promise<TwitchUserEmote[]> {
   const out: TwitchUserEmote[] = []
   let cursor: string | undefined
   for (let i = 0; i < 40; i++) {
@@ -330,6 +333,7 @@ export async function getUserEmotes(account: Account): Promise<TwitchUserEmote[]
       })
     }
     cursor = j.pagination?.cursor
+    if (cursor) onPage?.([...out])
     if (!cursor) break
   }
   return out
@@ -374,11 +378,12 @@ export async function getSubInfo(
 export interface HelixStream {
   user_login: string
   type: string
+  started_at: string
 }
 
-/** which of the given channels are live right now */
-export async function getLiveChannels(account: Account, logins: string[]): Promise<Set<string>> {
-  const live = new Set<string>()
+/** which of the given channels are live right now: login -> stream started_at (stream identity) */
+export async function getLiveChannels(account: Account, logins: string[]): Promise<Map<string, string>> {
+  const live = new Map<string, string>()
   for (let i = 0; i < logins.length; i += 100) {
     const res = await helixRequest(account, 'GET', '/streams', {
       user_login: logins.slice(i, i + 100),
@@ -386,7 +391,7 @@ export async function getLiveChannels(account: Account, logins: string[]): Promi
     })
     if (!res.ok) continue
     for (const s of ((res.json as { data: HelixStream[] })?.data ?? []) as HelixStream[]) {
-      live.add(s.user_login.toLowerCase())
+      live.set(s.user_login.toLowerCase(), s.started_at)
     }
   }
   return live
@@ -411,7 +416,10 @@ export async function getChannelBadges(
 }
 
 function badgesToMap(res: HttpResponse): Record<string, string> {
-  if (!res.ok) return {}
+  if (!res.ok) {
+    console.warn('[badges] request failed', res.status, res.json ?? res.text)
+    return {}
+  }
   const out: Record<string, string> = {}
   for (const set of ((res.json as { data: HelixBadgeSet[] })?.data ?? []) as HelixBadgeSet[]) {
     for (const v of set.versions) out[`${set.set_id}/${v.id}`] = v.image_url_2x

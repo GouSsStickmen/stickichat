@@ -29,8 +29,13 @@ class ChatService {
   private pendingByChannel = new Map<string, ChatMessage[]>()
   private flushTimer: number | null = null
   private historyLoaded = new Set<string>()
-  /** channel -> logins seen since we joined it this session (for "first message this session") */
+  /**
+   * channel -> logins that already wrote during the CURRENT STREAM. Reset when a new stream
+   * starts; persisted per stream so an app restart mid-stream doesn't re-ping everyone.
+   */
   private seenThisSession = new Map<string, Set<string>>()
+  /** channel -> started_at of the stream whose first-messages we're tracking */
+  private streamStartedAt = new Map<string, string>()
   private started = false
 
   start(): void {
@@ -71,6 +76,13 @@ class ChatService {
 
     this.pollLive()
     window.setInterval(() => this.pollLive(), 60000)
+
+    // mod status can change while the app is closed — refresh the cached list once per launch,
+    // otherwise the chatters list silently falls back to "recently active" on channels where
+    // the user actually IS a moderator
+    import('./accountService').then(({ refreshModeratedChannels }) => {
+      for (const a of useAccountsStore.getState().accounts) refreshModeratedChannels(a.id)
+    })
   }
 
   /** which open channels are currently streaming (for tab/pane indicators) */
@@ -84,11 +96,61 @@ class ChatService {
     }
     try {
       const live = await getLiveChannels(account, channels)
+      for (const ch of channels) {
+        const startedAt = live.get(ch)
+        if (startedAt && this.streamStartedAt.get(ch) !== startedAt) {
+          this.streamStartedAt.set(ch, startedAt)
+          this.onStreamStarted(ch, startedAt)
+        }
+        if (!startedAt) this.streamStartedAt.delete(ch)
+      }
       useChatStore
         .getState()
         .setLiveChannels(Object.fromEntries(channels.map((c) => [c, live.has(c)])))
     } catch {
       /* keep previous state */
+    }
+  }
+
+  private firstSeenKey(channel: string): string {
+    return `sticki:firstSeen:${channel}`
+  }
+
+  /**
+   * A stream (етер) just started — or we just learned about the current one after a restart.
+   * "First message" is per-stream: same stream after a restart restores who already wrote;
+   * a genuinely new stream starts with a clean slate so everyone pings once again.
+   */
+  private onStreamStarted(channel: string, startedAt: string): void {
+    try {
+      const raw = localStorage.getItem(this.firstSeenKey(channel))
+      const saved = raw ? (JSON.parse(raw) as { startedAt: string; logins: string[] }) : null
+      if (saved?.startedAt === startedAt) {
+        this.seenThisSession.set(channel, new Set(saved.logins))
+        return
+      }
+    } catch {
+      /* corrupt cache — treat as new stream */
+    }
+    this.seenThisSession.set(channel, new Set())
+    try {
+      localStorage.setItem(this.firstSeenKey(channel), JSON.stringify({ startedAt, logins: [] }))
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  private persistFirstSeen(channel: string): void {
+    const startedAt = this.streamStartedAt.get(channel)
+    const seen = this.seenThisSession.get(channel)
+    if (!startedAt || !seen) return
+    try {
+      localStorage.setItem(
+        this.firstSeenKey(channel),
+        JSON.stringify({ startedAt, logins: [...seen] })
+      )
+    } catch {
+      /* best-effort */
     }
   }
 
@@ -129,6 +191,7 @@ class ChatService {
           if (!seen.has(msg.login)) {
             seen.add(msg.login)
             msg.isFirstInSession = true
+            this.persistFirstSeen(msg.channel)
           }
           this.detectMention(msg)
           this.maybePlayFirstSeenSound(msg)
@@ -277,11 +340,15 @@ class ChatService {
     }
   }
 
-  /** optional sound for the first message we've seen from someone this session */
+  /** optional sound for someone's first message this stream — only for the ACTIVE tab */
   private maybePlayFirstSeenSound(msg: ChatMessage): void {
     if (!msg.isFirstInSession || msg.historical) return
     const settings = useSettingsStore.getState().settings
-    if (settings.firstMessageSound) playFirstMessageSound(settings)
+    if (!settings.firstMessageSound) return
+    const { tabs, activeTabId } = useLayoutStore.getState()
+    const activeChannels = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
+    if (!activeChannels.includes(msg.channel)) return
+    playFirstMessageSound(settings)
   }
 
   private systemMessage(channel: string, text: string): ChatMessage {

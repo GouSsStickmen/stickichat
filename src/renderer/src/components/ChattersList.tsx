@@ -32,6 +32,7 @@ function badgesOf(channel: string, login: string): { setId: string; version: str
 export default function ChattersList({ pane, account, channelId, isMod, onClose }: Props): React.JSX.Element {
   const t = useT()
   const [chatters, setChatters] = useState<Chatter[] | null>(null)
+  const [total, setTotal] = useState<number | null>(null)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
 
@@ -56,8 +57,10 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
   useEffect(() => {
     let cancelled = false
     if (isMod && account && channelId) {
-      getChatters(account, channelId).then((list) => {
-        if (!cancelled) setChatters(list)
+      getChatters(account, channelId).then(({ list, total: apiTotal }) => {
+        if (cancelled) return
+        setChatters(list)
+        setTotal(apiTotal)
       })
     } else {
       const msgs = useChatStore.getState().messages[pane.channel] ?? []
@@ -127,7 +130,7 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
     <div className="chatters-pop" ref={ref} draggable={false}>
       <div className="picker-section" style={{ margin: '0 0 6px 0' }}>
         {t('chatters.title')}
-        {chatters ? ` · ${chatters.length}` : ''}
+        {chatters ? ` · ${total ?? chatters.length}` : ''}
       </div>
       <input
         autoFocus

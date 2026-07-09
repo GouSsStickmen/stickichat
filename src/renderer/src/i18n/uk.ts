@@ -27,6 +27,7 @@ export const uk: Record<TranslationKey, string> = {
   'auth.success': 'Акаунт додано!',
   'auth.cancel': 'Скасувати',
   'auth.error': 'Помилка авторизації',
+  'auth.reauthNeeded': 'Сесія акаунта {login} злетіла — переавторизуй його в Налаштування → Акаунти',
 
   // Tabs / panes
   'tab.new': 'Нова вкладка',
@@ -114,7 +115,9 @@ export const uk: Record<TranslationKey, string> = {
   'set.caseSensitiveNicks': 'Враховувати регістр нікнейма',
   'set.charCounter': 'Показувати лічильник символів (ліміт 500)',
   'set.emotePickerAsWindow': 'Відкривати пікер емоутів окремим вікном',
+  'set.settingsAsWindow': 'Відкривати налаштування окремим вікном',
   'set.alwaysOnTop': 'Завжди поверх інших вікон',
+  'set.rememberPin': 'Запамʼятовувати стан 📌 (поверх усіх) для окремих вікон',
   'set.highlightSidebar': 'Показувати бічну панель із виділеними повідомленнями',
   'highlights.title': 'Виділені',
   'highlights.empty': 'Поки що нічого не виділено',

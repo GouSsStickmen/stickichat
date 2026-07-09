@@ -197,7 +197,13 @@ export default function TabBar(): React.JSX.Element {
       <button
         className="icon-btn"
         title={t('set.title')}
-        onClick={() => useUiStore.getState().setSettingsOpen(true)}
+        onClick={() => {
+          if (useSettingsStore.getState().settings.settingsAsWindow) {
+            window.sticki.openSettingsWindow('settings')
+          } else {
+            useUiStore.getState().setSettingsOpen(true)
+          }
+        }}
       >
         ⚙
       </button>

@@ -4,6 +4,8 @@ import { useSettingsStore } from '../store/settings'
 import { useAccountsStore } from '../store/accounts'
 import { pollDeviceToken, startDeviceFlow, validateToken } from '../lib/twitchAuth'
 import { createAccountFromTokens } from '../services/accountService'
+import { reloadAllBadges } from '../services/emoteService'
+import { persistAccountTokens } from '../services/config'
 import { useUiStore } from '../store/ui'
 
 type Phase = 'starting' | 'waiting' | 'done' | 'error'
@@ -35,6 +37,11 @@ export default function DeviceAuthModal({ onClose }: { onClose: () => void }): R
           info.login
         )
         useAccountsStore.getState().addAccount(account)
+        // write straight to disk: the settings window has no store persistence, and without
+        // this a re-auth done there would evaporate on close (leaving dead tokens on disk)
+        await persistAccountTokens(account.id)
+        // a fresh token may fix previously-failed fetches (badges cache empty results)
+        reloadAllBadges()
         useUiStore.getState().toast(t('auth.success'))
         setPhase('done')
         onClose()

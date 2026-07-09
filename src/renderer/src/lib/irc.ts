@@ -91,6 +91,7 @@ export class IrcClient {
   private backoff = 1000
   private opts: IrcClientOptions
   private sendQueue: string[] = []
+  private reconnectTimer: number | null = null
   ready = false
 
   constructor(opts: IrcClientOptions) {
@@ -100,13 +101,31 @@ export class IrcClient {
 
   private connect(): void {
     if (this.closed) return
+    // Neuter the previous socket completely before replacing it. A stale socket whose
+    // handlers stay alive keeps scheduling reconnects and keeps delivering messages —
+    // connections multiply and every chat line starts arriving N times.
+    const old = this.ws
+    if (old) {
+      old.onopen = null
+      old.onmessage = null
+      old.onclose = null
+      old.onerror = null
+      try {
+        old.close()
+      } catch {
+        /* noop */
+      }
+    }
+    let ws: WebSocket
     try {
-      this.ws = new WebSocket(IRC_URL)
+      ws = new WebSocket(IRC_URL)
     } catch {
       this.scheduleReconnect()
       return
     }
-    this.ws.onopen = () => {
+    this.ws = ws
+    ws.onopen = () => {
+      if (this.ws !== ws) return
       this.backoff = 1000
       const pass = this.opts.token ? `oauth:${this.opts.token}` : 'SCHMOOPIIE'
       const nick = this.opts.token
@@ -116,7 +135,8 @@ export class IrcClient {
       this.rawSend(`PASS ${pass}`)
       this.rawSend(`NICK ${nick}`)
     }
-    this.ws.onmessage = (ev) => {
+    ws.onmessage = (ev) => {
+      if (this.ws !== ws) return
       const data = String(ev.data)
       for (const line of data.split('\r\n')) {
         if (!line) continue
@@ -137,14 +157,16 @@ export class IrcClient {
         this.opts.onMessage(msg)
       }
     }
-    this.ws.onclose = () => {
+    ws.onclose = () => {
+      if (this.ws !== ws) return
       this.ready = false
       this.opts.onClose?.()
       this.scheduleReconnect()
     }
-    this.ws.onerror = () => {
+    ws.onerror = () => {
+      // close THIS socket specifically — this.ws may already point to a newer one
       try {
-        this.ws?.close()
+        ws.close()
       } catch {
         /* noop */
       }
@@ -153,9 +175,13 @@ export class IrcClient {
 
   private scheduleReconnect(): void {
     if (this.closed) return
+    if (this.reconnectTimer !== null) return // only ever one pending reconnect
     const delay = this.backoff
     this.backoff = Math.min(this.backoff * 2, 30000)
-    setTimeout(() => this.connect(), delay)
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null
+      this.connect()
+    }, delay)
   }
 
   private rawSend(line: string): void {
@@ -192,6 +218,10 @@ export class IrcClient {
 
   close(): void {
     this.closed = true
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     try {
       this.ws?.close()
     } catch {

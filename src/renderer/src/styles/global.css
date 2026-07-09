@@ -805,10 +805,16 @@ select:focus {
 .standalone-settings {
   width: 100%;
   height: 100vh;
+  /* .modal caps at 88vh — as a window that left a bar of raw page background at the bottom */
+  max-height: none;
   margin: 0;
   border: none;
   border-radius: 0;
   box-shadow: none;
+}
+.standalone-settings .settings-layout {
+  flex: 1;
+  min-height: 0;
 }
 .standalone-settings .settings-content {
   max-height: none;
@@ -1189,6 +1195,23 @@ select:focus {
 .emote-picker-standalone .picker-body {
   flex: 1;
   max-height: none;
+  /* flex items refuse to shrink below their content height without this, which made the
+     body taller than the window — no scrollbar, list looked frozen */
+  min-height: 0;
+}
+/* centered overlay variant — used where an anchored popover would get clipped (settings) */
+.emote-picker.emote-picker-fixed {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  right: auto;
+  bottom: auto;
+  width: min(420px, 92vw);
+  z-index: 300;
+}
+.emote-picker-fixed .picker-body {
+  max-height: min(50vh, 460px);
 }
 .picker-tabs {
   align-items: center;

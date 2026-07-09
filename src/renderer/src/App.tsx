@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { loadConfig, startPersistence, startConfigSync } from './services/config'
+import { loadConfig, startPersistence, startSettingsPersistence, startConfigSync } from './services/config'
 import { chatService } from './services/chatService'
 import { useSettingsStore } from './store/settings'
 import { useAccountsStore } from './store/accounts'
@@ -82,9 +82,13 @@ export default function App(): React.JSX.Element | null {
             tabId
           )
           if (detached.name) document.title = `StickiChat — ${detached.name}`
+          // layout here is ephemeral, but settings tweaks (font zoom, sounds…) must persist
+          startSettingsPersistence()
           setOnboarded(true)
         } else if (special?.kind === 'emotepicker' || special?.kind === 'settings') {
-          // utility windows: read-only view of accounts/settings, no chat, no persistence of layout
+          // utility windows: no chat and no layout persistence, but settings changed here
+          // (sounds, pins, mod buttons…) must still reach the disk
+          startSettingsPersistence()
           setOnboarded(true)
         } else {
           startPersistence()

@@ -186,6 +186,12 @@ export interface Settings {
   messageSpacing: number // px, extra vertical padding per message
   caseSensitiveNicks: boolean
   alwaysOnTop: boolean
+  /** open Settings as a separate window instead of the in-app modal */
+  settingsAsWindow: boolean
+  /** persist the 📌 always-on-top state of utility windows between opens */
+  rememberPinState: boolean
+  emotePickerPinned: boolean
+  settingsPinned: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -212,7 +218,11 @@ export const DEFAULT_SETTINGS: Settings = {
   showCharCounter: true,
   messageSpacing: 3,
   caseSensitiveNicks: false,
-  alwaysOnTop: false
+  alwaysOnTop: false,
+  settingsAsWindow: false,
+  rememberPinState: true,
+  emotePickerPinned: false,
+  settingsPinned: false
 }
 
 export const DEFAULT_MOD_BUTTONS: ModButton[] = [

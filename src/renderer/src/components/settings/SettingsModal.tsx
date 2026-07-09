@@ -8,7 +8,7 @@ import { nextId } from '../../store/layout'
 import { removeAccountEverywhere, refreshModeratedChannels } from '../../services/accountService'
 import { playMentionSound, playFirstMessageSound } from '../../lib/sound'
 import BtnIcon from '../BtnIcon'
-import EmotePicker from '../EmotePicker'
+import EmotePicker, { PinButton } from '../EmotePicker'
 
 type Section = 'accounts' | 'appearance' | 'moderation' | 'highlights' | 'language' | 'advanced'
 
@@ -42,6 +42,7 @@ export default function SettingsModal({ standalone }: { standalone?: boolean }):
       <div className="modal-header">
         {t('set.title')}
         <div className="spacer" />
+        {standalone && <PinButton settingKey="settingsPinned" />}
         {!standalone && (
           <button className="ghost" title={t('set.openInWindow')} onClick={openInWindow}>
             ⧉
@@ -194,9 +195,19 @@ function AppearanceSection(): React.JSX.Element {
         onChange={(v) => set({ emotePickerAsWindow: v })}
       />
       <Toggle
+        label={t('set.settingsAsWindow')}
+        value={settings.settingsAsWindow}
+        onChange={(v) => set({ settingsAsWindow: v })}
+      />
+      <Toggle
         label={t('set.alwaysOnTop')}
         value={settings.alwaysOnTop}
         onChange={(v) => set({ alwaysOnTop: v })}
+      />
+      <Toggle
+        label={t('set.rememberPin')}
+        value={settings.rememberPinState}
+        onChange={(v) => set({ rememberPinState: v })}
       />
       <Toggle
         label={t('set.highlightSidebar')}
@@ -431,6 +442,7 @@ function ModerationSection(): React.JSX.Element {
                   channel=""
                   channelId=""
                   account={firstAccount}
+                  fixed
                   onPick={(emote) => {
                     update(b.id, { icon: emote.provider === 'emoji' ? emote.code : emote.url })
                     setIconPickerFor(null)
