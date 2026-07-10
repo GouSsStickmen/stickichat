@@ -55,6 +55,8 @@ export interface ChatMessage {
   historical?: boolean
   /** computed at ingest: mentions one of my accounts */
   isMention?: boolean
+  /** the message is a reply to one of my accounts */
+  replyToMe?: boolean
   /** first message we've seen from this login since we joined this channel this session */
   isFirstInSession?: boolean
 }
@@ -135,6 +137,8 @@ export interface ModButton {
   color?: 'primary' | 'blue' | 'green' | 'orange' | 'purple'
   /** where the button shows up */
   scope: 'message' | 'toolbar'
+  /** limit to specific channel logins (comma-entered in settings); empty/undefined = everywhere */
+  channels?: string[]
 }
 
 // ---------- Layout ----------
@@ -192,6 +196,29 @@ export interface Settings {
   rememberPinState: boolean
   emotePickerPinned: boolean
   settingsPinned: boolean
+  /** language of emoji names in tooltips/search hints */
+  emojiNameLang: 'uk' | 'en' | 'both'
+  /** px size of badges in chat/lists */
+  badgeSize: number
+  /** px size of the big hover preview in the emote picker */
+  emotePreviewSize: number
+  /** show viewer count / stream title / uptime in the pane header */
+  showStreamInfo: boolean
+  /** custom highlight colors (hex) */
+  mentionBgColor: string
+  firstMessageBgColor: string
+  /** words/phrases that trigger the keyword alert sound */
+  keywordAlerts: string[]
+  keywordSound: boolean
+  keywordSoundType: 'ping' | 'pop' | 'bell' | 'custom'
+  keywordSoundVolume: number
+  keywordSoundCustomId?: string
+  /** the укр⇄eng wrong-layout converter (Aа button + Ctrl+Shift+T) */
+  translitEnabled: boolean
+  /** custom UI font family; empty = default system stack */
+  fontFamily: string
+  /** text size in the standalone user-card window */
+  usercardFontSize: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -222,7 +249,20 @@ export const DEFAULT_SETTINGS: Settings = {
   settingsAsWindow: false,
   rememberPinState: true,
   emotePickerPinned: false,
-  settingsPinned: false
+  settingsPinned: false,
+  emojiNameLang: 'both',
+  badgeSize: 18,
+  emotePreviewSize: 112,
+  showStreamInfo: true,
+  mentionBgColor: '#8b5cf6',
+  firstMessageBgColor: '#22c55e',
+  keywordAlerts: [],
+  keywordSound: true,
+  keywordSoundType: 'ping',
+  keywordSoundVolume: 0.5,
+  translitEnabled: true,
+  fontFamily: '',
+  usercardFontSize: 14
 }
 
 export const DEFAULT_MOD_BUTTONS: ModButton[] = [

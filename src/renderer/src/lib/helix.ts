@@ -379,11 +379,19 @@ export interface HelixStream {
   user_login: string
   type: string
   started_at: string
+  viewer_count: number
+  title: string
 }
 
-/** which of the given channels are live right now: login -> stream started_at (stream identity) */
-export async function getLiveChannels(account: Account, logins: string[]): Promise<Map<string, string>> {
-  const live = new Map<string, string>()
+export interface LiveInfo {
+  startedAt: string
+  viewers: number
+  title: string
+}
+
+/** which of the given channels are live right now: login -> stream info */
+export async function getLiveChannels(account: Account, logins: string[]): Promise<Map<string, LiveInfo>> {
+  const live = new Map<string, LiveInfo>()
   for (let i = 0; i < logins.length; i += 100) {
     const res = await helixRequest(account, 'GET', '/streams', {
       user_login: logins.slice(i, i + 100),
@@ -391,7 +399,11 @@ export async function getLiveChannels(account: Account, logins: string[]): Promi
     })
     if (!res.ok) continue
     for (const s of ((res.json as { data: HelixStream[] })?.data ?? []) as HelixStream[]) {
-      live.set(s.user_login.toLowerCase(), s.started_at)
+      live.set(s.user_login.toLowerCase(), {
+        startedAt: s.started_at,
+        viewers: s.viewer_count ?? 0,
+        title: s.title ?? ''
+      })
     }
   }
   return live

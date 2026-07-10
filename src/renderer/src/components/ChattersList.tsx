@@ -127,7 +127,17 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
     )
 
   return (
-    <div className="chatters-pop" ref={ref} draggable={false}>
+    <div
+      className="chatters-pop"
+      ref={ref}
+      draggable={false}
+      // the popover lives inside the draggable pane header — don't let a drag that starts
+      // here bubble up and grab the whole pane
+      onDragStart={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+    >
       <div className="picker-section" style={{ margin: '0 0 6px 0' }}>
         {t('chatters.title')}
         {chatters ? ` · ${total ?? chatters.length}` : ''}

@@ -11,12 +11,32 @@ import InputBox, { ReplyTarget } from './InputBox'
 import ModToolbar from './ModToolbar'
 import ChattersList from './ChattersList'
 import HighlightSidebar from './HighlightSidebar'
+import { AddPaneForm } from './SplitGrid'
 import { useT } from '../i18n'
+
+function formatUptime(startedAt: string): string {
+  const ms = Date.now() - new Date(startedAt).getTime()
+  if (ms <= 0) return '0:00'
+  const totalMin = Math.floor(ms / 60000)
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return `${h}:${String(m).padStart(2, '0')}`
+}
 
 export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane }): React.JSX.Element {
   const t = useT()
   const channelId = useChatStore((s) => s.channelIds[pane.channel] ?? '')
   const isLive = useChatStore((s) => !!s.liveChannels[pane.channel])
+  const channelName = useChatStore((s) => s.channelNames[pane.channel])
+  const streamInfo = useChatStore((s) => s.streamInfo[pane.channel])
+  const showStreamInfo = useSettingsStore((s) => s.settings.showStreamInfo)
+  // re-render every minute so the uptime counter ticks
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    if (!streamInfo) return
+    const id = window.setInterval(() => forceTick((v) => v + 1), 60000)
+    return () => window.clearInterval(id)
+  }, [streamInfo])
   const accounts = useAccountsStore((s) => s.accounts)
   const account = useMemo(
     () => accounts.find((a) => a.id === pane.accountId),
@@ -29,6 +49,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const showHighlightSidebar = useSettingsStore((s) => s.settings.showHighlightSidebar)
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
   const [chattersOpen, setChattersOpen] = useState(false)
+  const [addPaneOpen, setAddPaneOpen] = useState(false)
   const [scrollLocked, setScrollLocked] = useState(false)
   const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
 
@@ -43,7 +64,8 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const bindHotkeys = (): void => {
     if (keydownHandlerRef.current) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+      // physical key, not the produced character — works on the Ukrainian layout too
+      if (e.ctrlKey && e.code === 'KeyL') {
         e.preventDefault()
         setScrollLocked((v) => !v)
       }
@@ -79,14 +101,43 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         }}
         title="⠿ drag"
       >
-        <span className="channel-name">#{pane.channel}</span>
+        <span className="channel-name">{channelName ?? pane.channel}</span>
         {isLive && <span className="live-badge">{t('pane.live')}</span>}
         {isMod && (
           <span className={`mod-badge ${isBroadcaster ? 'broadcaster' : ''}`}>
             {isBroadcaster ? t('mod.youAreBroadcaster') : t('mod.youAreMod')}
           </span>
         )}
+        {showStreamInfo && streamInfo && (
+          <span className="stream-info" title={streamInfo.title}>
+            👁 {streamInfo.viewers.toLocaleString('uk-UA')} · ⏱ {formatUptime(streamInfo.startedAt)}
+            {streamInfo.title ? ` · ${streamInfo.title}` : ''}
+          </span>
+        )}
         <div className="spacer" />
+        <span style={{ position: 'relative' }}>
+          <button
+            className="icon-btn"
+            title={t('pane.add')}
+            onClick={() => setAddPaneOpen((v) => !v)}
+          >
+            +
+          </button>
+          {addPaneOpen && (
+            <div className="popover" style={{ top: '100%', right: 0, marginTop: 6 }} onDragStart={(e) => e.stopPropagation()}>
+              <AddPaneForm tabId={tabId} onDone={() => setAddPaneOpen(false)} />
+            </div>
+          )}
+        </span>
+        <button
+          className={`icon-btn ${showHighlightSidebar ? 'active' : ''}`}
+          title={t('highlights.title')}
+          onClick={() =>
+            useSettingsStore.getState().setSettings({ showHighlightSidebar: !showHighlightSidebar })
+          }
+        >
+          ★
+        </button>
         <span style={{ position: 'relative' }}>
           <button
             className="icon-btn chatters-btn"

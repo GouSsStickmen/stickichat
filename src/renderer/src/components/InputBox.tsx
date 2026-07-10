@@ -8,7 +8,9 @@ import { useSettingsStore } from '../store/settings'
 import { chatService } from '../services/chatService'
 import { useUiStore } from '../store/ui'
 import { matchCommands, runSlashCommand, SlashCommand } from '../lib/slashCommands'
-import { EMOJI_LIST } from '../lib/emojiData'
+import { canModerate } from '../services/accountService'
+import { EMOJI_LIST, emojiLabel } from '../lib/emojiData'
+import { swapLayout } from '../lib/translit'
 import EmotePicker from './EmotePicker'
 import { useT } from '../i18n'
 
@@ -46,6 +48,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const emoteVersion = useEmotesStore((s) => s.version)
   const showCharCounter = useSettingsStore((s) => s.settings.showCharCounter)
   const emotePickerAsWindow = useSettingsStore((s) => s.settings.emotePickerAsWindow)
+  const translitEnabled = useSettingsStore((s) => s.settings.translitEnabled)
   const [text, setText] = useState('')
   const [history, setHistory] = useState<string[]>([])
   const [histIdx, setHistIdx] = useState(-1)
@@ -95,9 +98,14 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   }, [text, isCommand])
 
   const suggestions = useMemo((): Suggestion[] => {
-    // slash commands (while typing the command name)
+    // no autocomplete while browsing sent history — its arrows must keep working even
+    // when a recalled message ends with an emote word
+    if (histIdx !== -1) return []
+    // slash commands (while typing the command name) — only those this account can use here
     if (isCommand && !text.includes(' ')) {
-      return matchCommands(text).map((cmd) => ({ kind: 'command', cmd }))
+      const isBroadcaster = !!account && account.login.toLowerCase() === pane.channel.toLowerCase()
+      const isMod = canModerate(account, pane.channel, channelId)
+      return matchCommands(text, { isMod, isBroadcaster }).map((cmd) => ({ kind: 'command', cmd }))
     }
     if (!currentWord) return []
     // @viewer mentions from recent chatters in this channel
@@ -136,7 +144,8 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     scan(st.globalEmotes.values())
     for (const e of EMOJI_LIST) {
       if (out.length >= 25) break
-      if (seen.has(e.char) || !e.name.includes(q)) continue
+      if (seen.has(e.char)) continue
+      if (!e.name.includes(q) && !e.nameUk.toLowerCase().includes(q)) continue
       seen.add(e.char)
       out.push({ kind: 'emote', emote: { code: e.char, url: '', provider: 'emoji' } })
     }
@@ -148,7 +157,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     })
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWord, text, isCommand, pane.channel, emoteVersion, account])
+  }, [currentWord, text, isCommand, pane.channel, emoteVersion, account, histIdx])
 
   const applySuggestion = (s: Suggestion): void => {
     if (s.kind === 'command') setText(`/${s.cmd.name} `)
@@ -260,6 +269,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
                 <div
                   key={key}
                   className={`item ${i === acIndex ? 'sel' : ''}`}
+                  ref={i === acIndex ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
                   onMouseDown={(e) => {
                     e.preventDefault()
                     applySuggestion(s)
@@ -272,7 +282,11 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
                       ) : (
                         <img src={s.emote.url} alt="" loading="lazy" />
                       )}
-                      <span>{s.emote.code}</span>
+                      <span>
+                        {s.emote.provider === 'emoji'
+                          ? emojiLabel(s.emote.code, useSettingsStore.getState().settings.emojiNameLang)
+                          : s.emote.code}
+                      </span>
                       <span className="provider">{s.emote.provider}</span>
                     </>
                   )}
@@ -340,7 +354,8 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             rows={1}
             placeholder={account ? t('input.placeholder') : t('input.placeholderReadOnly')}
             disabled={!account}
-            spellCheck={false}
+            spellCheck={true}
+            lang="uk"
             onChange={(e) => {
               setText(e.target.value)
               setAcIndex(0)
@@ -356,6 +371,19 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             </span>
           )}
         </div>
+        {translitEnabled && (
+          <button
+            className="ghost"
+            title={t('input.translit')}
+            disabled={!account || !text}
+            onClick={() => {
+              setText(swapLayout(text))
+              taRef.current?.focus()
+            }}
+          >
+            Aа
+          </button>
+        )}
         <button
           className="ghost picker-btn"
           title={t('picker.open')}

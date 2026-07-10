@@ -16,6 +16,7 @@ const api = {
   },
   openEmotePickerWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openEmotePicker', hash),
   openSettingsWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openSettings', hash),
+  openUserCardWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openUserCard', hash),
   sendEmotePick: (payload: string): Promise<void> => ipcRenderer.invoke('app:sendEmotePick', payload),
   onEmotePicked: (cb: (payload: string) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, payload: string): void => cb(payload)
@@ -31,6 +32,7 @@ const api = {
     return () => ipcRenderer.removeListener('app:configChanged', listener)
   },
   checkForUpdates: (): Promise<void> => ipcRenderer.invoke('updater:check'),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('updater:download'),
   installUpdate: (): Promise<void> => ipcRenderer.invoke('updater:install'),
   onUpdateStatus: (cb: (status: unknown) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, status: unknown): void => cb(status)

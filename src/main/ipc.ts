@@ -2,7 +2,10 @@ import { ipcMain, safeStorage, shell, app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig } from './storage'
 
-function createChildWindow(hash: string, opts: { width: number; height: number; title?: string }): BrowserWindow {
+function createChildWindow(
+  hash: string,
+  opts: { width: number; height: number; title?: string; parent?: BrowserWindow | null }
+): BrowserWindow {
   const win = new BrowserWindow({
     width: opts.width,
     height: opts.height,
@@ -11,6 +14,9 @@ function createChildWindow(hash: string, opts: { width: number; height: number; 
     autoHideMenuBar: true,
     backgroundColor: '#0e0e10',
     title: opts.title ?? 'StickiChat',
+    // utility windows become children of the chat window that opened them: they always stay
+    // ABOVE it, even when that chat window itself is set to always-on-top
+    parent: opts.parent ?? undefined,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -72,13 +78,33 @@ export function registerIpc(): void {
   })
 
   // standalone emote picker window
-  ipcMain.handle('app:openEmotePicker', (_e, hash: string) => {
-    createChildWindow(hash, { width: 420, height: 580, title: 'StickiChat — Emotes' })
+  ipcMain.handle('app:openEmotePicker', (e, hash: string) => {
+    createChildWindow(hash, {
+      width: 420,
+      height: 580,
+      title: 'StickiChat — Emotes',
+      parent: BrowserWindow.fromWebContents(e.sender)
+    })
+  })
+
+  // standalone user card window (resizable, can be moved anywhere incl. other displays)
+  ipcMain.handle('app:openUserCard', (e, hash: string) => {
+    createChildWindow(hash, {
+      width: 480,
+      height: 640,
+      title: 'StickiChat — User',
+      parent: BrowserWindow.fromWebContents(e.sender)
+    })
   })
 
   // standalone settings window
-  ipcMain.handle('app:openSettings', (_e, hash: string) => {
-    createChildWindow(hash, { width: 980, height: 680, title: 'StickiChat — Settings' })
+  ipcMain.handle('app:openSettings', (e, hash: string) => {
+    createChildWindow(hash, {
+      width: 980,
+      height: 680,
+      title: 'StickiChat — Settings',
+      parent: BrowserWindow.fromWebContents(e.sender)
+    })
   })
 
   // an emote picked in the standalone picker window needs to land in the main window's input

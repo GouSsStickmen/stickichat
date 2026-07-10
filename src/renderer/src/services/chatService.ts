@@ -9,8 +9,8 @@ import { loadChannelBadges, loadChannelEmotes, loadGlobalBadges, loadGlobalEmote
 import { ensureFreshToken } from '../lib/twitchAuth'
 import { translate } from '../i18n'
 import { useAccountsStore } from '../store/accounts'
-import { playMentionSound, playFirstMessageSound } from '../lib/sound'
-import { getLiveChannels } from '../lib/helix'
+import { playMentionSound, playFirstMessageSound, playKeywordSound } from '../lib/sound'
+import { getLiveChannels, getUsers } from '../lib/helix'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -97,7 +97,7 @@ class ChatService {
     try {
       const live = await getLiveChannels(account, channels)
       for (const ch of channels) {
-        const startedAt = live.get(ch)
+        const startedAt = live.get(ch)?.startedAt
         if (startedAt && this.streamStartedAt.get(ch) !== startedAt) {
           this.streamStartedAt.set(ch, startedAt)
           this.onStreamStarted(ch, startedAt)
@@ -107,8 +107,38 @@ class ChatService {
       useChatStore
         .getState()
         .setLiveChannels(Object.fromEntries(channels.map((c) => [c, live.has(c)])))
+      useChatStore.getState().setStreamInfo(
+        Object.fromEntries(
+          channels.flatMap((c) => {
+            const info = live.get(c)
+            return info ? [[c, { viewers: info.viewers, title: info.title, startedAt: info.startedAt }]] : []
+          })
+        )
+      )
+      this.resolveChannelNames(account, channels)
     } catch {
       /* keep previous state */
+    }
+  }
+
+  private channelNamesRequested = new Set<string>()
+
+  /** broadcaster display names (proper capitalization) for tab/pane titles */
+  private async resolveChannelNames(account: Account, channels: string[]): Promise<void> {
+    const known = useChatStore.getState().channelNames
+    const missing = channels.filter((c) => !known[c] && !this.channelNamesRequested.has(c))
+    if (missing.length === 0) return
+    missing.forEach((c) => this.channelNamesRequested.add(c))
+    try {
+      const users = await getUsers(account, { logins: missing })
+      const names: Record<string, string> = {}
+      for (const u of users) names[u.login.toLowerCase()] = u.display_name
+      if (Object.keys(names).length) useChatStore.getState().setChannelNames(names)
+    } finally {
+      // allow a retry for logins that failed to resolve
+      missing.forEach((c) => {
+        if (!useChatStore.getState().channelNames[c]) this.channelNamesRequested.delete(c)
+      })
     }
   }
 
@@ -192,6 +222,11 @@ class ChatService {
             seen.add(msg.login)
             msg.isFirstInSession = true
             this.persistFirstSeen(msg.channel)
+          }
+          const myLogins = useAccountsStore.getState().accounts.map((a) => a.login.toLowerCase())
+          if (msg.replyParent && myLogins.includes(msg.replyParent.login.toLowerCase())) {
+            msg.replyToMe = true
+            msg.isMention = true
           }
           this.detectMention(msg)
           this.maybePlayFirstSeenSound(msg)
@@ -316,7 +351,10 @@ class ChatService {
       const l = a.login.toLowerCase()
       return lower.includes(`@${l}`) || new RegExp(`(^|[^\\w])${l}([^\\w]|$)`).test(lower)
     })
-    if (!mentioned) return
+    if (!mentioned) {
+      this.detectKeywords(msg)
+      return
+    }
     msg.isMention = true
     if (msg.historical) return
 
@@ -331,18 +369,40 @@ class ChatService {
     }
   }
 
+  /** user-configured words/phrases that should alert like a mention */
+  private detectKeywords(msg: ChatMessage): void {
+    if (msg.historical || !msg.text) return
+    // own messages never trigger keyword alerts
+    if (useAccountsStore.getState().accounts.some((a) => a.id === msg.userId)) return
+    const settings = useSettingsStore.getState().settings
+    if (!settings.keywordSound || settings.keywordAlerts.length === 0) return
+    const lower = msg.text.toLowerCase()
+    const hit = settings.keywordAlerts.some((w) => {
+      const needle = w.trim().toLowerCase()
+      return needle.length > 0 && lower.includes(needle)
+    })
+    if (!hit) return
+    msg.isMention = true // highlight it like a mention so it's visible in chat/sidebar
+    playKeywordSound(settings)
+  }
+
   /** lights up the tab (subtle, distinct from the @ mention dot) for any new message while inactive */
   private markUnreadIfInactive(channel: string): void {
     const { tabs, activeTabId } = useLayoutStore.getState()
     const activeChannels = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
     if (!activeChannels.includes(channel)) {
       useChatStore.getState().setUnreadMessage(channel)
+    } else {
+      // the user is watching this channel right now — advance its "read up to" mark
+      useChatStore.getState().markChannelsRead([channel])
     }
   }
 
   /** optional sound for someone's first message this stream — only for the ACTIVE tab */
   private maybePlayFirstSeenSound(msg: ChatMessage): void {
     if (!msg.isFirstInSession || msg.historical) return
+    // don't ping yourself
+    if (useAccountsStore.getState().accounts.some((a) => a.id === msg.userId)) return
     const settings = useSettingsStore.getState().settings
     if (!settings.firstMessageSound) return
     const { tabs, activeTabId } = useLayoutStore.getState()

@@ -65,6 +65,7 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
   const toolbarButtons = modButtons
     .filter((b) => b.scope === 'toolbar')
     .filter((b) => isMod || !MOD_ONLY_TYPES.has(b.type))
+    .filter((b) => !b.channels?.length || b.channels.includes(pane.channel))
 
   const doRaid = async (target: string): Promise<void> => {
     setPopover(null)
@@ -132,6 +133,21 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
           </button>
         )
       })}
+      <button
+        className="ghost"
+        title={t('set.modBtn.add')}
+        style={{ opacity: 0.7 }}
+        onClick={() => {
+          useUiStore.getState().setSettingsSection('moderation')
+          if (useSettingsStore.getState().settings.settingsAsWindow) {
+            window.sticki.openSettingsWindow('settings=moderation')
+          } else {
+            useUiStore.getState().setSettingsOpen(true)
+          }
+        }}
+      >
+        +
+      </button>
       <div className="spacer" />
       {isMod && (
         <>

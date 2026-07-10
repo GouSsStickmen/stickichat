@@ -30,11 +30,14 @@ export interface EmotePreviewTarget {
 
 interface UiState {
   settingsOpen: boolean
+  /** which settings section to land on when the modal/window opens next */
+  settingsSection: string | null
   addAccountOpen: boolean
   userCard: UserCardTarget | null
   toasts: Toast[]
   emotePreview: EmotePreviewTarget | null
   setSettingsOpen: (v: boolean) => void
+  setSettingsSection: (v: string | null) => void
   setAddAccountOpen: (v: boolean) => void
   setUserCard: (v: UserCardTarget | null) => void
   toast: (text: string, kind?: 'ok' | 'error') => void
@@ -46,11 +49,13 @@ let toastId = 0
 
 export const useUiStore = create<UiState>()((set) => ({
   settingsOpen: false,
+  settingsSection: null,
   addAccountOpen: false,
   userCard: null,
   toasts: [],
   emotePreview: null,
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSettingsSection: (settingsSection) => set({ settingsSection }),
   setAddAccountOpen: (addAccountOpen) => set({ addAccountOpen }),
   setUserCard: (userCard) => set({ userCard }),
   toast: (text, kind = 'ok') => {

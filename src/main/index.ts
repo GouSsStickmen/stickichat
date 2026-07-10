@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, session, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { registerIpc } from './ipc'
 import { initAutoUpdater } from './updater'
@@ -50,6 +50,13 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // spellcheck for the message input — Ukrainian + English (Chromium downloads
+  // the Hunspell dictionaries on demand)
+  try {
+    session.defaultSession.setSpellCheckerLanguages(['uk', 'en-US'])
+  } catch {
+    /* unsupported language on this platform — keep defaults */
+  }
   registerIpc()
   createWindow()
   initAutoUpdater()

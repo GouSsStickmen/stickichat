@@ -5,9 +5,14 @@ export type Token =
   | { kind: 'emote'; emote: Emote; overlays: Emote[] }
   | { kind: 'link'; url: string }
   | { kind: 'mention'; name: string; color: string }
+  | { kind: 'emoji'; char: string }
+
+// an emoji plus any variation selectors / ZWJ continuation (👨‍👩‍👧 etc.)
+const EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}️?)*/gu
 
 const URL_RE = /^https?:\/\/[^\s]+$/i
-const WWW_RE = /^www\.[^\s]+\.[a-z]{2,}[^\s]*$/i
+// bare links without a protocol: www.foo.bar, twitch.tv/xqc, sub.domain.co.ua/path?x=1 …
+const BARE_URL_RE = /^(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/?#][^\s]*)?$/i
 
 function twitchEmoteUrl(id: string): string {
   return `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/2.0`
@@ -114,7 +119,7 @@ export function tokenizeMessage(
         tokens.push({ kind: 'link', url: piece })
         continue
       }
-      if (WWW_RE.test(piece)) {
+      if (BARE_URL_RE.test(piece) && !piece.includes('@')) {
         tokens.push({ kind: 'link', url: `https://${piece}` })
         continue
       }
@@ -122,6 +127,18 @@ export function tokenizeMessage(
         const login = piece.slice(1).replace(/[^\w]+$/, '').toLowerCase()
         const raw = (mentionColorLookup?.(login)) || fallbackColor(login)
         tokens.push({ kind: 'mention', name: piece, color: ensureReadable(raw, dark) })
+        continue
+      }
+      // split out emoji so they get their own token (right-click → insert, like emotes)
+      if (EMOJI_RE.test(piece)) {
+        EMOJI_RE.lastIndex = 0
+        let last = 0
+        for (const m of piece.matchAll(EMOJI_RE)) {
+          if (m.index! > last) pushText(piece.slice(last, m.index))
+          tokens.push({ kind: 'emoji', char: m[0] })
+          last = m.index! + m[0].length
+        }
+        if (last < piece.length) pushText(piece.slice(last))
         continue
       }
       pushText(piece)

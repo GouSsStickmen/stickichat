@@ -86,3 +86,11 @@ export function playFirstMessageSound(
   const data = s.customSounds.find((c) => c.id === s.firstMessageSoundCustomId)?.data
   playAlertSound({ type: s.firstMessageSoundType, volume: s.firstMessageSoundVolume, data }, 'first-message', force)
 }
+
+export function playKeywordSound(
+  s: Pick<Settings, 'keywordSoundType' | 'keywordSoundVolume' | 'keywordSoundCustomId' | 'customSounds'>,
+  force = false
+): void {
+  const data = s.customSounds.find((c) => c.id === s.keywordSoundCustomId)?.data
+  playAlertSound({ type: s.keywordSoundType, volume: s.keywordSoundVolume, data }, 'keyword', force)
+}

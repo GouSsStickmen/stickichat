@@ -4,12 +4,11 @@ import type { TwitchUserEmote } from '../lib/helix'
 import { useEmotesStore } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
 import { loadTwitchUserEmotes } from '../services/emoteService'
-import { EMOJI_LIST } from '../lib/emojiData'
+import { EMOJI_LIST, emojiLabel, emojiSearchText } from '../lib/emojiData'
+import EmojiGlyph from './EmojiGlyph'
 import { useT } from '../i18n'
 
 const EMOJI_AS_EMOTES: Emote[] = EMOJI_LIST.map((e) => ({ code: e.char, url: '', provider: 'emoji', size: 0 }))
-// so emoji show up in typing-suggestions/search by their English name, not just the glyph itself
-const EMOJI_SEARCH_NAMES = new Map(EMOJI_LIST.map((e) => [e.char, e.name]))
 
 interface Props {
   channel: string
@@ -176,25 +175,54 @@ export default function EmotePicker({
     for (const e of twitchEmotes) push(e)
     for (const e of st.channelEmotes[channel]?.values() ?? []) push(e)
     for (const e of st.globalEmotes.values()) push(e)
-    for (const e of EMOJI_AS_EMOTES) push(e, EMOJI_SEARCH_NAMES.get(e.code))
+    for (const e of EMOJI_AS_EMOTES) push(e, emojiSearchText(e.code))
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, channel, emoteVersion, twitchEmotes])
 
-  const cell = (e: Emote | FavoriteEmote): React.JSX.Element => (
-    <button
-      key={`${e.provider}:${e.code}`}
-      className="emote-cell"
-      title={e.provider === 'emoji' ? (EMOJI_SEARCH_NAMES.get(e.code) ?? e.code) : `${e.code} (${PROVIDER_LABEL[e.provider]})`}
-      onClick={() => onPick(e)}
-      onContextMenu={(ev) => {
-        ev.preventDefault()
-        toggleFavorite({ code: e.code, url: e.url, provider: e.provider })
-      }}
-    >
-      {e.provider === 'emoji' ? <span className="emoji-cell-char">{e.code}</span> : <img src={e.url} alt={e.code} loading="lazy" />}
-    </button>
+  const emojiNameLang = useSettingsStore((s) => s.settings.emojiNameLang)
+  const previewSize = useSettingsStore((s) => s.settings.emotePreviewSize)
+  const [preview, setPreview] = useState<Emote | FavoriteEmote | null>(null)
+  const [favPop, setFavPop] = useState<string | null>(null)
+
+  const favSet = useMemo(
+    () => new Set(favorites.map((f) => `${f.provider}:${f.code}`)),
+    [favorites]
   )
+
+  const cell = (e: Emote | FavoriteEmote): React.JSX.Element => {
+    const favKey = `${e.provider}:${e.code}`
+    const isFav = favSet.has(favKey)
+    return (
+      <button
+        key={favKey}
+        className={`emote-cell ${favPop === favKey ? 'fav-pop' : ''}`}
+        title={
+          e.provider === 'emoji'
+            ? emojiLabel(e.code, emojiNameLang)
+            : `${e.code} (${PROVIDER_LABEL[e.provider]})`
+        }
+        onMouseEnter={() => setPreview(e)}
+        onMouseLeave={() => setPreview((cur) => (cur === e ? null : cur))}
+        onClick={() => onPick(e)}
+        onContextMenu={(ev) => {
+          ev.preventDefault()
+          toggleFavorite({ code: e.code, url: e.url, provider: e.provider })
+          if (!isFav) {
+            setFavPop(favKey)
+            window.setTimeout(() => setFavPop((cur) => (cur === favKey ? null : cur)), 500)
+          }
+        }}
+      >
+        {isFav && <span className="fav-star">⭐</span>}
+        {e.provider === 'emoji' ? (
+          <EmojiGlyph char={e.code} className="emoji-cell-char" />
+        ) : (
+          <img src={e.url} alt={e.code} loading="lazy" />
+        )}
+      </button>
+    )
+  }
 
   const section = (title: string, emotes: (Emote | FavoriteEmote)[], key?: string): React.JSX.Element | null =>
     emotes.length === 0 ? null : (
@@ -269,6 +297,25 @@ export default function EmotePicker({
           </>
         ) : (
           <div className="picker-grid">{EMOJI_AS_EMOTES.map(cell)}</div>
+        )}
+      </div>
+      {/* always the same height — a popover anchored to the input jumps otherwise */}
+      <div className="picker-preview" style={{ height: previewSize + 26 }}>
+        {preview ? (
+          <>
+            {preview.provider === 'emoji' ? (
+              <span style={{ fontSize: previewSize * 0.72, lineHeight: 1 }}>
+                <EmojiGlyph char={preview.code} className="emoji-preview-glyph" />
+              </span>
+            ) : (
+              <img src={preview.url} alt={preview.code} style={{ height: previewSize }} />
+            )}
+            <div className="picker-preview-name">
+              {preview.provider === 'emoji' ? emojiLabel(preview.code, emojiNameLang) : preview.code}
+            </div>
+          </>
+        ) : (
+          <div className="picker-preview-name">{t('picker.previewHint')}</div>
         )}
       </div>
       <div className="picker-hint">{t('picker.favHint')}</div>

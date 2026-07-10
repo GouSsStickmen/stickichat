@@ -4,7 +4,13 @@ import { useChatStore } from '../store/chat'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
 import { useT } from '../i18n'
-import { AddPaneForm } from './SplitGrid'
+
+// 1x1 transparent canvas — suppresses the native drag ghost so the tab row itself
+// (live reorder + colored dragging tab) is the only visual feedback. A canvas is always
+// "loaded", unlike an Image, so the very first drag has no fallback rectangle.
+const TRANSPARENT_IMG = document.createElement('canvas')
+TRANSPARENT_IMG.width = 1
+TRANSPARENT_IMG.height = 1
 
 export default function TabBar(): React.JSX.Element {
   const t = useT()
@@ -16,11 +22,10 @@ export default function TabBar(): React.JSX.Element {
   const unreadMessages = useChatStore((s) => s.unreadMessages)
   const alwaysOnTop = useSettingsStore((s) => s.settings.alwaysOnTop)
   const setSettings = useSettingsStore((s) => s.setSettings)
+  const channelNames = useChatStore((s) => s.channelNames)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [nameInput, setNameInput] = useState('')
-  const [addOpen, setAddOpen] = useState(false)
   const [draggingTab, setDraggingTab] = useState<string | null>(null)
-  const [dragOverTab, setDragOverTab] = useState<string | null>(null)
 
   const activeTab = tabs.find((x) => x.id === activeTabId)
 
@@ -29,7 +34,7 @@ export default function TabBar(): React.JSX.Element {
     if (!tab) return ''
     if (tab.name) return tab.name
     if (tab.panes.length === 0) return t('tab.new')
-    return tab.panes.map((p) => p.channel).join(' · ')
+    return tab.panes.map((p) => channelNames[p.channel] ?? p.channel).join(' · ')
   }
 
   const activateTab = (id: string): void => {
@@ -39,6 +44,7 @@ export default function TabBar(): React.JSX.Element {
       const channels = tab.panes.map((p) => p.channel)
       useChatStore.getState().clearUnreadMentions(channels)
       useChatStore.getState().clearUnreadMessages(channels)
+      useChatStore.getState().markChannelsRead(channels)
     }
   }
 
@@ -55,7 +61,19 @@ export default function TabBar(): React.JSX.Element {
 
   return (
     <div className="tabbar">
-      <div className="tabbar-tabs">
+      <div
+        className="tabbar-tabs"
+        // accept the drag across the WHOLE row (incl. gaps between tabs) — otherwise the
+        // cursor flashes a "no drop" sign every time it passes between two tabs
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('sticki/tab')) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+        }}
+        onDrop={(e) => {
+          if (e.dataTransfer.types.includes('sticki/tab')) e.preventDefault()
+        }}
+      >
       <span
         className="conn-dot"
         title={connState === 'open' ? t('misc.connected') : t('misc.disconnected')}
@@ -69,34 +87,34 @@ export default function TabBar(): React.JSX.Element {
         return (
           <div
             key={tab.id}
-            className={`tab ${isActive ? 'active' : ''} ${draggingTab === tab.id ? 'dragging' : ''} ${
-              dragOverTab === tab.id && draggingTab && draggingTab !== tab.id ? 'drag-over' : ''
-            }`}
+            className={`tab ${isActive ? 'active' : ''} ${draggingTab === tab.id ? 'dragging' : ''}`}
             draggable={renaming !== tab.id}
             onDragStart={(e) => {
               e.dataTransfer.setData('sticki/tab', tab.id)
               e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setDragImage(TRANSPARENT_IMG, 0, 0)
               setDraggingTab(tab.id)
             }}
             onDragOver={(e) => {
-              if (e.dataTransfer.types.includes('sticki/tab')) {
-                e.preventDefault()
-                if (dragOverTab !== tab.id) setDragOverTab(tab.id)
+              if (!e.dataTransfer.types.includes('sticki/tab')) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              // live reorder — but only once the cursor crosses the MIDDLE of the target,
+              // otherwise the two tabs keep swapping back and forth at the boundary
+              if (draggingTab && draggingTab !== tab.id) {
+                const curIdx = tabs.findIndex((x) => x.id === draggingTab)
+                if (curIdx === -1) return
+                const rect = e.currentTarget.getBoundingClientRect()
+                const pastMiddle = e.clientX > rect.left + rect.width / 2
+                const shouldMove =
+                  (curIdx < index && pastMiddle) || (curIdx > index && !pastMiddle)
+                if (shouldMove) useLayoutStore.getState().moveTab(draggingTab, index)
               }
             }}
-            onDragLeave={() => setDragOverTab((cur) => (cur === tab.id ? null : cur))}
-            onDragEnd={() => {
-              setDraggingTab(null)
-              setDragOverTab(null)
-            }}
+            onDragEnd={() => setDraggingTab(null)}
             onDrop={(e) => {
-              const dragged = e.dataTransfer.getData('sticki/tab')
+              e.preventDefault()
               setDraggingTab(null)
-              setDragOverTab(null)
-              if (dragged && dragged !== tab.id) {
-                e.preventDefault()
-                useLayoutStore.getState().moveTab(dragged, index)
-              }
             }}
             onClick={() => activateTab(tab.id)}
             onDoubleClick={() => {
@@ -126,8 +144,11 @@ export default function TabBar(): React.JSX.Element {
             ) : (
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{tabLabel(tab.id)}</span>
             )}
-            {hasMention && <span className="mention-dot">@</span>}
-            {hasUnread && <span className="unread-dot" title={t('tab.newMessage')} />}
+            {/* fixed-width slot so the tab doesn't change size when an indicator appears */}
+            <span className="tab-indicator-slot">
+              {hasMention && <span className="mention-dot">@</span>}
+              {!hasMention && hasUnread && <span className="unread-dot" title={t('tab.newMessage')} />}
+            </span>
             {isActive && tab.panes.length > 0 && (
               <span
                 className="close"
@@ -158,34 +179,22 @@ export default function TabBar(): React.JSX.Element {
       </button>
       </div>
       <div className="tabbar-actions">
-      {activeTab && (
-        <div style={{ position: 'relative', display: 'flex', gap: 5, alignItems: 'center' }}>
-          <button className="icon-btn" style={{ fontSize: 12 }} onClick={() => setAddOpen((v) => !v)}>
-            + {t('pane.add')}
-          </button>
-          {activeTab.panes.length > 1 && (
-            <select
-              title={t('pane.columns')}
-              style={{ padding: '3px 6px', fontSize: 12 }}
-              value={activeTab.columns}
-              onChange={(e) =>
-                useLayoutStore.getState().setColumns(activeTab.id, parseInt(e.target.value, 10))
-              }
-            >
-              <option value={0}>{t('pane.auto')}</option>
-              {[1, 2, 3, 4].map((c) => (
-                <option key={c} value={c}>
-                  {c} ⬚
-                </option>
-              ))}
-            </select>
-          )}
-          {addOpen && (
-            <div className="popover" style={{ top: '100%', right: 0, marginTop: 6 }}>
-              <AddPaneForm tabId={activeTab.id} onDone={() => setAddOpen(false)} />
-            </div>
-          )}
-        </div>
+      {activeTab && activeTab.panes.length > 1 && (
+        <select
+          title={t('pane.columns')}
+          style={{ padding: '3px 6px', fontSize: 12 }}
+          value={activeTab.columns}
+          onChange={(e) =>
+            useLayoutStore.getState().setColumns(activeTab.id, parseInt(e.target.value, 10))
+          }
+        >
+          <option value={0}>{t('pane.auto')}</option>
+          {[1, 2, 3, 4].map((c) => (
+            <option key={c} value={c}>
+              {c} ⬚
+            </option>
+          ))}
+        </select>
       )}
       <button
         className={`icon-btn ${alwaysOnTop ? 'active' : ''}`}

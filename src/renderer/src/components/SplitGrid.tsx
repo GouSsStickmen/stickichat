@@ -50,8 +50,12 @@ export default function SplitGrid(): React.JSX.Element | null {
 export function AddPaneForm({ tabId, onDone }: { tabId: string; onDone: () => void }): React.JSX.Element {
   const t = useT()
   const accounts = useAccountsStore((s) => s.accounts)
+  const tabs = useLayoutStore((s) => s.tabs)
   const [channel, setChannel] = useState('')
   const [accountId, setAccountId] = useState<string>(accounts[0]?.id ?? '')
+
+  // suggest channels the user already has in other tabs
+  const knownChannels = [...new Set(tabs.flatMap((tab) => tab.panes.map((p) => p.channel)))]
 
   const submit = (): void => {
     const ch = channel.trim().replace(/^[#@]/, '').toLowerCase()
@@ -64,6 +68,7 @@ export function AddPaneForm({ tabId, onDone }: { tabId: string; onDone: () => vo
     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
       <input
         autoFocus
+        list="known-channels"
         placeholder={t('pane.channelPlaceholder')}
         value={channel}
         spellCheck={false}
@@ -73,6 +78,11 @@ export function AddPaneForm({ tabId, onDone }: { tabId: string; onDone: () => vo
           if (e.key === 'Escape') onDone()
         }}
       />
+      <datalist id="known-channels">
+        {knownChannels.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
       <select
         value={accountId}
         onChange={(e) => {

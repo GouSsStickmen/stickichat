@@ -9,6 +9,7 @@ import { useUiStore } from '../store/ui'
 import { runModButton } from '../services/modActions'
 import { banUser, deleteChatMessage } from '../lib/helix'
 import BtnIcon from './BtnIcon'
+import EmojiGlyph from './EmojiGlyph'
 import { ReplyTarget, InsertEventDetail } from './InputBox'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
@@ -105,7 +106,57 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
         </span>
       )
     }
+    case 'emoji': {
+      const insert = (e: React.MouseEvent): void => {
+        e.preventDefault()
+        window.dispatchEvent(
+          new CustomEvent<InsertEventDetail>('sticki:insert', {
+            detail: { paneId, text: `${token.char} ` }
+          })
+        )
+      }
+      return (
+        <span className="emoji-token" title={token.char} onContextMenu={insert}>
+          <EmojiGlyph char={token.char} />
+        </span>
+      )
+    }
   }
+}
+
+// Braille art is drawn for a specific number of cells per line, but the count varies by
+// generator (28–40+). Measure one cell's width in OUR font, wrap at an adjustable column
+// count (slider on the art itself), and remember the last pick as the new default.
+let brailleCellWidth: number | null = null
+function getBrailleCellWidth(): number {
+  if (brailleCellWidth !== null) return brailleCellWidth
+  try {
+    const span = document.createElement('span')
+    span.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-size:13px;line-height:1'
+    span.textContent = '⣿'.repeat(30)
+    document.body.appendChild(span)
+    brailleCellWidth = (span.getBoundingClientRect().width || 330) / 30
+    span.remove()
+  } catch {
+    brailleCellWidth = 11
+  }
+  return brailleCellWidth
+}
+let lastArtCols = 30
+
+/**
+ * Twitch replaces the newlines of pasted braille art with SPACES, while the art itself uses
+ * the braille blank (U+2800) inside lines. So space-separated segments of consistent length
+ * are almost certainly the original lines — rebuild them. Returns null when unsure.
+ */
+function recoverArtLines(text: string): string[] | null {
+  const segs = text.split(' ').filter((s) => s.length > 0)
+  if (segs.length < 4) return null
+  const lens = segs.map((s) => [...s].length).sort((a, b) => a - b)
+  const median = lens[Math.floor(lens.length / 2)]
+  if (median < 8) return null
+  const consistent = segs.filter((s) => Math.abs([...s].length - median) <= 2).length
+  return consistent / segs.length >= 0.7 ? segs : null
 }
 
 // swipe zones (px): 40‑90 delete, 90‑342 timeout tiers, beyond — ban
@@ -216,6 +267,7 @@ function MessageViewInner({
   )
   const visibleButtons = modButtons
     .filter((b) => b.scope === 'message')
+    .filter((b) => !b.channels?.length || b.channels.includes(msg.channel))
     .filter((b) => {
       const modOnly = MOD_ONLY_TYPES.has(b.type)
       if (modOnly && !isMod) return false
@@ -223,6 +275,11 @@ function MessageViewInner({
       return true
     })
   const swipeEnabled = isMod && canAct && !msg.deleted
+  // braille "ASCII art" is drawn for a fixed line width — never rewrap it
+  const brailleArt = (msg.text.match(/[⠀-⣿]/g)?.length ?? 0) >= 24
+  // best case: the original line structure can be recovered exactly (no slider needed)
+  const artLines = useMemo(() => (brailleArt ? recoverArtLines(msg.text) : null), [brailleArt, msg.text])
+  const [artCols, setArtCols] = useState(lastArtCols)
   const toast = useUiStore.getState().toast
 
   const openUserCard = (e: React.MouseEvent): void => {
@@ -253,42 +310,23 @@ function MessageViewInner({
     else toast((res.json as { message?: string })?.message ?? t('mod.actionFail'), 'error')
   }
 
-  const startSwipe = (e: React.PointerEvent, immediate: boolean): void => {
+  // swipe-to-moderate starts ONLY from the ⠿ grip — dragging from the message body used to
+  // hijack plain text selection (left-to-right copy started a swipe)
+  const startSwipe = (e: React.PointerEvent): void => {
     if (!swipeEnabled || e.button !== 0) return
-    if (!immediate) {
-      const target = e.target as HTMLElement
-      if (target.closest('button, a, input, textarea, select, .hover-actions, .nick, .swipe-grip')) return
-    } else {
-      e.preventDefault()
-    }
+    e.preventDefault()
     const start = { x: e.clientX, y: e.clientY }
-    let active = immediate
-    if (immediate) {
-      draggingRef.current = true
-      document.getSelection()?.removeAllRanges()
-    }
+    draggingRef.current = true
+    document.getSelection()?.removeAllRanges()
     const onMove = (ev: PointerEvent): void => {
       const dx = ev.clientX - start.x
-      const dy = ev.clientY - start.y
-      if (!active) {
-        if (dx > 30 && Math.abs(dx) > Math.abs(dy) * 2) {
-          active = true
-          draggingRef.current = true
-          document.getSelection()?.removeAllRanges()
-        } else if (Math.abs(dy) > 24 || dx < -24) {
-          cleanup()
-          return
-        }
-      }
       const cap = targetIsProtected ? SWIPE_TIMEOUT_START - 1 : SWIPE_BAN_START + 40
-      if (active) setDragX(Math.max(0, Math.min(dx, cap)))
+      setDragX(Math.max(0, Math.min(dx, cap)))
     }
     const onUp = (ev: PointerEvent): void => {
       cleanup()
-      if (active) {
-        draggingRef.current = false
-        executeSwipe(ev.clientX - start.x)
-      }
+      draggingRef.current = false
+      executeSwipe(ev.clientX - start.x)
       setDragX(0)
     }
     const cleanup = (): void => {
@@ -298,8 +336,6 @@ function MessageViewInner({
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
   }
-
-  const onPointerDown = (e: React.PointerEvent): void => startSwipe(e, false)
 
   const insertNick = (e: React.MouseEvent): void => {
     e.preventDefault()
@@ -337,13 +373,12 @@ function MessageViewInner({
             transform: dragX > 0 ? `translateX(${dragX}px)` : undefined
           } as React.CSSProperties
         }
-        onPointerDown={onPointerDown}
       >
         {swipeEnabled && (
           <span
             className="swipe-grip"
             title={t('swipe.hint')}
-            onPointerDown={(e) => startSwipe(e, true)}
+            onPointerDown={startSwipe}
           >
             ⠿
           </span>
@@ -381,11 +416,39 @@ function MessageViewInner({
           {msg.displayName.toLowerCase() !== msg.login ? ` (${msg.login})` : ''}
         </span>
         {msg.isAction ? ' ' : ': '}
-        <span className="msg-text" style={msg.isAction ? { color } : undefined}>
-          {tokens.map((tk, i) => (
-            <TokenView key={i} token={tk} paneId={paneId} />
-          ))}
-        </span>
+        {brailleArt && !artLines && (
+          <span className="art-width-ctl" title={`${artCols}`}>
+            <input
+              type="range"
+              min={16}
+              max={60}
+              value={artCols}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10)
+                setArtCols(v)
+                lastArtCols = v
+              }}
+            />
+          </span>
+        )}
+        {artLines ? (
+          // original line structure recovered — render exactly as drawn
+          <span className="msg-text ascii-art" style={{ whiteSpace: 'pre' }}>
+            {artLines.join('\n')}
+          </span>
+        ) : (
+          <span
+            className={`msg-text ${brailleArt ? 'ascii-art' : ''}`}
+            style={{
+              ...(msg.isAction ? { color } : undefined),
+              ...(brailleArt ? { width: Math.ceil(getBrailleCellWidth() * artCols) } : undefined)
+            }}
+          >
+            {tokens.map((tk, i) => (
+              <TokenView key={i} token={tk} paneId={paneId} />
+            ))}
+          </span>
+        )}
 
         {canAct && (
           <span className="hover-actions">

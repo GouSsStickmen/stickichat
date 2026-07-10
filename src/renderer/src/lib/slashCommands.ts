@@ -29,6 +29,8 @@ export interface SlashCommand {
   usage: string
   /** short description shown in the suggestion list (uk) */
   desc: string
+  /** minimum role: undefined = everyone, 'mod' = moderators, 'broadcaster' = streamer only */
+  perm?: 'mod' | 'broadcaster'
   run: (args: string[], rest: string, ctx: SlashContext) => Promise<void>
 }
 
@@ -67,6 +69,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'timeout',
+    perm: 'mod',
     usage: '/timeout <нік> [час: 30s 10m 1h 1d] [причина]',
     desc: 'Таймаут користувача',
     run: async (args, _r, ctx) => {
@@ -79,6 +82,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'ban',
+    perm: 'mod',
     usage: '/ban <нік> [причина]',
     desc: 'Забанити користувача',
     run: async (args, _r, ctx) => {
@@ -90,6 +94,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'unban',
+    perm: 'mod',
     usage: '/unban <нік>',
     desc: 'Розбанити / зняти таймаут',
     run: async (args, _r, ctx) => {
@@ -100,6 +105,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'untimeout',
+    perm: 'mod',
     usage: '/untimeout <нік>',
     desc: 'Зняти таймаут',
     run: async (args, _r, ctx) => {
@@ -110,6 +116,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'warn',
+    perm: 'mod',
     usage: '/warn <нік> <причина>',
     desc: 'Офіційне попередження',
     run: async (args, _r, ctx) => {
@@ -121,6 +128,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'clear',
+    perm: 'mod',
     usage: '/clear',
     desc: 'Очистити весь чат',
     run: async (_a, _r, ctx) => {
@@ -129,6 +137,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'raid',
+    perm: 'mod',
     usage: '/raid <канал>',
     desc: 'Почати рейд',
     run: async (args, _r, ctx) => {
@@ -139,6 +148,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'unraid',
+    perm: 'mod',
     usage: '/unraid',
     desc: 'Скасувати рейд',
     run: async (_a, _r, ctx) => {
@@ -147,6 +157,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'shoutout',
+    perm: 'mod',
     usage: '/shoutout <нік>',
     desc: 'Шатаут каналу',
     run: async (args, _r, ctx) => {
@@ -157,6 +168,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'announce',
+    perm: 'mod',
     usage: '/announce <текст>',
     desc: 'Надіслати анонс',
     run: async (_a, rest, ctx) => {
@@ -165,6 +177,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'announceblue',
+    perm: 'mod',
     usage: '/announceblue <текст>',
     desc: 'Анонс (синій)',
     run: async (_a, rest, ctx) => {
@@ -173,6 +186,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'announcegreen',
+    perm: 'mod',
     usage: '/announcegreen <текст>',
     desc: 'Анонс (зелений)',
     run: async (_a, rest, ctx) => {
@@ -181,6 +195,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'announceorange',
+    perm: 'mod',
     usage: '/announceorange <текст>',
     desc: 'Анонс (помаранчевий)',
     run: async (_a, rest, ctx) => {
@@ -189,6 +204,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'announcepurple',
+    perm: 'mod',
     usage: '/announcepurple <текст>',
     desc: 'Анонс (фіолетовий)',
     run: async (_a, rest, ctx) => {
@@ -197,6 +213,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'slow',
+    perm: 'mod',
     usage: '/slow [секунди]',
     desc: 'Повільний режим',
     run: async (args, _r, ctx) => {
@@ -210,6 +227,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'slowoff',
+    perm: 'mod',
     usage: '/slowoff',
     desc: 'Вимкнути повільний режим',
     run: async (_a, _r, ctx) => {
@@ -218,6 +236,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'followers',
+    perm: 'mod',
     usage: '/followers [хвилини]',
     desc: 'Режим лише для фоловерів',
     run: async (args, _r, ctx) => {
@@ -234,6 +253,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'followersoff',
+    perm: 'mod',
     usage: '/followersoff',
     desc: 'Вимкнути followers-режим',
     run: async (_a, _r, ctx) => {
@@ -242,6 +262,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'subscribers',
+    perm: 'mod',
     usage: '/subscribers',
     desc: 'Чат лише для сабів',
     run: async (_a, _r, ctx) => {
@@ -250,6 +271,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'subscribersoff',
+    perm: 'mod',
     usage: '/subscribersoff',
     desc: 'Вимкнути saby-режим',
     run: async (_a, _r, ctx) => {
@@ -258,6 +280,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'emoteonly',
+    perm: 'mod',
     usage: '/emoteonly',
     desc: 'Чат лише емоутами',
     run: async (_a, _r, ctx) => {
@@ -266,6 +289,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'emoteonlyoff',
+    perm: 'mod',
     usage: '/emoteonlyoff',
     desc: 'Вимкнути emote-only',
     run: async (_a, _r, ctx) => {
@@ -274,6 +298,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'uniquechat',
+    perm: 'mod',
     usage: '/uniquechat',
     desc: 'Режим унікальних повідомлень',
     run: async (_a, _r, ctx) => {
@@ -282,6 +307,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'uniquechatoff',
+    perm: 'mod',
     usage: '/uniquechatoff',
     desc: 'Вимкнути унікальні повідомлення',
     run: async (_a, _r, ctx) => {
@@ -290,6 +316,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'mod',
+    perm: 'broadcaster',
     usage: '/mod <нік>',
     desc: 'Видати модерку (лише стрімер)',
     run: async (args, _r, ctx) => {
@@ -300,6 +327,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'unmod',
+    perm: 'broadcaster',
     usage: '/unmod <нік>',
     desc: 'Забрати модерку (лише стрімер)',
     run: async (args, _r, ctx) => {
@@ -310,6 +338,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'vip',
+    perm: 'broadcaster',
     usage: '/vip <нік>',
     desc: 'Видати VIP (лише стрімер)',
     run: async (args, _r, ctx) => {
@@ -320,6 +349,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'unvip',
+    perm: 'broadcaster',
     usage: '/unvip <нік>',
     desc: 'Забрати VIP (лише стрімер)',
     run: async (args, _r, ctx) => {
@@ -342,6 +372,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'pin',
+    perm: 'mod',
     usage: '/pin',
     desc: 'Недоступно: Twitch не має API для піна',
     run: async (_a, _r, ctx) => {
@@ -350,15 +381,23 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   }
 ]
 
-export function matchCommands(input: string): SlashCommand[] {
+export function matchCommands(
+  input: string,
+  perms?: { isMod: boolean; isBroadcaster: boolean }
+): SlashCommand[] {
   if (!input.startsWith('/')) return []
+  const allowed = (c: SlashCommand): boolean => {
+    if (!perms || !c.perm) return true
+    if (c.perm === 'broadcaster') return perms.isBroadcaster
+    return perms.isMod || perms.isBroadcaster
+  }
   const typed = input.slice(1).split(' ')[0].toLowerCase()
   if (input.includes(' ')) {
     // command fully typed — show just its usage while typing args
     const exact = SLASH_COMMANDS.find((c) => c.name === typed)
-    return exact ? [exact] : []
+    return exact && allowed(exact) ? [exact] : []
   }
-  return SLASH_COMMANDS.filter((c) => c.name.startsWith(typed)).slice(0, 12)
+  return SLASH_COMMANDS.filter((c) => c.name.startsWith(typed) && allowed(c))
 }
 
 /** Returns true if the text was handled as a command (or rejected as unknown). */

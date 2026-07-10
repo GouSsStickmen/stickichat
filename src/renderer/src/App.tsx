@@ -16,6 +16,7 @@ import Toasts from './components/Toasts'
 import UpdateBanner from './components/UpdateBanner'
 import EmoteHoverPreview from './components/EmoteHoverPreview'
 import EmotePickerWindow from './components/EmotePickerWindow'
+import UserCardWindow from './components/UserCardWindow'
 import { useT } from './i18n'
 
 interface DetachedPayload {
@@ -30,10 +31,16 @@ export interface EmotePickerWindowPayload {
   accountId: string | null
 }
 
+export interface UserCardWindowPayload {
+  target: import('./store/ui').UserCardTarget
+  messages: { id: string; timestamp: number; text: string; emotesTag?: string }[]
+}
+
 type Special =
   | { kind: 'detached'; data: DetachedPayload }
   | { kind: 'emotepicker'; data: EmotePickerWindowPayload }
-  | { kind: 'settings' }
+  | { kind: 'settings'; section?: string }
+  | { kind: 'usercard'; data: UserCardWindowPayload }
   | null
 
 function parseHash(): Special {
@@ -42,6 +49,8 @@ function parseHash(): Special {
     if (h.startsWith('#detached=')) return { kind: 'detached', data: JSON.parse(decodeURIComponent(h.slice(10))) }
     if (h.startsWith('#emotepicker=')) return { kind: 'emotepicker', data: JSON.parse(decodeURIComponent(h.slice(13))) }
     if (h === '#settings') return { kind: 'settings' }
+    if (h.startsWith('#settings=')) return { kind: 'settings', section: h.slice(10) }
+    if (h.startsWith('#usercard=')) return { kind: 'usercard', data: JSON.parse(decodeURIComponent(h.slice(10))) }
   } catch {
     /* malformed hash */
   }
@@ -85,7 +94,7 @@ export default function App(): React.JSX.Element | null {
           // layout here is ephemeral, but settings tweaks (font zoom, sounds…) must persist
           startSettingsPersistence()
           setOnboarded(true)
-        } else if (special?.kind === 'emotepicker' || special?.kind === 'settings') {
+        } else if (special?.kind === 'emotepicker' || special?.kind === 'settings' || special?.kind === 'usercard') {
           // utility windows: no chat and no layout persistence, but settings changed here
           // (sounds, pins, mod buttons…) must still reach the disk
           startSettingsPersistence()
@@ -108,7 +117,24 @@ export default function App(): React.JSX.Element | null {
     root.style.setProperty('--font-size', `${settings.fontSize}px`)
     root.style.setProperty('--emote-scale', String(settings.emoteScale))
     root.style.setProperty('--msg-spacing', `${settings.messageSpacing}px`)
-  }, [settings.theme, settings.fontSize, settings.emoteScale, settings.messageSpacing])
+    root.style.setProperty('--badge-size', `${settings.badgeSize}px`)
+    root.style.setProperty('--mention-bg', settings.mentionBgColor)
+    root.style.setProperty('--first-msg-bg', settings.firstMessageBgColor)
+    if (settings.fontFamily.trim()) {
+      root.style.setProperty('--app-font', `"${settings.fontFamily.trim()}", 'Segoe UI', sans-serif`)
+    } else {
+      root.style.removeProperty('--app-font')
+    }
+  }, [
+    settings.theme,
+    settings.fontSize,
+    settings.emoteScale,
+    settings.messageSpacing,
+    settings.badgeSize,
+    settings.mentionBgColor,
+    settings.firstMessageBgColor,
+    settings.fontFamily
+  ])
 
   // pin this window on top when the setting is on (main window only follows the persisted setting)
   useEffect(() => {
@@ -117,7 +143,7 @@ export default function App(): React.JSX.Element | null {
 
   useEffect(() => {
     if (!booted || !onboarded) return
-    if (special?.kind === 'emotepicker' || special?.kind === 'settings') return
+    if (special?.kind === 'emotepicker' || special?.kind === 'settings' || special?.kind === 'usercard') return
     chatService.start()
     if (!detached && useLayoutStore.getState().tabs.length === 0) {
       useLayoutStore.getState().addTab()
@@ -153,7 +179,7 @@ export default function App(): React.JSX.Element | null {
 
   // F5 = force-reconnect chat (instead of reloading the page)
   useEffect(() => {
-    if (!booted || !onboarded || special?.kind === 'emotepicker' || special?.kind === 'settings') return
+    if (!booted || !onboarded || special?.kind === 'emotepicker' || special?.kind === 'settings' || special?.kind === 'usercard') return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'F5') {
         e.preventDefault()
@@ -164,6 +190,18 @@ export default function App(): React.JSX.Element | null {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [booted, onboarded, special, t])
+
+  // Ctrl+Shift+T — convert the focused field's text between keyboard layouts (укр ⇄ eng)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey || !e.shiftKey || e.code !== 'KeyT') return
+      if (!useSettingsStore.getState().settings.translitEnabled) return
+      e.preventDefault()
+      import('./lib/translit').then(({ swapLayoutInFocusedField }) => swapLayoutInFocusedField())
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Ctrl + mouse wheel = zoom chat text size
   useEffect(() => {
@@ -197,10 +235,14 @@ export default function App(): React.JSX.Element | null {
   if (special?.kind === 'settings') {
     return (
       <div className="app settings-window">
-        <SettingsModal standalone />
+        <SettingsModal standalone initialSection={special.section} />
         <Toasts />
       </div>
     )
+  }
+
+  if (special?.kind === 'usercard') {
+    return <UserCardWindow payload={special.data} />
   }
 
   if (!onboarded) {

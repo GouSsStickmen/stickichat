@@ -12,10 +12,16 @@ interface ChatState {
   connState: ConnState
   /** channel login -> currently live */
   liveChannels: Record<string, boolean>
+  /** channel login -> broadcaster's display name (proper capitalization) */
+  channelNames: Record<string, string>
+  /** channel login -> live stream info for the pane header */
+  streamInfo: Record<string, { viewers: number; title: string; startedAt: string }>
   /** channel login -> has an unseen mention of one of my accounts */
   unreadMentions: Record<string, boolean>
   /** channel login -> has any unseen message at all (inactive tabs only) */
   unreadMessages: Record<string, boolean>
+  /** channel login -> timestamp up to which the user has "seen" messages */
+  lastReadAt: Record<string, number>
   appendMessages: (channel: string, msgs: ChatMessage[]) => void
   prependMessages: (channel: string, msgs: ChatMessage[]) => void
   markDeleted: (channel: string, messageId: string) => void
@@ -25,10 +31,13 @@ interface ChatState {
   setChannelId: (channel: string, id: string) => void
   setConnState: (s: ConnState) => void
   setLiveChannels: (live: Record<string, boolean>) => void
+  setChannelNames: (names: Record<string, string>) => void
+  setStreamInfo: (info: Record<string, { viewers: number; title: string; startedAt: string }>) => void
   setUnreadMention: (channel: string) => void
   clearUnreadMentions: (channels: string[]) => void
   setUnreadMessage: (channel: string) => void
   clearUnreadMessages: (channels: string[]) => void
+  markChannelsRead: (channels: string[]) => void
 }
 
 /** most recent known chat color for a login in a channel (for coloring @mentions) */
@@ -58,8 +67,11 @@ export const useChatStore = create<ChatState>()((set) => ({
   channelIds: {},
   connState: 'connecting',
   liveChannels: {},
+  channelNames: {},
+  streamInfo: {},
   unreadMentions: {},
   unreadMessages: {},
+  lastReadAt: {},
   appendMessages: (channel, msgs) =>
     set((s) => {
       const limit = useSettingsStore.getState().settings.messageLimit
@@ -117,6 +129,8 @@ export const useChatStore = create<ChatState>()((set) => ({
     ),
   setConnState: (connState) => set({ connState }),
   setLiveChannels: (liveChannels) => set({ liveChannels }),
+  setChannelNames: (names) => set((s) => ({ channelNames: { ...s.channelNames, ...names } })),
+  setStreamInfo: (streamInfo) => set({ streamInfo }),
   setUnreadMention: (channel) =>
     set((s) =>
       s.unreadMentions[channel] ? s : { unreadMentions: { ...s.unreadMentions, [channel]: true } }
@@ -138,5 +152,12 @@ export const useChatStore = create<ChatState>()((set) => ({
       const unreadMessages = { ...s.unreadMessages }
       for (const c of channels) delete unreadMessages[c]
       return { unreadMessages }
+    }),
+  markChannelsRead: (channels) =>
+    set((s) => {
+      const now = Date.now()
+      const lastReadAt = { ...s.lastReadAt }
+      for (const c of channels) lastReadAt[c] = now
+      return { lastReadAt }
     })
 }))

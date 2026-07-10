@@ -73,9 +73,29 @@ export default function DeviceAuthModal({ onClose }: { onClose: () => void }): R
             <>
               <p>{t('auth.deviceIntro')}</p>
               <div className="device-code">{userCode}</div>
-              <button className="primary" style={{ width: '100%' }} onClick={() => window.sticki.openExternal(verifyUri)}>
-                {t('auth.openPage')}
-              </button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="primary" style={{ flex: 1 }} onClick={() => window.sticki.openExternal(verifyUri)}>
+                  {t('auth.openPage')}
+                </button>
+                <button
+                  title={t('auth.copyLink')}
+                  onClick={() => {
+                    navigator.clipboard.writeText(verifyUri)
+                    useUiStore.getState().toast(t('auth.linkCopied'))
+                  }}
+                >
+                  🔗
+                </button>
+                <button
+                  title={t('auth.copyCode')}
+                  onClick={() => {
+                    navigator.clipboard.writeText(userCode)
+                    useUiStore.getState().toast(t('auth.linkCopied'))
+                  }}
+                >
+                  📋
+                </button>
+              </div>
               <p style={{ color: 'var(--text-muted)', textAlign: 'center' }}>{t('auth.waiting')}</p>
             </>
           )}

@@ -2,18 +2,31 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useUiStore, UserCardTarget } from '../store/ui'
 import { useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
-import { lookupBadgeUrl } from '../store/emotes'
+import { useSettingsStore } from '../store/settings'
+import { lookupBadgeUrl, lookupEmote } from '../store/emotes'
 import { canModerate } from '../services/accountService'
 import { getFollowDate, getSubInfo, getUsers, HelixUser, SubInfo } from '../lib/helix'
 import { banUser, unbanUser, warnUser } from '../lib/helix'
 import { useT } from '../i18n'
-import { formatDuration } from '../lib/tokenize'
+import { formatDuration, tokenizeMessage } from '../lib/tokenize'
+import EmojiGlyph from './EmojiGlyph'
 
 const TIMEOUTS = [60, 600, 3600, 86400]
 
-export default function UserCard({ target }: { target: UserCardTarget }): React.JSX.Element {
+export default function UserCard({
+  target,
+  standalone,
+  presetMessages
+}: {
+  target: UserCardTarget
+  standalone?: boolean
+  presetMessages?: { id: string; timestamp: number; text: string; emotesTag?: string }[]
+}): React.JSX.Element {
   const t = useT()
-  const close = (): void => useUiStore.getState().setUserCard(null)
+  const close = (): void => {
+    if (standalone) window.close()
+    else useUiStore.getState().setUserCard(null)
+  }
   const accounts = useAccountsStore((s) => s.accounts)
   const account = accounts.find((a) => a.id === target.accountId) ?? accounts[0]
   const isMod = canModerate(account, target.channel, target.channelId)
@@ -24,9 +37,10 @@ export default function UserCard({ target }: { target: UserCardTarget }): React.
   const [subInfo, setSubInfo] = useState<SubInfo | null | undefined>(undefined)
   const ref = useRef<HTMLDivElement>(null)
 
+  // chronological, same as the chat itself: oldest at the top, newest at the bottom
   const userMessages = useMemo(
-    () => messages.filter((m) => m.userId === target.userId && !m.system).slice(-30).reverse(),
-    [messages, target.userId]
+    () => presetMessages ?? messages.filter((m) => m.userId === target.userId && !m.system).slice(-30),
+    [messages, target.userId, presetMessages]
   )
 
   useEffect(() => {
@@ -45,7 +59,7 @@ export default function UserCard({ target }: { target: UserCardTarget }): React.
 
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close()
+      if (!standalone && ref.current && !ref.current.contains(e.target as Node)) close()
     }
     const onEsc = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') close()
@@ -56,11 +70,35 @@ export default function UserCard({ target }: { target: UserCardTarget }): React.
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onEsc)
     }
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [standalone])
 
-  const x = Math.min(target.x, window.innerWidth - 336)
-  const y = Math.min(target.y, window.innerHeight - 360)
+  // draggable: keep an offset from the initial anchor, clamped inside the window using the
+  // card's REAL height (a fixed guess let tall cards stick out at the bottom of the chat)
+  const [drag, setDrag] = useState({ dx: 0, dy: 0 })
+  const [cardH, setCardH] = useState(420)
+  useEffect(() => {
+    if (ref.current) setCardH(ref.current.offsetHeight)
+  }, [info, followedAt, subInfo, userMessages.length])
+  const x = Math.max(4, Math.min(target.x + drag.dx, window.innerWidth - 340))
+  const y = Math.max(4, Math.min(target.y + drag.dy, window.innerHeight - cardH - 8))
   const toast = useUiStore.getState().toast
+
+  const startDrag = (e: React.PointerEvent): void => {
+    if ((e.target as HTMLElement).closest('button, a, input, img')) return
+    e.preventDefault()
+    const start = { x: e.clientX - drag.dx, y: e.clientY - drag.dy }
+    const onMove = (ev: PointerEvent): void =>
+      setDrag({ dx: ev.clientX - start.x, dy: ev.clientY - start.y })
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const emoteLookup = lookupEmote(target.channel)
 
   const act = async (fn: () => Promise<{ ok: boolean; json: unknown }>, label: string): Promise<void> => {
     const res = await fn()
@@ -70,9 +108,22 @@ export default function UserCard({ target }: { target: UserCardTarget }): React.
     )
   }
 
+  const ucFontSize = useSettingsStore((s) => s.settings.usercardFontSize)
+  const setSettings = useSettingsStore((s) => s.setSettings)
+
   return (
-    <div className="usercard" ref={ref} style={{ left: x, top: y }}>
-      <div className="uc-head">
+    <div
+      className={`usercard ${standalone ? 'usercard-standalone' : ''}`}
+      ref={ref}
+      style={standalone ? { fontSize: ucFontSize } : { left: x, top: y }}
+    >
+      {standalone && (
+        <div className="uc-zoom">
+          <button onClick={() => setSettings({ usercardFontSize: Math.max(10, ucFontSize - 1) })}>A−</button>
+          <button onClick={() => setSettings({ usercardFontSize: Math.min(28, ucFontSize + 1) })}>A+</button>
+        </div>
+      )}
+      <div className="uc-head" onPointerDown={standalone ? undefined : startDrag} style={{ cursor: standalone ? undefined : 'grab' }}>
         {info?.profile_image_url && <img src={info.profile_image_url} alt="" />}
         <div>
           <div className="uc-name" style={{ color: target.color }}>
@@ -121,6 +172,36 @@ export default function UserCard({ target }: { target: UserCardTarget }): React.
         <button onClick={() => window.sticki.openExternal(`https://www.twitch.tv/${target.login}`)}>
           ↗ {t('user.openChannel')}
         </button>
+        <button
+          title={t('user.viewercard')}
+          onClick={() =>
+            window.sticki.openExternal(
+              `https://www.twitch.tv/popout/${target.channel}/viewercard/${target.login}`
+            )
+          }
+        >
+          🗂 {t('user.viewercard')}
+        </button>
+        {!standalone && (
+          <button
+            title={t('user.openWindow')}
+            onClick={() => {
+              const payload = {
+                target,
+                messages: userMessages.map((m) => ({
+                  id: m.id,
+                  timestamp: m.timestamp,
+                  text: m.text,
+                  emotesTag: (m as { emotesTag?: string }).emotesTag
+                }))
+              }
+              window.sticki.openUserCardWindow(`usercard=${encodeURIComponent(JSON.stringify(payload))}`)
+              close()
+            }}
+          >
+            ⧉
+          </button>
+        )}
       </div>
       {isMod && account && (
         <div className="uc-actions">
@@ -157,7 +238,15 @@ export default function UserCard({ target }: { target: UserCardTarget }): React.
         {userMessages.length === 0 && <div>{t('user.noMessages')}</div>}
         {userMessages.map((m) => (
           <div key={m.id} className="m">
-            {new Date(m.timestamp).toLocaleTimeString()} — {m.text}
+            {new Date(m.timestamp).toLocaleTimeString()} —{' '}
+            {tokenizeMessage(m, emoteLookup).map((tk, i) => {
+              if (tk.kind === 'emote')
+                return <img key={i} className="uc-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />
+              if (tk.kind === 'emoji') return <EmojiGlyph key={i} char={tk.char} />
+              if (tk.kind === 'link') return <span key={i}>{tk.url}</span>
+              if (tk.kind === 'mention') return <span key={i}>{tk.name}</span>
+              return <span key={i}>{tk.text}</span>
+            })}
           </div>
         ))}
       </div>

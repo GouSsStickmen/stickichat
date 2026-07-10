@@ -1,5 +1,5 @@
 :root {
-  --font: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+  --font: var(--app-font, 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif);
   --font-size: 13px;
   --emote-scale: 1;
 }
@@ -187,12 +187,11 @@ select:focus {
   white-space: nowrap;
   overflow: hidden;
 }
+/* the moving tab itself is the drag indicator (native ghost is suppressed) */
 .tabbar .tab.dragging {
-  opacity: 0.35;
-}
-.tabbar .tab.drag-over {
-  box-shadow: inset 3px 0 0 var(--accent-strong);
-  background: var(--surface-3);
+  background: color-mix(in srgb, var(--accent) 25%, var(--surface-2));
+  border-color: var(--accent);
+  color: var(--text);
 }
 .tabbar .tab.active {
   background: var(--surface-2);
@@ -239,6 +238,14 @@ select:focus {
 @keyframes live-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
+}
+/* fixed slot: tabs keep the same width whether an indicator is shown or not */
+.tab-indicator-slot {
+  width: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 .mention-dot {
   color: var(--accent);
@@ -320,6 +327,16 @@ select:focus {
 .pane-header .mod-badge.broadcaster {
   background: var(--danger);
 }
+.pane-header .stream-info {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+  flex-shrink: 1;
+  min-width: 0;
+}
 .pane-header .spacer {
   flex: 1;
 }
@@ -379,7 +396,8 @@ select:focus {
   border-left: 1px solid var(--border);
   background: var(--surface-2);
   padding: 8px;
-  overflow-y: auto;
+  /* the header (mode tabs) stays pinned; only the list below scrolls */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -387,6 +405,13 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.highlight-item.unread {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .highlight-item {
   display: flex;
@@ -425,16 +450,16 @@ select:focus {
   background: var(--surface-2);
 }
 .msg.mention {
-  background: var(--mention-bg);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--mention-bg) 20%, transparent);
+  box-shadow: inset 3px 0 0 var(--mention-bg);
 }
 .msg.first-msg {
   box-shadow: inset 3px 0 0 var(--success);
   background: var(--highlight-bg);
 }
 .msg.first-in-session {
-  box-shadow: inset 3px 0 0 var(--link);
-  background: rgba(30, 144, 255, 0.08);
+  box-shadow: inset 3px 0 0 var(--first-msg-bg, var(--link));
+  background: color-mix(in srgb, var(--first-msg-bg, #1e90ff) 12%, transparent);
 }
 .msg.usernotice {
   box-shadow: inset 4px 0 0 var(--announce-accent, var(--accent)), inset -4px 0 0 var(--announce-accent, var(--accent));
@@ -444,6 +469,46 @@ select:focus {
 .msg.deleted .msg-text a {
   color: var(--text-faint);
   text-decoration: line-through;
+}
+/* emote-only deleted messages had no visual cue — fade and desaturate the emotes too */
+.msg.deleted .msg-text img,
+.msg.deleted .emote-stack {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+/* multiple spaces matter for braille/ASCII art — preserve them instead of collapsing */
+.msg .msg-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* braille art wraps at an adjustable cell count (width set inline from a live measurement)
+   so the picture can be tuned to the shape it was drawn with */
+.msg .msg-text.ascii-art {
+  display: block;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1;
+  font-size: 13px;
+}
+/* width slider shown on braille-art messages — subtle until hovered */
+.art-width-ctl {
+  display: block;
+  opacity: 0.25;
+  transition: opacity 0.15s;
+}
+.msg:hover .art-width-ctl {
+  opacity: 1;
+}
+.art-width-ctl input[type='range'] {
+  width: 170px;
+  height: 10px;
+}
+/* badges shouldn't end up in copied text selections */
+.msg .badge,
+.msg .swipe-grip,
+.chatter-row .badge {
+  user-select: none;
 }
 .msg.historical {
   opacity: 0.6;
@@ -457,13 +522,13 @@ select:focus {
 .chatter-row .badge,
 .usercard .uc-badges img {
   display: inline-block;
-  height: 18px;
-  width: 18px;
-  min-width: 18px;
-  max-width: 18px;
+  height: var(--badge-size, 18px);
+  width: var(--badge-size, 18px);
+  min-width: var(--badge-size, 18px);
+  max-width: var(--badge-size, 18px);
   flex: 0 0 auto;
   object-fit: contain;
-  vertical-align: -4px;
+  vertical-align: calc(var(--badge-size, 18px) / -4.5);
   margin-right: 3px;
   border-radius: 3px;
 }
@@ -531,7 +596,7 @@ select:focus {
   animation: msg-flash 3.2s ease;
 }
 @keyframes msg-flash {
-  0%, 20%, 40%, 60% { background: var(--mention-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  0%, 20%, 40%, 60% { background: color-mix(in srgb, var(--mention-bg) 20%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
   10%, 30%, 50%, 80% { background: transparent; box-shadow: none; }
   100% { background: transparent; box-shadow: none; }
 }
@@ -605,9 +670,10 @@ select:focus {
 }
 
 .scroll-lock-btn {
+  /* bottom-LEFT corner: message hover buttons live on the right and were covered */
   position: absolute;
   bottom: 8px;
-  right: 8px;
+  left: 8px;
   z-index: 6;
   background: var(--surface-3);
   border: 1px solid var(--border);
@@ -668,6 +734,21 @@ select:focus {
   flex-shrink: 0;
   position: relative;
   align-items: flex-end;
+}
+/* keep the account select, textarea and buttons on one shared 34px baseline */
+.input-row .account-select,
+.input-row > button {
+  height: 34px;
+  box-sizing: border-box;
+  margin: 0;
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.input-row .ta-wrap textarea {
+  min-height: 34px;
+  box-sizing: border-box;
 }
 .ta-wrap {
   flex: 1;
@@ -885,6 +966,42 @@ select:focus {
   color: var(--text-muted);
   font-size: 11px;
 }
+/* full-window user card: fills the window; text size set by the A−/A+ controls */
+.usercard.usercard-standalone {
+  position: static;
+  width: 100%;
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+/* higher specificity than the base `.usercard .uc-msgs` rule below — otherwise its
+   max-height:180px capped the list (gray void underneath) and 12px froze the text size */
+.usercard.usercard-standalone .uc-msgs {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  max-height: none;
+  font-size: inherit;
+}
+.usercard-standalone .uc-zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 5;
+}
+.usercard .uc-emote {
+  height: 20px;
+  vertical-align: -5px;
+  margin: 0 1px;
+}
 .usercard .uc-badges {
   display: flex;
   gap: 3px;
@@ -970,6 +1087,20 @@ select:focus {
   display: flex;
   min-height: 420px;
 }
+/* visual grouping inside a settings section */
+.set-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+  margin: 16px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.set-group-title:first-child {
+  margin-top: 0;
+}
 .settings-nav {
   width: 160px;
   border-right: 1px solid var(--border);
@@ -1036,12 +1167,25 @@ select:focus {
   background: var(--surface-2);
   transition: opacity 0.12s ease;
 }
+/* the moving card itself is the drag indicator (native ghost is suppressed) */
 .modbtn-card.dragging {
-  opacity: 0.35;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
 }
-.modbtn-card.drag-over {
-  box-shadow: inset 0 3px 0 var(--accent-strong);
+.modbtn-channel-chips {
+  flex-wrap: wrap;
+}
+.modbtn-channel-chips .chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
   background: var(--surface-3);
+  border: 1px solid var(--border);
+}
+.modbtn-channel-chips .chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 .modbtn-line {
   display: flex;
@@ -1213,6 +1357,71 @@ select:focus {
 .emote-picker-fixed .picker-body {
   max-height: min(50vh, 460px);
 }
+/* big preview of the hovered emote at the bottom of the picker */
+.picker-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.picker-preview img {
+  max-width: 100%;
+  object-fit: contain;
+}
+.picker-preview {
+  overflow: hidden;
+  box-sizing: content-box;
+}
+/* favorites: star badge on cells + a quick pop when something is added */
+.emote-cell {
+  position: relative;
+}
+.emote-cell .fav-star {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  font-size: 9px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+}
+@keyframes fav-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35) rotate(-8deg); }
+  70% { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+.emote-cell.fav-pop {
+  animation: fav-pop 0.45s ease;
+}
+.emote-cell.fav-pop .fav-star {
+  animation: fav-pop 0.45s ease;
+}
+/* emoji inside chat messages behave like emotes: right-click inserts */
+.emoji-token {
+  cursor: default;
+}
+/* image fallback for emoji the system font can't draw (flags on Windows) */
+.emoji-img {
+  height: 1.25em;
+  width: auto;
+  vertical-align: -0.25em;
+}
+.emoji-preview-glyph.emoji-img {
+  height: 1em;
+}
+.emoji-token:hover {
+  filter: brightness(1.25);
+}
+.picker-preview-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  word-break: break-word;
+}
 .picker-tabs {
   align-items: center;
 }
@@ -1298,6 +1507,9 @@ select:focus {
 
 /* ---------- Update banner ---------- */
 
+.update-banner-wrap {
+  flex-shrink: 0;
+}
 .update-banner {
   display: flex;
   align-items: center;
@@ -1307,6 +1519,16 @@ select:focus {
   color: #fff;
   font-size: 12px;
   flex-shrink: 0;
+}
+.update-notes {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 14px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow-y: auto;
+  user-select: text;
 }
 .update-banner .spacer {
   flex: 1;
