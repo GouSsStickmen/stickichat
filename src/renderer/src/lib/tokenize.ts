@@ -7,8 +7,9 @@ export type Token =
   | { kind: 'mention'; name: string; color: string }
   | { kind: 'emoji'; char: string }
 
-// an emoji plus any variation selectors / ZWJ continuation (👨‍👩‍👧 etc.)
-const EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}️?)*/gu
+// an emoji plus any variation selectors / ZWJ continuation (👨‍👩‍👧 etc.), or a country
+// flag (two regional indicators — those are NOT Extended_Pictographic!)
+const EMOJI_RE = /(?:[🇦-🇿]{2}|\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}️?)*)/gu
 
 const URL_RE = /^https?:\/\/[^\s]+$/i
 // bare links without a protocol: www.foo.bar, twitch.tv/xqc, sub.domain.co.ua/path?x=1 …

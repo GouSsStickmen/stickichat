@@ -30,6 +30,7 @@ export interface ActionContext {
   targetUserId?: string
   targetLogin?: string
   targetMsgId?: string
+  targetText?: string
 }
 
 function report(res: HttpResponse, okText: string): boolean {
@@ -111,6 +112,13 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
       case 'link': {
         if (!btn.text) return
         await chatService.sendMessage(ctx.account, ctx.channel, fill(btn.text, ctx))
+        break
+      }
+      case 'copy': {
+        if (ctx.targetText) {
+          await navigator.clipboard.writeText(ctx.targetText)
+          toast('📋', 'ok')
+        }
         break
       }
       case 'fill': {

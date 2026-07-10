@@ -117,6 +117,7 @@ export default function App(): React.JSX.Element | null {
     root.style.setProperty('--font-size', `${settings.fontSize}px`)
     root.style.setProperty('--emote-scale', String(settings.emoteScale))
     root.style.setProperty('--msg-spacing', `${settings.messageSpacing}px`)
+    root.style.setProperty('--line-spacing', `${settings.lineSpacing}px`)
     root.style.setProperty('--badge-size', `${settings.badgeSize}px`)
     root.style.setProperty('--mention-bg', settings.mentionBgColor)
     root.style.setProperty('--first-msg-bg', settings.firstMessageBgColor)
@@ -133,8 +134,20 @@ export default function App(): React.JSX.Element | null {
     settings.badgeSize,
     settings.mentionBgColor,
     settings.firstMessageBgColor,
-    settings.fontFamily
+    settings.fontFamily,
+    settings.lineSpacing,
+    settings.customFonts
   ])
+
+  // user-uploaded fonts become @font-face rules available to the font-family setting
+  useEffect(() => {
+    const el = document.getElementById('sticki-custom-fonts') ?? document.createElement('style')
+    el.id = 'sticki-custom-fonts'
+    el.textContent = settings.customFonts
+      .map((f) => `@font-face { font-family: "${f.name.replace(/"/g, '')}"; src: url("${f.data}"); }`)
+      .join('\n')
+    if (!el.parentNode) document.head.appendChild(el)
+  }, [settings.customFonts])
 
   // pin this window on top when the setting is on (main window only follows the persisted setting)
   useEffect(() => {
@@ -236,6 +249,7 @@ export default function App(): React.JSX.Element | null {
     return (
       <div className="app settings-window">
         <SettingsModal standalone initialSection={special.section} />
+        {addAccountOpen && <DeviceAuthModal onClose={() => useUiStore.getState().setAddAccountOpen(false)} />}
         <Toasts />
       </div>
     )

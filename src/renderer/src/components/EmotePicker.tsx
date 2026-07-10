@@ -6,6 +6,7 @@ import { useSettingsStore } from '../store/settings'
 import { loadTwitchUserEmotes } from '../services/emoteService'
 import { EMOJI_LIST, emojiLabel, emojiSearchText } from '../lib/emojiData'
 import EmojiGlyph from './EmojiGlyph'
+import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
 
 const EMOJI_AS_EMOTES: Emote[] = EMOJI_LIST.map((e) => ({ code: e.char, url: '', provider: 'emoji', size: 0 }))
@@ -184,6 +185,9 @@ export default function EmotePicker({
   const previewSize = useSettingsStore((s) => s.settings.emotePreviewSize)
   const [preview, setPreview] = useState<Emote | FavoriteEmote | null>(null)
   const [favPop, setFavPop] = useState<string | null>(null)
+  const [editFavs, setEditFavs] = useState(false)
+  const favGridRef = useRef<HTMLDivElement>(null)
+  const setFavoriteEmotes = useSettingsStore((s) => s.setFavoriteEmotes)
 
   const favSet = useMemo(
     () => new Set(favorites.map((f) => `${f.provider}:${f.code}`)),
@@ -196,6 +200,10 @@ export default function EmotePicker({
     return (
       <button
         key={favKey}
+        // never keep keyboard focus on a cell: Enter must go to the message input,
+        // not re-trigger the last clicked emote
+        tabIndex={-1}
+        onMouseDown={(ev) => ev.preventDefault()}
         className={`emote-cell ${favPop === favKey ? 'fav-pop' : ''}`}
         title={
           e.provider === 'emoji'
@@ -261,7 +269,9 @@ export default function EmotePicker({
         )}
       </div>
       <input
-        autoFocus
+        // in popup mode the message input keeps focus (Enter sends the message);
+        // the standalone window has nothing else to focus, so search it is
+        autoFocus={standalone}
         placeholder={t('picker.search')}
         value={query}
         spellCheck={false}
@@ -276,7 +286,50 @@ export default function EmotePicker({
           )
         ) : tab === 'favorites' ? (
           favorites.length > 0 ? (
-            <div className="picker-grid">{favorites.map(cell)}</div>
+            <>
+              <button
+                className={`ghost fav-edit-btn ${editFavs ? 'active' : ''}`}
+                onClick={() => setEditFavs((v) => !v)}
+              >
+                ✎ {t('picker.editFavs')}
+              </button>
+              <div className="picker-grid" ref={favGridRef}>
+                {editFavs
+                  ? favorites.map((f, i) => (
+                      <button
+                        key={`${f.provider}:${f.code}`}
+                        className="emote-cell fav-editing"
+                        title={t('picker.editFavs')}
+                        onPointerDown={(e) => {
+                          if (!favGridRef.current) return
+                          e.preventDefault()
+                          startPointerReorder({
+                            e,
+                            container: favGridRef.current,
+                            itemSelector: '.emote-cell',
+                            index: i,
+                            axis: 'x',
+                            threshold: 3,
+                            onMove: (from, to) => {
+                              const list = [...useSettingsStore.getState().favoriteEmotes]
+                              const [it] = list.splice(from, 1)
+                              list.splice(to, 0, it)
+                              setFavoriteEmotes(list)
+                            },
+                            onDragState: () => undefined
+                          })
+                        }}
+                      >
+                        {f.provider === 'emoji' ? (
+                          <EmojiGlyph char={f.code} className="emoji-cell-char" />
+                        ) : (
+                          <img src={f.url} alt={f.code} loading="lazy" draggable={false} />
+                        )}
+                      </button>
+                    ))
+                  : favorites.map(cell)}
+              </div>
+            </>
           ) : (
             <div className="picker-empty">{t('picker.empty')}</div>
           )

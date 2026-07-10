@@ -27,3 +27,32 @@ export function writeConfig(cfg: unknown): boolean {
     return false
   }
 }
+
+export interface WindowState {
+  x?: number
+  y?: number
+  width: number
+  height: number
+}
+
+function windowStatePath(): string {
+  return join(app.getPath('userData'), 'window-state.json')
+}
+
+export function readWindowState(): WindowState | null {
+  try {
+    const p = windowStatePath()
+    if (!existsSync(p)) return null
+    return JSON.parse(readFileSync(p, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+export function writeWindowState(state: WindowState): void {
+  try {
+    writeFileSync(windowStatePath(), JSON.stringify(state), 'utf8')
+  } catch {
+    /* best-effort */
+  }
+}

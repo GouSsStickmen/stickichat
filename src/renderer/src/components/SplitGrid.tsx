@@ -10,7 +10,6 @@ export default function SplitGrid(): React.JSX.Element | null {
   const tabs = useLayoutStore((s) => s.tabs)
   const activeTabId = useLayoutStore((s) => s.activeTabId)
   const tab = tabs.find((x) => x.id === activeTabId) ?? tabs[0]
-  const [adding, setAdding] = useState(false)
 
   if (!tab) {
     return (
@@ -34,13 +33,8 @@ export default function SplitGrid(): React.JSX.Element | null {
       ))}
       {n === 0 && (
         <div className="empty-tab">
-          {adding ? (
-            <AddPaneForm tabId={tab.id} onDone={() => setAdding(false)} />
-          ) : (
-            <button className="primary" onClick={() => setAdding(true)}>
-              + {t('pane.add')}
-            </button>
-          )}
+          {/* a fresh tab asks for the channel right away, no extra click */}
+          <AddPaneForm tabId={tab.id} onDone={() => undefined} />
         </div>
       )}
     </div>

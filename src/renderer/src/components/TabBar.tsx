@@ -1,16 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLayoutStore } from '../store/layout'
 import { useChatStore } from '../store/chat'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
+import { startPointerReorder, justReordered } from '../lib/pointerReorder'
 import { useT } from '../i18n'
-
-// 1x1 transparent canvas — suppresses the native drag ghost so the tab row itself
-// (live reorder + colored dragging tab) is the only visual feedback. A canvas is always
-// "loaded", unlike an Image, so the very first drag has no fallback rectangle.
-const TRANSPARENT_IMG = document.createElement('canvas')
-TRANSPARENT_IMG.width = 1
-TRANSPARENT_IMG.height = 1
 
 export default function TabBar(): React.JSX.Element {
   const t = useT()
@@ -21,11 +15,13 @@ export default function TabBar(): React.JSX.Element {
   const unreadMentions = useChatStore((s) => s.unreadMentions)
   const unreadMessages = useChatStore((s) => s.unreadMessages)
   const alwaysOnTop = useSettingsStore((s) => s.settings.alwaysOnTop)
+  const muted = useSettingsStore((s) => s.settings.muted)
   const setSettings = useSettingsStore((s) => s.setSettings)
   const channelNames = useChatStore((s) => s.channelNames)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [nameInput, setNameInput] = useState('')
   const [draggingTab, setDraggingTab] = useState<string | null>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
 
   const activeTab = tabs.find((x) => x.id === activeTabId)
 
@@ -61,19 +57,7 @@ export default function TabBar(): React.JSX.Element {
 
   return (
     <div className="tabbar">
-      <div
-        className="tabbar-tabs"
-        // accept the drag across the WHOLE row (incl. gaps between tabs) — otherwise the
-        // cursor flashes a "no drop" sign every time it passes between two tabs
-        onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes('sticki/tab')) return
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'move'
-        }}
-        onDrop={(e) => {
-          if (e.dataTransfer.types.includes('sticki/tab')) e.preventDefault()
-        }}
-      >
+      <div className="tabbar-tabs" ref={tabsRef}>
       <span
         className="conn-dot"
         title={connState === 'open' ? t('misc.connected') : t('misc.disconnected')}
@@ -88,35 +72,24 @@ export default function TabBar(): React.JSX.Element {
           <div
             key={tab.id}
             className={`tab ${isActive ? 'active' : ''} ${draggingTab === tab.id ? 'dragging' : ''}`}
-            draggable={renaming !== tab.id}
-            onDragStart={(e) => {
-              e.dataTransfer.setData('sticki/tab', tab.id)
-              e.dataTransfer.effectAllowed = 'move'
-              e.dataTransfer.setDragImage(TRANSPARENT_IMG, 0, 0)
-              setDraggingTab(tab.id)
+            onPointerDown={(e) => {
+              if (renaming === tab.id) return
+              if ((e.target as HTMLElement).closest('.close, input')) return
+              if (!tabsRef.current) return
+              startPointerReorder({
+                e,
+                container: tabsRef.current,
+                itemSelector: '.tab',
+                index,
+                axis: 'x',
+                onMove: (_from, to) => useLayoutStore.getState().moveTab(tab.id, to),
+                onDragState: (d) => setDraggingTab(d ? tab.id : null)
+              })
             }}
-            onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes('sticki/tab')) return
-              e.preventDefault()
-              e.dataTransfer.dropEffect = 'move'
-              // live reorder — but only once the cursor crosses the MIDDLE of the target,
-              // otherwise the two tabs keep swapping back and forth at the boundary
-              if (draggingTab && draggingTab !== tab.id) {
-                const curIdx = tabs.findIndex((x) => x.id === draggingTab)
-                if (curIdx === -1) return
-                const rect = e.currentTarget.getBoundingClientRect()
-                const pastMiddle = e.clientX > rect.left + rect.width / 2
-                const shouldMove =
-                  (curIdx < index && pastMiddle) || (curIdx > index && !pastMiddle)
-                if (shouldMove) useLayoutStore.getState().moveTab(draggingTab, index)
-              }
+            onClick={() => {
+              if (justReordered) return
+              activateTab(tab.id)
             }}
-            onDragEnd={() => setDraggingTab(null)}
-            onDrop={(e) => {
-              e.preventDefault()
-              setDraggingTab(null)
-            }}
-            onClick={() => activateTab(tab.id)}
             onDoubleClick={() => {
               setRenaming(tab.id)
               setNameInput(tab.name ?? '')
@@ -196,6 +169,13 @@ export default function TabBar(): React.JSX.Element {
           ))}
         </select>
       )}
+      <button
+        className={`icon-btn ${muted ? 'active' : ''}`}
+        title={t('set.mute')}
+        onClick={() => setSettings({ muted: !muted })}
+      >
+        {muted ? '🔇' : '🔊'}
+      </button>
       <button
         className={`icon-btn ${alwaysOnTop ? 'active' : ''}`}
         title={t('set.alwaysOnTop')}

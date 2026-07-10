@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MOD_ONLY_TYPES, Pane } from '../types'
-import { useChatStore } from '../store/chat'
+import { useChatStore, lookupUserBadges } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
+import { useUiStore } from '../store/ui'
+import { getUsers } from '../lib/helix'
 import { useLayoutStore } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
 import { canModerate } from '../services/accountService'
@@ -61,6 +63,29 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
     if (account) loadTwitchUserEmotes(account)
   }, [account])
 
+  // clicking an @mention in message text opens the user card for that login
+  useEffect(() => {
+    const onOpenCard = async (e: Event): Promise<void> => {
+      const d = (e as CustomEvent<{ paneId: string; login: string; x: number; y: number }>).detail
+      if (d.paneId !== pane.id || !account) return
+      const [user] = await getUsers(account, { logins: [d.login] })
+      if (!user) return
+      useUiStore.getState().setUserCard({
+        channel: pane.channel,
+        channelId,
+        userId: user.id,
+        login: user.login,
+        displayName: user.display_name,
+        badges: lookupUserBadges(pane.channel, user.login) ?? [],
+        accountId: pane.accountId,
+        x: d.x,
+        y: d.y
+      })
+    }
+    window.addEventListener('sticki:opencard', onOpenCard as EventListener)
+    return () => window.removeEventListener('sticki:opencard', onOpenCard as EventListener)
+  }, [account, channelId, pane.id, pane.channel, pane.accountId])
+
   const bindHotkeys = (): void => {
     if (keydownHandlerRef.current) return
     const onKey = (e: KeyboardEvent): void => {
@@ -82,25 +107,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
 
   return (
     <div className="pane" onMouseEnter={bindHotkeys} onMouseLeave={unbindHotkeys}>
-      <div
-        className="pane-header"
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData('sticki/pane', pane.id)
-          e.dataTransfer.effectAllowed = 'move'
-        }}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('sticki/pane')) e.preventDefault()
-        }}
-        onDrop={(e) => {
-          const dragged = e.dataTransfer.getData('sticki/pane')
-          if (dragged && dragged !== pane.id) {
-            e.preventDefault()
-            useLayoutStore.getState().swapPanes(tabId, dragged, pane.id)
-          }
-        }}
-        title="⠿ drag"
-      >
+      <div className="pane-header">
         <span className="channel-name">{channelName ?? pane.channel}</span>
         {isLive && <span className="live-badge">{t('pane.live')}</span>}
         {isMod && (
@@ -129,6 +136,13 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             </div>
           )}
         </span>
+        <button
+          className={`icon-btn ${scrollLocked ? 'active' : ''}`}
+          title={t('pane.scrollLock')}
+          onClick={() => setScrollLocked((v) => !v)}
+        >
+          {scrollLocked ? '🔒' : '🔓'}
+        </button>
         <button
           className={`icon-btn ${showHighlightSidebar ? 'active' : ''}`}
           title={t('highlights.title')}
@@ -182,7 +196,6 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           isMod={isMod}
           onReply={onReply}
           scrollLocked={scrollLocked}
-          onToggleScrollLock={() => setScrollLocked((v) => !v)}
         />
         {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
       </div>

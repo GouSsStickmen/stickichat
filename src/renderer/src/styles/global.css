@@ -176,16 +176,23 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 6px 10px;
   background: var(--surface);
   border-radius: 8px 8px 0 0;
   color: var(--text-muted);
   cursor: pointer;
   border: 1px solid transparent;
   border-bottom: none;
+  /* flexible: tabs shrink/grow so every row is packed edge-to-edge */
+  flex: 1 1 auto;
+  min-width: 84px;
   max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
+}
+.tabbar .tab > span:not(.close):not(.tab-indicator-slot):not(.live-dot):not(.mention-dot) {
+  flex: 1;
+  min-width: 0;
 }
 /* the moving tab itself is the drag indicator (native ghost is suppressed) */
 .tabbar .tab.dragging {
@@ -481,6 +488,10 @@ select:focus {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* extra line spacing so stacked emote rows don't overlap (user setting) */
+.msg {
+  line-height: calc(1.45em + var(--line-spacing, 0px));
+}
 /* braille art wraps at an adjustable cell count (width set inline from a live measurement)
    so the picture can be tuned to the shape it was drawn with */
 .msg .msg-text.ascii-art {
@@ -735,20 +746,31 @@ select:focus {
   position: relative;
   align-items: flex-end;
 }
-/* keep the account select, textarea and buttons on one shared 34px baseline */
+/* every control in the input row shares ONE exact height and bottom edge */
+.input-row {
+  --input-h: 34px;
+}
 .input-row .account-select,
 .input-row > button {
-  height: 34px;
+  height: var(--input-h);
+  min-height: var(--input-h);
+  max-height: var(--input-h);
   box-sizing: border-box;
   margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
   align-self: flex-end;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
+.input-row .ta-wrap {
+  align-self: flex-end;
+}
 .input-row .ta-wrap textarea {
-  min-height: 34px;
+  min-height: var(--input-h);
   box-sizing: border-box;
+  display: block;
 }
 .ta-wrap {
   flex: 1;
@@ -819,6 +841,39 @@ select:focus {
 .account-select {
   max-width: 130px;
   font-size: 12px;
+}
+/* narrow-pane replacement for the account select: just the avatar */
+.account-compact {
+  width: 34px;
+  padding: 0;
+}
+.account-compact img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+.account-pop {
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+}
+.account-pop img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  vertical-align: -4px;
+}
+.fav-edit-btn {
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+.emote-cell.fav-editing {
+  cursor: grab;
+  outline: 1px dashed var(--border);
 }
 .autocomplete {
   position: absolute;
@@ -998,9 +1053,21 @@ select:focus {
   z-index: 5;
 }
 .usercard .uc-emote {
-  height: 20px;
-  vertical-align: -5px;
+  /* em-based: grows together with the A+/A− text size */
+  height: 1.5em;
+  vertical-align: -0.35em;
   margin: 0 1px;
+}
+.usercard .uc-ts {
+  color: var(--text-faint);
+}
+.usercard .uc-nick {
+  font-weight: 700;
+}
+.usercard .uc-reply {
+  color: var(--text-faint);
+  font-size: 0.85em;
+  margin-right: 4px;
 }
 .usercard .uc-badges {
   display: flex;

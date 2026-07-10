@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../../store/settings'
 import { useAccountsStore } from '../../store/accounts'
 import { useUiStore } from '../../store/ui'
 import { useT } from '../../i18n'
 import { ModButton, ModActionType, HighlightRule, Settings } from '../../types'
 import { nextId, useLayoutStore } from '../../store/layout'
+import { startPointerReorder } from '../../lib/pointerReorder'
 import { removeAccountEverywhere, refreshModeratedChannels } from '../../services/accountService'
 import { playMentionSound, playFirstMessageSound, playKeywordSound } from '../../lib/sound'
 import BtnIcon from '../BtnIcon'
@@ -21,14 +22,8 @@ type Section =
   | 'advanced'
 
 const BUTTON_TYPES: ModActionType[] = [
-  'timeout', 'ban', 'unban', 'delete', 'warn', 'shoutout', 'raid', 'announce', 'snippet', 'link', 'fill'
+  'timeout', 'ban', 'unban', 'delete', 'warn', 'shoutout', 'raid', 'announce', 'snippet', 'link', 'fill', 'copy'
 ]
-
-// 1x1 transparent canvas used to suppress the native floating drag ghost (a canvas is
-// always ready, so even the first drag never falls back to an element snapshot)
-const TRANSPARENT_IMG = document.createElement('canvas')
-TRANSPARENT_IMG.width = 1
-TRANSPARENT_IMG.height = 1
 
 export default function SettingsModal({
   standalone,
@@ -121,6 +116,48 @@ export default function SettingsModal({
   )
 }
 
+/** color input with right-click reset and a system-wide eyedropper */
+function ColorField({
+  value,
+  defaultValue,
+  onChange
+}: {
+  value: string
+  defaultValue: string
+  onChange: (v: string) => void
+}): React.JSX.Element {
+  const t = useT()
+  return (
+    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+      <input
+        type="color"
+        value={value}
+        title={t('set.colorReset')}
+        onChange={(e) => onChange(e.target.value)}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          onChange(defaultValue)
+        }}
+      />
+      <button
+        className="ghost"
+        title={t('set.eyedropper')}
+        onClick={async () => {
+          try {
+            const ed = new (window as unknown as { EyeDropper: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper()
+            const r = await ed.open()
+            onChange(r.sRGBHex)
+          } catch {
+            /* cancelled / unsupported */
+          }
+        }}
+      >
+        💧
+      </button>
+    </span>
+  )
+}
+
 function AccountsSection(): React.JSX.Element {
   const t = useT()
   const accounts = useAccountsStore((s) => s.accounts)
@@ -166,13 +203,47 @@ function AppearanceSection(): React.JSX.Element {
       </div>
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
-        <input
-          style={{ width: 190 }}
-          placeholder={t('set.fontFamily.placeholder')}
+        <select
+          style={{ maxWidth: 190 }}
           value={settings.fontFamily}
-          spellCheck={false}
           onChange={(e) => set({ fontFamily: e.target.value })}
-        />
+        >
+          <option value="">Segoe UI ({t('set.fontDefault')})</option>
+          {['Inter', 'Verdana', 'Tahoma', 'Arial', 'Calibri', 'Georgia', 'Consolas', 'Comic Sans MS'].map((f) => (
+            <option key={f} value={f} style={{ fontFamily: f }}>
+              {f}
+            </option>
+          ))}
+          {settings.customFonts.map((f) => (
+            <option key={f.name} value={f.name}>
+              {f.name} ★
+            </option>
+          ))}
+        </select>
+        <label className="ghost" style={{ cursor: 'pointer' }}>
+          <input
+            type="file"
+            accept=".ttf,.otf,.woff,.woff2"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              if (file.size > 5 * 1024 * 1024) return
+              const reader = new FileReader()
+              reader.onload = () => {
+                const name = file.name.replace(/\.[a-z0-9]+$/i, '')
+                const fresh = useSettingsStore.getState().settings
+                set({
+                  customFonts: [...fresh.customFonts.filter((f) => f.name !== name), { name, data: String(reader.result) }],
+                  fontFamily: name
+                })
+              }
+              reader.readAsDataURL(file)
+              e.target.value = ''
+            }}
+          />
+          <span className="hint">📁 {t('set.fontUpload')}</span>
+        </label>
       </div>
       <div className="set-row">
         <label>{t('set.fontSize')}</label>
@@ -197,6 +268,17 @@ function AppearanceSection(): React.JSX.Element {
         </select>
       </div>
       <div className="set-group-title">{t('set.group.chat')}</div>
+      <div className="set-row">
+        <label>{t('set.lineSpacing')}</label>
+        <input
+          type="number"
+          min={0}
+          max={24}
+          style={{ width: 70 }}
+          value={settings.lineSpacing}
+          onChange={(e) => set({ lineSpacing: parseInt(e.target.value, 10) || 0 })}
+        />
+      </div>
       <div className="set-row">
         <label>{t('set.messageSpacing')}</label>
         <input
@@ -243,6 +325,16 @@ function AppearanceSection(): React.JSX.Element {
         value={settings.showHighlightSidebar}
         onChange={(v) => set({ showHighlightSidebar: v })}
       />
+      <div className="set-row">
+        <label>{t('set.sidebarDefault')}</label>
+        <select
+          value={settings.highlightSidebarDefault}
+          onChange={(e) => set({ highlightSidebarDefault: e.target.value as 'highlights' | 'mentions' })}
+        >
+          <option value="highlights">{t('highlights.title')}</option>
+          <option value="mentions">{t('highlights.mentions')}</option>
+        </select>
+      </div>
     </div>
   )
 }
@@ -331,6 +423,11 @@ function WindowsSection(): React.JSX.Element {
         label={t('set.rememberPin')}
         value={settings.rememberPinState}
         onChange={(v) => set({ rememberPinState: v })}
+      />
+      <Toggle
+        label={t('set.rememberWindowSize')}
+        value={settings.rememberWindowSize}
+        onChange={(v) => set({ rememberWindowSize: v })}
       />
     </div>
   )
@@ -486,8 +583,7 @@ function ModerationSection(): React.JSX.Element {
   const [favInput, setFavInput] = useState('')
   const [iconPickerFor, setIconPickerFor] = useState<string | null>(null)
   const [draggingBtn, setDraggingBtn] = useState<string | null>(null)
-  /** drag is only allowed when it started on the ⠿ handle */
-  const [dragArmed, setDragArmed] = useState<string | null>(null)
+  const modListRef = useRef<HTMLDivElement>(null)
   const firstAccount = useAccountsStore((s) => s.accounts[0])
 
   const knownChannels = [...new Set(tabs.flatMap((tab) => tab.panes.map((p) => p.channel)))]
@@ -497,7 +593,8 @@ function ModerationSection(): React.JSX.Element {
   }
   const reorder = (draggedId: string, targetId: string): void => {
     if (draggedId === targetId) return
-    const list = [...modButtons]
+    // always read fresh state: during a pointer drag this is called many times in a row
+    const list = [...useSettingsStore.getState().modButtons]
     const from = list.findIndex((b) => b.id === draggedId)
     const to = list.findIndex((b) => b.id === targetId)
     if (from === -1 || to === -1) return
@@ -516,72 +613,33 @@ function ModerationSection(): React.JSX.Element {
   }
 
   return (
-    <div
-      // accept the drag everywhere in the section (incl. gaps between cards) so the cursor
-      // never flips to the "no drop" sign mid-drag
-      onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes('sticki/modbtn')) return
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
-      }}
-      onDrop={(e) => {
-        if (e.dataTransfer.types.includes('sticki/modbtn')) e.preventDefault()
-      }}
-    >
+    <div ref={modListRef}>
       <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
         {t('set.modBtn.hint')}
       </p>
-      {modButtons.map((b) => (
-        <div
-          key={b.id}
-          className={`modbtn-card ${draggingBtn === b.id ? 'dragging' : ''}`}
-          draggable={dragArmed === b.id}
-          onDragStart={(e) => {
-            e.dataTransfer.setData('sticki/modbtn', b.id)
-            e.dataTransfer.effectAllowed = 'move'
-            // no floating ghost — the colored card itself shows what's being moved
-            e.dataTransfer.setDragImage(TRANSPARENT_IMG, 0, 0)
-            setDraggingBtn(b.id)
-          }}
-          onDragOver={(e) => {
-            if (!e.dataTransfer.types.includes('sticki/modbtn')) return
-            e.preventDefault()
-            e.dataTransfer.dropEffect = 'move'
-            // live reorder only after crossing the vertical middle — avoids boundary flicker
-            if (draggingBtn && draggingBtn !== b.id) {
-              const curIdx = modButtons.findIndex((x) => x.id === draggingBtn)
-              const targetIdx = modButtons.findIndex((x) => x.id === b.id)
-              const rect = e.currentTarget.getBoundingClientRect()
-              const pastMiddle = e.clientY > rect.top + rect.height / 2
-              const shouldMove =
-                (curIdx < targetIdx && pastMiddle) || (curIdx > targetIdx && !pastMiddle)
-              if (shouldMove) reorder(draggingBtn, b.id)
-            }
-            // auto-scroll the settings pane when dragging near its edges (wheel is dead
-            // during a native HTML5 drag, this is the only way to scroll)
-            const scroller = (e.currentTarget as HTMLElement).closest('.settings-content')
-            if (scroller) {
-              const r = scroller.getBoundingClientRect()
-              if (e.clientY < r.top + 90) scroller.scrollTop -= 22
-              else if (e.clientY > r.bottom - 90) scroller.scrollTop += 22
-            }
-          }}
-          onDragEnd={() => {
-            setDraggingBtn(null)
-            setDragArmed(null)
-          }}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDraggingBtn(null)
-            setDragArmed(null)
-          }}
-        >
+      {modButtons.map((b, index) => (
+        <div key={b.id} className={`modbtn-card ${draggingBtn === b.id ? 'dragging' : ''}`}>
           <div className="modbtn-line">
             <span
               className="modbtn-drag"
               title="⠿"
-              onMouseDown={() => setDragArmed(b.id)}
-              onMouseUp={() => setDragArmed(null)}
+              onPointerDown={(e) => {
+                if (!modListRef.current) return
+                e.preventDefault()
+                startPointerReorder({
+                  e,
+                  container: modListRef.current,
+                  itemSelector: '.modbtn-card',
+                  index,
+                  axis: 'y',
+                  threshold: 3,
+                  onMove: (from, to) => {
+                    const list = useSettingsStore.getState().modButtons
+                    reorder(list[from].id, list[to].id)
+                  },
+                  onDragState: (d) => setDraggingBtn(d ? b.id : null)
+                })
+              }}
             >
               ⠿
             </span>
@@ -786,16 +844,22 @@ function HighlightsSection(): React.JSX.Element {
   return (
     <div>
       <div className="set-group-title">{t('set.group.msgColors')}</div>
+      <Toggle label={t('set.showMentionBg')} value={settings.showMentionBg} onChange={(v) => set({ showMentionBg: v })} />
+      <Toggle label={t('set.showFirstMsgBg')} value={settings.showFirstMsgBg} onChange={(v) => set({ showFirstMsgBg: v })} />
       <div className="set-row">
         <label>{t('set.mentionColor')}</label>
-        <input type="color" value={settings.mentionBgColor} onChange={(e) => set({ mentionBgColor: e.target.value })} />
+        <ColorField
+          value={settings.mentionBgColor}
+          defaultValue="#8b5cf6"
+          onChange={(v) => set({ mentionBgColor: v })}
+        />
       </div>
       <div className="set-row">
         <label>{t('set.firstMsgColor')}</label>
-        <input
-          type="color"
+        <ColorField
           value={settings.firstMessageBgColor}
-          onChange={(e) => set({ firstMessageBgColor: e.target.value })}
+          defaultValue="#22c55e"
+          onChange={(v) => set({ firstMessageBgColor: v })}
         />
       </div>
       <div className="set-group-title">{t('set.highlights')}</div>
@@ -833,13 +897,7 @@ function HighlightsSection(): React.JSX.Element {
               onChange={(e) => update(r.id, { value: e.target.value.toLowerCase().trim() })}
             />
           )}
-          <input
-            type="color"
-            title={t('hl.color')}
-            value={r.color}
-            onChange={(e) => update(r.id, { color: e.target.value })}
-            style={{ width: 44, padding: 2, height: 30 }}
-          />
+          <ColorField value={r.color} defaultValue="#9147ff" onChange={(v) => update(r.id, { color: v })} />
           <input
             type="range"
             title={`${t('hl.opacity')}: ${Math.round(r.opacity * 100)}%`}

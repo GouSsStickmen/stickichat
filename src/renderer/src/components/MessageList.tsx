@@ -15,7 +15,6 @@ interface Props {
   isMod: boolean
   onReply: (target: ReplyTarget) => void
   scrollLocked: boolean
-  onToggleScrollLock: () => void
 }
 
 export interface JumpEventDetail {
@@ -29,8 +28,7 @@ export default function MessageList({
   channelId,
   isMod,
   onReply,
-  scrollLocked,
-  onToggleScrollLock
+  scrollLocked
 }: Props): React.JSX.Element {
   const t = useT()
   const messages = useChatStore((s) => s.messages[pane.channel]) ?? []
@@ -93,13 +91,6 @@ export default function MessageList({
           ↓ {t('misc.newMessages')}
         </div>
       )}
-      <button
-        className={`scroll-lock-btn ${scrollLocked ? 'active' : ''}`}
-        title={t('pane.scrollLock')}
-        onClick={onToggleScrollLock}
-      >
-        {scrollLocked ? '🔒' : '🔓'}
-      </button>
     </div>
   )
 }

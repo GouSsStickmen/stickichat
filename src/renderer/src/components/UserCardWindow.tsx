@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { UserCardWindowPayload } from '../App'
-import { loadGlobalBadges, loadGlobalEmotes, loadChannelBadges, loadChannelEmotes } from '../services/emoteService'
+import { useLayoutStore, nextId } from '../store/layout'
+import { chatService } from '../services/chatService'
 import UserCard from './UserCard'
 import Toasts from './Toasts'
 
@@ -9,19 +10,30 @@ export default function UserCardWindow({ payload }: { payload: UserCardWindowPay
     document.title = `StickiChat — ${payload.target.displayName}`
   }, [payload.target.displayName])
 
-  // this window never runs chatService — fetch emotes/badges for rendering messages
+  // live messages: join the channel with our own reader (also loads history + emotes/badges),
+  // so the card updates in real time instead of showing a frozen snapshot
   useEffect(() => {
-    loadGlobalEmotes()
-    loadGlobalBadges()
-    if (payload.target.channelId) {
-      loadChannelEmotes(payload.target.channel, payload.target.channelId)
-      loadChannelBadges(payload.target.channel, payload.target.channelId)
-    }
-  }, [payload.target.channel, payload.target.channelId])
+    const tabId = nextId('tab')
+    useLayoutStore
+      .getState()
+      .setAll(
+        [
+          {
+            id: tabId,
+            name: payload.target.displayName,
+            columns: 0,
+            panes: [{ id: nextId('pane'), channel: payload.target.channel, accountId: payload.target.accountId }]
+          }
+        ],
+        tabId
+      )
+    chatService.start()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="app">
-      <UserCard target={payload.target} standalone presetMessages={payload.messages} />
+      <UserCard target={payload.target} standalone />
       <Toasts />
     </div>
   )

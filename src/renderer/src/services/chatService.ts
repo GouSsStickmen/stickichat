@@ -269,7 +269,7 @@ class ChatService {
       }
       case 'USERNOTICE': {
         // subs, resubs, raids, announcements...
-        const sysText = m.tags['system-msg'] || m.tags['msg-id'] || ''
+        const sysText = this.usernoticeText(m)
         const msg = this.privmsgToChatMessage(m)
         if (msg) {
           msg.system = 'usernotice'
@@ -289,6 +289,53 @@ class ChatService {
         }
         break
       }
+    }
+  }
+
+  /**
+   * Human-readable text for USERNOTICE events. Twitch's system-msg is always English —
+   * with the Ukrainian locale we build our own accented strings from the tags instead.
+   */
+  private usernoticeText(m: IrcMessage): string {
+    const en = m.tags['system-msg'] || m.tags['msg-id'] || ''
+    if (useSettingsStore.getState().settings.language !== 'uk') return en
+    const id = m.tags['msg-id']
+    const name = m.tags['display-name'] || m.tags['login'] || ''
+    const months = m.tags['msg-param-cumulative-months']
+    const streak = m.tags['msg-param-streak-months']
+    const tier = (m.tags['msg-param-sub-plan'] ?? '').replace('Prime', 'Prime').replace('1000', 'T1').replace('2000', 'T2').replace('3000', 'T3')
+    switch (id) {
+      case 'sub':
+        return `⭐ ${name} оформив підписку (${tier || 'T1'})!`
+      case 'resub': {
+        const base = `⭐ ${name} продовжив підписку (${tier || 'T1'}) — ${months || '?'} міс.`
+        return m.tags['msg-param-should-share-streak'] === '1' && streak
+          ? `${base} 🔥 Стрик: ${streak} міс. поспіль!`
+          : `${base}`
+      }
+      case 'subgift':
+        return `🎁 ${name} подарував підписку для ${m.tags['msg-param-recipient-display-name'] || '?'} (${tier || 'T1'})!`
+      case 'submysterygift':
+        return `🎁 ${name} дарує ${m.tags['msg-param-mass-gift-count'] || '?'} підписок чату!`
+      case 'giftpaidupgrade':
+      case 'primepaidupgrade':
+        return `⭐ ${name} перейшов на платну підписку!`
+      case 'raid':
+        return `🚨 РЕЙД! ${m.tags['msg-param-displayName'] || name} привів ${m.tags['msg-param-viewerCount'] || '?'} глядачів!`
+      case 'unraid':
+        return `↩️ Рейд скасовано`
+      case 'announcement':
+        return ''
+      case 'bitsbadgetier':
+        return `💎 ${name} отримав новий рівень біт-бейджа!`
+      case 'communitypayforward':
+        return `💜 ${name} передає подарунок далі!`
+      case 'standardpayforward':
+        return `💜 ${name} передає подарунок далі!`
+      case 'highlighted-message':
+        return `⭐ Виділене повідомлення`
+      default:
+        return en
     }
   }
 

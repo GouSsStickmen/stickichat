@@ -37,9 +37,11 @@ export default function UserCard({
   const [subInfo, setSubInfo] = useState<SubInfo | null | undefined>(undefined)
   const ref = useRef<HTMLDivElement>(null)
 
-  // chronological, same as the chat itself: oldest at the top, newest at the bottom
+  // newest first — the latest message is what a moderator looks for
   const userMessages = useMemo(
-    () => presetMessages ?? messages.filter((m) => m.userId === target.userId && !m.system).slice(-30),
+    () =>
+      (presetMessages ??
+        messages.filter((m) => m.userId === target.userId && !m.system).slice(-60)).slice().reverse(),
     [messages, target.userId, presetMessages]
   )
 
@@ -236,19 +238,36 @@ export default function UserCard({
       <div className="uc-msgs">
         <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('user.messagesHere')}</div>
         {userMessages.length === 0 && <div>{t('user.noMessages')}</div>}
-        {userMessages.map((m) => (
-          <div key={m.id} className="m">
-            {new Date(m.timestamp).toLocaleTimeString()} —{' '}
-            {tokenizeMessage(m, emoteLookup).map((tk, i) => {
-              if (tk.kind === 'emote')
-                return <img key={i} className="uc-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />
-              if (tk.kind === 'emoji') return <EmojiGlyph key={i} char={tk.char} />
-              if (tk.kind === 'link') return <span key={i}>{tk.url}</span>
-              if (tk.kind === 'mention') return <span key={i}>{tk.name}</span>
-              return <span key={i}>{tk.text}</span>
-            })}
-          </div>
-        ))}
+        {userMessages.map((m) => {
+          const full = m as Partial<import('../types').ChatMessage>
+          return (
+            <div key={m.id} className="m">
+              <span className="uc-ts">{new Date(m.timestamp).toLocaleTimeString()}</span>{' '}
+              {full.replyParent && (
+                <span className="uc-reply" title={`${full.replyParent.displayName}: ${full.replyParent.text}`}>
+                  ↩ @{full.replyParent.displayName}
+                </span>
+              )}
+              <span className="uc-nick" style={{ color: target.color }}>
+                {target.displayName}
+              </span>
+              {': '}
+              {tokenizeMessage(m, emoteLookup).map((tk, i) => {
+                if (tk.kind === 'emote')
+                  return <img key={i} className="uc-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />
+                if (tk.kind === 'emoji') return <EmojiGlyph key={i} char={tk.char} />
+                if (tk.kind === 'link') return <span key={i}>{tk.url}</span>
+                if (tk.kind === 'mention')
+                  return (
+                    <span key={i} style={{ color: tk.color, fontWeight: 600 }}>
+                      {tk.name}
+                    </span>
+                  )
+                return <span key={i}>{tk.text}</span>
+              })}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

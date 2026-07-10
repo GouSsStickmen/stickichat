@@ -1,5 +1,6 @@
 import { Settings } from '../types'
 import { useUiStore } from '../store/ui'
+import { useSettingsStore } from '../store/settings'
 
 let ctx: AudioContext | null = null
 const lastPlayed: Record<string, number> = {}
@@ -48,6 +49,8 @@ interface AlertSoundOpts {
 
 /** Plays an alert sound. Each `throttleKey` gets its own 2s anti-spam cooldown. `force` skips it (for previews). */
 function playAlertSound(opts: AlertSoundOpts, throttleKey: string, force = false): void {
+  // global mute (except explicit previews from the settings UI)
+  if (!force && useSettingsStore.getState().settings.muted) return
   const now = Date.now()
   if (!force && now - (lastPlayed[throttleKey] ?? 0) < 2000) return
   lastPlayed[throttleKey] = now

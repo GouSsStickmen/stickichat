@@ -57,6 +57,18 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const taRef = useRef<HTMLTextAreaElement>(null)
   const highlightRef = useRef<HTMLDivElement>(null)
   const draftRef = useRef('')
+  const rowRef = useRef<HTMLDivElement>(null)
+  const [narrow, setNarrow] = useState(false)
+  const [acctOpen, setAcctOpen] = useState(false)
+
+  // narrow panes swap the account <select> for a compact avatar button
+  useEffect(() => {
+    const el = rowRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setNarrow(el.clientWidth < 420))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const isCommand = text.startsWith('/')
 
@@ -80,6 +92,12 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const autoGrow = (): void => {
     const ta = taRef.current
     if (!ta) return
+    if (!ta.value) {
+      // empty field: reset to the CSS min-height — measuring scrollHeight here picks up the
+      // multi-line PLACEHOLDER and inflates the box after erasing text
+      ta.style.height = ''
+      return
+    }
     ta.style.height = 'auto'
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
   }
@@ -259,7 +277,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
           </button>
         </div>
       )}
-      <div className="input-row">
+      <div className="input-row" ref={rowRef}>
         {suggestions.length > 0 && (
           <div className="autocomplete">
             {suggestions.map((s, i) => {
@@ -320,26 +338,67 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             onClose={() => setPickerOpen(false)}
           />
         )}
-        <select
-          className="account-select"
-          title={t('pane.account')}
-          value={pane.accountId ?? ''}
-          onChange={(e) => {
-            if (e.target.value === '__add__') {
-              useUiStore.getState().setAddAccountOpen(true)
-              return
-            }
-            useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: e.target.value || null })
-          }}
-        >
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.displayName}
-            </option>
-          ))}
-          <option value="">{t('pane.readOnly')}</option>
-          <option value="__add__">+ {t('auth.addAccount')}</option>
-        </select>
+        {narrow ? (
+          <span style={{ position: 'relative' }}>
+            <button
+              className="ghost account-compact"
+              title={account?.displayName ?? t('pane.account')}
+              onClick={() => setAcctOpen((v) => !v)}
+            >
+              {account?.avatarUrl ? (
+                <img src={account.avatarUrl} alt={account.displayName} draggable={false} />
+              ) : (
+                '👤'
+              )}
+            </button>
+            {acctOpen && (
+              <div className="popover account-pop">
+                {accounts.map((a) => (
+                  <button
+                    key={a.id}
+                    className={a.id === pane.accountId ? 'primary' : 'ghost'}
+                    onClick={() => {
+                      useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: a.id })
+                      setAcctOpen(false)
+                    }}
+                  >
+                    {a.avatarUrl && <img src={a.avatarUrl} alt="" draggable={false} />} {a.displayName}
+                  </button>
+                ))}
+                <button
+                  className="ghost"
+                  onClick={() => {
+                    useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: null })
+                    setAcctOpen(false)
+                  }}
+                >
+                  {t('pane.readOnly')}
+                </button>
+              </div>
+            )}
+          </span>
+        ) : (
+          <select
+            className="account-select"
+            title={t('pane.account')}
+            value={pane.accountId ?? ''}
+            onChange={(e) => {
+              if (e.target.value === '__add__') {
+                useUiStore.getState().setAddAccountOpen(true)
+                return
+              }
+              useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: e.target.value || null })
+            }}
+          >
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.displayName}
+              </option>
+            ))}
+            <option value="">{t('pane.readOnly')}</option>
+            <option value="__add__">+ {t('auth.addAccount')}</option>
+          </select>
+        )}
         <div className="ta-wrap">
           {showCharCounter && overLimit && (
             <div className="ta-highlight" ref={highlightRef} aria-hidden>
@@ -373,7 +432,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
         </div>
         {translitEnabled && (
           <button
-            className="ghost"
+            className="ghost translit-btn"
             title={t('input.translit')}
             disabled={!account || !text}
             onClick={() => {
@@ -381,7 +440,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
               taRef.current?.focus()
             }}
           >
-            Aа
+            Аа⇄En
           </button>
         )}
         <button

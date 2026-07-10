@@ -65,8 +65,12 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
           className="mention-token"
           style={{ color: token.color }}
           title={login}
-          onClick={() => {
-            navigator.clipboard.writeText(login)
+          onClick={(e) => {
+            window.dispatchEvent(
+              new CustomEvent('sticki:opencard', {
+                detail: { paneId, login, x: e.clientX, y: e.clientY }
+              })
+            )
           }}
           onContextMenu={insertMention}
         >
@@ -251,9 +255,9 @@ function MessageViewInner({
   const color = ensureReadable(msg.color || fallbackColor(msg.login), dark)
   const classes = ['msg']
   if (settings.alternatingBackground && index % 2 === 1) classes.push('alt')
-  if (isMention) classes.push('mention')
-  if (msg.isFirstMsg) classes.push('first-msg')
-  else if (msg.isFirstInSession) classes.push('first-in-session')
+  if (isMention && settings.showMentionBg) classes.push('mention')
+  if (msg.isFirstMsg && settings.showFirstMsgBg) classes.push('first-msg')
+  else if (msg.isFirstInSession && settings.showFirstMsgBg) classes.push('first-in-session')
   if (msg.deleted) classes.push('deleted')
   if (msg.historical) classes.push('historical')
   if (flash) classes.push('flash')
@@ -472,7 +476,8 @@ function MessageViewInner({
                     paneId,
                     targetUserId: msg.userId,
                     targetLogin: msg.login,
-                    targetMsgId: msg.id
+                    targetMsgId: msg.id,
+            targetText: msg.text
                   })
                 }
               >

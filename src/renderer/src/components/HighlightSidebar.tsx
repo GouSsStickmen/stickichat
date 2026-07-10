@@ -14,7 +14,9 @@ export default function HighlightSidebar({ channel }: { channel: string }): Reac
   const lastReadAt = useChatStore((s) => s.lastReadAt[channel] ?? Number.MAX_SAFE_INTEGER)
   const highlightRules = useSettingsStore((s) => s.highlightRules)
   const caseSensitiveNicks = useSettingsStore((s) => s.settings.caseSensitiveNicks)
-  const [mode, setMode] = useState<Mode>('highlights')
+  const [mode, setMode] = useState<Mode>(
+    () => useSettingsStore.getState().settings.highlightSidebarDefault
+  )
   const [order, setOrder] = useState<Order>('newest-top')
 
   const items = useMemo(() => {

@@ -119,6 +119,7 @@ export type ModActionType =
   | 'snippet'
   | 'link'
   | 'fill'
+  | 'copy'
 
 /** these require real moderator rights via Helix; the rest are plain chat actions anyone can use */
 export const MOD_ONLY_TYPES: ReadonlySet<ModActionType> = new Set([
@@ -219,6 +220,19 @@ export interface Settings {
   fontFamily: string
   /** text size in the standalone user-card window */
   usercardFontSize: number
+  /** background highlight toggles (sounds/detection stay independent) */
+  showMentionBg: boolean
+  showFirstMsgBg: boolean
+  /** which tab the highlight sidebar opens on */
+  highlightSidebarDefault: 'highlights' | 'mentions'
+  /** extra px of line-height inside messages (emote rows overlapping) */
+  lineSpacing: number
+  /** restore the main window's size/position on launch */
+  rememberWindowSize: boolean
+  /** global sound mute */
+  muted: boolean
+  /** user-uploaded fonts (name + data URL), injected as @font-face */
+  customFonts: { name: string; data: string }[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -262,7 +276,14 @@ export const DEFAULT_SETTINGS: Settings = {
   keywordSoundVolume: 0.5,
   translitEnabled: true,
   fontFamily: '',
-  usercardFontSize: 14
+  usercardFontSize: 14,
+  showMentionBg: true,
+  showFirstMsgBg: true,
+  highlightSidebarDefault: 'highlights',
+  lineSpacing: 0,
+  rememberWindowSize: true,
+  muted: false,
+  customFonts: []
 }
 
 export const DEFAULT_MOD_BUTTONS: ModButton[] = [
