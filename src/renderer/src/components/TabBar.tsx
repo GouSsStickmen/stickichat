@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useLayoutStore } from '../store/layout'
 import { useChatStore } from '../store/chat'
 import { useSettingsStore } from '../store/settings'
@@ -24,6 +24,38 @@ export default function TabBar(): React.JSX.Element {
   const tabsRef = useRef<HTMLDivElement>(null)
 
   const activeTab = tabs.find((x) => x.id === activeTabId)
+
+  // FLIP: when the order changes (drag reorder, close, add), every tab glides from its
+  // previous position to the new one — the Chrome-tabs feel
+  const prevRects = useRef(new Map<string, DOMRect>())
+  useLayoutEffect(() => {
+    const container = tabsRef.current
+    if (!container) return
+    for (const el of Array.from(container.querySelectorAll<HTMLElement>('.tab'))) {
+      const id = el.dataset.tabid
+      if (!id) continue
+      const rect = el.getBoundingClientRect()
+      // While a drag is live, reorder instantly and only record positions: spawning an
+      // animation per pointermove floods the compositor, and getBoundingClientRect() of a
+      // mid-flight element feeds wrong rects back into the drag hit-testing (tabs "jump")
+      if (draggingTab) {
+        prevRects.current.set(id, rect)
+        continue
+      }
+      const prev = prevRects.current.get(id)
+      if (prev) {
+        const dx = prev.left - rect.left
+        const dy = prev.top - rect.top
+        if (dx !== 0 || dy !== 0) {
+          el.animate(
+            [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
+            { duration: 160, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+          )
+        }
+      }
+      prevRects.current.set(id, rect)
+    }
+  })
 
   const tabLabel = (id: string): string => {
     const tab = tabs.find((x) => x.id === id)
@@ -57,6 +89,53 @@ export default function TabBar(): React.JSX.Element {
 
   return (
     <div className="tabbar">
+      {/* floated right — must precede the tab flow so rows wrap around it */}
+      <div className="tabbar-actions">
+      {activeTab && activeTab.panes.length > 1 && (
+        <select
+          title={t('pane.columns')}
+          style={{ padding: '3px 6px', fontSize: 12 }}
+          value={activeTab.columns}
+          onChange={(e) =>
+            useLayoutStore.getState().setColumns(activeTab.id, parseInt(e.target.value, 10))
+          }
+        >
+          <option value={0}>{t('pane.auto')}</option>
+          {[1, 2, 3, 4].map((c) => (
+            <option key={c} value={c}>
+              {c} ⬚
+            </option>
+          ))}
+        </select>
+      )}
+      <button
+        className={`icon-btn ${muted ? 'active' : ''}`}
+        title={t('set.mute')}
+        onClick={() => setSettings({ muted: !muted })}
+      >
+        {muted ? '🔇' : '🔊'}
+      </button>
+      <button
+        className={`icon-btn ${alwaysOnTop ? 'active' : ''}`}
+        title={t('set.alwaysOnTop')}
+        onClick={() => setSettings({ alwaysOnTop: !alwaysOnTop })}
+      >
+        📌
+      </button>
+      <button
+        className="icon-btn"
+        title={t('set.title')}
+        onClick={() => {
+          if (useSettingsStore.getState().settings.settingsAsWindow) {
+            window.sticki.openSettingsWindow('settings')
+          } else {
+            useUiStore.getState().setSettingsOpen(true)
+          }
+        }}
+      >
+        ⚙
+      </button>
+      </div>
       <div className="tabbar-tabs" ref={tabsRef}>
       <span
         className="conn-dot"
@@ -71,6 +150,7 @@ export default function TabBar(): React.JSX.Element {
         return (
           <div
             key={tab.id}
+            data-tabid={tab.id}
             className={`tab ${isActive ? 'active' : ''} ${draggingTab === tab.id ? 'dragging' : ''}`}
             onPointerDown={(e) => {
               if (renaming === tab.id) return
@@ -149,52 +229,6 @@ export default function TabBar(): React.JSX.Element {
       })}
       <button className="icon-btn" title={t('tab.new')} onClick={() => useLayoutStore.getState().addTab()}>
         +
-      </button>
-      </div>
-      <div className="tabbar-actions">
-      {activeTab && activeTab.panes.length > 1 && (
-        <select
-          title={t('pane.columns')}
-          style={{ padding: '3px 6px', fontSize: 12 }}
-          value={activeTab.columns}
-          onChange={(e) =>
-            useLayoutStore.getState().setColumns(activeTab.id, parseInt(e.target.value, 10))
-          }
-        >
-          <option value={0}>{t('pane.auto')}</option>
-          {[1, 2, 3, 4].map((c) => (
-            <option key={c} value={c}>
-              {c} ⬚
-            </option>
-          ))}
-        </select>
-      )}
-      <button
-        className={`icon-btn ${muted ? 'active' : ''}`}
-        title={t('set.mute')}
-        onClick={() => setSettings({ muted: !muted })}
-      >
-        {muted ? '🔇' : '🔊'}
-      </button>
-      <button
-        className={`icon-btn ${alwaysOnTop ? 'active' : ''}`}
-        title={t('set.alwaysOnTop')}
-        onClick={() => setSettings({ alwaysOnTop: !alwaysOnTop })}
-      >
-        📌
-      </button>
-      <button
-        className="icon-btn"
-        title={t('set.title')}
-        onClick={() => {
-          if (useSettingsStore.getState().settings.settingsAsWindow) {
-            window.sticki.openSettingsWindow('settings')
-          } else {
-            useUiStore.getState().setSettingsOpen(true)
-          }
-        }}
-      >
-        ⚙
       </button>
       </div>
     </div>

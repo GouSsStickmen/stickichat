@@ -95,6 +95,10 @@ app.whenReady().then(() => {
   } catch {
     /* unsupported language on this platform — keep defaults */
   }
+  // Electron grants renderer permissions by default; make that explicit so the
+  // Local Font Access API (font picker) keeps working across Electron upgrades
+  session.defaultSession.setPermissionCheckHandler(() => true)
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb(true))
   registerIpc()
   createWindow()
   initAutoUpdater()

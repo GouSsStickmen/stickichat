@@ -150,30 +150,31 @@ select:focus {
 /* ---------- Tab bar ---------- */
 
 .tabbar {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  /* block flow: the floated actions sit top-right and tab rows wrap AROUND them,
+     filling the space beneath instead of leaving a dead column */
+  display: block;
   padding: 6px 8px 0 8px;
   background: var(--bg);
   flex-shrink: 0;
 }
 .tabbar-tabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  flex: 1;
+  display: block;
   min-width: 0;
-  row-gap: 4px;
+}
+.tabbar-tabs > * {
+  vertical-align: top;
+  margin: 0 4px 4px 0;
 }
 .tabbar-actions {
+  float: right;
   display: flex;
   align-items: center;
   gap: 5px;
+  margin-left: 8px;
   flex-shrink: 0;
 }
 .tabbar .tab {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
@@ -183,16 +184,10 @@ select:focus {
   cursor: pointer;
   border: 1px solid transparent;
   border-bottom: none;
-  /* flexible: tabs shrink/grow so every row is packed edge-to-edge */
-  flex: 1 1 auto;
-  min-width: 84px;
   max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
-}
-.tabbar .tab > span:not(.close):not(.tab-indicator-slot):not(.live-dot):not(.mention-dot) {
-  flex: 1;
-  min-width: 0;
+  user-select: none;
 }
 /* the moving tab itself is the drag indicator (native ghost is suppressed) */
 .tabbar .tab.dragging {
@@ -874,6 +869,53 @@ select:focus {
 .emote-cell.fav-editing {
   cursor: grab;
   outline: 1px dashed var(--border);
+}
+.translit-btn svg {
+  display: block;
+}
+
+/* font picker: editable input + scrollable dropdown of installed fonts */
+.font-combo {
+  position: relative;
+  display: inline-block;
+}
+.font-combo-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 60;
+  width: 230px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+.font-combo-item {
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.font-combo-item:hover {
+  background: var(--surface-3);
+}
+.font-combo-item.selected {
+  color: var(--accent);
+}
+
+/* mass-gift header: clickable, expands the collapsed subgift lines */
+.usernotice-tag.gift-toggle {
+  cursor: pointer;
+}
+.usernotice-tag.gift-toggle:hover {
+  text-decoration: underline;
+}
+.gift-toggle-arrow {
+  color: var(--text-faint);
+  font-size: 0.85em;
 }
 .autocomplete {
   position: absolute;

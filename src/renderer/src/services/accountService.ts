@@ -29,7 +29,7 @@ export async function createAccountFromTokens(
       account.displayName = user.display_name
       account.avatarUrl = user.profile_image_url
     }
-    account.moderatedChannelIds = await getModeratedChannelIds(account)
+    account.moderatedChannelIds = (await getModeratedChannelIds(account)) ?? []
   } catch {
     /* non-fatal */
   }
@@ -42,7 +42,8 @@ export async function refreshModeratedChannels(accountId: string): Promise<void>
   if (!account) return
   try {
     const ids = await getModeratedChannelIds(account)
-    useAccountsStore.getState().updateAccount(accountId, { moderatedChannelIds: ids })
+    // null = API failure — keep the old cache instead of wiping mod rights
+    if (ids) useAccountsStore.getState().updateAccount(accountId, { moderatedChannelIds: ids })
   } catch {
     /* keep old cache */
   }

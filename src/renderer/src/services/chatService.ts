@@ -10,7 +10,7 @@ import { ensureFreshToken } from '../lib/twitchAuth'
 import { translate } from '../i18n'
 import { useAccountsStore } from '../store/accounts'
 import { playMentionSound, playFirstMessageSound, playKeywordSound } from '../lib/sound'
-import { getLiveChannels, getUsers } from '../lib/helix'
+import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -36,6 +36,8 @@ class ChatService {
   private seenThisSession = new Map<string, Set<string>>()
   /** channel -> started_at of the stream whose first-messages we're tracking */
   private streamStartedAt = new Map<string, string>()
+  /** "channel:login" -> active mass-gift group (individual subgifts collapse under it) */
+  private mysteryGifts = new Map<string, { id: string; until: number }>()
   private started = false
 
   start(): void {
@@ -77,12 +79,14 @@ class ChatService {
     this.pollLive()
     window.setInterval(() => this.pollLive(), 60000)
 
-    // mod status can change while the app is closed — refresh the cached list once per launch,
-    // otherwise the chatters list silently falls back to "recently active" on channels where
-    // the user actually IS a moderator
-    import('./accountService').then(({ refreshModeratedChannels }) => {
-      for (const a of useAccountsStore.getState().accounts) refreshModeratedChannels(a.id)
-    })
+    // mod status can change while the app is closed — refresh the cached list once per launch.
+    // Main window only: utility windows (user card, detached) also call start(), and their
+    // parallel refreshes race the token rotation and produce spurious 401s
+    if (!window.location.hash) {
+      import('./accountService').then(({ refreshModeratedChannels }) => {
+        for (const a of useAccountsStore.getState().accounts) refreshModeratedChannels(a.id)
+      })
+    }
   }
 
   /** which open channels are currently streaming (for tab/pane indicators) */
@@ -134,6 +138,11 @@ class ChatService {
       const names: Record<string, string> = {}
       for (const u of users) names[u.login.toLowerCase()] = u.display_name
       if (Object.keys(names).length) useChatStore.getState().setChannelNames(names)
+      // broadcaster chat colors — the accent for PRIMARY announcements on their channel
+      const colors = await getUserChatColors(account, users.map((u) => u.id))
+      const accents: Record<string, string> = {}
+      for (const u of users) if (colors[u.id]) accents[u.login.toLowerCase()] = colors[u.id]
+      if (Object.keys(accents).length) useChatStore.getState().setChannelAccents(accents)
     } finally {
       // allow a retry for logins that failed to resolve
       missing.forEach((c) => {
@@ -270,16 +279,24 @@ class ChatService {
       case 'USERNOTICE': {
         // subs, resubs, raids, announcements...
         const sysText = this.usernoticeText(m)
-        const msg = this.privmsgToChatMessage(m)
+        const msg = this.privmsgToChatMessage(m) ?? (m.channel && sysText ? this.systemMessage(m.channel, '') : null)
         if (msg) {
           msg.system = 'usernotice'
           msg.systemText = sysText
           if (m.tags['msg-id'] === 'announcement') {
             msg.announceColor = (m.tags['msg-param-color'] || 'PRIMARY').toLowerCase()
           }
+          // mass gifts: the "X дарує N підписок" header groups the individual
+          // subgift lines that follow — they stay collapsed until clicked
+          const login = (m.tags['login'] || '').toLowerCase()
+          if (m.tags['msg-id'] === 'submysterygift') {
+            msg.giftGroupId = msg.id
+            this.mysteryGifts.set(`${m.channel}:${login}`, { id: msg.id, until: Date.now() + 90_000 })
+          } else if (m.tags['msg-id'] === 'subgift') {
+            const g = this.mysteryGifts.get(`${m.channel}:${login}`)
+            if (g && Date.now() < g.until) msg.groupedUnder = g.id
+          }
           this.queue(m.channel, msg)
-        } else if (m.channel && sysText) {
-          this.queue(m.channel, this.systemMessage(m.channel, sysText))
         }
         break
       }
@@ -334,6 +351,14 @@ class ChatService {
         return `💜 ${name} передає подарунок далі!`
       case 'highlighted-message':
         return `⭐ Виділене повідомлення`
+      case 'viewermilestone': {
+        // watch-streak milestone
+        const val = m.tags['msg-param-value'] || '?'
+        return `🔥 ${name} дивиться стрім ${val}-й раз поспіль! Оце стрик!`
+      }
+      case 'midnightsquid':
+      case 'cheer':
+        return en
       default:
         return en
     }

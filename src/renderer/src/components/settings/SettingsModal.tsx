@@ -191,6 +191,32 @@ function AppearanceSection(): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
+  const [systemFonts, setSystemFonts] = useState<string[]>([])
+  // custom combobox instead of <datalist>: the native dropdown filters by the CURRENT
+  // value (with a font already picked nothing else is selectable) and doesn't scroll
+  const [fontOpen, setFontOpen] = useState(false)
+  const [fontQuery, setFontQuery] = useState('')
+  // Windows-installed fonts via the Local Font Access API (needs a user gesture)
+  const loadSystemFonts = async (): Promise<void> => {
+    if (systemFonts.length) return
+    try {
+      const q = (window as unknown as { queryLocalFonts?: () => Promise<{ family: string }[]> }).queryLocalFonts
+      if (!q) return
+      const fonts = await q()
+      setSystemFonts([...new Set(fonts.map((f) => f.family))].sort())
+    } catch {
+      /* permission denied / unsupported — keep the short built-in list */
+    }
+  }
+  const allFonts = [
+    ...settings.customFonts.map((f) => f.name),
+    ...(systemFonts.length
+      ? systemFonts
+      : ['Inter', 'Verdana', 'Tahoma', 'Arial', 'Calibri', 'Georgia', 'Consolas', 'Comic Sans MS'])
+  ]
+  const fontMatches = fontQuery
+    ? allFonts.filter((f) => f.toLowerCase().includes(fontQuery.toLowerCase()))
+    : allFonts
   return (
     <div>
       <div className="set-group-title">{t('set.group.general')}</div>
@@ -203,23 +229,48 @@ function AppearanceSection(): React.JSX.Element {
       </div>
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
-        <select
-          style={{ maxWidth: 190 }}
-          value={settings.fontFamily}
-          onChange={(e) => set({ fontFamily: e.target.value })}
-        >
-          <option value="">Segoe UI ({t('set.fontDefault')})</option>
-          {['Inter', 'Verdana', 'Tahoma', 'Arial', 'Calibri', 'Georgia', 'Consolas', 'Comic Sans MS'].map((f) => (
-            <option key={f} value={f} style={{ fontFamily: f }}>
-              {f}
-            </option>
-          ))}
-          {settings.customFonts.map((f) => (
-            <option key={f.name} value={f.name}>
-              {f.name} ★
-            </option>
-          ))}
-        </select>
+        <div className="font-combo">
+          <input
+            style={{ width: 190 }}
+            placeholder={t('set.fontFamily.placeholder')}
+            value={settings.fontFamily}
+            spellCheck={false}
+            onChange={(e) => {
+              set({ fontFamily: e.target.value })
+              setFontQuery(e.target.value)
+              setFontOpen(true)
+            }}
+            onFocus={() => {
+              loadSystemFonts()
+              // opening shows the FULL list; only typing after that narrows it
+              setFontQuery('')
+              setFontOpen(true)
+            }}
+            onBlur={() => setFontOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' || e.key === 'Enter') setFontOpen(false)
+            }}
+          />
+          {fontOpen && fontMatches.length > 0 && (
+            <div className="font-combo-list">
+              {fontMatches.map((f) => (
+                <div
+                  key={f}
+                  className={`font-combo-item ${f === settings.fontFamily ? 'selected' : ''}`}
+                  style={{ fontFamily: `'${f}'` }}
+                  // mousedown, not click: click fires after the input's blur closes the list
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    set({ fontFamily: f })
+                    setFontOpen(false)
+                  }}
+                >
+                  {f}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <label className="ghost" style={{ cursor: 'pointer' }}>
           <input
             type="file"

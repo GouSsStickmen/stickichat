@@ -159,6 +159,7 @@ export const en = {
   'set.eyedropper': 'Eyedropper (works outside the window too)',
   'picker.editFavs': 'Reorder',
   'btn.type.copy': 'Copy message text',
+  'gift.showAll': 'show all',
   'set.highlightSidebar': 'Show a sidebar with highlighted messages',
   'highlights.title': 'Highlights',
   'highlights.empty': 'Nothing highlighted yet',

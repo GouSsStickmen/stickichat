@@ -1,14 +1,22 @@
 import { ipcMain, safeStorage, shell, app, BrowserWindow } from 'electron'
 import { join } from 'path'
-import { readConfig, writeConfig } from './storage'
+import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
+
+function rememberEnabled(): boolean {
+  const cfg = readConfig() as { settings?: { rememberWindowSize?: boolean } } | null
+  return cfg?.settings?.rememberWindowSize !== false
+}
 
 function createChildWindow(
   hash: string,
-  opts: { width: number; height: number; title?: string; parent?: BrowserWindow | null }
+  opts: { width: number; height: number; title?: string; parent?: BrowserWindow | null; stateKey?: string }
 ): BrowserWindow {
+  const saved = opts.stateKey && rememberEnabled() ? readWindowState(opts.stateKey) : null
   const win = new BrowserWindow({
-    width: opts.width,
-    height: opts.height,
+    width: saved?.width ?? opts.width,
+    height: saved?.height ?? opts.height,
+    x: saved?.x,
+    y: saved?.y,
     minWidth: 320,
     minHeight: 240,
     autoHideMenuBar: true,
@@ -36,6 +44,18 @@ function createChildWindow(
     win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${hash}`)
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'), { hash })
+  }
+  if (opts.stateKey) {
+    const key = opts.stateKey
+    let t: NodeJS.Timeout | null = null
+    const save = (): void => {
+      if (t) clearTimeout(t)
+      t = setTimeout(() => {
+        if (!win.isDestroyed() && !win.isMinimized()) writeWindowState(win.getBounds(), key)
+      }, 500)
+    }
+    win.on('resize', save)
+    win.on('move', save)
   }
   return win
 }
@@ -83,6 +103,7 @@ export function registerIpc(): void {
       width: 420,
       height: 580,
       title: 'StickiChat — Emotes',
+      stateKey: 'emotepicker',
       parent: BrowserWindow.fromWebContents(e.sender)
     })
   })
@@ -93,6 +114,7 @@ export function registerIpc(): void {
       width: 480,
       height: 640,
       title: 'StickiChat — User',
+      stateKey: 'usercard',
       parent: BrowserWindow.fromWebContents(e.sender)
     })
   })
@@ -103,6 +125,7 @@ export function registerIpc(): void {
       width: 980,
       height: 680,
       title: 'StickiChat — Settings',
+      stateKey: 'settings',
       parent: BrowserWindow.fromWebContents(e.sender)
     })
   })

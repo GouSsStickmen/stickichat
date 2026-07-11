@@ -39,19 +39,29 @@ function windowStatePath(): string {
   return join(app.getPath('userData'), 'window-state.json')
 }
 
-export function readWindowState(): WindowState | null {
+/** per-window-kind saved bounds: 'main', 'emotepicker', 'settings', 'usercard' … */
+function readAllWindowStates(): Record<string, WindowState> {
   try {
     const p = windowStatePath()
-    if (!existsSync(p)) return null
-    return JSON.parse(readFileSync(p, 'utf8'))
+    if (!existsSync(p)) return {}
+    const raw = JSON.parse(readFileSync(p, 'utf8'))
+    // migrate the old single-window format ({x,y,width,height} at top level)
+    if (raw && typeof raw.width === 'number') return { main: raw }
+    return raw ?? {}
   } catch {
-    return null
+    return {}
   }
 }
 
-export function writeWindowState(state: WindowState): void {
+export function readWindowState(key = 'main'): WindowState | null {
+  return readAllWindowStates()[key] ?? null
+}
+
+export function writeWindowState(state: WindowState, key = 'main'): void {
   try {
-    writeFileSync(windowStatePath(), JSON.stringify(state), 'utf8')
+    const all = readAllWindowStates()
+    all[key] = state
+    writeFileSync(windowStatePath(), JSON.stringify(all), 'utf8')
   } catch {
     /* best-effort */
   }

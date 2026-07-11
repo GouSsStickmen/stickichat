@@ -62,8 +62,12 @@ export async function getUsers(
   return ((res.json as { data: HelixUser[] })?.data ?? []) as HelixUser[]
 }
 
-/** channels where the account is a moderator */
-export async function getModeratedChannelIds(account: Account): Promise<string[]> {
+/**
+ * Channels where the account is a moderator. Returns null when ANY page fails —
+ * a partial/empty result must never overwrite a previously known-good cache
+ * (a transient 401 during startup token refresh would silently strip mod rights).
+ */
+export async function getModeratedChannelIds(account: Account): Promise<string[] | null> {
   const ids: string[] = []
   let cursor: string | undefined
   for (let i = 0; i < 20; i++) {
@@ -72,7 +76,7 @@ export async function getModeratedChannelIds(account: Account): Promise<string[]
       first: '100',
       after: cursor
     })
-    if (!res.ok) break
+    if (!res.ok) return null
     const j = res.json as { data: { broadcaster_id: string }[]; pagination?: { cursor?: string } }
     ids.push(...(j.data ?? []).map((d) => d.broadcaster_id))
     cursor = j.pagination?.cursor
@@ -387,6 +391,22 @@ export interface LiveInfo {
   startedAt: string
   viewers: number
   title: string
+}
+
+/** the user's chosen chat color (used as the channel accent for PRIMARY announcements) */
+export async function getUserChatColors(
+  account: Account,
+  userIds: string[]
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  for (let i = 0; i < userIds.length; i += 100) {
+    const res = await helixRequest(account, 'GET', '/chat/color', { user_id: userIds.slice(i, i + 100) })
+    if (!res.ok) continue
+    for (const u of ((res.json as { data: { user_id: string; color: string }[] })?.data ?? [])) {
+      if (u.color) out[u.user_id] = u.color
+    }
+  }
+  return out
 }
 
 /** which of the given channels are live right now: login -> stream info */

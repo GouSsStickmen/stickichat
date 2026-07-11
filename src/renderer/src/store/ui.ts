@@ -36,8 +36,11 @@ interface UiState {
   userCard: UserCardTarget | null
   toasts: Toast[]
   emotePreview: EmotePreviewTarget | null
+  /** mass-gift groups the user expanded (header message id -> true) */
+  expandedGifts: Record<string, boolean>
   setSettingsOpen: (v: boolean) => void
   setSettingsSection: (v: string | null) => void
+  toggleGiftGroup: (id: string) => void
   setAddAccountOpen: (v: boolean) => void
   setUserCard: (v: UserCardTarget | null) => void
   toast: (text: string, kind?: 'ok' | 'error') => void
@@ -54,8 +57,11 @@ export const useUiStore = create<UiState>()((set) => ({
   userCard: null,
   toasts: [],
   emotePreview: null,
+  expandedGifts: {},
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setSettingsSection: (settingsSection) => set({ settingsSection }),
+  toggleGiftGroup: (id) =>
+    set((s) => ({ expandedGifts: { ...s.expandedGifts, [id]: !s.expandedGifts[id] } })),
   setAddAccountOpen: (addAccountOpen) => set({ addAccountOpen }),
   setUserCard: (userCard) => set({ userCard }),
   toast: (text, kind = 'ok') => {

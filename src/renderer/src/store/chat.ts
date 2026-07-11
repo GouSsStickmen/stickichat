@@ -14,6 +14,8 @@ interface ChatState {
   liveChannels: Record<string, boolean>
   /** channel login -> broadcaster's display name (proper capitalization) */
   channelNames: Record<string, string>
+  /** channel login -> broadcaster's chat color (accent for PRIMARY announcements) */
+  channelAccents: Record<string, string>
   /** channel login -> live stream info for the pane header */
   streamInfo: Record<string, { viewers: number; title: string; startedAt: string }>
   /** channel login -> has an unseen mention of one of my accounts */
@@ -32,6 +34,7 @@ interface ChatState {
   setConnState: (s: ConnState) => void
   setLiveChannels: (live: Record<string, boolean>) => void
   setChannelNames: (names: Record<string, string>) => void
+  setChannelAccents: (accents: Record<string, string>) => void
   setStreamInfo: (info: Record<string, { viewers: number; title: string; startedAt: string }>) => void
   setUnreadMention: (channel: string) => void
   clearUnreadMentions: (channels: string[]) => void
@@ -68,6 +71,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   connState: 'connecting',
   liveChannels: {},
   channelNames: {},
+  channelAccents: {},
   streamInfo: {},
   unreadMentions: {},
   unreadMessages: {},
@@ -130,6 +134,8 @@ export const useChatStore = create<ChatState>()((set) => ({
   setConnState: (connState) => set({ connState }),
   setLiveChannels: (liveChannels) => set({ liveChannels }),
   setChannelNames: (names) => set((s) => ({ channelNames: { ...s.channelNames, ...names } })),
+  setChannelAccents: (accents) =>
+    set((s) => ({ channelAccents: { ...s.channelAccents, ...accents } })),
   setStreamInfo: (streamInfo) => set({ streamInfo }),
   setUnreadMention: (channel) =>
     set((s) =>

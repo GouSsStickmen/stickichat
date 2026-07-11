@@ -37,13 +37,19 @@ export default function UserCard({
   const [subInfo, setSubInfo] = useState<SubInfo | null | undefined>(undefined)
   const ref = useRef<HTMLDivElement>(null)
 
-  // newest first — the latest message is what a moderator looks for
+  // like the chat itself: every buffered message, oldest → newest, pinned to the bottom
   const userMessages = useMemo(
-    () =>
-      (presetMessages ??
-        messages.filter((m) => m.userId === target.userId && !m.system).slice(-60)).slice().reverse(),
+    () => presetMessages ?? messages.filter((m) => m.userId === target.userId && !m.system),
     [messages, target.userId, presetMessages]
   )
+
+  // keep the list glued to the bottom as new messages arrive
+  const msgsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = msgsRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [userMessages.length])
 
   useEffect(() => {
     if (account) getUsers(account, { ids: [target.userId] }).then(([u]) => u && setInfo(u))
@@ -235,7 +241,7 @@ export default function UserCard({
           </button>
         </div>
       )}
-      <div className="uc-msgs">
+      <div className="uc-msgs" ref={msgsRef}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('user.messagesHere')}</div>
         {userMessages.length === 0 && <div>{t('user.noMessages')}</div>}
         {userMessages.map((m) => {
@@ -256,7 +262,7 @@ export default function UserCard({
                 if (tk.kind === 'emote')
                   return <img key={i} className="uc-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />
                 if (tk.kind === 'emoji') return <EmojiGlyph key={i} char={tk.char} />
-                if (tk.kind === 'link') return <span key={i}>{tk.url}</span>
+                if (tk.kind === 'link') return <span key={i}>{tk.label}</span>
                 if (tk.kind === 'mention')
                   return (
                     <span key={i} style={{ color: tk.color, fontWeight: 600 }}>

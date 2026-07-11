@@ -30,6 +30,7 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
   const threshold = opts.threshold ?? 5
   let active = false
   let current = opts.index
+  let lastSwapAt: { x: number; y: number } | null = null
 
   const items = (): HTMLElement[] =>
     Array.from(opts.container.querySelectorAll<HTMLElement>(opts.itemSelector))
@@ -49,16 +50,27 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
       return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom
     })
     if (target === -1 || target === current) return
+    // a swap reflows the whole list — if the pointer hasn't moved since the last one,
+    // whatever is under it now is a layout artifact, not user intent (kills A↔B loops
+    // when tabs of different widths shuffle between wrapped rows)
+    if (lastSwapAt && Math.hypot(ev.clientX - lastSwapAt.x, ev.clientY - lastSwapAt.y) < 8) return
     const r = list[target].getBoundingClientRect()
+    const curRect = list[current]?.getBoundingClientRect()
+    // in a wrapping horizontal list the target may sit on ANOTHER row — being inside it
+    // is unambiguous there, and comparing x-middles across rows is meaningless
+    const sameRow =
+      opts.axis !== 'x' || !curRect || Math.abs(r.top - curRect.top) < r.height / 2
     // only reorder after the pointer crosses the target's middle — no boundary flicker
     const pastMiddle =
       opts.axis === 'y'
         ? ev.clientY > r.top + r.height / 2
         : ev.clientX > r.left + r.width / 2
-    const shouldMove = (current < target && pastMiddle) || (current > target && !pastMiddle)
+    const shouldMove =
+      !sameRow || (current < target && pastMiddle) || (current > target && !pastMiddle)
     if (!shouldMove) return
     opts.onMove(current, target)
     current = target
+    lastSwapAt = { x: ev.clientX, y: ev.clientY }
   }
 
   const onUp = (): void => {

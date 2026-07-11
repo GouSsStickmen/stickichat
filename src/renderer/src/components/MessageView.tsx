@@ -2,7 +2,7 @@ import { memo, useMemo, useRef, useState } from 'react'
 import { Account, ChatMessage, MOD_ONLY_TYPES, Settings } from '../types'
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration } from '../lib/tokenize'
 import { lookupBadgeUrl, lookupEmote } from '../store/emotes'
-import { lookupUserColor } from '../store/chat'
+import { lookupUserColor, useChatStore } from '../store/chat'
 import { highlightRuleMatches } from '../lib/highlight'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
@@ -49,7 +49,7 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
             window.sticki.openExternal(token.url)
           }}
         >
-          {token.url}
+          {token.label}
         </a>
       )
     case 'mention': {
@@ -217,6 +217,7 @@ function MessageViewInner({
   const t = useT()
   const modButtons = useSettingsStore((s) => s.modButtons)
   const highlightRules = useSettingsStore((s) => s.highlightRules)
+  const channelAccent = useChatStore((s) => s.channelAccents[msg.channel])
   const [dragX, setDragX] = useState(0)
   const draggingRef = useRef(false)
 
@@ -373,7 +374,12 @@ function MessageViewInner({
         style={
           {
             background: msg.announceColor ? undefined : customBg,
-            '--announce-accent': msg.announceColor ? ANNOUNCE_COLORS[msg.announceColor] : undefined,
+            // PRIMARY announcements take the broadcaster's own color for this channel
+            '--announce-accent': msg.announceColor
+              ? msg.announceColor === 'primary'
+                ? (channelAccent ?? ANNOUNCE_COLORS.primary)
+                : ANNOUNCE_COLORS[msg.announceColor]
+              : undefined,
             transform: dragX > 0 ? `translateX(${dragX}px)` : undefined
           } as React.CSSProperties
         }
@@ -388,7 +394,21 @@ function MessageViewInner({
           </span>
         )}
         {msg.system === 'usernotice' && msg.systemText && (
-          <span className="usernotice-tag">{msg.announceColor ? '📢' : '★'} {msg.systemText}</span>
+          <span
+            className={`usernotice-tag ${msg.giftGroupId ? 'gift-toggle' : ''}`}
+            onClick={
+              msg.giftGroupId
+                ? () => useUiStore.getState().toggleGiftGroup(msg.giftGroupId!)
+                : undefined
+            }
+          >
+            {msg.announceColor ? '📢' : '★'} {msg.systemText}
+            {msg.giftGroupId && (
+              <span className="gift-toggle-arrow">
+                {useUiStore.getState().expandedGifts[msg.giftGroupId] ? ' ▲' : ` ▼ ${t('gift.showAll')}`}
+              </span>
+            )}
+          </span>
         )}
         {msg.replyParent && (
           <span

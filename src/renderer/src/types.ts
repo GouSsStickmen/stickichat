@@ -57,6 +57,10 @@ export interface ChatMessage {
   isMention?: boolean
   /** the message is a reply to one of my accounts */
   replyToMe?: boolean
+  /** this sub-gift belongs to a mass gift — hidden until its group is expanded */
+  groupedUnder?: string
+  /** this message is a mass-gift header that can expand its grouped gifts */
+  giftGroupId?: string
   /** first message we've seen from this login since we joined this channel this session */
   isFirstInSession?: boolean
 }

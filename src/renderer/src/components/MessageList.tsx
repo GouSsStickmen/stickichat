@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import { Account, Pane } from '../types'
 import { useChatStore } from '../store/chat'
+import { useUiStore } from '../store/ui'
 import { useSettingsStore } from '../store/settings'
 import { useEmotesStore } from '../store/emotes'
 import MessageView from './MessageView'
@@ -31,7 +32,13 @@ export default function MessageList({
   scrollLocked
 }: Props): React.JSX.Element {
   const t = useT()
-  const messages = useChatStore((s) => s.messages[pane.channel]) ?? []
+  const allMessages = useChatStore((s) => s.messages[pane.channel]) ?? []
+  const expandedGifts = useUiStore((s) => s.expandedGifts)
+  // sub-gifts of a collapsed mass-gift group stay hidden until the header is clicked
+  const messages = useMemo(
+    () => allMessages.filter((m) => !m.groupedUnder || expandedGifts[m.groupedUnder]),
+    [allMessages, expandedGifts]
+  )
   const settings = useSettingsStore((s) => s.settings)
   const emoteVersion = useEmotesStore((s) => s.version)
   const virtuosoRef = useRef<VirtuosoHandle>(null)

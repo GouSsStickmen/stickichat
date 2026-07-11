@@ -161,6 +161,7 @@ export const uk: Record<TranslationKey, string> = {
   'set.eyedropper': 'Піпетка (працює і за межами вікна)',
   'picker.editFavs': 'Змінити порядок',
   'btn.type.copy': 'Копіювати текст повідомлення',
+  'gift.showAll': 'показати всі',
   'set.highlightSidebar': 'Показувати бічну панель із виділеними повідомленнями',
   'highlights.title': 'Виділені',
   'highlights.empty': 'Поки що нічого не виділено',

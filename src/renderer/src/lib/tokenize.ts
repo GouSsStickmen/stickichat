@@ -3,7 +3,7 @@ import { ChatMessage, Emote } from '../types'
 export type Token =
   | { kind: 'text'; text: string }
   | { kind: 'emote'; emote: Emote; overlays: Emote[] }
-  | { kind: 'link'; url: string }
+  | { kind: 'link'; url: string; label: string }
   | { kind: 'mention'; name: string; color: string }
   | { kind: 'emoji'; char: string }
 
@@ -117,11 +117,12 @@ export function tokenizeMessage(
         continue
       }
       if (URL_RE.test(piece)) {
-        tokens.push({ kind: 'link', url: piece })
+        tokens.push({ kind: 'link', url: piece, label: piece })
         continue
       }
       if (BARE_URL_RE.test(piece) && !piece.includes('@')) {
-        tokens.push({ kind: 'link', url: `https://${piece}` })
+        // open with https, but show the text exactly as the user typed it
+        tokens.push({ kind: 'link', url: `https://${piece}`, label: piece })
         continue
       }
       if (piece.length > 1 && piece.startsWith('@')) {
