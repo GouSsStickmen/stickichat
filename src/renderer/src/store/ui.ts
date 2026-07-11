@@ -28,6 +28,11 @@ export interface EmotePreviewTarget {
   y: number
 }
 
+export interface ChannelPrompt {
+  /** channel login the user is offered to add */
+  channel: string
+}
+
 interface UiState {
   settingsOpen: boolean
   /** which settings section to land on when the modal/window opens next */
@@ -38,6 +43,9 @@ interface UiState {
   emotePreview: EmotePreviewTarget | null
   /** mass-gift groups the user expanded (header message id -> true) */
   expandedGifts: Record<string, boolean>
+  /** small "add this channel?" prompt (raids) */
+  channelPrompt: ChannelPrompt | null
+  whispersOpen: boolean
   setSettingsOpen: (v: boolean) => void
   setSettingsSection: (v: string | null) => void
   toggleGiftGroup: (id: string) => void
@@ -46,6 +54,8 @@ interface UiState {
   toast: (text: string, kind?: 'ok' | 'error') => void
   dismissToast: (id: number) => void
   setEmotePreview: (v: EmotePreviewTarget | null) => void
+  setChannelPrompt: (v: ChannelPrompt | null) => void
+  setWhispersOpen: (v: boolean) => void
 }
 
 let toastId = 0
@@ -58,6 +68,8 @@ export const useUiStore = create<UiState>()((set) => ({
   toasts: [],
   emotePreview: null,
   expandedGifts: {},
+  channelPrompt: null,
+  whispersOpen: false,
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setSettingsSection: (settingsSection) => set({ settingsSection }),
   toggleGiftGroup: (id) =>
@@ -72,5 +84,7 @@ export const useUiStore = create<UiState>()((set) => ({
     }, 3500)
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-  setEmotePreview: (emotePreview) => set({ emotePreview })
+  setEmotePreview: (emotePreview) => set({ emotePreview }),
+  setChannelPrompt: (channelPrompt) => set({ channelPrompt }),
+  setWhispersOpen: (whispersOpen) => set({ whispersOpen })
 }))

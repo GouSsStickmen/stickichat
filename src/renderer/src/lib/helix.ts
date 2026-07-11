@@ -1,5 +1,5 @@
 import { HttpResponse, httpGet, httpJson } from './http'
-import { Account } from '../types'
+import { Account, Cheermote } from '../types'
 import { useSettingsStore } from '../store/settings'
 import { ensureFreshToken, refreshAccountToken } from './twitchAuth'
 
@@ -445,6 +445,52 @@ export async function getChannelBadges(
 ): Promise<Record<string, string>> {
   const res = await helixRequest(account, 'GET', '/chat/badges', { broadcaster_id: broadcasterId })
   return badgesToMap(res)
+}
+
+/**
+ * Create an EventSub WebSocket subscription. Returns the raw HttpResponse so the caller can
+ * tell a real failure from a harmless 409 (subscription already exists for this session).
+ */
+export async function createEventSubSubscription(
+  account: Account,
+  type: string,
+  version: string,
+  condition: Record<string, string>,
+  sessionId: string
+): Promise<HttpResponse> {
+  return helixRequest(account, 'POST', '/eventsub/subscriptions', {}, {
+    type,
+    version,
+    condition,
+    transport: { method: 'websocket', session_id: sessionId }
+  })
+}
+
+interface HelixCheermote {
+  prefix: string
+  tiers: {
+    min_bits: number
+    color: string
+    images?: { dark?: { animated?: Record<string, string>; static?: Record<string, string> } }
+  }[]
+}
+
+/** channel + global cheermotes (bit icons). broadcasterId gives channel-specific ones too. */
+export async function getCheermotes(account: Account, broadcasterId: string): Promise<Cheermote[]> {
+  const res = await helixRequest(account, 'GET', '/bits/cheermotes', { broadcaster_id: broadcasterId })
+  if (!res.ok) return []
+  const data = ((res.json as { data: HelixCheermote[] })?.data ?? []) as HelixCheermote[]
+  return data.map((c) => ({
+    prefix: c.prefix.toLowerCase(),
+    tiers: c.tiers
+      .map((t) => ({
+        min: t.min_bits,
+        // prefer the 2x animated icon, fall back to static
+        url: t.images?.dark?.animated?.['2'] ?? t.images?.dark?.static?.['2'] ?? '',
+        color: t.color
+      }))
+      .sort((a, b) => b.min - a.min)
+  }))
 }
 
 function badgesToMap(res: HttpResponse): Record<string, string> {

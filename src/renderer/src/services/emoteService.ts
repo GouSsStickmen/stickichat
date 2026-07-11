@@ -7,7 +7,7 @@ import {
   fetchFfzGlobal,
   mergeEmotes
 } from '../lib/emoteProviders'
-import { getChannelBadges, getGlobalBadges, getUserEmotes, getUsers } from '../lib/helix'
+import { getChannelBadges, getCheermotes, getGlobalBadges, getUserEmotes, getUsers } from '../lib/helix'
 import type { TwitchUserEmote } from '../lib/helix'
 import { Account } from '../types'
 import { useAccountsStore } from '../store/accounts'
@@ -18,6 +18,7 @@ let globalLoaded = false
 const channelLoaded = new Set<string>()
 let globalBadgesLoaded = false
 const channelBadgesLoaded = new Set<string>()
+const cheermotesLoaded = new Set<string>()
 
 export async function loadGlobalEmotes(): Promise<void> {
   if (globalLoaded) return
@@ -62,6 +63,20 @@ export async function loadChannelBadges(channel: string, twitchId: string): Prom
     return
   }
   useEmotesStore.getState().setChannelBadges(channel, map)
+}
+
+/** channel + global cheermotes (bit icons) for a channel */
+export async function loadCheermotes(channel: string, twitchId: string): Promise<void> {
+  if (cheermotesLoaded.has(channel)) return
+  const account = useAccountsStore.getState().accounts[0]
+  if (!account) return
+  cheermotesLoaded.add(channel)
+  const list = await getCheermotes(account, twitchId)
+  if (list.length === 0) {
+    cheermotesLoaded.delete(channel)
+    return
+  }
+  useEmotesStore.getState().setCheermotes(channel, list)
 }
 
 /** Re-fetch all badges (global + every known channel). Called after a (re-)authorization. */

@@ -1,9 +1,11 @@
 import { memo, useMemo, useRef, useState } from 'react'
 import { Account, ChatMessage, MOD_ONLY_TYPES, Settings } from '../types'
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration } from '../lib/tokenize'
-import { lookupBadgeUrl, lookupEmote } from '../store/emotes'
+import { lookupBadgeUrl, lookupEmote, lookupCheermote } from '../store/emotes'
 import { lookupUserColor, useChatStore } from '../store/chat'
+import { useAccountsStore } from '../store/accounts'
 import { highlightRuleMatches } from '../lib/highlight'
+import { openUserCard as openCard } from '../lib/openUserCard'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
 import { runModButton } from '../services/modActions'
@@ -40,6 +42,22 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
   switch (token.kind) {
     case 'text':
       return <>{token.text}</>
+    case 'command': {
+      // "!command" at message start: right-click puts it into the input, like nicks/emotes
+      const insert = (e: React.MouseEvent): void => {
+        e.preventDefault()
+        window.dispatchEvent(
+          new CustomEvent<InsertEventDetail>('sticki:insert', {
+            detail: { paneId, text: `${token.text} ` }
+          })
+        )
+      }
+      return (
+        <span className="command-token" title={token.text} onContextMenu={insert}>
+          {token.text}
+        </span>
+      )
+    }
     case 'link':
       return (
         <a
@@ -125,6 +143,15 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
         </span>
       )
     }
+    case 'cheer':
+      return (
+        <span className="cheer-token" title={`${token.bits} bits`}>
+          {token.url && <img src={token.url} alt="" loading="lazy" />}
+          <span className="cheer-amount" style={{ color: token.color }}>
+            {token.bits}
+          </span>
+        </span>
+      )
   }
 }
 
@@ -163,12 +190,11 @@ function recoverArtLines(text: string): string[] | null {
   return consistent / segs.length >= 0.7 ? segs : null
 }
 
-// swipe zones (px): 40‑90 delete, 90‑342 timeout tiers, beyond — ban
+// swipe zones (px): 40‑90 delete, then one timeout tier every SWIPE_TIER_WIDTH px, beyond — ban
 const SWIPE_DELETE_START = 40
 const SWIPE_TIMEOUT_START = 90
 const SWIPE_TIER_WIDTH = 42
-const SWIPE_TIERS = [60, 300, 600, 1800, 3600, 86400]
-const SWIPE_BAN_START = SWIPE_TIMEOUT_START + SWIPE_TIER_WIDTH * SWIPE_TIERS.length
+const banStartFor = (tiers: number[]): number => SWIPE_TIMEOUT_START + SWIPE_TIER_WIDTH * tiers.length
 
 const ANNOUNCE_COLORS: Record<string, string> = {
   primary: '#9147ff',
@@ -188,14 +214,15 @@ interface SwipeAction {
 function swipeActionFor(
   dx: number,
   labels: { delete: string; ban: string },
+  tiers: number[],
   deleteOnly = false
 ): SwipeAction | null {
   if (dx < SWIPE_DELETE_START) return null
   if (deleteOnly || dx < SWIPE_TIMEOUT_START)
     return { kind: 'delete', label: `🗑 ${labels.delete}`, color: 'var(--warning)' }
-  if (dx < SWIPE_BAN_START) {
-    const tier = Math.min(SWIPE_TIERS.length - 1, Math.floor((dx - SWIPE_TIMEOUT_START) / SWIPE_TIER_WIDTH))
-    const secs = SWIPE_TIERS[tier]
+  if (dx < banStartFor(tiers)) {
+    const tier = Math.min(tiers.length - 1, Math.floor((dx - SWIPE_TIMEOUT_START) / SWIPE_TIER_WIDTH))
+    const secs = tiers[tier]
     return { kind: 'timeout', seconds: secs, label: `⏱ ${formatDuration(secs)}`, color: 'var(--accent-strong)' }
   }
   return { kind: 'ban', label: `🔨 ${labels.ban}`, color: 'var(--danger)' }
@@ -229,7 +256,8 @@ function MessageViewInner({
             msg,
             lookupEmote(msg.channel),
             (login) => lookupUserColor(msg.channel, login),
-            settings.theme === 'dark'
+            settings.theme === 'dark',
+            msg.bits ? lookupCheermote(msg.channel) : undefined
           ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [msg, emoteVersion, settings.theme]
@@ -238,14 +266,22 @@ function MessageViewInner({
   const isMention = settings.highlightMentions && !!msg.isMention
 
   const customBg = useMemo(() => {
-    if (isMention || msg.system) return undefined
-    const rule = highlightRules.find((r) => highlightRuleMatches(msg, r, settings.caseSensitiveNicks))
+    if (isMention) return undefined
+    const myAccountIds = useAccountsStore.getState().accounts.map((a) => a.id)
+    const ctx = { caseSensitiveNicks: settings.caseSensitiveNicks, myAccountIds }
+    const rule = highlightRules.find((r) => highlightRuleMatches(msg, r, ctx))
     return rule ? hexToRgba(rule.color, rule.opacity) : undefined
   }, [highlightRules, msg, isMention, settings.caseSensitiveNicks])
 
+  // muted users: 'hide' is filtered out in MessageList; 'dim' renders semi-transparent here
+  const muted = useMemo(
+    () => settings.mutedUsers.find((u) => u.login === msg.login && !msg.system),
+    [settings.mutedUsers, msg.login, msg.system]
+  )
+
   if (msg.system === 'info') {
     return (
-      <div className="msg">
+      <div className={`msg ${msg.redeemed ? 'redeem-info' : ''}`}>
         {settings.showTimestamps && <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>}
         <span className="sysmsg">{msg.systemText}</span>
       </div>
@@ -257,8 +293,6 @@ function MessageViewInner({
   const classes = ['msg']
   if (settings.alternatingBackground && index % 2 === 1) classes.push('alt')
   if (isMention && settings.showMentionBg) classes.push('mention')
-  if (msg.isFirstMsg && settings.showFirstMsgBg) classes.push('first-msg')
-  else if (msg.isFirstInSession && settings.showFirstMsgBg) classes.push('first-in-session')
   if (msg.deleted) classes.push('deleted')
   if (msg.historical) classes.push('historical')
   if (flash) classes.push('flash')
@@ -276,10 +310,13 @@ function MessageViewInner({
     .filter((b) => {
       const modOnly = MOD_ONLY_TYPES.has(b.type)
       if (modOnly && !isMod) return false
-      if (modOnly && targetIsProtected && b.type !== 'delete') return false
+      // mods/broadcasters can't be punished, but delete and shoutout still make sense on them
+      if (modOnly && targetIsProtected && b.type !== 'delete' && b.type !== 'shoutout') return false
       return true
     })
-  const swipeEnabled = isMod && canAct && !msg.deleted
+  // still swipeable after a delete — you often delete first, then decide to time out too
+  const swipeEnabled = isMod && canAct
+  const swipeTiers = settings.swipeTimeouts.length ? settings.swipeTimeouts : [60, 300, 600, 1800, 3600, 86400]
   // braille "ASCII art" is drawn for a fixed line width — never rewrap it
   const brailleArt = (msg.text.match(/[⠀-⣿]/g)?.length ?? 0) >= 24
   // best case: the original line structure can be recovered exactly (no slider needed)
@@ -288,7 +325,7 @@ function MessageViewInner({
   const toast = useUiStore.getState().toast
 
   const openUserCard = (e: React.MouseEvent): void => {
-    useUiStore.getState().setUserCard({
+    openCard({
       channel: msg.channel,
       channelId,
       userId: msg.userId,
@@ -305,7 +342,7 @@ function MessageViewInner({
   const swipeLabels = { delete: t('swipe.delete'), ban: t('swipe.ban') }
 
   const executeSwipe = async (dx: number): Promise<void> => {
-    const action = swipeActionFor(dx, swipeLabels, targetIsProtected)
+    const action = swipeActionFor(dx, swipeLabels, swipeTiers, targetIsProtected)
     if (!action || !account) return
     const res =
       action.kind === 'delete'
@@ -325,7 +362,7 @@ function MessageViewInner({
     document.getSelection()?.removeAllRanges()
     const onMove = (ev: PointerEvent): void => {
       const dx = ev.clientX - start.x
-      const cap = targetIsProtected ? SWIPE_TIMEOUT_START - 1 : SWIPE_BAN_START + 40
+      const cap = targetIsProtected ? SWIPE_TIMEOUT_START - 1 : banStartFor(swipeTiers) + 40
       setDragX(Math.max(0, Math.min(dx, cap)))
     }
     const onUp = (ev: PointerEvent): void => {
@@ -351,7 +388,7 @@ function MessageViewInner({
     )
   }
 
-  const swipeAction = dragX > 0 ? swipeActionFor(dragX, swipeLabels, targetIsProtected) : null
+  const swipeAction = dragX > 0 ? swipeActionFor(dragX, swipeLabels, swipeTiers, targetIsProtected) : null
 
   const jumpToParent = (): void => {
     if (!msg.replyParent?.msgId) return
@@ -373,6 +410,7 @@ function MessageViewInner({
         className={classes.join(' ')}
         style={
           {
+            opacity: muted?.mode === 'dim' ? muted.opacity : undefined,
             background: msg.announceColor ? undefined : customBg,
             // PRIMARY announcements take the broadcaster's own color for this channel
             '--announce-accent': msg.announceColor
@@ -392,6 +430,11 @@ function MessageViewInner({
           >
             ⠿
           </span>
+        )}
+        {/* redemptions are announced on their own line by PubSub (with the real reward name);
+            here we only tag bits, which come through IRC with the amount */}
+        {settings.showBits && !!msg.bits && !msg.system && (
+          <span className="event-header bits">{t('msg.bits', { count: msg.bits })}</span>
         )}
         {msg.system === 'usernotice' && msg.systemText && (
           <span

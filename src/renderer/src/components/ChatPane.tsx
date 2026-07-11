@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MOD_ONLY_TYPES, Pane } from '../types'
 import { useChatStore, lookupUserBadges } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
-import { useUiStore } from '../store/ui'
 import { getUsers } from '../lib/helix'
 import { useLayoutStore } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
 import { canModerate } from '../services/accountService'
 import { loadTwitchUserEmotes } from '../services/emoteService'
+import { openUserCard } from '../lib/openUserCard'
+import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
 import MessageList from './MessageList'
 import InputBox, { ReplyTarget } from './InputBox'
 import ModToolbar from './ModToolbar'
@@ -52,6 +53,10 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
   const [chattersOpen, setChattersOpen] = useState(false)
   const [addPaneOpen, setAddPaneOpen] = useState(false)
+  // fixed-position anchor: the pane clips absolute popovers (overflow:hidden), so in a
+  // narrow window the "add chat" form used to lose its channel input off-screen
+  const addBtnRef = useRef<HTMLButtonElement>(null)
+  const [addPanePos, setAddPanePos] = useState<{ top: number; right: number } | null>(null)
   const [scrollLocked, setScrollLocked] = useState(false)
   const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
 
@@ -70,7 +75,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
       if (d.paneId !== pane.id || !account) return
       const [user] = await getUsers(account, { logins: [d.login] })
       if (!user) return
-      useUiStore.getState().setUserCard({
+      openUserCard({
         channel: pane.channel,
         channelId,
         userId: user.id,
@@ -90,7 +95,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
     if (keydownHandlerRef.current) return
     const onKey = (e: KeyboardEvent): void => {
       // physical key, not the produced character — works on the Ukrainian layout too
-      if (e.ctrlKey && e.code === 'KeyL') {
+      if (matchHotkey(e, hotkeyFor(useSettingsStore.getState().settings, 'scrollLock'))) {
         e.preventDefault()
         setScrollLocked((v) => !v)
       }
@@ -117,21 +122,31 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         )}
         {showStreamInfo && streamInfo && (
           <span className="stream-info" title={streamInfo.title}>
-            👁 {streamInfo.viewers.toLocaleString('uk-UA')} · ⏱ {formatUptime(streamInfo.startedAt)}
+            <span className="si-icon">👁</span> {streamInfo.viewers.toLocaleString('uk-UA')} ·{' '}
+            <span className="si-icon">⏱</span> {formatUptime(streamInfo.startedAt)}
             {streamInfo.title ? ` · ${streamInfo.title}` : ''}
           </span>
         )}
         <div className="spacer" />
-        <span style={{ position: 'relative' }}>
+        <span>
           <button
+            ref={addBtnRef}
             className="icon-btn"
             title={t('pane.add')}
-            onClick={() => setAddPaneOpen((v) => !v)}
+            onClick={() => {
+              const r = addBtnRef.current?.getBoundingClientRect()
+              if (r) setAddPanePos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })
+              setAddPaneOpen((v) => !v)
+            }}
           >
             +
           </button>
           {addPaneOpen && (
-            <div className="popover" style={{ top: '100%', right: 0, marginTop: 6 }} onDragStart={(e) => e.stopPropagation()}>
+            <div
+              className="popover add-pane-pop"
+              style={{ position: 'fixed', top: addPanePos?.top ?? 40, right: addPanePos?.right ?? 8 }}
+              onDragStart={(e) => e.stopPropagation()}
+            >
               <AddPaneForm tabId={tabId} onDone={() => setAddPaneOpen(false)} />
             </div>
           )}

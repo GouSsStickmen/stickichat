@@ -14,6 +14,8 @@ export interface StickiApi {
   sendEmotePick(payload: string): Promise<void>
   onEmotePicked(cb: (payload: string) => void): () => void
   setAlwaysOnTop(flag: boolean): Promise<void>
+  suspendAlwaysOnTop(): Promise<void>
+  resumeAlwaysOnTop(): Promise<void>
   closeWindow(): Promise<void>
   notifyConfigChanged(): Promise<void>
   onConfigChanged(cb: () => void): () => void

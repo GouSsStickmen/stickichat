@@ -10,6 +10,7 @@ import { banUser, unbanUser, warnUser } from '../lib/helix'
 import { useT } from '../i18n'
 import { formatDuration, tokenizeMessage } from '../lib/tokenize'
 import EmojiGlyph from './EmojiGlyph'
+import { PinButton } from './EmotePicker'
 
 const TIMEOUTS = [60, 600, 3600, 86400]
 
@@ -118,6 +119,16 @@ export default function UserCard({
 
   const ucFontSize = useSettingsStore((s) => s.settings.usercardFontSize)
   const setSettings = useSettingsStore((s) => s.setSettings)
+  const mutedUsers = useSettingsStore((s) => s.settings.mutedUsers)
+  const mutedEntry = mutedUsers.find((u) => u.login === target.login)
+
+  const toggleMuted = (): void => {
+    setSettings({
+      mutedUsers: mutedEntry
+        ? mutedUsers.filter((u) => u.login !== target.login)
+        : [...mutedUsers, { login: target.login, mode: 'dim' as const, opacity: 0.3 }]
+    })
+  }
 
   return (
     <div
@@ -127,6 +138,7 @@ export default function UserCard({
     >
       {standalone && (
         <div className="uc-zoom">
+          <PinButton settingKey="usercardPinned" />
           <button onClick={() => setSettings({ usercardFontSize: Math.max(10, ucFontSize - 1) })}>A−</button>
           <button onClick={() => setSettings({ usercardFontSize: Math.min(28, ucFontSize + 1) })}>A+</button>
         </div>
@@ -189,6 +201,13 @@ export default function UserCard({
           }
         >
           🗂 {t('user.viewercard')}
+        </button>
+        <button
+          title={t('muted.hint')}
+          className={mutedEntry ? 'primary' : ''}
+          onClick={toggleMuted}
+        >
+          {mutedEntry ? `🔊 ${t('user.unmute')}` : `🚫 ${t('user.mute')}`}
         </button>
         {!standalone && (
           <button
@@ -269,7 +288,15 @@ export default function UserCard({
                       {tk.name}
                     </span>
                   )
-                return <span key={i}>{tk.text}</span>
+                if (tk.kind === 'cheer')
+                  return (
+                    <span key={i} style={{ color: tk.color, fontWeight: 700 }}>
+                      {tk.bits}
+                    </span>
+                  )
+                if (tk.kind === 'command') return <span key={i}>{tk.text}</span>
+                if (tk.kind === 'text') return <span key={i}>{tk.text}</span>
+                return null
               })}
             </div>
           )

@@ -24,6 +24,9 @@ export const TWITCH_SCOPES = [
   'channel:manage:raids',
   'channel:manage:moderators',
   'channel:manage:vips',
+  // whispers: EventSub user.whisper.message needs the READ scope specifically; manage alone
+  // was not enough, which is why inbound whispers never arrived
+  'user:read:whispers',
   'user:manage:whispers'
 ].join(' ')
 

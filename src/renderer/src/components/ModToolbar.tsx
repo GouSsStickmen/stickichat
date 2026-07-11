@@ -78,6 +78,11 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
     const res = await startRaid(account, channelId, id)
     if (res.ok) {
       toast(`🚀 ${target}`, 'ok')
+      // we just raided that channel — offer to open its chat
+      const clean = target.trim().replace(/^[#@]/, '').toLowerCase()
+      if (useSettingsStore.getState().settings.raidPrompt) {
+        useUiStore.getState().setChannelPrompt({ channel: clean })
+      }
       return
     }
     const message = (res.json as { message?: string })?.message ?? ''

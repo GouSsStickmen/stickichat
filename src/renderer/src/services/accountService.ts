@@ -2,6 +2,7 @@ import { Account } from '../types'
 import { getModeratedChannelIds, getUsers } from '../lib/helix'
 import { useAccountsStore } from '../store/accounts'
 import { chatService } from './chatService'
+import { persistAccountRemoval } from './config'
 
 /** Builds a full Account after a successful device-flow authorization. */
 export async function createAccountFromTokens(
@@ -52,6 +53,9 @@ export async function refreshModeratedChannels(accountId: string): Promise<void>
 export function removeAccountEverywhere(accountId: string): void {
   chatService.dropSender(accountId)
   useAccountsStore.getState().removeAccount(accountId)
+  // write the removal to disk directly + notify other windows: the standalone settings window
+  // has no account-store persistence, so without this the account came back on the next open
+  persistAccountRemoval(accountId).catch(() => undefined)
 }
 
 /** Is this account allowed to moderate this channel? */

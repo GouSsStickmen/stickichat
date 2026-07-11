@@ -1,9 +1,12 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLayoutStore } from '../store/layout'
 import { useChatStore } from '../store/chat'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
+import { useWhispersStore } from '../store/whispers'
 import { startPointerReorder, justReordered } from '../lib/pointerReorder'
+import { useFlip } from '../lib/useFlip'
+import WhisperPanel from './WhisperPanel'
 import { useT } from '../i18n'
 
 export default function TabBar(): React.JSX.Element {
@@ -22,40 +25,14 @@ export default function TabBar(): React.JSX.Element {
   const [nameInput, setNameInput] = useState('')
   const [draggingTab, setDraggingTab] = useState<string | null>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
+  const unreadWhispers = useWhispersStore((s) => s.unread)
+  const whispersOpen = useUiStore((s) => s.whispersOpen)
 
   const activeTab = tabs.find((x) => x.id === activeTabId)
 
   // FLIP: when the order changes (drag reorder, close, add), every tab glides from its
   // previous position to the new one — the Chrome-tabs feel
-  const prevRects = useRef(new Map<string, DOMRect>())
-  useLayoutEffect(() => {
-    const container = tabsRef.current
-    if (!container) return
-    for (const el of Array.from(container.querySelectorAll<HTMLElement>('.tab'))) {
-      const id = el.dataset.tabid
-      if (!id) continue
-      const rect = el.getBoundingClientRect()
-      // While a drag is live, reorder instantly and only record positions: spawning an
-      // animation per pointermove floods the compositor, and getBoundingClientRect() of a
-      // mid-flight element feeds wrong rects back into the drag hit-testing (tabs "jump")
-      if (draggingTab) {
-        prevRects.current.set(id, rect)
-        continue
-      }
-      const prev = prevRects.current.get(id)
-      if (prev) {
-        const dx = prev.left - rect.left
-        const dy = prev.top - rect.top
-        if (dx !== 0 || dy !== 0) {
-          el.animate(
-            [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
-            { duration: 160, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-          )
-        }
-      }
-      prevRects.current.set(id, rect)
-    }
-  })
+  useFlip(tabsRef, '.tab', !!draggingTab)
 
   const tabLabel = (id: string): string => {
     const tab = tabs.find((x) => x.id === id)
@@ -108,6 +85,17 @@ export default function TabBar(): React.JSX.Element {
           ))}
         </select>
       )}
+      <span style={{ position: 'relative' }}>
+        <button
+          className={`icon-btn whisper-btn ${whispersOpen ? 'active' : ''}`}
+          title={t('whisper.title')}
+          onClick={() => useUiStore.getState().setWhispersOpen(!whispersOpen)}
+        >
+          ✉
+          {unreadWhispers > 0 && <span className="whisper-badge">{unreadWhispers}</span>}
+        </button>
+        {whispersOpen && <WhisperPanel onClose={() => useUiStore.getState().setWhispersOpen(false)} />}
+      </span>
       <button
         className={`icon-btn ${muted ? 'active' : ''}`}
         title={t('set.mute')}
@@ -150,7 +138,7 @@ export default function TabBar(): React.JSX.Element {
         return (
           <div
             key={tab.id}
-            data-tabid={tab.id}
+            data-flipid={tab.id}
             className={`tab ${isActive ? 'active' : ''} ${draggingTab === tab.id ? 'dragging' : ''}`}
             onPointerDown={(e) => {
               if (renaming === tab.id) return
@@ -202,9 +190,11 @@ export default function TabBar(): React.JSX.Element {
               {hasMention && <span className="mention-dot">@</span>}
               {!hasMention && hasUnread && <span className="unread-dot" title={t('tab.newMessage')} />}
             </span>
-            {isActive && tab.panes.length > 0 && (
+            {/* rendered for EVERY tab (visibility toggled in CSS): if only the active tab
+                had it, activating a tab changed its width and whole rows re-wrapped */}
+            {tab.panes.length > 0 && (
               <span
-                className="close"
+                className="close detach"
                 title={t('tab.detach')}
                 onClick={(e) => {
                   e.stopPropagation()

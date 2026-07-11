@@ -48,7 +48,11 @@ function groupByProvider(map: Map<string, Emote> | undefined): Map<EmoteProvider
   return groups
 }
 
-export function PinButton({ settingKey }: { settingKey: 'emotePickerPinned' | 'settingsPinned' }): React.JSX.Element {
+export function PinButton({
+  settingKey
+}: {
+  settingKey: 'emotePickerPinned' | 'settingsPinned' | 'usercardPinned'
+}): React.JSX.Element {
   const remember = useSettingsStore((s) => s.settings.rememberPinState)
   const saved = useSettingsStore((s) => s.settings[settingKey])
   const set = useSettingsStore((s) => s.setSettings)

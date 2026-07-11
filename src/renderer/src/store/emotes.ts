@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { EmoteMap } from '../types'
+import { Cheermote, CheermoteTier, EmoteMap } from '../types'
 import type { TwitchUserEmote } from '../lib/helix'
 
 export type BadgeMap = Record<string, string> // "setId/version" -> image url
@@ -15,6 +15,8 @@ interface EmotesState {
   ownerNames: Record<string, string>
   globalBadges: BadgeMap
   channelBadges: Record<string, BadgeMap>
+  /** channel login -> cheermotes (bit icons), includes global ones */
+  cheermotes: Record<string, Cheermote[]>
   /** bumped whenever any emote/badge set changes — used to invalidate render memos */
   version: number
   setGlobalEmotes: (m: EmoteMap) => void
@@ -23,6 +25,7 @@ interface EmotesState {
   setOwnerNames: (names: Record<string, string>) => void
   setGlobalBadges: (b: BadgeMap) => void
   setChannelBadges: (channel: string, b: BadgeMap) => void
+  setCheermotes: (channel: string, list: Cheermote[]) => void
 }
 
 export const useEmotesStore = create<EmotesState>()((set) => ({
@@ -32,6 +35,7 @@ export const useEmotesStore = create<EmotesState>()((set) => ({
   ownerNames: {},
   globalBadges: {},
   channelBadges: {},
+  cheermotes: {},
   version: 0,
   setGlobalEmotes: (m) => set((s) => ({ globalEmotes: m, version: s.version + 1 })),
   setChannelEmotes: (channel, m) =>
@@ -51,8 +55,33 @@ export const useEmotesStore = create<EmotesState>()((set) => ({
     set((s) => ({
       channelBadges: { ...s.channelBadges, [channel]: b },
       version: s.version + 1
+    })),
+  setCheermotes: (channel, list) =>
+    set((s) => ({
+      cheermotes: { ...s.cheermotes, [channel]: list },
+      version: s.version + 1
     }))
 }))
+
+/**
+ * Resolve a cheermote word like "Cheer100" for a channel → its icon + amount + tier color.
+ * Returns undefined for non-cheermote words.
+ */
+export function lookupCheermote(
+  channel: string
+): (word: string) => { bits: number; tier: CheermoteTier } | undefined {
+  const list = useEmotesStore.getState().cheermotes[channel] ?? []
+  return (word) => {
+    const m = /^([a-z]+)(\d+)$/i.exec(word)
+    if (!m) return undefined
+    const prefix = m[1].toLowerCase()
+    const bits = parseInt(m[2], 10)
+    const cm = list.find((c) => c.prefix === prefix)
+    if (!cm) return undefined
+    const tier = cm.tiers.find((t) => bits >= t.min) ?? cm.tiers[cm.tiers.length - 1]
+    return tier ? { bits, tier } : undefined
+  }
+}
 
 /** resolve an emote by code for a channel (channel set wins over global) */
 export function lookupEmote(channel: string): (code: string) => import('../types').Emote | undefined {

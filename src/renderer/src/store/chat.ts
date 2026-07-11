@@ -4,9 +4,18 @@ import { useSettingsStore } from './settings'
 
 export type ConnState = 'connecting' | 'open' | 'closed'
 
+/** large base so prepended history can subtract from it without going negative */
+const FIRST_INDEX_BASE = 1e9
+
 interface ChatState {
   /** channel login -> ring buffer of messages */
   messages: Record<string, ChatMessage[]>
+  /**
+   * channel login -> Virtuoso firstItemIndex. Bumped up when the ring buffer trims from the
+   * front and down when history is prepended, so the list's scroll position stays put instead
+   * of jumping when messages are added/removed at the edges under load.
+   */
+  firstIndex: Record<string, number>
   /** channel login -> twitch channel id (learned from IRC tags or Helix) */
   channelIds: Record<string, string>
   connState: ConnState
@@ -43,6 +52,15 @@ interface ChatState {
   markChannelsRead: (channels: string[]) => void
 }
 
+/** shallow record equality — skips store updates (and their re-renders) when nothing changed */
+function sameRecord<T>(a: Record<string, T>, b: Record<string, T>): boolean {
+  const ak = Object.keys(a)
+  const bk = Object.keys(b)
+  if (ak.length !== bk.length) return false
+  for (const k of ak) if (a[k] !== b[k]) return false
+  return true
+}
+
 /** most recent known chat color for a login in a channel (for coloring @mentions) */
 export function lookupUserColor(channel: string, login: string): string | undefined {
   const msgs = useChatStore.getState().messages[channel]
@@ -67,6 +85,7 @@ export function lookupUserBadges(channel: string, login: string): BadgeRef[] | u
 
 export const useChatStore = create<ChatState>()((set) => ({
   messages: {},
+  firstIndex: {},
   channelIds: {},
   connState: 'connecting',
   liveChannels: {},
@@ -81,8 +100,21 @@ export const useChatStore = create<ChatState>()((set) => ({
       const limit = useSettingsStore.getState().settings.messageLimit
       const cur = s.messages[channel] ?? []
       let next = [...cur, ...msgs]
-      if (next.length > limit) next = next.slice(next.length - limit)
-      return { messages: { ...s.messages, [channel]: next } }
+      let removed = 0
+      // trim in BATCHES, not every message: at steady-state (buffer full) trimming one item
+      // per incoming message bumps firstItemIndex constantly, which makes Virtuoso nudge the
+      // scroll a few px on every send. Let it overshoot by SLACK, then cut back to the limit.
+      const SLACK = 200
+      if (next.length > limit + SLACK) {
+        removed = next.length - limit
+        next = next.slice(removed)
+      }
+      const base = s.firstIndex[channel] ?? FIRST_INDEX_BASE
+      return {
+        messages: { ...s.messages, [channel]: next },
+        // trimming from the front shifts every item's absolute index up by `removed`
+        firstIndex: removed ? { ...s.firstIndex, [channel]: base + removed } : s.firstIndex
+      }
     }),
   prependMessages: (channel, msgs) =>
     set((s) => {
@@ -90,7 +122,13 @@ export const useChatStore = create<ChatState>()((set) => ({
       // history arrives after live messages may have started; dedupe by id
       const seen = new Set(cur.map((m) => m.id))
       const add = msgs.filter((m) => !seen.has(m.id))
-      return { messages: { ...s.messages, [channel]: [...add, ...cur] } }
+      if (add.length === 0) return s
+      const base = s.firstIndex[channel] ?? FIRST_INDEX_BASE
+      return {
+        messages: { ...s.messages, [channel]: [...add, ...cur] },
+        // prepending pushes the first item's absolute index down by however many we added
+        firstIndex: { ...s.firstIndex, [channel]: base - add.length }
+      }
     }),
   markDeleted: (channel, messageId) =>
     set((s) => {
@@ -125,15 +163,24 @@ export const useChatStore = create<ChatState>()((set) => ({
     set((s) => {
       const messages = { ...s.messages }
       delete messages[channel]
-      return { messages }
+      const firstIndex = { ...s.firstIndex }
+      delete firstIndex[channel]
+      return { messages, firstIndex }
     }),
   setChannelId: (channel, id) =>
     set((s) =>
       s.channelIds[channel] === id ? s : { channelIds: { ...s.channelIds, [channel]: id } }
     ),
   setConnState: (connState) => set({ connState }),
-  setLiveChannels: (liveChannels) => set({ liveChannels }),
-  setChannelNames: (names) => set((s) => ({ channelNames: { ...s.channelNames, ...names } })),
+  // polled once a minute — bail out when the live set is unchanged so tab/pane subscribers
+  // don't re-render (and re-tokenize) needlessly
+  setLiveChannels: (liveChannels) =>
+    set((s) => (sameRecord(s.liveChannels, liveChannels) ? s : { liveChannels })),
+  setChannelNames: (names) =>
+    set((s) => {
+      const merged = { ...s.channelNames, ...names }
+      return sameRecord(s.channelNames, merged) ? s : { channelNames: merged }
+    }),
   setChannelAccents: (accents) =>
     set((s) => ({ channelAccents: { ...s.channelAccents, ...accents } })),
   setStreamInfo: (streamInfo) => set({ streamInfo }),

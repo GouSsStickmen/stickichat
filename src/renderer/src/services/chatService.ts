@@ -5,12 +5,16 @@ import { useLayoutStore, allOpenChannels } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
 import { formatDuration } from '../lib/tokenize'
 import { fetchRecentMessages } from '../lib/recentMessages'
-import { loadChannelBadges, loadChannelEmotes, loadGlobalBadges, loadGlobalEmotes } from './emoteService'
+import { loadChannelBadges, loadChannelEmotes, loadCheermotes, loadGlobalBadges, loadGlobalEmotes } from './emoteService'
 import { ensureFreshToken } from '../lib/twitchAuth'
 import { translate } from '../i18n'
 import { useAccountsStore } from '../store/accounts'
-import { playMentionSound, playFirstMessageSound, playKeywordSound } from '../lib/sound'
+import { useUiStore } from '../store/ui'
+import { useWhispersStore } from '../store/whispers'
+import { playMentionSound, playFirstMessageSound, playKeywordSound, playStreamUpSound, playWhisperSound } from '../lib/sound'
 import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
+import { EventSubClient, EventSubDesired } from '../lib/eventsub'
+import { PubSubClient, RedemptionEvent } from '../lib/pubsub'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -38,6 +42,12 @@ class ChatService {
   private streamStartedAt = new Map<string, string>()
   /** "channel:login" -> active mass-gift group (individual subgifts collapse under it) */
   private mysteryGifts = new Map<string, { id: string; until: number }>()
+  private eventSub: EventSubClient | null = null
+  private pubSub: PubSubClient | null = null
+  /** channels we've polled at least once (so we don't fire a "went live" alert on startup) */
+  private liveKnown = new Set<string>()
+  /** channel -> was live at the previous poll */
+  private wasLive = new Map<string, boolean>()
   private started = false
 
   start(): void {
@@ -66,10 +76,15 @@ class ChatService {
           this.reader!.part(ch)
           this.historyLoaded.delete(ch)
           this.seenThisSession.delete(ch)
+          this.liveKnown.delete(ch)
+          this.wasLive.delete(ch)
           useChatStore.getState().dropChannel(ch)
         }
       }
       prev = channels
+      // channels changed — make sure raid + redemption subscriptions cover the new set
+      this.eventSub?.resync()
+      this.pubSub?.resync()
     }
     useLayoutStore.subscribe(sync)
     sync()
@@ -86,6 +101,120 @@ class ChatService {
       import('./accountService').then(({ refreshModeratedChannels }) => {
         for (const a of useAccountsStore.getState().accounts) refreshModeratedChannels(a.id)
       })
+      // EventSub carries what IRC no longer does: whispers (removed from IRC in 2023) and
+      // raids started by another mod / from the Twitch dashboard. Main window only.
+      this.eventSub = new EventSubClient(
+        () => this.desiredEventSubs(),
+        (type, event) => this.handleEventSub(type, event),
+        (desired, status) => this.onEventSubError(desired, status)
+      )
+      // PubSub gives us channel-point redemptions (incl. message-less ones) with full reward
+      // names, which no viewer-token EventSub subscription can — same trick Chatterino uses
+      this.pubSub = new PubSubClient(
+        () => useAccountsStore.getState().accounts.find((a) => a._accessToken),
+        () => {
+          const ids = useChatStore.getState().channelIds
+          return allOpenChannels(useLayoutStore.getState().tabs)
+            .map((ch) => ids[ch])
+            .filter(Boolean)
+        },
+        (e) => this.handleRedemption(e)
+      )
+    }
+  }
+
+  /** a channel-point redemption from PubSub — announce it with the real reward name/cost */
+  private handleRedemption(e: RedemptionEvent): void {
+    if (!useSettingsStore.getState().settings.showRedeems) return
+    // map the broadcaster id back to the open channel login
+    const ids = useChatStore.getState().channelIds
+    const channel = Object.keys(ids).find((login) => ids[login] === e.channelId)
+    if (!channel) return
+    const lang = useSettingsStore.getState().settings.language
+    const text = translate(lang, 'info.redeem', {
+      user: e.userDisplay,
+      reward: e.rewardTitle,
+      cost: String(e.rewardCost)
+    })
+    const full = e.userInput ? `${text}: ${e.userInput}` : text
+    const msg = this.systemMessage(channel, full)
+    msg.redeemed = true
+    this.queue(channel, msg)
+  }
+
+  /** a subscription was rejected — the common cause is an account authorized before the
+   *  whisper scope existed, so surface a single actionable hint instead of failing silently */
+  private eventSubErrorShown = false
+  private onEventSubError(desired: EventSubDesired, status: number): void {
+    if (desired.type !== 'user.whisper.message') return
+    if (this.eventSubErrorShown) return
+    this.eventSubErrorShown = true
+    const lang = useSettingsStore.getState().settings.language
+    // a scope/permission problem (401/403) is fixable by re-auth; show that hint. Any other
+    // status is unexpected — surface the code so it can actually be diagnosed.
+    if (status === 401 || status === 403) {
+      useUiStore.getState().toast(translate(lang, 'whisper.needReauth', { login: desired.account.login }), 'error')
+    } else {
+      useUiStore.getState().toast(`Whisper EventSub: HTTP ${status}`, 'error')
+    }
+  }
+
+  /** whisper (per account) + raid-out (per open channel) subscriptions for the live session */
+  private desiredEventSubs(): EventSubDesired[] {
+    const accounts = useAccountsStore.getState().accounts
+    const out: EventSubDesired[] = []
+    for (const a of accounts) {
+      if (!a._accessToken) continue
+      out.push({ account: a, type: 'user.whisper.message', version: '1', condition: { user_id: a.id }, key: `whisper:${a.id}` })
+    }
+    const auth = accounts.find((a) => a._accessToken)
+    if (auth) {
+      const ids = useChatStore.getState().channelIds
+      const open = allOpenChannels(useLayoutStore.getState().tabs)
+      for (const ch of open) {
+        const cid = ids[ch]
+        if (!cid) continue // learned from ROOMSTATE shortly after join; resync() picks it up
+        out.push({
+          account: auth,
+          type: 'channel.raid',
+          version: '1',
+          condition: { from_broadcaster_user_id: cid },
+          key: `raid:${cid}`
+        })
+      }
+    }
+    return out
+  }
+
+  /** dispatch an EventSub event to the right handler */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private handleEventSub(type: string, event: Record<string, any>): void {
+    if (type === 'user.whisper.message') {
+      const account = useAccountsStore.getState().accounts.find((a) => a.id === event.to_user_id)
+      if (!account) return
+      useWhispersStore.getState().add({
+        id: `w-${event.whisper_id ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
+        accountId: account.id,
+        otherLogin: (event.from_user_login ?? '').toLowerCase(),
+        otherDisplay: event.from_user_name || event.from_user_login || '?',
+        otherId: event.from_user_id ?? '',
+        text: event.whisper?.text ?? '',
+        timestamp: Date.now(),
+        incoming: true
+      })
+      const settings = useSettingsStore.getState().settings
+      if (settings.whisperSound) playWhisperSound(settings)
+    } else if (type === 'channel.raid') {
+      const fromLogin = (event.from_broadcaster_user_login ?? '').toLowerCase()
+      const toLogin = (event.to_broadcaster_user_login ?? '').toLowerCase()
+      const toName = event.to_broadcaster_user_name || toLogin
+      const viewers = event.viewers ?? 0
+      const open = allOpenChannels(useLayoutStore.getState().tabs)
+      if (!open.includes(fromLogin)) return
+      const lang = useSettingsStore.getState().settings.language
+      this.localInfo(fromLogin, translate(lang, 'info.raidStart', { target: toName, count: String(viewers) }))
+      // outgoing raid from an open channel — offer to follow it to the target
+      this.promptAddChannel(fromLogin, toLogin)
     }
   }
 
@@ -107,10 +236,17 @@ class ChatService {
           this.onStreamStarted(ch, startedAt)
         }
         if (!startedAt) this.streamStartedAt.delete(ch)
+        // offline → live transition: notify (but never on the very first poll of a channel,
+        // which would fire for everyone already streaming when the app opens)
+        const isLive = live.has(ch)
+        if (this.liveKnown.has(ch)) {
+          if (isLive && !this.wasLive.get(ch)) this.onStreamWentLive(ch)
+        } else {
+          this.liveKnown.add(ch)
+        }
+        this.wasLive.set(ch, isLive)
       }
-      useChatStore
-        .getState()
-        .setLiveChannels(Object.fromEntries(channels.map((c) => [c, live.has(c)])))
+      useChatStore.getState().setLiveChannels(Object.fromEntries(channels.map((c) => [c, live.has(c)])))
       useChatStore.getState().setStreamInfo(
         Object.fromEntries(
           channels.flatMap((c) => {
@@ -122,6 +258,17 @@ class ChatService {
       this.resolveChannelNames(account, channels)
     } catch {
       /* keep previous state */
+    }
+  }
+
+  /** a watched channel just went live: optional sound + a banner toast */
+  private onStreamWentLive(channel: string): void {
+    const settings = useSettingsStore.getState().settings
+    if (settings.streamUpSound) playStreamUpSound(settings)
+    if (settings.streamUpNotify) {
+      const name = useChatStore.getState().channelNames[channel] ?? channel
+      const lang = settings.language
+      useUiStore.getState().toast(translate(lang, 'info.streamUp', { channel: name }))
     }
   }
 
@@ -208,6 +355,10 @@ class ChatService {
               m.historical = true
               msgs.push(m)
             }
+          } else if (parsed.command === 'USERNOTICE') {
+            // scrollback should show subs/resubs/raids too, not just plain chat
+            const m = this.usernoticeToHistorical(parsed)
+            if (m) msgs.push(m)
           }
         }
         if (msgs.length) useChatStore.getState().prependMessages(channel, msgs)
@@ -247,9 +398,16 @@ class ChatService {
       case 'ROOMSTATE': {
         const id = m.tags['room-id']
         if (id && m.channel) {
+          const known = useChatStore.getState().channelIds[m.channel]
           useChatStore.getState().setChannelId(m.channel, id)
           loadChannelEmotes(m.channel, id)
           loadChannelBadges(m.channel, id)
+          loadCheermotes(m.channel, id)
+          // now that we know this channel's id, its raid + redemption topics can be created
+          if (known !== id) {
+            this.eventSub?.resync()
+            this.pubSub?.resync()
+          }
         }
         break
       }
@@ -261,8 +419,13 @@ class ChatService {
           const userId = m.tags['target-user-id']
           if (userId) useChatStore.getState().markUserMessagesDeleted(channel, userId)
           const dur = m.tags['ban-duration']
+          const secs = dur ? parseInt(dur, 10) : 0
           const text = dur
-            ? translate(lang, 'misc.timedOut', { user: m.trailing, duration: formatDuration(parseInt(dur, 10)) })
+            ? translate(lang, 'misc.timedOut', {
+                user: m.trailing,
+                // human-readable plus exact seconds, e.g. "10хв (600с)"
+                duration: secs >= 60 ? `${formatDuration(secs)} (${secs}с)` : `${secs}с`
+              })
             : translate(lang, 'misc.banned', { user: m.trailing })
           this.queue(channel, this.systemMessage(channel, text))
         } else {
@@ -286,6 +449,8 @@ class ChatService {
           if (m.tags['msg-id'] === 'announcement') {
             msg.announceColor = (m.tags['msg-param-color'] || 'PRIMARY').toLowerCase()
           }
+          if (m.tags['msg-id'] === 'viewermilestone') msg.watchStreak = true
+          if (m.tags['msg-id'] === 'raid') this.maybePromptRaidChannel(m)
           // mass gifts: the "X дарує N підписок" header groups the individual
           // subgift lines that follow — they stay collapsed until clicked
           const login = (m.tags['login'] || '').toLowerCase()
@@ -364,6 +529,19 @@ class ChatService {
     }
   }
 
+  /** build a historical usernotice line for scrollback (subs/resubs/raids) */
+  private usernoticeToHistorical(m: IrcMessage): ChatMessage | null {
+    const sysText = this.usernoticeText(m)
+    const msg = this.privmsgToChatMessage(m) ?? (m.channel ? this.systemMessage(m.channel, '') : null)
+    if (!msg || !sysText) return null
+    msg.system = 'usernotice'
+    msg.systemText = sysText
+    msg.historical = true
+    if (m.tags['msg-id'] === 'announcement') msg.announceColor = (m.tags['msg-param-color'] || 'PRIMARY').toLowerCase()
+    if (m.tags['msg-id'] === 'viewermilestone') msg.watchStreak = true
+    return msg
+  }
+
   private privmsgToChatMessage(m: IrcMessage): ChatMessage | null {
     if (!m.channel) return null
     let text = m.trailing
@@ -383,7 +561,13 @@ class ChatService {
     const login = m.tags['login'] || m.nick
     if (!login) return null
     const replyLogin = m.tags['reply-parent-user-login']
+    // channel-point redemptions: custom rewards carry custom-reward-id,
+    // "highlight my message" arrives as msg-id=highlighted-message
+    const redeemed = !!m.tags['custom-reward-id'] || m.tags['msg-id'] === 'highlighted-message'
+    const bits = m.tags['bits'] ? parseInt(m.tags['bits'], 10) || undefined : undefined
     return {
+      redeemed: redeemed || undefined,
+      bits,
       id: m.tags['id'] ?? `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       channel: m.channel,
       channelId: m.tags['room-id'] ?? '',
@@ -430,15 +614,16 @@ class ChatService {
     msg.isMention = true
     if (msg.historical) return
 
-    const settings = useSettingsStore.getState().settings
-    if (settings.mentionSound) playMentionSound(settings)
-
-    // badge the tab unless the channel is visible in the active tab right now
+    // is the mentioned channel visible in the active tab right now?
     const { tabs, activeTabId } = useLayoutStore.getState()
     const activeChannels = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
-    if (!activeChannels.includes(msg.channel)) {
-      useChatStore.getState().setUnreadMention(msg.channel)
-    }
+    const visible = activeChannels.includes(msg.channel)
+
+    const settings = useSettingsStore.getState().settings
+    // no ping for a channel you're already watching — you can see the mention
+    if (settings.mentionSound && !visible) playMentionSound(settings)
+
+    if (!visible) useChatStore.getState().setUnreadMention(msg.channel)
   }
 
   /** user-configured words/phrases that should alert like a mention */
@@ -520,7 +705,59 @@ class ChatService {
     this.pendingByChannel.clear()
   }
 
+  /**
+   * Offer to add a channel involved in a raid.
+   * @param contextChannel where the raid is happening (used for the "active tab only" option)
+   * @param targetChannel  the channel we'd add
+   */
+  private promptAddChannel(contextChannel: string, targetChannel: string): void {
+    const s = useSettingsStore.getState().settings
+    if (!s.raidPrompt || !targetChannel) return
+    const open = allOpenChannels(useLayoutStore.getState().tabs)
+    if (open.includes(targetChannel)) return
+    if (s.raidPromptActiveOnly) {
+      const { tabs, activeTabId } = useLayoutStore.getState()
+      const active = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
+      if (!active.includes(contextChannel)) return
+    }
+    useUiStore.getState().setChannelPrompt({ channel: targetChannel })
+  }
+
+  /** an incoming raid (someone raids a channel we watch) — offer to add the raider's channel */
+  private maybePromptRaidChannel(m: IrcMessage): void {
+    const raider = (m.tags['msg-param-login'] || m.tags['login'] || '').toLowerCase()
+    if (m.channel) this.promptAddChannel(m.channel, raider)
+  }
+
+  /** injects a local system line into a channel (client-side actions like shoutouts) */
+  localInfo(channel: string, text: string): void {
+    this.queue(channel, this.systemMessage(channel, text))
+  }
+
   // ---------- outgoing ----------
+
+  /** authenticated per-account connection, used only for sending PRIVMSG */
+  private async ensureSender(account: Account): Promise<IrcClient> {
+    const existing = this.senders.get(account.id)
+    if (existing) return existing
+    const clientId = useSettingsStore.getState().clientId
+    const token = await ensureFreshToken(clientId, account)
+    // ensureFreshToken awaits — a parallel call may have created the sender meanwhile
+    const raced = this.senders.get(account.id)
+    if (raced) return raced
+    const sender = new IrcClient({
+      nick: account.login,
+      token,
+      // sender connections only care about being kicked / notices
+      onMessage: (m) => {
+        if (m.command === 'NOTICE' && m.channel) {
+          this.queue(m.channel, this.systemMessage(m.channel, m.trailing))
+        }
+      }
+    })
+    this.senders.set(account.id, sender)
+    return sender
+  }
 
   async sendMessage(
     account: Account,
@@ -528,22 +765,7 @@ class ChatService {
     text: string,
     replyParentMsgId?: string
   ): Promise<void> {
-    const clientId = useSettingsStore.getState().clientId
-    const token = await ensureFreshToken(clientId, account)
-    let sender = this.senders.get(account.id)
-    if (!sender) {
-      sender = new IrcClient({
-        nick: account.login,
-        token,
-        onMessage: (m) => {
-          // sender connections only care about being kicked / notices
-          if (m.command === 'NOTICE' && m.channel) {
-            this.queue(m.channel, this.systemMessage(m.channel, m.trailing))
-          }
-        }
-      })
-      this.senders.set(account.id, sender)
-    }
+    const sender = await this.ensureSender(account)
     sender.join(channel)
     sender.say(channel, text, replyParentMsgId)
   }
@@ -551,6 +773,12 @@ class ChatService {
   dropSender(accountId: string): void {
     this.senders.get(accountId)?.close()
     this.senders.delete(accountId)
+  }
+
+  /** accounts/channels changed in another window — refresh EventSub + PubSub subscriptions */
+  resyncSubscriptions(): void {
+    this.eventSub?.resync()
+    this.pubSub?.resync()
   }
 
   /** force-reconnects the reader connection (F5 / manual "reconnect") */

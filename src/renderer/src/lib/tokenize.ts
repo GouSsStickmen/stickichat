@@ -6,6 +6,10 @@ export type Token =
   | { kind: 'link'; url: string; label: string }
   | { kind: 'mention'; name: string; color: string }
   | { kind: 'emoji'; char: string }
+  /** a "!command" at the very start of the message — right-click inserts it into the input */
+  | { kind: 'command'; text: string }
+  /** a cheermote like "Cheer100" — bit icon + colored amount */
+  | { kind: 'cheer'; url: string; bits: number; color: string }
 
 // an emoji plus any variation selectors / ZWJ continuation (👨‍👩‍👧 etc.), or a country
 // flag (two regional indicators — those are NOT Extended_Pictographic!)
@@ -52,7 +56,8 @@ export function tokenizeMessage(
   msg: Pick<ChatMessage, 'text' | 'emotesTag'>,
   emoteLookup: (code: string) => Emote | undefined,
   mentionColorLookup?: (login: string) => string | undefined,
-  dark = true
+  dark = true,
+  cheermoteLookup?: (word: string) => { bits: number; tier: { url: string; color: string } } | undefined
 ): Token[] {
   const cp = Array.from(msg.text) // code points
   const ranges = parseEmotesTag(msg.emotesTag ?? '')
@@ -114,6 +119,17 @@ export function tokenizeMessage(
       const emote = emoteLookup(piece)
       if (emote) {
         pushEmote(emote)
+        continue
+      }
+      // cheermotes ("Cheer100", "Kappa50"…) render as a bit icon + colored amount
+      const cheer = cheermoteLookup?.(piece)
+      if (cheer) {
+        tokens.push({ kind: 'cheer', url: cheer.tier.url, bits: cheer.bits, color: cheer.tier.color })
+        continue
+      }
+      // a leading "!command" behaves like nicks/emotes: right-click puts it into the input
+      if (tokens.length === 0 && /^![^\s!]\S*$/.test(piece)) {
+        tokens.push({ kind: 'command', text: piece })
         continue
       }
       if (URL_RE.test(piece)) {

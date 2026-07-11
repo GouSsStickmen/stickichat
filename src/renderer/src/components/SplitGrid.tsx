@@ -59,10 +59,11 @@ export function AddPaneForm({ tabId, onDone }: { tabId: string; onDone: () => vo
   }
 
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
       <input
         autoFocus
         list="known-channels"
+        style={{ minWidth: 130, flex: 1 }}
         placeholder={t('pane.channelPlaceholder')}
         value={channel}
         spellCheck={false}

@@ -225,6 +225,7 @@ export const uk: Record<TranslationKey, string> = {
   'set.sound.upload': 'Завантажити звук…',
   'set.sound.tooBig': 'Файл завеликий (макс 2 МБ)',
   'set.sound.preview': 'Прослухати',
+  'set.sound.delete': 'Видалити цей завантажений звук',
 
   // Detached window
   'detach.return': 'Повернути в головне вікно',
@@ -257,6 +258,9 @@ export const uk: Record<TranslationKey, string> = {
   'set.msgLimit': 'Повідомлень на чат у памʼяті',
   'set.clientId': 'Twitch Client ID',
   'set.raidFavorites': 'Улюблені для рейдів (по каналу на рядок)',
+  'set.swipeTiers': 'Тайминги свайп-модерації',
+  'set.swipeTiers.hint': 'Відстань свайпу по повідомленню обирає таймаут — задай рівні (секунди) від найкоротшого до найдовшого.',
+  'set.swipeTiers.unit': 'секунди',
   'set.modBtn.add': 'Додати кнопку',
   'set.modBtn.label': 'Напис',
   'set.modBtn.icon': 'Іконка (емодзі)',
@@ -268,6 +272,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.modBtn.scope.message': 'На повідомленні',
   'set.modBtn.scope.toolbar': 'Панель зверху',
   'set.modBtn.delete': 'Видалити',
+  'set.modBtn.duplicate': 'Дублювати',
+  'set.modBtn.allChannels': 'Усі канали',
   'set.modBtn.up': 'Вгору',
   'set.modBtn.down': 'Вниз',
   'set.modBtn.hint':
@@ -286,6 +292,135 @@ export const uk: Record<TranslationKey, string> = {
   'btn.type.snippet': 'Сніпет',
   'btn.type.link': 'Швидке посилання',
   'btn.type.fill': 'Вставити в поле (без відправки)',
+
+  // New settings sections
+  'set.chat': 'Чат',
+  'set.hotkeys': 'Хоткеї',
+  'set.about': 'Про застосунок',
+  'set.emoteSuggestions': 'Підказки емоутів та емодзі при введенні',
+  'set.usercardAsWindow': 'Відкривати картку користувача окремим вікном',
+  'set.raidPrompt': 'Пропонувати додати канал під час рейду',
+
+  // Highlight categories
+  'hl.mention': 'Згадки мене',
+  'hl.kind.own': 'Власні повідомлення',
+  'hl.kind.redeem': 'Редімка (бали каналу)',
+  'hl.kind.bits': 'Бітси / чир',
+  'hl.kind.firstMsg': 'Перше повідомлення взагалі',
+  'hl.kind.firstStream': 'Перше повідомлення за стрім',
+  'hl.kind.watchStreak': 'Стрик перегляду',
+
+  // Muted users
+  'muted.title': 'Приглушені користувачі',
+  'muted.hint':
+    'Ховати повідомлення повністю або робити їх ледь помітними (зручно для ботів). Прозорість діє в режимі «Приглушити».',
+  'muted.mode.hide': 'Приховати',
+  'muted.mode.dim': 'Приглушити',
+  'muted.add': 'Додати користувача',
+  'muted.placeholder': 'нікнейм…',
+  'user.mute': 'Приглушити в чаті',
+  'user.unmute': 'Повернути видимість',
+
+  // Color palette
+  'color.saved': 'Збережені кольори',
+  'color.recent': 'Останні',
+  'color.save': 'Зберегти поточний колір',
+  'color.remove': 'ПКМ — видалити',
+
+  // Hotkeys
+  'hk.hint': 'Клікни на хоткей, щоб змінити його. Esc — скасувати, Backspace — скинути до стандартного.',
+  'hk.reconnect': 'Перепідключити чат',
+  'hk.scrollLock': 'Блокування автоскролу (навівши на чат)',
+  'hk.translit': 'Конвертувати розкладку у полі вводу',
+  'hk.resendLast': 'Надіслати попереднє повідомлення ще раз (фокус у полі)',
+  'hk.press': 'Натисни клавіші…',
+  'hk.reset': 'Скинути',
+  'hk.builtin': 'Вбудовані хоткеї',
+  'hk.fixed.send': 'Надіслати повідомлення',
+  'hk.fixed.newline': 'Новий рядок',
+  'hk.fixed.autocomplete': 'Застосувати підказку',
+  'hk.fixed.history': 'Гортати надіслані повідомлення',
+  'hk.fixed.zoom': 'Розмір тексту чату',
+  'hk.fixed.native': 'Стандартне редагування (скасувати / повторити / копіювати / вставити)',
+
+  // About
+  'about.developer': 'Розробник',
+  'about.feedback': 'Зворотній звʼязок і поради',
+  'about.feedbackHint': 'Знайшов баг або маєш ідею? Пиши сюди:',
+  'about.changelog': 'Журнал оновлень',
+  'about.github': 'GitHub (баг-репорти)',
+  'about.twitch': 'Twitch',
+
+  // Whispers
+  'whisper.title': 'Приватні повідомлення',
+  'whisper.empty': 'Поки немає повідомлень',
+  'whisper.placeholder': 'Відповісти…',
+  'whisper.send': 'Надіслати',
+  'whisper.back': 'Всі діалоги',
+  'whisper.new': 'Нове повідомлення',
+  'whisper.nick': 'Нікнейм…',
+  'whisper.noUser': 'Користувача не знайдено',
+  'whisper.needReauth': 'Щоб отримувати приватні повідомлення, переавторизуй {login} у Налаштування → Акаунти (потрібен новий дозвіл).',
+
+  // Raid prompt
+  'raid.addPrompt': 'Рейд! Додати чат {channel}?',
+  'raid.add': 'Додати',
+  'set.raidDest': 'Куди додавати канал рейду',
+  'set.raidDest.tabs': 'Нова вкладка',
+  'set.raidDest.split': 'Спліт-скрін',
+  'set.raidActiveOnly': 'Тільки для рейдів на активній вкладці',
+  'hint.raidActiveOnly': 'Вимкнено: пропонувати для рейду на будь-якому відкритому каналі. Увімкнено: лише коли рейд відбувається на каналі, який ти зараз дивишся.',
+  'set.whisperSound': 'Звук на нове приватне повідомлення',
+
+  // Info lines
+  'info.raidStart': '🚨 Рейд на {target} ({count} глядачів)',
+  'info.streamUp': '🔴 {channel} почав стрім',
+  'info.redeem': '🟣 {user} обміняв(-ла) «{reward}» ({cost})',
+  'msg.bits': '💎 {count} бітів',
+  'msg.redeem': '🎁 Редімка',
+
+  // Stream-up + bits/redeem settings
+  'set.streamUpSound': 'Звук, коли канал починає стрім',
+  'set.streamUpNotify': 'Плашка, коли канал починає стрім',
+  'set.showBits': 'Показувати бітси в чаті',
+  'set.showRedeems': 'Позначати редімки в чаті',
+  'hint.streamUp': 'Грає звук / показує плашку щойно канал зі списку починає стрім.',
+  'hint.showBits': 'Додає позначку 💎 з кількістю бітів до повідомлень із чиром.',
+  'hint.showRedeems': 'Показує редімки балів каналу окремим рядком із назвою нагороди (через PubSub, як у Chatterino — включно з тими, що без повідомлення).',
+  'set.group.streamUp': 'Початок стріму',
+
+  // Shoutout
+  'mod.shoutoutGiven': '📣 Шатаут для {user}',
+
+  // Command token
+  'cmd.insertHint': 'ПКМ — вставити команду в поле вводу',
+
+  // Setting hints (long-hover tooltips)
+  'hint.translit': 'Додає кнопку Aа біля поля вводу та хоткей конвертації тексту, набраного не в тій розкладці.',
+  'hint.caseSensitiveNicks': 'Якщо увімкнено, згадки та правила за ніком порівнюються з точним регістром літер.',
+  'hint.altBg': 'Кожне друге повідомлення отримує трохи інший фон — довгий чат легше читати.',
+  'hint.history': 'При відкритті каналу підвантажує останні повідомлення з архіву recent-messages.robotty.de.',
+  'hint.msgLimit': 'Скільки повідомлень тримати в памʼяті на чат. Більше = довший скролбек, більше памʼяті.',
+  'hint.emoteSuggestions': 'Підказки над полем вводу під час набору назви емоута чи емодзі. Слеш-команди та @ніки працюють завжди.',
+  'hint.streamInfo': 'Кількість глядачів, тривалість і назва стріму в шапці чату, коли канал у етері.',
+  'hint.charCounter': 'Лічильник символів у полі вводу; текст понад ліміт Twitch у 500 символів підсвічується.',
+  'hint.raidPrompt': 'Коли починається рейд, маленьке віконце запропонує відкрити чат іншого каналу в поточній вкладці.',
+  'hint.usercardAsWindow': 'Клік по ніку відкриє картку користувача окремим вікном (можна перенести на інший монітор і закріпити поверх усіх).',
+  'hint.rememberPin': 'Окремі вікна (емоути, налаштування, картка користувача) відкриваються з тим самим станом 📌 поверх усіх.',
+  'hint.settingsAsWindow': 'Налаштування відкриваються окремим вікном замість накладки в застосунку.',
+  'hint.emotePickerAsWindow': 'Вікно емоутів відкривається окремо — можна тримати на другому моніторі.',
+  'hint.alwaysOnTop': 'Головне вікно залишається поверх усіх інших програм.',
+  'hint.highlightSidebar': 'Бічна панель зі згадками та виділеними повідомленнями поточного чату.',
+  'hint.mentionSound': 'Грає, коли будь-яке повідомлення згадує один із твоїх акаунтів.',
+  'hint.firstMessageSound': 'Грає, коли глядач пише вперше за поточний стрім (лише активна вкладка).',
+  'hint.keywordSound': 'Грає, коли повідомлення містить одне з твоїх слів; повідомлення підсвічується як згадка.',
+  'hint.lineSpacing': 'Додатковий відступ УСЕРЕДИНІ повідомлення — допомагає, коли рядки емоутів злипаються.',
+  'hint.messageSpacing': 'Додатковий відступ МІЖ повідомленнями.',
+  'hint.mentionBg': 'Підсвітка фону повідомлень, які згадують тебе.',
+  'hint.clientId': 'Client ID твого Twitch-застосунку (з dev.twitch.tv). Змінюй, лише якщо знаєш навіщо.',
+  'hint.emojiNameLang': 'Мова назв емодзі у пошуку та підказках.',
+  'hint.sidebarDefault': 'З якої вкладки відкривається бічна панель виділених.',
+  'hint.rememberWindowSize': 'Вікна відкриваються з тим самим розміром і позицією, що минулого разу.',
 
   // Misc
   'misc.close': 'Закрити',

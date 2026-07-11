@@ -33,13 +33,24 @@ export default function MessageList({
 }: Props): React.JSX.Element {
   const t = useT()
   const allMessages = useChatStore((s) => s.messages[pane.channel]) ?? []
+  const firstIndexBase = useChatStore((s) => s.firstIndex[pane.channel] ?? 1e9)
   const expandedGifts = useUiStore((s) => s.expandedGifts)
-  // sub-gifts of a collapsed mass-gift group stay hidden until the header is clicked
-  const messages = useMemo(
-    () => allMessages.filter((m) => !m.groupedUnder || expandedGifts[m.groupedUnder]),
-    [allMessages, expandedGifts]
-  )
   const settings = useSettingsStore((s) => s.settings)
+  // sub-gifts of a collapsed mass-gift group stay hidden until the header is clicked;
+  // muted-with-'hide' users disappear from the list entirely
+  const hiddenLogins = useMemo(
+    () => new Set(settings.mutedUsers.filter((u) => u.mode === 'hide').map((u) => u.login)),
+    [settings.mutedUsers]
+  )
+  const messages = useMemo(
+    () =>
+      allMessages.filter(
+        (m) =>
+          (!m.groupedUnder || expandedGifts[m.groupedUnder]) &&
+          (m.system || !hiddenLogins.has(m.login))
+      ),
+    [allMessages, expandedGifts, hiddenLogins]
+  )
   const emoteVersion = useEmotesStore((s) => s.version)
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const [atBottom, setAtBottom] = useState(true)
@@ -67,6 +78,9 @@ export default function MessageList({
       <Virtuoso
         ref={virtuosoRef}
         data={messages}
+        // keeps scroll anchored when the ring buffer trims from the front or history is
+        // prepended — otherwise the list visibly jumps up during message floods
+        firstItemIndex={firstIndexBase}
         followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? 'auto' : false)}
         atBottomStateChange={setAtBottom}
         atBottomThreshold={40}

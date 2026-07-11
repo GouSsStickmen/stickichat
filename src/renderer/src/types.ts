@@ -63,6 +63,12 @@ export interface ChatMessage {
   giftGroupId?: string
   /** first message we've seen from this login since we joined this channel this session */
   isFirstInSession?: boolean
+  /** channel-point redemption (custom reward / highlighted message) */
+  redeemed?: boolean
+  /** watch-streak milestone usernotice */
+  watchStreak?: boolean
+  /** bits cheered in this message (from the IRC `bits` tag) */
+  bits?: number
 }
 
 // ---------- Emotes / badges ----------
@@ -81,6 +87,23 @@ export interface Emote {
 
 export type EmoteMap = Map<string, Emote>
 
+// ---------- Cheermotes (bits) ----------
+
+export interface CheermoteTier {
+  /** minimum bits for this tier */
+  min: number
+  url: string
+  /** tier color, used to tint the bit amount like on Twitch */
+  color: string
+}
+
+export interface Cheermote {
+  /** lower-cased prefix, e.g. "cheer" */
+  prefix: string
+  /** tiers sorted by `min` descending */
+  tiers: CheermoteTier[]
+}
+
 export interface FavoriteEmote {
   code: string
   url: string
@@ -97,16 +120,57 @@ export interface CustomSound {
 
 // ---------- User highlight rules ----------
 
+/**
+ * badge: twitch badge set id (moderator, vip…); nick: exact login;
+ * own: my own messages; redeem: channel-point redemptions;
+ * firstMsg: first message ever in the channel; firstStream: first message this stream;
+ * watchStreak: watch-streak milestone messages
+ */
+export type HighlightKind =
+  | 'badge'
+  | 'nick'
+  | 'own'
+  | 'redeem'
+  | 'bits'
+  | 'firstMsg'
+  | 'firstStream'
+  | 'watchStreak'
+
+/** kinds that don't need a value input (the category itself is the match) */
+export const VALUELESS_HL_KINDS: ReadonlySet<HighlightKind> = new Set([
+  'own', 'redeem', 'bits', 'firstMsg', 'firstStream', 'watchStreak'
+])
+
 export interface HighlightRule {
   id: string
-  /** badge: match a twitch badge set id (moderator, vip, subscriber…); nick: exact login */
-  kind: 'badge' | 'nick'
+  kind: HighlightKind
   value: string
   /** hex color like #9147ff */
   color: string
   /** 0..1 background opacity */
   opacity: number
   enabled: boolean
+}
+
+// ---------- Muted (dimmed/hidden) users ----------
+
+export interface MutedUser {
+  login: string
+  /** hide: drop from chat entirely; dim: render with reduced opacity */
+  mode: 'hide' | 'dim'
+  /** 0..1 message opacity when mode = dim */
+  opacity: number
+}
+
+// ---------- Hotkeys ----------
+
+export type HotkeyAction = 'reconnect' | 'scrollLock' | 'translit' | 'resendLast'
+
+export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
+  reconnect: 'F5',
+  scrollLock: 'Ctrl+L',
+  translit: 'Ctrl+Shift+T',
+  resendLast: 'Ctrl+Enter'
 }
 
 // ---------- Mod buttons ----------
@@ -218,6 +282,17 @@ export interface Settings {
   keywordSoundType: 'ping' | 'pop' | 'bell' | 'custom'
   keywordSoundVolume: number
   keywordSoundCustomId?: string
+  /** sound + banner when a watched channel goes live */
+  streamUpSound: boolean
+  streamUpSoundType: 'ping' | 'pop' | 'bell' | 'custom'
+  streamUpSoundVolume: number
+  streamUpSoundCustomId?: string
+  streamUpNotify: boolean
+  /** sound when an incoming whisper arrives */
+  whisperSound: boolean
+  whisperSoundType: 'ping' | 'pop' | 'bell' | 'custom'
+  whisperSoundVolume: number
+  whisperSoundCustomId?: string
   /** the укр⇄eng wrong-layout converter (Aа button + Ctrl+Shift+T) */
   translitEnabled: boolean
   /** custom UI font family; empty = default system stack */
@@ -237,6 +312,38 @@ export interface Settings {
   muted: boolean
   /** user-uploaded fonts (name + data URL), injected as @font-face */
   customFonts: { name: string; data: string }[]
+  /** 0..1 background opacity of the mention highlight */
+  mentionBgOpacity: number
+  /** emote/emoji suggestions while typing (slash commands and @mentions stay on) */
+  emoteSuggestions: boolean
+  /** open user cards in a separate window instead of the in-app popup */
+  usercardAsWindow: boolean
+  /** persisted 📌 state of the standalone user-card window */
+  usercardPinned: boolean
+  /** offer to add the channel involved in a raid */
+  raidPrompt: boolean
+  /** only offer for raids on the channel you're currently watching (active tab) */
+  raidPromptActiveOnly: boolean
+  /** where accepting a raid prompt puts the channel: a new top tab or the current split */
+  raidPromptDest: 'tabs' | 'split'
+  /** show bits/cheers in chat */
+  showBits: boolean
+  /** tag messages that were channel-point redemptions */
+  showRedeems: boolean
+  /** users whose messages are hidden or dimmed */
+  mutedUsers: MutedUser[]
+  /** user-saved palette colors (hex) shown next to every color field */
+  savedColors: string[]
+  /** recently used colors (hex), newest first */
+  recentColors: string[]
+  /** action → accelerator (e.g. "Ctrl+L"); missing keys fall back to DEFAULT_HOTKEYS */
+  hotkeys: Partial<Record<HotkeyAction, string>>
+  /** swipe-to-moderate timeout tiers (seconds), shortest→longest */
+  swipeTimeouts: number[]
+  /** one-time migration: mention/first-message colors converted into highlight rules */
+  hlMigratedV1: boolean
+  /** one-time migration: default redeem + bits highlight rules seeded */
+  hlMigratedV2: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -278,6 +385,13 @@ export const DEFAULT_SETTINGS: Settings = {
   keywordSound: true,
   keywordSoundType: 'ping',
   keywordSoundVolume: 0.5,
+  streamUpSound: false,
+  streamUpSoundType: 'bell',
+  streamUpSoundVolume: 0.5,
+  streamUpNotify: true,
+  whisperSound: true,
+  whisperSoundType: 'pop',
+  whisperSoundVolume: 0.5,
   translitEnabled: true,
   fontFamily: '',
   usercardFontSize: 14,
@@ -287,7 +401,23 @@ export const DEFAULT_SETTINGS: Settings = {
   lineSpacing: 0,
   rememberWindowSize: true,
   muted: false,
-  customFonts: []
+  customFonts: [],
+  mentionBgOpacity: 0.2,
+  emoteSuggestions: true,
+  usercardAsWindow: false,
+  usercardPinned: false,
+  raidPrompt: true,
+  raidPromptActiveOnly: false,
+  raidPromptDest: 'split',
+  showBits: true,
+  showRedeems: true,
+  mutedUsers: [],
+  savedColors: [],
+  recentColors: [],
+  hotkeys: {},
+  swipeTimeouts: [60, 300, 600, 1800, 3600, 86400],
+  hlMigratedV1: false,
+  hlMigratedV2: false
 }
 
 export const DEFAULT_MOD_BUTTONS: ModButton[] = [

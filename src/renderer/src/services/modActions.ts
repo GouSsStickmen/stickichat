@@ -90,7 +90,11 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
       case 'shoutout': {
         const target = ctx.targetUserId
         if (!target) return
-        report(await sendShoutout(ctx.account, ctx.channelId, target), `📣 ${ctx.targetLogin}`)
+        const lang = useSettingsStore.getState().settings.language
+        if (report(await sendShoutout(ctx.account, ctx.channelId, target), `📣 ${ctx.targetLogin}`)) {
+          // shoutouts don't come back through IRC — show the event in chat ourselves
+          chatService.localInfo(ctx.channel, translate(lang, 'mod.shoutoutGiven', { user: ctx.targetLogin ?? '' }))
+        }
         break
       }
       case 'raid': {
@@ -123,9 +127,10 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
       }
       case 'fill': {
         if (!btn.text || !ctx.paneId) return
-        window.dispatchEvent(
-          new CustomEvent('sticki:insert', { detail: { paneId: ctx.paneId, text: fill(btn.text, ctx) } })
-        )
+        // fill goes straight into the input — keep spaces exactly as typed (no trim),
+        // so templates like "!команда " with a trailing space stay intact
+        const text = btn.text.replaceAll('{user}', ctx.targetLogin ?? '').replaceAll('{channel}', ctx.channel)
+        window.dispatchEvent(new CustomEvent('sticki:insert', { detail: { paneId: ctx.paneId, text } }))
         break
       }
     }

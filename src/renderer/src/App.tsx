@@ -17,6 +17,9 @@ import UpdateBanner from './components/UpdateBanner'
 import EmoteHoverPreview from './components/EmoteHoverPreview'
 import EmotePickerWindow from './components/EmotePickerWindow'
 import UserCardWindow from './components/UserCardWindow'
+import ChannelPrompt from './components/ChannelPrompt'
+import { hexToRgba } from './lib/tokenize'
+import { hotkeyFor, matchHotkey } from './lib/hotkeys'
 import { useT } from './i18n'
 
 interface DetachedPayload {
@@ -119,8 +122,9 @@ export default function App(): React.JSX.Element | null {
     root.style.setProperty('--msg-spacing', `${settings.messageSpacing}px`)
     root.style.setProperty('--line-spacing', `${settings.lineSpacing}px`)
     root.style.setProperty('--badge-size', `${settings.badgeSize}px`)
-    root.style.setProperty('--mention-bg', settings.mentionBgColor)
-    root.style.setProperty('--first-msg-bg', settings.firstMessageBgColor)
+    // background carries the user-picked opacity; the accent stripe stays solid
+    root.style.setProperty('--mention-bg', hexToRgba(settings.mentionBgColor, settings.mentionBgOpacity))
+    root.style.setProperty('--mention-accent', settings.mentionBgColor)
     if (settings.fontFamily.trim()) {
       root.style.setProperty('--app-font', `"${settings.fontFamily.trim()}", 'Segoe UI', sans-serif`)
     } else {
@@ -133,7 +137,7 @@ export default function App(): React.JSX.Element | null {
     settings.messageSpacing,
     settings.badgeSize,
     settings.mentionBgColor,
-    settings.firstMessageBgColor,
+    settings.mentionBgOpacity,
     settings.fontFamily,
     settings.lineSpacing,
     settings.customFonts
@@ -190,11 +194,11 @@ export default function App(): React.JSX.Element | null {
     })
   }, [])
 
-  // F5 = force-reconnect chat (instead of reloading the page)
+  // F5 (configurable) = force-reconnect chat (instead of reloading the page)
   useEffect(() => {
     if (!booted || !onboarded || special?.kind === 'emotepicker' || special?.kind === 'settings' || special?.kind === 'usercard') return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'F5') {
+      if (matchHotkey(e, hotkeyFor(useSettingsStore.getState().settings, 'reconnect'))) {
         e.preventDefault()
         chatService.reconnect()
         useUiStore.getState().toast(t('misc.reconnecting'))
@@ -204,11 +208,12 @@ export default function App(): React.JSX.Element | null {
     return () => window.removeEventListener('keydown', onKey)
   }, [booted, onboarded, special, t])
 
-  // Ctrl+Shift+T — convert the focused field's text between keyboard layouts (укр ⇄ eng)
+  // Ctrl+Shift+T (configurable) — convert the focused field's text between layouts (укр ⇄ eng)
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!e.ctrlKey || !e.shiftKey || e.code !== 'KeyT') return
-      if (!useSettingsStore.getState().settings.translitEnabled) return
+      const settings = useSettingsStore.getState().settings
+      if (!settings.translitEnabled) return
+      if (!matchHotkey(e, hotkeyFor(settings, 'translit'))) return
       e.preventDefault()
       import('./lib/translit').then(({ swapLayoutInFocusedField }) => swapLayoutInFocusedField())
     }
@@ -299,6 +304,7 @@ export default function App(): React.JSX.Element | null {
       )}
       {userCard && <UserCard target={userCard} />}
       <EmoteHoverPreview />
+      <ChannelPrompt />
       <Toasts />
     </div>
   )

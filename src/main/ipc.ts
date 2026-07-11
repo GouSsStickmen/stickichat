@@ -145,11 +145,34 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle('window:setAlwaysOnTop', (e, flag: boolean) => {
-    BrowserWindow.fromWebContents(e.sender)?.setAlwaysOnTop(flag)
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return
+    // 'screen-saver' is a HIGHER level than the default 'floating' one — without it a
+    // fullscreen game (which itself runs at a high window level) ends up above our window,
+    // and switching back leaves the chat stranded underneath. Re-assert + raise as well.
+    if (flag) {
+      win.setAlwaysOnTop(true, 'screen-saver')
+      win.moveTop()
+    } else {
+      win.setAlwaysOnTop(false)
+    }
   })
 
   ipcMain.handle('window:close', (e) => {
     BrowserWindow.fromWebContents(e.sender)?.close()
+  })
+
+  // eyedropper: the OS magnifier loupe renders BELOW any always-on-top window (settings can be
+  // a separate window while the main chat is pinned), so drop every pinned window for the pick
+  // and restore them afterwards
+  let suspendedOnTop: BrowserWindow[] = []
+  ipcMain.handle('window:suspendAlwaysOnTop', () => {
+    suspendedOnTop = BrowserWindow.getAllWindows().filter((w) => w.isAlwaysOnTop())
+    for (const w of suspendedOnTop) w.setAlwaysOnTop(false)
+  })
+  ipcMain.handle('window:resumeAlwaysOnTop', () => {
+    for (const w of suspendedOnTop) if (!w.isDestroyed()) w.setAlwaysOnTop(true, 'screen-saver')
+    suspendedOnTop = []
   })
 
   // All HTTP goes through the main process so the renderer never hits CORS walls

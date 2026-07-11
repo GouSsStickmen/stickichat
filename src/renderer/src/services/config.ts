@@ -3,10 +3,62 @@ import { useAccountsStore } from '../store/accounts'
 import { useLayoutStore } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
 
+/**
+ * One-time migration: the old dedicated "first message" background settings become
+ * regular highlight rules, so every category is edited in the same standardized UI.
+ */
+function migrateHighlightRules(): void {
+  const st = useSettingsStore.getState()
+  if (st.settings.hlMigratedV1) return
+  const rules = [...st.highlightRules]
+  if (!rules.some((r) => r.kind === 'firstStream')) {
+    rules.push({
+      id: 'hl-first-stream',
+      kind: 'firstStream',
+      value: '',
+      color: st.settings.firstMessageBgColor || '#22c55e',
+      opacity: 0.12,
+      enabled: st.settings.showFirstMsgBg
+    })
+  }
+  if (!rules.some((r) => r.kind === 'firstMsg')) {
+    rules.push({
+      id: 'hl-first-ever',
+      kind: 'firstMsg',
+      value: '',
+      color: '#ff5c5c',
+      opacity: 0.12,
+      enabled: st.settings.showFirstMsgBg
+    })
+  }
+  st.setHighlightRules(rules)
+  st.setSettings({ hlMigratedV1: true })
+}
+
+/** seed default redeem + bits highlight rules so both are visible out of the box (editable) */
+function migrateHighlightRulesV2(): void {
+  const st = useSettingsStore.getState()
+  if (st.settings.hlMigratedV2) return
+  const rules = [...st.highlightRules]
+  if (!rules.some((r) => r.kind === 'redeem')) {
+    rules.push({ id: 'hl-redeem', kind: 'redeem', value: '', color: '#9147ff', opacity: 0.14, enabled: true })
+  }
+  if (!rules.some((r) => r.kind === 'bits')) {
+    rules.push({ id: 'hl-bits', kind: 'bits', value: '', color: '#f5b83d', opacity: 0.14, enabled: true })
+  }
+  st.setHighlightRules(rules)
+  st.setSettings({ hlMigratedV2: true })
+}
+
 /** Loads persisted config into all stores. Returns true if config existed. */
 export async function loadConfig(): Promise<boolean> {
   const raw = (await window.sticki.getConfig()) as Partial<AppConfig> | null
-  if (!raw) return false
+  if (!raw) {
+    // fresh install: still seed the default highlight rules
+    migrateHighlightRules()
+    migrateHighlightRulesV2()
+    return false
+  }
 
   const settings = useSettingsStore.getState()
   settings.setClientId(raw.clientId ?? '')
@@ -29,6 +81,8 @@ export async function loadConfig(): Promise<boolean> {
   }
 
   useLayoutStore.getState().setAll(raw.tabs ?? [], raw.activeTabId ?? raw.tabs?.[0]?.id ?? null)
+  migrateHighlightRules()
+  migrateHighlightRulesV2()
   return !!raw.clientId
 }
 
@@ -124,6 +178,18 @@ export async function persistAccountTokens(accountId: string): Promise<void> {
   window.sticki.notifyConfigChanged()
 }
 
+/**
+ * Persist an account REMOVAL straight to disk (merging into the stored config) and tell other
+ * windows. The standalone settings window has no account-store persistence, so removing an
+ * account there otherwise never reached disk — and the account reappeared on the next open.
+ */
+export async function persistAccountRemoval(accountId: string): Promise<void> {
+  const raw = ((await window.sticki.getConfig()) as Partial<AppConfig> | null) ?? {}
+  const accounts = (raw.accounts ?? []).filter((a) => a.id !== accountId)
+  await window.sticki.setConfig({ ...raw, accounts })
+  window.sticki.notifyConfigChanged()
+}
+
 /** Reload settings/tokens (not layout — each window keeps its own tabs) when another window saves. */
 export function startConfigSync(): () => void {
   return window.sticki.onConfigChanged(() => {
@@ -139,31 +205,53 @@ export function startConfigSync(): () => void {
         settings.setRaidFavorites(cfg.raidFavorites ?? [])
         settings.setHighlightRules(cfg.highlightRules ?? [])
         settings.setFavoriteEmotes(cfg.favoriteEmotes ?? [])
-        // pick up token rotations done by other windows, otherwise this window keeps trying
-        // (and failing) to refresh with the already-consumed old refresh token
+        // reconcile accounts with other windows: pick up token rotations, ADD accounts added
+        // elsewhere (e.g. the standalone settings window), and drop ones removed elsewhere
         let tokensChanged = false
+        let accountsAdded = false
         for (const a of cfg.accounts ?? []) {
           const existing = useAccountsStore.getState().accounts.find((x) => x.id === a.id)
-          if (!existing) continue
-          if (
-            existing.accessTokenEnc === a.accessTokenEnc &&
-            existing.refreshTokenEnc === a.refreshTokenEnc
-          )
-            continue
-          const accessToken = a.accessTokenEnc ? await window.sticki.decrypt(a.accessTokenEnc) : null
-          const refreshToken = a.refreshTokenEnc ? await window.sticki.decrypt(a.refreshTokenEnc) : null
-          useAccountsStore.getState().updateAccount(a.id, {
-            accessTokenEnc: a.accessTokenEnc,
-            refreshTokenEnc: a.refreshTokenEnc,
-            _accessToken: accessToken ?? undefined,
-            _refreshToken: refreshToken ?? undefined
-          })
-          tokensChanged = true
+          if (existing) {
+            if (
+              existing.accessTokenEnc === a.accessTokenEnc &&
+              existing.refreshTokenEnc === a.refreshTokenEnc
+            )
+              continue
+            const accessToken = a.accessTokenEnc ? await window.sticki.decrypt(a.accessTokenEnc) : null
+            const refreshToken = a.refreshTokenEnc ? await window.sticki.decrypt(a.refreshTokenEnc) : null
+            useAccountsStore.getState().updateAccount(a.id, {
+              accessTokenEnc: a.accessTokenEnc,
+              refreshTokenEnc: a.refreshTokenEnc,
+              _accessToken: accessToken ?? undefined,
+              _refreshToken: refreshToken ?? undefined
+            })
+            tokensChanged = true
+          } else {
+            // brand-new account authorized in another window — decrypt tokens and add it here
+            const accessToken = a.accessTokenEnc ? await window.sticki.decrypt(a.accessTokenEnc) : null
+            const refreshToken = a.refreshTokenEnc ? await window.sticki.decrypt(a.refreshTokenEnc) : null
+            useAccountsStore.getState().addAccount({
+              ...a,
+              moderatedChannelIds: a.moderatedChannelIds ?? [],
+              _accessToken: accessToken ?? undefined,
+              _refreshToken: refreshToken ?? undefined
+            })
+            accountsAdded = true
+          }
         }
-        if (tokensChanged) {
-          // fresh tokens may unblock fetches that previously failed with a dead token
+        // reconcile removals: an account removed in another window must disappear here too
+        const cfgIds = new Set((cfg.accounts ?? []).map((a) => a.id))
+        const stale = useAccountsStore.getState().accounts.filter((a) => !cfgIds.has(a.id))
+        if (tokensChanged || accountsAdded || stale.length) {
+          const { chatService } = await import('./chatService')
+          for (const a of stale) {
+            chatService.dropSender(a.id)
+            useAccountsStore.getState().removeAccount(a.id)
+          }
+          // fresh tokens / new accounts may unblock fetches and need whisper subscriptions
           const { reloadAllBadges } = await import('./emoteService')
           reloadAllBadges()
+          chatService.resyncSubscriptions()
         }
       } finally {
         applyingRemote = false

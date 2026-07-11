@@ -223,6 +223,7 @@ export const en = {
   'set.sound.upload': 'Upload sound…',
   'set.sound.tooBig': 'File is too big (max 2 MB)',
   'set.sound.preview': 'Preview',
+  'set.sound.delete': 'Delete this uploaded sound',
 
   // Detached window
   'detach.return': 'Return to the main window',
@@ -255,6 +256,9 @@ export const en = {
   'set.msgLimit': 'Messages kept per chat',
   'set.clientId': 'Twitch Client ID',
   'set.raidFavorites': 'Raid favorites (one channel per line)',
+  'set.swipeTiers': 'Swipe-to-moderate timeouts',
+  'set.swipeTiers.hint': 'Drag distance on a message picks a timeout — set the tiers (seconds) from shortest to longest.',
+  'set.swipeTiers.unit': 'seconds',
   'set.modBtn.add': 'Add button',
   'set.modBtn.label': 'Label',
   'set.modBtn.icon': 'Icon (emoji)',
@@ -266,6 +270,8 @@ export const en = {
   'set.modBtn.scope.message': 'On message',
   'set.modBtn.scope.toolbar': 'Toolbar',
   'set.modBtn.delete': 'Delete',
+  'set.modBtn.duplicate': 'Duplicate',
+  'set.modBtn.allChannels': 'All channels',
   'set.modBtn.up': 'Up',
   'set.modBtn.down': 'Down',
   'set.modBtn.hint':
@@ -284,6 +290,135 @@ export const en = {
   'btn.type.snippet': 'Snippet',
   'btn.type.link': 'Quick link',
   'btn.type.fill': 'Fill input (no send)',
+
+  // New settings sections
+  'set.chat': 'Chat',
+  'set.hotkeys': 'Hotkeys',
+  'set.about': 'About',
+  'set.emoteSuggestions': 'Emote & emoji suggestions while typing',
+  'set.usercardAsWindow': 'Open user cards in a separate window',
+  'set.raidPrompt': 'Offer to add the channel when a raid happens',
+
+  // Highlight categories
+  'hl.mention': 'Mentions of me',
+  'hl.kind.own': 'My messages',
+  'hl.kind.redeem': 'Channel-point redemption',
+  'hl.kind.bits': 'Bits / cheer',
+  'hl.kind.firstMsg': 'First message ever',
+  'hl.kind.firstStream': 'First message this stream',
+  'hl.kind.watchStreak': 'Watch streak',
+
+  // Muted users
+  'muted.title': 'Muted users',
+  'muted.hint':
+    'Hide their messages completely or render them barely visible (handy for bots). Opacity applies to the "dim" mode.',
+  'muted.mode.hide': 'Hide',
+  'muted.mode.dim': 'Dim',
+  'muted.add': 'Add user',
+  'muted.placeholder': 'nickname…',
+  'user.mute': 'Mute in chat',
+  'user.unmute': 'Unmute',
+
+  // Color palette
+  'color.saved': 'Saved colors',
+  'color.recent': 'Recent',
+  'color.save': 'Save current color',
+  'color.remove': 'Right click — remove',
+
+  // Hotkeys
+  'hk.hint': 'Click a shortcut to change it. Esc — cancel, Backspace — reset to default.',
+  'hk.reconnect': 'Reconnect chat',
+  'hk.scrollLock': 'Toggle auto-scroll lock (hover a chat)',
+  'hk.translit': 'Convert keyboard layout in the focused field',
+  'hk.resendLast': 'Send the previous message again (input focused)',
+  'hk.press': 'Press keys…',
+  'hk.reset': 'Reset',
+  'hk.builtin': 'Built-in shortcuts',
+  'hk.fixed.send': 'Send message',
+  'hk.fixed.newline': 'New line',
+  'hk.fixed.autocomplete': 'Apply suggestion',
+  'hk.fixed.history': 'Browse sent messages',
+  'hk.fixed.zoom': 'Chat text size',
+  'hk.fixed.native': 'Standard editing (undo / redo / copy / paste)',
+
+  // About
+  'about.developer': 'Developer',
+  'about.feedback': 'Feedback & suggestions',
+  'about.feedbackHint': 'Found a bug or have an idea? Write here:',
+  'about.changelog': 'Changelog',
+  'about.github': 'GitHub (bug reports)',
+  'about.twitch': 'Twitch',
+
+  // Whispers
+  'whisper.title': 'Whispers',
+  'whisper.empty': 'No whispers yet',
+  'whisper.placeholder': 'Reply…',
+  'whisper.send': 'Send',
+  'whisper.back': 'All conversations',
+  'whisper.new': 'New whisper',
+  'whisper.nick': 'Nickname…',
+  'whisper.noUser': 'User not found',
+  'whisper.needReauth': 'To receive whispers, re-authorize {login} in Settings → Accounts (a new permission is required).',
+
+  // Raid prompt
+  'raid.addPrompt': 'Raid! Add the {channel} chat?',
+  'raid.add': 'Add',
+  'set.raidDest': 'Where to add the raided channel',
+  'set.raidDest.tabs': 'New tab',
+  'set.raidDest.split': 'Split screen',
+  'set.raidActiveOnly': 'Only for raids on the active tab',
+  'hint.raidActiveOnly': 'Off: prompt for a raid on any open channel. On: only when the raid happens on the channel you are currently watching.',
+  'set.whisperSound': 'Sound on a new whisper',
+
+  // Info lines
+  'info.raidStart': '🚨 Raiding {target} ({count} viewers)',
+  'info.streamUp': '🔴 {channel} went live',
+  'info.redeem': '🟣 {user} redeemed {reward} ({cost})',
+  'msg.bits': '💎 {count} bits',
+  'msg.redeem': '🎁 Redemption',
+
+  // Stream-up + bits/redeem settings
+  'set.streamUpSound': 'Sound when a channel goes live',
+  'set.streamUpNotify': 'Banner when a channel goes live',
+  'set.showBits': 'Show bits/cheers in chat',
+  'set.showRedeems': 'Mark channel-point redemptions in chat',
+  'hint.streamUp': 'Plays a sound / shows a banner the moment a watched channel starts streaming.',
+  'hint.showBits': 'Adds a 💎 tag with the bit amount to messages that cheer.',
+  'hint.showRedeems': 'Shows channel-point redemptions on their own line with the reward name (via PubSub, like Chatterino — including message-less ones).',
+  'set.group.streamUp': 'Stream start',
+
+  // Shoutout
+  'mod.shoutoutGiven': '📣 Shoutout for {user}',
+
+  // Command token
+  'cmd.insertHint': 'Right click — put the command into the input',
+
+  // Setting hints (long-hover tooltips)
+  'hint.translit': 'Adds the Aа button next to the input and the layout-swap hotkey for text typed in the wrong keyboard layout.',
+  'hint.caseSensitiveNicks': 'When on, mention detection and nickname rules compare with exact letter case.',
+  'hint.altBg': 'Every second message gets a slightly different background so long chats are easier to read.',
+  'hint.history': 'On joining a channel, loads the latest messages from the recent-messages.robotty.de archive.',
+  'hint.msgLimit': 'How many messages are kept in memory per chat. Higher = more scrollback, more RAM.',
+  'hint.emoteSuggestions': 'Suggestions that pop up above the input while typing an emote or emoji name. Slash commands and @nicknames keep working.',
+  'hint.streamInfo': 'Viewer count, stream uptime and title in the chat header while the channel is live.',
+  'hint.charCounter': 'Character counter in the input; text over the 500-character Twitch limit is highlighted.',
+  'hint.raidPrompt': 'When a raid starts, a small prompt offers to open the other channel’s chat in the current tab.',
+  'hint.usercardAsWindow': 'Clicking a nickname opens the user card in its own window (movable to another monitor, can be pinned on top).',
+  'hint.rememberPin': 'Separate windows (emote picker, settings, user card) reopen with the 📌 always-on-top state they had.',
+  'hint.settingsAsWindow': 'Settings open in their own window instead of the in-app overlay.',
+  'hint.emotePickerAsWindow': 'The emote picker opens in its own window you can keep on a second monitor.',
+  'hint.alwaysOnTop': 'The main window stays above every other application.',
+  'hint.highlightSidebar': 'A side panel listing mentions and highlighted messages of the current chat.',
+  'hint.mentionSound': 'Plays when any message mentions one of your accounts.',
+  'hint.firstMessageSound': 'Plays when a viewer writes for the first time during the current stream (active tab only).',
+  'hint.keywordSound': 'Plays when a message contains one of your keywords; the message is highlighted like a mention.',
+  'hint.lineSpacing': 'Extra vertical space INSIDE a message — helps when stacked emotes overlap.',
+  'hint.messageSpacing': 'Extra vertical space BETWEEN messages.',
+  'hint.mentionBg': 'Background highlight for messages that mention you.',
+  'hint.clientId': 'Your own Twitch application Client ID (from dev.twitch.tv). Change only if you know why.',
+  'hint.emojiNameLang': 'Language of emoji names in search and tooltips.',
+  'hint.sidebarDefault': 'Which tab the highlights side panel opens on.',
+  'hint.rememberWindowSize': 'Windows reopen with the same size and position as last time.',
 
   // Misc
   'misc.close': 'Close',

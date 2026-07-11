@@ -1,16 +1,41 @@
 import { ChatMessage, HighlightRule } from '../types'
 
-export function highlightRuleMatches(msg: ChatMessage, rule: HighlightRule, caseSensitiveNicks: boolean): boolean {
-  if (!rule.enabled || !rule.value || msg.system) return false
-  if (rule.kind === 'nick') {
-    return caseSensitiveNicks ? rule.value === msg.displayName : rule.value.toLowerCase() === msg.login
-  }
-  return msg.badges.some((b) => b.setId === rule.value)
+export interface HighlightContext {
+  caseSensitiveNicks: boolean
+  /** user ids of my own accounts (for the 'own' category) */
+  myAccountIds?: string[]
 }
 
-/** mention or a matching highlight rule — used to drive the Chatterino-style highlights sidebar */
-export function isHighlightedMessage(msg: ChatMessage, rules: HighlightRule[], caseSensitiveNicks: boolean): boolean {
+export function highlightRuleMatches(msg: ChatMessage, rule: HighlightRule, ctx: HighlightContext): boolean {
+  if (!rule.enabled) return false
+  // category rules apply to usernotice messages too (watch streaks arrive as usernotice);
+  // plain info/system lines never get highlighted
+  if (msg.system && msg.system !== 'usernotice') return false
+  switch (rule.kind) {
+    case 'nick':
+      if (!rule.value) return false
+      return ctx.caseSensitiveNicks ? rule.value === msg.displayName : rule.value.toLowerCase() === msg.login
+    case 'badge':
+      return !!rule.value && !msg.system && msg.badges.some((b) => b.setId === rule.value)
+    case 'own':
+      return !msg.system && !!msg.userId && (ctx.myAccountIds ?? []).includes(msg.userId)
+    case 'redeem':
+      return !!msg.redeemed
+    case 'bits':
+      return !!msg.bits
+    case 'firstMsg':
+      return !!msg.isFirstMsg && !msg.system
+    case 'firstStream':
+      return !!msg.isFirstInSession && !msg.isFirstMsg && !msg.system
+    case 'watchStreak':
+      return !!msg.watchStreak
+  }
+}
+
+/** mention or a badge/nick rule — drives the Chatterino-style highlights sidebar.
+ *  Category rules (own/redeem/first…) only color the chat, they'd flood the sidebar. */
+export function isHighlightedMessage(msg: ChatMessage, rules: HighlightRule[], ctx: HighlightContext): boolean {
   if (msg.system || msg.deleted) return false
   if (msg.isMention) return true
-  return rules.some((r) => highlightRuleMatches(msg, r, caseSensitiveNicks))
+  return rules.some((r) => (r.kind === 'badge' || r.kind === 'nick') && highlightRuleMatches(msg, r, ctx))
 }

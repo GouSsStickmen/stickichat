@@ -97,3 +97,19 @@ export function playKeywordSound(
   const data = s.customSounds.find((c) => c.id === s.keywordSoundCustomId)?.data
   playAlertSound({ type: s.keywordSoundType, volume: s.keywordSoundVolume, data }, 'keyword', force)
 }
+
+export function playStreamUpSound(
+  s: Pick<Settings, 'streamUpSoundType' | 'streamUpSoundVolume' | 'streamUpSoundCustomId' | 'customSounds'>,
+  force = false
+): void {
+  const data = s.customSounds.find((c) => c.id === s.streamUpSoundCustomId)?.data
+  playAlertSound({ type: s.streamUpSoundType, volume: s.streamUpSoundVolume, data }, 'stream-up', force)
+}
+
+export function playWhisperSound(
+  s: Pick<Settings, 'whisperSoundType' | 'whisperSoundVolume' | 'whisperSoundCustomId' | 'customSounds'>,
+  force = false
+): void {
+  const data = s.customSounds.find((c) => c.id === s.whisperSoundCustomId)?.data
+  playAlertSound({ type: s.whisperSoundType, volume: s.whisperSoundVolume, data }, 'whisper', force)
+}

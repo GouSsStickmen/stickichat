@@ -209,6 +209,18 @@ select:focus {
   opacity: 1;
   color: var(--danger);
 }
+/* detach button occupies its slot on every tab (constant tab width) but only shows
+   itself on the active or hovered tab */
+.tabbar .tab .detach {
+  visibility: hidden;
+}
+.tabbar .tab.active .detach,
+.tabbar .tab:hover .detach {
+  visibility: visible;
+}
+.tabbar .tab .detach:hover {
+  color: var(--accent);
+}
 .tabbar .icon-btn {
   padding: 5px 9px;
   background: transparent;
@@ -328,6 +340,9 @@ select:focus {
 }
 .pane-header .mod-badge.broadcaster {
   background: var(--danger);
+}
+.pane-header .stream-info .si-icon {
+  font-size: 14px;
 }
 .pane-header .stream-info {
   font-size: 11px;
@@ -451,17 +466,11 @@ select:focus {
 .msg.alt {
   background: var(--surface-2);
 }
+/* --mention-bg already carries the user-picked opacity (set from settings in App.tsx);
+   first-message/first-in-stream backgrounds moved into the unified highlight rules */
 .msg.mention {
-  background: color-mix(in srgb, var(--mention-bg) 20%, transparent);
-  box-shadow: inset 3px 0 0 var(--mention-bg);
-}
-.msg.first-msg {
-  box-shadow: inset 3px 0 0 var(--success);
-  background: var(--highlight-bg);
-}
-.msg.first-in-session {
-  box-shadow: inset 3px 0 0 var(--first-msg-bg, var(--link));
-  background: color-mix(in srgb, var(--first-msg-bg, #1e90ff) 12%, transparent);
+  background: var(--mention-bg);
+  box-shadow: inset 3px 0 0 var(--mention-accent, var(--accent));
 }
 .msg.usernotice {
   box-shadow: inset 4px 0 0 var(--announce-accent, var(--accent)), inset -4px 0 0 var(--announce-accent, var(--accent));
@@ -556,6 +565,14 @@ select:focus {
 .msg .mention-token:hover {
   text-decoration: underline;
 }
+/* leading "!command": right-click inserts it into the input */
+.msg .command-token {
+  font-weight: 600;
+}
+.msg .command-token:hover {
+  text-decoration: underline;
+  cursor: context-menu;
+}
 .msg .emote-wrap {
   display: inline-grid;
   vertical-align: middle;
@@ -576,6 +593,45 @@ select:focus {
   display: block;
   color: var(--accent);
   font-size: 0.9em;
+  font-weight: 600;
+}
+/* Twitch-style header line shown ABOVE the message for redemptions / bits */
+.msg .event-header {
+  display: block;
+  font-size: 0.85em;
+  font-weight: 600;
+  margin-bottom: 1px;
+  user-select: none;
+}
+.msg .event-header.redeem {
+  color: var(--accent);
+}
+.msg .event-header.bits {
+  color: var(--warning);
+}
+/* cheermote: bit icon + colored amount, like on Twitch */
+.cheer-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  vertical-align: middle;
+  margin: -4px 1px;
+}
+.cheer-token img {
+  height: calc(24px * var(--emote-scale));
+}
+.cheer-amount {
+  font-weight: 700;
+  font-size: 0.95em;
+}
+/* channel-point redemption announcement (from PubSub) — purple, stands out from grey sysmsgs */
+.msg.redeem-info {
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.msg.redeem-info .sysmsg {
+  color: var(--accent);
+  font-style: normal;
   font-weight: 600;
 }
 .msg .reply-ref {
@@ -1030,6 +1086,12 @@ select:focus {
   z-index: 50;
   min-width: 220px;
 }
+/* "add chat" form: fixed-position (escapes the pane's overflow clipping) and never wider
+   than the window, so the channel input stays reachable at any window width */
+.popover.add-pane-pop {
+  max-width: calc(100vw - 16px);
+  z-index: 90;
+}
 
 /* ---------- User card ---------- */
 
@@ -1270,11 +1332,15 @@ select:focus {
 }
 .modbtn-card {
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
   background: var(--surface-2);
-  transition: opacity 0.12s ease;
+  transition: opacity 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.modbtn-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.15);
 }
 /* the moving card itself is the drag indicator (native ghost is suppressed) */
 .modbtn-card.dragging {
@@ -1322,6 +1388,73 @@ select:focus {
   flex-shrink: 0;
   padding: 0 2px;
 }
+
+/* channel multi-select dropdown (mod-button "channels") */
+.chan-select {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.chan-select-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.chan-select-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.chan-select-caret {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.chan-select-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 70;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.chan-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+.chan-opt:hover {
+  background: var(--surface-3);
+}
+.chan-opt.active {
+  color: var(--accent);
+}
+.chan-add {
+  padding: 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.chan-add input {
+  width: 100%;
+  font-size: 12px;
+}
 .modbtn-card {
   cursor: default;
 }
@@ -1364,6 +1497,132 @@ select:focus {
   border-radius: 5px;
   font-size: 12px;
   border: 1px solid var(--border);
+}
+/* standardized highlight-rule / muted-user row */
+.hl-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.hl-row .spacer {
+  flex: 1;
+}
+.hl-row input[type='range'] {
+  width: 110px;
+}
+.hl-row select,
+.hl-row input[type='text'],
+.hl-row input:not([type]) {
+  padding: 5px 7px;
+  font-size: 12px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+.hl-kind-label {
+  font-weight: 600;
+}
+/* labels that carry a long-hover hint get a subtle affordance */
+.set-row label.has-hint {
+  text-decoration: underline dotted var(--text-faint);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+/* saved/recent color palette popover */
+.color-pal {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 70;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  min-width: 190px;
+}
+.color-pal-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+  margin: 4px 0;
+}
+.color-pal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+.color-swatch-add {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* hotkeys */
+.hotkey-btn {
+  min-width: 120px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+}
+.hotkey-btn.capturing {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.hotkey-fixed {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+/* changelog */
+.changelog {
+  margin-top: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  user-select: text;
+}
+.changelog-version {
+  font-weight: 700;
+  margin-top: 10px;
+}
+.changelog-entry:first-child .changelog-version {
+  margin-top: 0;
+}
+.changelog ul {
+  margin: 6px 0 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 /* ---------- Emote picker ---------- */
@@ -1697,16 +1956,166 @@ select:focus {
   color: var(--text-muted);
 }
 
-/* ---------- Toasts ---------- */
+/* ---------- Whispers ---------- */
 
-.toasts {
+.whisper-btn {
+  position: relative;
+}
+.whisper-badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+.whisper-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 16px);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.whisper-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.whisper-head .spacer {
+  flex: 1;
+}
+.whisper-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+.whisper-conv {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.whisper-conv:hover {
+  background: var(--surface-3);
+}
+.whisper-conv-nick {
+  font-weight: 700;
+  font-size: 12px;
+}
+.whisper-conv-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.whisper-thread {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  user-select: text;
+}
+.whisper-msg {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  align-self: flex-start;
+  max-width: 90%;
+  overflow-wrap: anywhere;
+}
+.whisper-msg.out {
+  align-self: flex-end;
+  background: var(--accent-strong);
+  color: #fff;
+}
+.whisper-msg .whisper-ts {
+  font-size: 9px;
+  opacity: 0.6;
+}
+.whisper-input {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+.whisper-input input {
+  flex: 1;
+  min-width: 0;
+}
+.whisper-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+.whisper-compose textarea {
+  resize: vertical;
+}
+
+/* ---------- Channel prompt (raids) ---------- */
+
+.channel-prompt {
   position: fixed;
   bottom: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-3);
+  border: 1px solid var(--accent-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 200;
+  animation: toast-in 0.15s ease;
+  max-width: min(440px, calc(100vw - 32px));
+}
+.channel-prompt-text {
+  font-weight: 600;
+}
+
+/* ---------- Toasts ---------- */
+
+/* top-right, under the tab bar: the old bottom-right spot covered the send button */
+.toasts {
+  position: fixed;
+  top: 46px;
   right: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   z-index: 200;
+  pointer-events: none;
 }
 .toast {
   background: var(--surface-3);
@@ -1717,6 +2126,7 @@ select:focus {
   box-shadow: var(--shadow);
   animation: toast-in 0.15s ease;
   max-width: 340px;
+  pointer-events: auto;
 }
 .toast.error {
   border-left-color: var(--danger);
@@ -1724,7 +2134,7 @@ select:focus {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;

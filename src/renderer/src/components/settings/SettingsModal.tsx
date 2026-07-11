@@ -3,27 +3,46 @@ import { useSettingsStore } from '../../store/settings'
 import { useAccountsStore } from '../../store/accounts'
 import { useUiStore } from '../../store/ui'
 import { useT } from '../../i18n'
-import { ModButton, ModActionType, HighlightRule, Settings } from '../../types'
+import {
+  DEFAULT_HOTKEYS,
+  HighlightKind,
+  HighlightRule,
+  HotkeyAction,
+  ModButton,
+  ModActionType,
+  Settings,
+  VALUELESS_HL_KINDS
+} from '../../types'
 import { nextId, useLayoutStore } from '../../store/layout'
 import { startPointerReorder } from '../../lib/pointerReorder'
+import { useFlip } from '../../lib/useFlip'
+import { eventToAccel, hotkeyFor } from '../../lib/hotkeys'
+import { hexToRgba } from '../../lib/tokenize'
 import { removeAccountEverywhere, refreshModeratedChannels } from '../../services/accountService'
-import { playMentionSound, playFirstMessageSound, playKeywordSound } from '../../lib/sound'
+import { playMentionSound, playFirstMessageSound, playKeywordSound, playStreamUpSound, playWhisperSound } from '../../lib/sound'
+import { CHANGELOG } from '../../changelog'
 import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
 
 type Section =
   | 'accounts'
   | 'appearance'
-  | 'notifications'
-  | 'windows'
-  | 'moderation'
+  | 'chat'
   | 'highlights'
-  | 'language'
+  | 'notifications'
+  | 'moderation'
+  | 'hotkeys'
+  | 'windows'
   | 'advanced'
+  | 'about'
 
 const BUTTON_TYPES: ModActionType[] = [
   'timeout', 'ban', 'unban', 'delete', 'warn', 'shoutout', 'raid', 'announce', 'snippet', 'link', 'fill', 'copy'
 ]
+
+const DEVELOPER = 'GouS_Stickmen'
+const GITHUB_ISSUES = 'https://github.com/GouSsStickmen/stickichat/issues'
+const TWITCH_PROFILE = 'https://www.twitch.tv/gous_stickmen'
 
 export default function SettingsModal({
   standalone,
@@ -33,6 +52,8 @@ export default function SettingsModal({
   initialSection?: string
 }): React.JSX.Element {
   const t = useT()
+  const settings = useSettingsStore((s) => s.settings)
+  const set = useSettingsStore((s) => s.setSettings)
   const close = (): void => (standalone ? window.close() : useUiStore.getState().setSettingsOpen(false))
   // NOTE: read-only in the initializer — StrictMode runs it twice, so clearing here
   // would wipe the requested section before the second run sees it
@@ -64,6 +85,15 @@ export default function SettingsModal({
       <div className="modal-header">
         {t('set.title')}
         <div className="spacer" />
+        {/* language switcher lives in the header — always one click away */}
+        <select
+          value={settings.language}
+          style={{ marginRight: 6, padding: '4px 7px', fontSize: 12 }}
+          onChange={(e) => set({ language: e.target.value as 'uk' | 'en' })}
+        >
+          <option value="uk">🇺🇦 Українська</option>
+          <option value="en">🇬🇧 English</option>
+        </select>
         {standalone && <PinButton settingKey="settingsPinned" />}
         {!standalone && (
           <button className="ghost" title={t('set.openInWindow')} onClick={openInWindow}>
@@ -80,12 +110,14 @@ export default function SettingsModal({
             [
               ['accounts', t('set.accounts')],
               ['appearance', t('set.appearance')],
-              ['notifications', t('set.notifications')],
-              ['windows', t('set.windows')],
-              ['moderation', t('set.moderation')],
+              ['chat', t('set.chat')],
               ['highlights', t('set.highlights')],
-              ['language', t('set.language')],
-              ['advanced', t('set.advanced')]
+              ['notifications', t('set.notifications')],
+              ['moderation', t('set.moderation')],
+              ['hotkeys', t('set.hotkeys')],
+              ['windows', t('set.windows')],
+              ['advanced', t('set.advanced')],
+              ['about', t('set.about')]
             ] as [Section, string][]
           ).map(([key, label]) => (
             <button key={key} className={section === key ? 'active' : ''} onClick={() => setSection(key)}>
@@ -96,12 +128,14 @@ export default function SettingsModal({
         <div className="settings-content">
           {section === 'accounts' && <AccountsSection />}
           {section === 'appearance' && <AppearanceSection />}
-          {section === 'notifications' && <NotificationsSection />}
-          {section === 'windows' && <WindowsSection />}
-          {section === 'moderation' && <ModerationSection />}
+          {section === 'chat' && <ChatSection />}
           {section === 'highlights' && <HighlightsSection />}
-          {section === 'language' && <LanguageSection />}
+          {section === 'notifications' && <NotificationsSection />}
+          {section === 'moderation' && <ModerationSection />}
+          {section === 'hotkeys' && <HotkeysSection />}
+          {section === 'windows' && <WindowsSection />}
           {section === 'advanced' && <AdvancedSection />}
+          {section === 'about' && <AboutSection />}
         </div>
       </div>
     </>
@@ -116,7 +150,7 @@ export default function SettingsModal({
   )
 }
 
-/** color input with right-click reset and a system-wide eyedropper */
+/** color input with right-click reset, a system-wide eyedropper and a saved/recent palette */
 function ColorField({
   value,
   defaultValue,
@@ -127,13 +161,38 @@ function ColorField({
   onChange: (v: string) => void
 }): React.JSX.Element {
   const t = useT()
+  const set = useSettingsStore((s) => s.setSettings)
+  const savedColors = useSettingsStore((s) => s.settings.savedColors)
+  const recentColors = useSettingsStore((s) => s.settings.recentColors)
+  const [palOpen, setPalOpen] = useState(false)
+  const rootRef = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    if (!palOpen) return
+    const onDown = (e: MouseEvent): void => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setPalOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [palOpen])
+
+  const commitRecent = (v: string): void => {
+    const fresh = useSettingsStore.getState().settings
+    set({ recentColors: [v, ...fresh.recentColors.filter((c) => c !== v)].slice(0, 10) })
+  }
+  const apply = (v: string): void => {
+    onChange(v)
+    commitRecent(v)
+  }
+
   return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+    <span ref={rootRef} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', position: 'relative' }}>
       <input
         type="color"
         value={value}
         title={t('set.colorReset')}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={() => commitRecent(value)}
         onContextMenu={(e) => {
           e.preventDefault()
           onChange(defaultValue)
@@ -143,17 +202,75 @@ function ColorField({
         className="ghost"
         title={t('set.eyedropper')}
         onClick={async () => {
+          // the OS eyedropper loupe renders below any always-on-top window; the settings can be
+          // a separate window while the main chat stays pinned, so drop EVERY pinned window for
+          // the duration of the pick, then restore them
+          await window.sticki.suspendAlwaysOnTop()
           try {
             const ed = new (window as unknown as { EyeDropper: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper()
             const r = await ed.open()
-            onChange(r.sRGBHex)
+            apply(r.sRGBHex)
           } catch {
             /* cancelled / unsupported */
+          } finally {
+            await window.sticki.resumeAlwaysOnTop()
           }
         }}
       >
         💧
       </button>
+      <button
+        className={`ghost ${palOpen ? 'active' : ''}`}
+        title={`${t('color.saved')} · ${t('color.recent')}`}
+        onClick={() => setPalOpen((v) => !v)}
+      >
+        🎨
+      </button>
+      {palOpen && (
+        <div className="color-pal">
+          <div className="color-pal-title">{t('color.saved')}</div>
+          <div className="color-pal-row">
+            {savedColors.map((c) => (
+              <button
+                key={c}
+                className="color-swatch"
+                style={{ background: c }}
+                title={`${c} · ${t('color.remove')}`}
+                onClick={() => apply(c)}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  set({ savedColors: savedColors.filter((x) => x !== c) })
+                }}
+              />
+            ))}
+            <button
+              className="color-swatch color-swatch-add"
+              title={t('color.save')}
+              onClick={() => {
+                if (!savedColors.includes(value)) set({ savedColors: [...savedColors, value].slice(0, 20) })
+              }}
+            >
+              +
+            </button>
+          </div>
+          {recentColors.length > 0 && (
+            <>
+              <div className="color-pal-title">{t('color.recent')}</div>
+              <div className="color-pal-row">
+                {recentColors.map((c) => (
+                  <button
+                    key={c}
+                    className="color-swatch"
+                    style={{ background: c }}
+                    title={c}
+                    onClick={() => apply(c)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </span>
   )
 }
@@ -318,29 +435,6 @@ function AppearanceSection(): React.JSX.Element {
           <option value="2">200%</option>
         </select>
       </div>
-      <div className="set-group-title">{t('set.group.chat')}</div>
-      <div className="set-row">
-        <label>{t('set.lineSpacing')}</label>
-        <input
-          type="number"
-          min={0}
-          max={24}
-          style={{ width: 70 }}
-          value={settings.lineSpacing}
-          onChange={(e) => set({ lineSpacing: parseInt(e.target.value, 10) || 0 })}
-        />
-      </div>
-      <div className="set-row">
-        <label>{t('set.messageSpacing')}</label>
-        <input
-          type="number"
-          min={0}
-          max={20}
-          style={{ width: 70 }}
-          value={settings.messageSpacing}
-          onChange={(e) => set({ messageSpacing: parseInt(e.target.value, 10) || 0 })}
-        />
-      </div>
       <div className="set-row">
         <label>{t('set.badgeSize')}</label>
         <input
@@ -352,7 +446,7 @@ function AppearanceSection(): React.JSX.Element {
           onChange={(e) => set({ badgeSize: parseInt(e.target.value, 10) || 18 })}
         />
       </div>
-      <div className="set-row">
+      <div className="set-row" title={t('hint.emojiNameLang')}>
         <label>{t('set.emojiNameLang')}</label>
         <select
           value={settings.emojiNameLang}
@@ -363,20 +457,59 @@ function AppearanceSection(): React.JSX.Element {
           <option value="both">{t('set.emojiNameLang.both')}</option>
         </select>
       </div>
+    </div>
+  )
+}
+
+function ChatSection(): React.JSX.Element {
+  const t = useT()
+  const settings = useSettingsStore((s) => s.settings)
+  const set = useSettingsStore((s) => s.setSettings)
+  return (
+    <div>
+      <div className="set-group-title">{t('set.group.general')}</div>
       <Toggle label={t('set.timestamps')} value={settings.showTimestamps} onChange={(v) => set({ showTimestamps: v })} />
       <Toggle label={t('set.timestampSeconds')} value={settings.timestampSeconds} onChange={(v) => set({ timestampSeconds: v })} />
-      <Toggle label={t('set.altBg')} value={settings.alternatingBackground} onChange={(v) => set({ alternatingBackground: v })} />
-      <Toggle label={t('set.highlightMentions')} value={settings.highlightMentions} onChange={(v) => set({ highlightMentions: v })} />
-      <Toggle label={t('set.caseSensitiveNicks')} value={settings.caseSensitiveNicks} onChange={(v) => set({ caseSensitiveNicks: v })} />
-      <Toggle label={t('set.charCounter')} value={settings.showCharCounter} onChange={(v) => set({ showCharCounter: v })} />
-      <Toggle label={t('set.translit')} value={settings.translitEnabled} onChange={(v) => set({ translitEnabled: v })} />
-      <Toggle label={t('set.streamInfo')} value={settings.showStreamInfo} onChange={(v) => set({ showStreamInfo: v })} />
+      <Toggle label={t('set.altBg')} hint={t('hint.altBg')} value={settings.alternatingBackground} onChange={(v) => set({ alternatingBackground: v })} />
+      <Toggle label={t('set.streamInfo')} hint={t('hint.streamInfo')} value={settings.showStreamInfo} onChange={(v) => set({ showStreamInfo: v })} />
+      <Toggle label={t('set.showBits')} hint={t('hint.showBits')} value={settings.showBits} onChange={(v) => set({ showBits: v })} />
+      <Toggle label={t('set.showRedeems')} hint={t('hint.showRedeems')} value={settings.showRedeems} onChange={(v) => set({ showRedeems: v })} />
+      <Toggle label={t('set.history')} hint={t('hint.history')} value={settings.loadHistory} onChange={(v) => set({ loadHistory: v })} />
+      <div className="set-row" title={t('hint.lineSpacing')}>
+        <label>{t('set.lineSpacing')}</label>
+        <input
+          type="number"
+          min={0}
+          max={24}
+          style={{ width: 70 }}
+          value={settings.lineSpacing}
+          onChange={(e) => set({ lineSpacing: parseInt(e.target.value, 10) || 0 })}
+        />
+      </div>
+      <div className="set-row" title={t('hint.messageSpacing')}>
+        <label>{t('set.messageSpacing')}</label>
+        <input
+          type="number"
+          min={0}
+          max={20}
+          style={{ width: 70 }}
+          value={settings.messageSpacing}
+          onChange={(e) => set({ messageSpacing: parseInt(e.target.value, 10) || 0 })}
+        />
+      </div>
+      <div className="set-group-title">{t('input.send')}</div>
+      <Toggle label={t('set.emoteSuggestions')} hint={t('hint.emoteSuggestions')} value={settings.emoteSuggestions} onChange={(v) => set({ emoteSuggestions: v })} />
+      <Toggle label={t('set.charCounter')} hint={t('hint.charCounter')} value={settings.showCharCounter} onChange={(v) => set({ showCharCounter: v })} />
+      <Toggle label={t('set.translit')} hint={t('hint.translit')} value={settings.translitEnabled} onChange={(v) => set({ translitEnabled: v })} />
+      <Toggle label={t('set.caseSensitiveNicks')} hint={t('hint.caseSensitiveNicks')} value={settings.caseSensitiveNicks} onChange={(v) => set({ caseSensitiveNicks: v })} />
+      <div className="set-group-title">{t('highlights.title')}</div>
       <Toggle
         label={t('set.highlightSidebar')}
+        hint={t('hint.highlightSidebar')}
         value={settings.showHighlightSidebar}
         onChange={(v) => set({ showHighlightSidebar: v })}
       />
-      <div className="set-row">
+      <div className="set-row" title={t('hint.sidebarDefault')}>
         <label>{t('set.sidebarDefault')}</label>
         <select
           value={settings.highlightSidebarDefault}
@@ -396,15 +529,16 @@ function NotificationsSection(): React.JSX.Element {
   const set = useSettingsStore((s) => s.setSettings)
   return (
     <div>
-      <Toggle label={t('set.mentionSound')} value={settings.mentionSound} onChange={(v) => set({ mentionSound: v })} />
+      <Toggle label={t('set.mentionSound')} hint={t('hint.mentionSound')} value={settings.mentionSound} onChange={(v) => set({ mentionSound: v })} />
       {settings.mentionSound && <SoundSettings kind="mention" />}
       <Toggle
         label={t('set.firstMessageSound')}
+        hint={t('hint.firstMessageSound')}
         value={settings.firstMessageSound}
         onChange={(v) => set({ firstMessageSound: v })}
       />
       {settings.firstMessageSound && <SoundSettings kind="firstMessage" />}
-      <Toggle label={t('set.keywordSound')} value={settings.keywordSound} onChange={(v) => set({ keywordSound: v })} />
+      <Toggle label={t('set.keywordSound')} hint={t('hint.keywordSound')} value={settings.keywordSound} onChange={(v) => set({ keywordSound: v })} />
       {settings.keywordSound && (
         <>
           <div className="set-row" style={{ alignItems: 'flex-start' }}>
@@ -423,6 +557,32 @@ function NotificationsSection(): React.JSX.Element {
           <SoundSettings kind="keyword" />
         </>
       )}
+      <div className="set-group-title">{t('whisper.title')}</div>
+      <Toggle label={t('set.whisperSound')} value={settings.whisperSound} onChange={(v) => set({ whisperSound: v })} />
+      {settings.whisperSound && <SoundSettings kind="whisper" />}
+      <div className="set-group-title">{t('set.group.streamUp')}</div>
+      <Toggle label={t('set.streamUpNotify')} hint={t('hint.streamUp')} value={settings.streamUpNotify} onChange={(v) => set({ streamUpNotify: v })} />
+      <Toggle label={t('set.streamUpSound')} hint={t('hint.streamUp')} value={settings.streamUpSound} onChange={(v) => set({ streamUpSound: v })} />
+      {settings.streamUpSound && <SoundSettings kind="streamUp" />}
+      <div className="set-group-title">{t('mod.raid')}</div>
+      <Toggle label={t('set.raidPrompt')} hint={t('hint.raidPrompt')} value={settings.raidPrompt} onChange={(v) => set({ raidPrompt: v })} />
+      {settings.raidPrompt && (
+        <>
+          <div className="set-row">
+            <label>{t('set.raidDest')}</label>
+            <select value={settings.raidPromptDest} onChange={(e) => set({ raidPromptDest: e.target.value as 'tabs' | 'split' })}>
+              <option value="split">{t('set.raidDest.split')}</option>
+              <option value="tabs">{t('set.raidDest.tabs')}</option>
+            </select>
+          </div>
+          <Toggle
+            label={t('set.raidActiveOnly')}
+            hint={t('hint.raidActiveOnly')}
+            value={settings.raidPromptActiveOnly}
+            onChange={(v) => set({ raidPromptActiveOnly: v })}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -433,6 +593,46 @@ function WindowsSection(): React.JSX.Element {
   const set = useSettingsStore((s) => s.setSettings)
   return (
     <div>
+      <div className="set-group-title">{t('set.group.general')}</div>
+      <Toggle
+        label={t('set.alwaysOnTop')}
+        hint={t('hint.alwaysOnTop')}
+        value={settings.alwaysOnTop}
+        onChange={(v) => set({ alwaysOnTop: v })}
+      />
+      <Toggle
+        label={t('set.rememberWindowSize')}
+        hint={t('hint.rememberWindowSize')}
+        value={settings.rememberWindowSize}
+        onChange={(v) => set({ rememberWindowSize: v })}
+      />
+      <Toggle
+        label={t('set.rememberPin')}
+        hint={t('hint.rememberPin')}
+        value={settings.rememberPinState}
+        onChange={(v) => set({ rememberPinState: v })}
+      />
+      <div className="set-group-title">{t('set.title')}</div>
+      <Toggle
+        label={t('set.settingsAsWindow')}
+        hint={t('hint.settingsAsWindow')}
+        value={settings.settingsAsWindow}
+        onChange={(v) => set({ settingsAsWindow: v })}
+      />
+      <div className="set-group-title">{t('user.viewercard')}</div>
+      <Toggle
+        label={t('set.usercardAsWindow')}
+        hint={t('hint.usercardAsWindow')}
+        value={settings.usercardAsWindow}
+        onChange={(v) => set({ usercardAsWindow: v })}
+      />
+      <div className="set-group-title">{t('picker.open')}</div>
+      <Toggle
+        label={t('set.emotePickerAsWindow')}
+        hint={t('hint.emotePickerAsWindow')}
+        value={settings.emotePickerAsWindow}
+        onChange={(v) => set({ emotePickerAsWindow: v })}
+      />
       <div className="set-row">
         <label>{t('set.pickerDefaultTab')}</label>
         <select
@@ -455,36 +655,11 @@ function WindowsSection(): React.JSX.Element {
           onChange={(e) => set({ emotePreviewSize: parseInt(e.target.value, 10) || 112 })}
         />
       </div>
-      <Toggle
-        label={t('set.emotePickerAsWindow')}
-        value={settings.emotePickerAsWindow}
-        onChange={(v) => set({ emotePickerAsWindow: v })}
-      />
-      <Toggle
-        label={t('set.settingsAsWindow')}
-        value={settings.settingsAsWindow}
-        onChange={(v) => set({ settingsAsWindow: v })}
-      />
-      <Toggle
-        label={t('set.alwaysOnTop')}
-        value={settings.alwaysOnTop}
-        onChange={(v) => set({ alwaysOnTop: v })}
-      />
-      <Toggle
-        label={t('set.rememberPin')}
-        value={settings.rememberPinState}
-        onChange={(v) => set({ rememberPinState: v })}
-      />
-      <Toggle
-        label={t('set.rememberWindowSize')}
-        value={settings.rememberWindowSize}
-        onChange={(v) => set({ rememberWindowSize: v })}
-      />
     </div>
   )
 }
 
-type SoundKind = 'mention' | 'firstMessage' | 'keyword'
+type SoundKind = 'mention' | 'firstMessage' | 'keyword' | 'streamUp' | 'whisper'
 
 const SOUND_KEYS = {
   mention: { type: 'mentionSoundType', volume: 'mentionSoundVolume', customId: 'mentionSoundCustomId' },
@@ -493,13 +668,17 @@ const SOUND_KEYS = {
     volume: 'firstMessageSoundVolume',
     customId: 'firstMessageSoundCustomId'
   },
-  keyword: { type: 'keywordSoundType', volume: 'keywordSoundVolume', customId: 'keywordSoundCustomId' }
+  keyword: { type: 'keywordSoundType', volume: 'keywordSoundVolume', customId: 'keywordSoundCustomId' },
+  streamUp: { type: 'streamUpSoundType', volume: 'streamUpSoundVolume', customId: 'streamUpSoundCustomId' },
+  whisper: { type: 'whisperSoundType', volume: 'whisperSoundVolume', customId: 'whisperSoundCustomId' }
 } as const
 
 const SOUND_PLAYERS: Record<SoundKind, (s: Settings, force?: boolean) => void> = {
   mention: playMentionSound,
   firstMessage: playFirstMessageSound,
-  keyword: playKeywordSound
+  keyword: playKeywordSound,
+  streamUp: playStreamUpSound,
+  whisper: playWhisperSound
 }
 
 function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
@@ -566,6 +745,12 @@ function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
           <button onClick={() => play(true)} title={t('set.sound.preview')}>
             ▶
           </button>
+          {/* delete the currently-selected uploaded sound right here — no bulky bottom list */}
+          {type === 'custom' && customId && (
+            <button className="danger" title={t('set.sound.delete')} onClick={() => removeCustomSound(customId)}>
+              🗑
+            </button>
+          )}
         </div>
       </div>
       <div className="set-row">
@@ -596,30 +781,136 @@ function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
           style={{ maxWidth: 240 }}
         />
       </div>
-      {settings.customSounds.length > 0 && (
-        <div className="set-row" style={{ alignItems: 'flex-start' }}>
-          <label>{t('set.sound.library')}</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {settings.customSounds.map((c) => (
-              <span key={c.id} className="chip">
-                {c.name}
-                <button className="ghost" onClick={() => removeCustomSound(c.id)}>
-                  ✕
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </>
   )
 }
 
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }): React.JSX.Element {
+function Toggle({
+  label,
+  value,
+  onChange,
+  hint
+}: {
+  label: string
+  value: boolean
+  onChange: (v: boolean) => void
+  hint?: string
+}): React.JSX.Element {
   return (
-    <div className="set-row">
-      <label>{label}</label>
+    <div className="set-row" title={hint}>
+      <label className={hint ? 'has-hint' : undefined}>{label}</label>
       <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />
+    </div>
+  )
+}
+
+/** multi-select dropdown for the channels a mod button is limited to (empty = everywhere) */
+function ChannelMultiSelect({
+  value,
+  known,
+  onChange
+}: {
+  value: string[]
+  known: string[]
+  onChange: (channels: string[]) => void
+}): React.JSX.Element {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [add, setAdd] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  // known channels first, then any manually-added ones not currently open
+  const options = [...new Set([...known, ...value])]
+  const toggle = (ch: string): void =>
+    onChange(value.includes(ch) ? value.filter((c) => c !== ch) : [...value, ch])
+  const label = value.length === 0 ? t('set.modBtn.allChannels') : value.join(', ')
+
+  return (
+    <div className="chan-select" ref={ref}>
+      <button className="chan-select-btn" title={t('set.modBtn.channels.hint')} onClick={() => setOpen((v) => !v)}>
+        <span className="chan-select-label">{label}</span>
+        <span className="chan-select-caret">▾</span>
+      </button>
+      {open && (
+        <div className="chan-select-pop">
+          {/* preventDefault on mousedown keeps focus off these buttons — otherwise the browser
+              scrolls the focused option into view and the settings pane visibly jumps */}
+          <button
+            className={`chan-opt ${value.length === 0 ? 'active' : ''}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange([])}
+          >
+            {t('set.modBtn.allChannels')}
+          </button>
+          {options.map((ch) => (
+            <button
+              key={ch}
+              className={`chan-opt ${value.includes(ch) ? 'active' : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => toggle(ch)}
+            >
+              <input type="checkbox" readOnly checked={value.includes(ch)} /> {ch}
+            </button>
+          ))}
+          <div className="chan-add">
+            <input
+              placeholder={t('pane.channelPlaceholder')}
+              value={add}
+              spellCheck={false}
+              onChange={(e) => setAdd(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                const ch = add.trim().toLowerCase().replace(/^[#@]/, '')
+                if (ch && !value.includes(ch)) onChange([...value, ch])
+                setAdd('')
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** edit the swipe-to-moderate timeout tiers (seconds, shortest→longest) */
+function SwipeTiersEditor(): React.JSX.Element {
+  const t = useT()
+  const tiers = useSettingsStore((s) => s.settings.swipeTimeouts)
+  const set = useSettingsStore((s) => s.setSettings)
+  const [raw, setRaw] = useState(tiers.join(', '))
+  useEffect(() => setRaw(tiers.join(', ')), [tiers])
+  const commit = (): void => {
+    const parsed = raw
+      .split(',')
+      .map((x) => parseInt(x.trim(), 10))
+      .filter((n) => Number.isFinite(n) && n > 0)
+    set({ swipeTimeouts: parsed.length ? parsed : [60, 300, 600, 1800, 3600, 86400] })
+  }
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <input
+        style={{ flex: 1 }}
+        value={raw}
+        spellCheck={false}
+        placeholder="60, 300, 600, 1800, 3600, 86400"
+        onChange={(e) => setRaw(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+        }}
+      />
+      <span className="hint" style={{ color: 'var(--text-faint)' }}>
+        {t('set.swipeTiers.unit')}
+      </span>
     </div>
   )
 }
@@ -636,6 +927,9 @@ function ModerationSection(): React.JSX.Element {
   const [draggingBtn, setDraggingBtn] = useState<string | null>(null)
   const modListRef = useRef<HTMLDivElement>(null)
   const firstAccount = useAccountsStore((s) => s.accounts[0])
+
+  // same glide animation the tab bar uses — cards flow around the dragged one
+  useFlip(modListRef, '.modbtn-card', !!draggingBtn)
 
   const knownChannels = [...new Set(tabs.flatMap((tab) => tab.panes.map((p) => p.channel)))]
 
@@ -669,7 +963,7 @@ function ModerationSection(): React.JSX.Element {
         {t('set.modBtn.hint')}
       </p>
       {modButtons.map((b, index) => (
-        <div key={b.id} className={`modbtn-card ${draggingBtn === b.id ? 'dragging' : ''}`}>
+        <div key={b.id} data-flipid={b.id} className={`modbtn-card ${draggingBtn === b.id ? 'dragging' : ''}`}>
           <div className="modbtn-line">
             <span
               className="modbtn-drag"
@@ -734,6 +1028,18 @@ function ModerationSection(): React.JSX.Element {
             />
             <div className="modbtn-actions">
               <button
+                className="ghost"
+                title={t('set.modBtn.duplicate')}
+                onClick={() => {
+                  const list = useSettingsStore.getState().modButtons
+                  const i = list.findIndex((x) => x.id === b.id)
+                  const copy = { ...b, id: nextId('mb') }
+                  setModButtons([...list.slice(0, i + 1), copy, ...list.slice(i + 1)])
+                }}
+              >
+                ⧉
+              </button>
+              <button
                 className="danger"
                 title={t('set.modBtn.delete')}
                 onClick={() => setModButtons(modButtons.filter((x) => x.id !== b.id))}
@@ -754,41 +1060,12 @@ function ModerationSection(): React.JSX.Element {
               <option value="message">{t('set.modBtn.scope.message')}</option>
               <option value="toolbar">{t('set.modBtn.scope.toolbar')}</option>
             </select>
-            <input
-              style={{ flex: 1 }}
-              placeholder={t('set.modBtn.channels')}
-              title={t('set.modBtn.channels.hint')}
-              value={(b.channels ?? []).join(', ')}
-              spellCheck={false}
-              onChange={(e) =>
-                update(b.id, {
-                  channels: e.target.value
-                    .split(',')
-                    .map((c) => c.trim().toLowerCase().replace(/^#/, ''))
-                    .filter(Boolean)
-                })
-              }
+            <ChannelMultiSelect
+              value={b.channels ?? []}
+              known={knownChannels}
+              onChange={(channels) => update(b.id, { channels })}
             />
           </div>
-          {knownChannels.length > 0 && (
-            <div className="modbtn-line modbtn-channel-chips">
-              {knownChannels.map((ch) => {
-                const active = (b.channels ?? []).includes(ch)
-                return (
-                  <button
-                    key={ch}
-                    className={`chip ${active ? 'active' : ''}`}
-                    onClick={() => {
-                      const cur = b.channels ?? []
-                      update(b.id, { channels: active ? cur.filter((c) => c !== ch) : [...cur, ch] })
-                    }}
-                  >
-                    {ch}
-                  </button>
-                )
-              })}
-            </div>
-          )}
           {(b.type === 'timeout' || needsText(b.type)) && (
             <div className="modbtn-line">
               {b.type === 'timeout' && (
@@ -839,6 +1116,12 @@ function ModerationSection(): React.JSX.Element {
         + {t('set.modBtn.add')}
       </button>
 
+      <h4 style={{ marginTop: 22, marginBottom: 6 }}>{t('set.swipeTiers')}</h4>
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {t('set.swipeTiers.hint')}
+      </p>
+      <SwipeTiersEditor />
+
       <h4 style={{ marginTop: 22, marginBottom: 6 }}>{t('set.raidFavorites')}</h4>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
         <input
@@ -881,55 +1164,82 @@ const BADGE_OPTIONS: { id: string; labelKey: string }[] = [
   { id: 'premium', labelKey: 'badge.premium' }
 ]
 
+const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'firstMsg', 'firstStream', 'watchStreak']
+
 function HighlightsSection(): React.JSX.Element {
   const t = useT()
   const rules = useSettingsStore((s) => s.highlightRules)
   const setRules = useSettingsStore((s) => s.setHighlightRules)
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
+  const [mutedInput, setMutedInput] = useState('')
 
   const update = (id: string, patch: Partial<HighlightRule>): void => {
     setRules(rules.map((r) => (r.id === id ? { ...r, ...patch } : r)))
   }
 
+  const addMuted = (): void => {
+    const login = mutedInput.trim().replace(/^@/, '').toLowerCase()
+    if (!login || settings.mutedUsers.some((u) => u.login === login)) return
+    set({ mutedUsers: [...settings.mutedUsers, { login, mode: 'dim', opacity: 0.3 }] })
+    setMutedInput('')
+  }
+
   return (
     <div>
       <div className="set-group-title">{t('set.group.msgColors')}</div>
-      <Toggle label={t('set.showMentionBg')} value={settings.showMentionBg} onChange={(v) => set({ showMentionBg: v })} />
-      <Toggle label={t('set.showFirstMsgBg')} value={settings.showFirstMsgBg} onChange={(v) => set({ showFirstMsgBg: v })} />
-      <div className="set-row">
-        <label>{t('set.mentionColor')}</label>
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {t('hl.hint')}
+      </p>
+      {/* mentions: built-in category, same standardized row as the rules below */}
+      <div className="hl-row" title={t('hint.mentionBg')}>
+        <input
+          type="checkbox"
+          title={t('hl.enabled')}
+          checked={settings.showMentionBg}
+          onChange={(e) => set({ showMentionBg: e.target.checked })}
+        />
+        <span className="hl-kind-label">@ {t('hl.mention')}</span>
         <ColorField
           value={settings.mentionBgColor}
           defaultValue="#8b5cf6"
           onChange={(v) => set({ mentionBgColor: v })}
         />
-      </div>
-      <div className="set-row">
-        <label>{t('set.firstMsgColor')}</label>
-        <ColorField
-          value={settings.firstMessageBgColor}
-          defaultValue="#22c55e"
-          onChange={(v) => set({ firstMessageBgColor: v })}
+        <input
+          type="range"
+          title={`${t('hl.opacity')}: ${Math.round(settings.mentionBgOpacity * 100)}%`}
+          min={5}
+          max={100}
+          value={Math.round(settings.mentionBgOpacity * 100)}
+          onChange={(e) => set({ mentionBgOpacity: parseInt(e.target.value, 10) / 100 })}
         />
+        <span className="hl-preview" style={{ background: hexToRgba(settings.mentionBgColor, settings.mentionBgOpacity) }}>
+          Text
+        </span>
+        <div className="spacer" />
       </div>
-      <div className="set-group-title">{t('set.highlights')}</div>
-      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
-        {t('hl.hint')}
-      </p>
       {rules.map((r) => (
-        <div key={r.id} className="modbtn-line" style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+        <div key={r.id} className="hl-row">
           <input
             type="checkbox"
             title={t('hl.enabled')}
             checked={r.enabled}
             onChange={(e) => update(r.id, { enabled: e.target.checked })}
           />
-          <select value={r.kind} onChange={(e) => update(r.id, { kind: e.target.value as 'badge' | 'nick' })}>
-            <option value="badge">{t('hl.kind.badge')}</option>
-            <option value="nick">{t('hl.kind.nick')}</option>
+          <select
+            value={r.kind}
+            onChange={(e) => {
+              const kind = e.target.value as HighlightKind
+              update(r.id, { kind, value: kind === 'badge' ? 'moderator' : '' })
+            }}
+          >
+            {HL_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {t(`hl.kind.${k}` as Parameters<typeof t>[0])}
+              </option>
+            ))}
           </select>
-          {r.kind === 'badge' ? (
+          {r.kind === 'badge' && (
             <select value={r.value} onChange={(e) => update(r.id, { value: e.target.value })}>
               <option value="" disabled>
                 {t('hl.value')}
@@ -940,7 +1250,8 @@ function HighlightsSection(): React.JSX.Element {
                 </option>
               ))}
             </select>
-          ) : (
+          )}
+          {r.kind === 'nick' && (
             <input
               placeholder={t('hl.nickPlaceholder')}
               value={r.value}
@@ -957,10 +1268,7 @@ function HighlightsSection(): React.JSX.Element {
             value={Math.round(r.opacity * 100)}
             onChange={(e) => update(r.id, { opacity: parseInt(e.target.value, 10) / 100 })}
           />
-          <span
-            className="hl-preview"
-            style={{ background: `${r.color}${Math.round(r.opacity * 255).toString(16).padStart(2, '0')}` }}
-          >
+          <span className="hl-preview" style={{ background: hexToRgba(r.color, r.opacity) }}>
             Text
           </span>
           <div className="spacer" />
@@ -980,21 +1288,164 @@ function HighlightsSection(): React.JSX.Element {
       >
         + {t('hl.add')}
       </button>
+
+      <div className="set-group-title" style={{ marginTop: 24 }}>
+        {t('muted.title')}
+      </div>
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {t('muted.hint')}
+      </p>
+      {settings.mutedUsers.map((u) => (
+        <div key={u.login} className="hl-row">
+          <b style={{ minWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.login}</b>
+          <select
+            value={u.mode}
+            onChange={(e) =>
+              set({
+                mutedUsers: settings.mutedUsers.map((x) =>
+                  x.login === u.login ? { ...x, mode: e.target.value as 'hide' | 'dim' } : x
+                )
+              })
+            }
+          >
+            <option value="dim">{t('muted.mode.dim')}</option>
+            <option value="hide">{t('muted.mode.hide')}</option>
+          </select>
+          <input
+            type="range"
+            title={`${t('hl.opacity')}: ${Math.round(u.opacity * 100)}%`}
+            min={5}
+            max={90}
+            disabled={u.mode === 'hide'}
+            value={Math.round(u.opacity * 100)}
+            onChange={(e) =>
+              set({
+                mutedUsers: settings.mutedUsers.map((x) =>
+                  x.login === u.login ? { ...x, opacity: parseInt(e.target.value, 10) / 100 } : x
+                )
+              })
+            }
+          />
+          <span className="hl-preview" style={{ opacity: u.mode === 'hide' ? 0.15 : u.opacity }}>
+            Text
+          </span>
+          <div className="spacer" />
+          <button
+            className="danger"
+            onClick={() => set({ mutedUsers: settings.mutedUsers.filter((x) => x.login !== u.login) })}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+        <input
+          placeholder={t('muted.placeholder')}
+          value={mutedInput}
+          spellCheck={false}
+          onChange={(e) => setMutedInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') addMuted()
+          }}
+        />
+        <button onClick={addMuted}>{t('muted.add')}</button>
+      </div>
     </div>
   )
 }
 
-function LanguageSection(): React.JSX.Element {
+const EDITABLE_HOTKEYS: HotkeyAction[] = ['reconnect', 'scrollLock', 'translit', 'resendLast']
+
+function HotkeyInput({ action }: { action: HotkeyAction }): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
+  const [capturing, setCapturing] = useState(false)
+  const current = hotkeyFor(settings, action)
+  const isDefault = current === DEFAULT_HOTKEYS[action]
+
   return (
-    <div className="set-row">
-      <label>{t('set.language')}</label>
-      <select value={settings.language} onChange={(e) => set({ language: e.target.value as 'uk' | 'en' })}>
-        <option value="uk">Українська</option>
-        <option value="en">English</option>
-      </select>
+    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+      <button
+        className={`hotkey-btn ${capturing ? 'capturing' : ''}`}
+        onClick={() => setCapturing(true)}
+        onBlur={() => setCapturing(false)}
+        onKeyDown={(e) => {
+          if (!capturing) return
+          e.preventDefault()
+          e.stopPropagation()
+          if (e.key === 'Escape') {
+            setCapturing(false)
+            return
+          }
+          if (e.key === 'Backspace') {
+            // reset to default
+            const { [action]: _, ...rest } = settings.hotkeys
+            set({ hotkeys: rest })
+            setCapturing(false)
+            return
+          }
+          const accel = eventToAccel(e)
+          if (accel) {
+            set({ hotkeys: { ...settings.hotkeys, [action]: accel } })
+            setCapturing(false)
+          }
+        }}
+      >
+        {capturing ? t('hk.press') : current}
+      </button>
+      {!isDefault && !capturing && (
+        <button
+          className="ghost"
+          title={`${t('hk.reset')}: ${DEFAULT_HOTKEYS[action]}`}
+          onClick={() => {
+            const { [action]: _, ...rest } = settings.hotkeys
+            set({ hotkeys: rest })
+          }}
+        >
+          ⟲
+        </button>
+      )}
+    </span>
+  )
+}
+
+function HotkeysSection(): React.JSX.Element {
+  const t = useT()
+  const labels: Record<HotkeyAction, string> = {
+    reconnect: t('hk.reconnect'),
+    scrollLock: t('hk.scrollLock'),
+    translit: t('hk.translit'),
+    resendLast: t('hk.resendLast')
+  }
+  const builtin: [string, string][] = [
+    ['Enter', t('hk.fixed.send')],
+    ['Shift+Enter', t('hk.fixed.newline')],
+    ['Tab', t('hk.fixed.autocomplete')],
+    ['↑ / ↓', t('hk.fixed.history')],
+    ['Ctrl+🖱 wheel', t('hk.fixed.zoom')],
+    ['Ctrl+Z / Ctrl+Shift+Z / Ctrl+C / Ctrl+V', t('hk.fixed.native')]
+  ]
+  return (
+    <div>
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {t('hk.hint')}
+      </p>
+      {EDITABLE_HOTKEYS.map((a) => (
+        <div key={a} className="set-row">
+          <label>{labels[a]}</label>
+          <HotkeyInput action={a} />
+        </div>
+      ))}
+      <div className="set-group-title" style={{ marginTop: 20 }}>
+        {t('hk.builtin')}
+      </div>
+      {builtin.map(([keys, desc]) => (
+        <div key={keys} className="set-row">
+          <label>{desc}</label>
+          <span className="hotkey-fixed">{keys}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -1005,20 +1456,14 @@ function AdvancedSection(): React.JSX.Element {
   const setClientId = useSettingsStore((s) => s.setClientId)
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
-  const [version, setVersion] = useState('')
-
-  useEffect(() => {
-    window.sticki.getVersion().then(setVersion)
-  }, [])
 
   return (
     <div>
-      <div className="set-row">
+      <div className="set-row" title={t('hint.clientId')}>
         <label>{t('set.clientId')}</label>
         <input style={{ width: 260 }} value={clientId} spellCheck={false} onChange={(e) => setClientId(e.target.value.trim())} />
       </div>
-      <Toggle label={t('set.history')} value={settings.loadHistory} onChange={(v) => set({ loadHistory: v })} />
-      <div className="set-row">
+      <div className="set-row" title={t('hint.msgLimit')}>
         <label>{t('set.msgLimit')}</label>
         <input
           type="number"
@@ -1029,12 +1474,61 @@ function AdvancedSection(): React.JSX.Element {
           onChange={(e) => set({ messageLimit: parseInt(e.target.value, 10) || 800 })}
         />
       </div>
+    </div>
+  )
+}
+
+function AboutSection(): React.JSX.Element {
+  const t = useT()
+  const [version, setVersion] = useState('')
+  const [logOpen, setLogOpen] = useState(false)
+
+  useEffect(() => {
+    window.sticki.getVersion().then(setVersion)
+  }, [])
+
+  return (
+    <div>
       <div className="set-row">
         <label>
-          {t('set.version')}: v{version}
+          <b>StickiChat</b> · {t('set.version')} v{version}
         </label>
         <button onClick={() => window.sticki.checkForUpdates()}>{t('set.checkUpdates')}</button>
       </div>
+      <div className="set-row">
+        <label>
+          {t('about.developer')}: <b>{DEVELOPER}</b>
+        </label>
+        <span style={{ display: 'inline-flex', gap: 6 }}>
+          <button onClick={() => window.sticki.openExternal(TWITCH_PROFILE)}>💜 {t('about.twitch')}</button>
+        </span>
+      </div>
+      <div className="set-row">
+        <label>{t('about.feedbackHint')}</label>
+        <button onClick={() => window.sticki.openExternal(GITHUB_ISSUES)}>🐞 {t('about.github')}</button>
+      </div>
+      <div className="set-group-title" style={{ marginTop: 20 }}>
+        {t('about.changelog')}
+      </div>
+      <button className="ghost" onClick={() => setLogOpen((v) => !v)}>
+        {logOpen ? '▲' : '▼'} {t('about.changelog')}
+      </button>
+      {logOpen && (
+        <div className="changelog">
+          {CHANGELOG.map((entry) => (
+            <div key={entry.version} className="changelog-entry">
+              <div className="changelog-version">
+                v{entry.version} <span className="hint">· {entry.date}</span>
+              </div>
+              <ul>
+                {entry.items.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -11,6 +11,7 @@ import { matchCommands, runSlashCommand, SlashCommand } from '../lib/slashComman
 import { canModerate } from '../services/accountService'
 import { EMOJI_LIST, emojiLabel } from '../lib/emojiData'
 import { swapLayout } from '../lib/translit'
+import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
 import EmotePicker from './EmotePicker'
 import { useT } from '../i18n'
 
@@ -49,6 +50,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const showCharCounter = useSettingsStore((s) => s.settings.showCharCounter)
   const emotePickerAsWindow = useSettingsStore((s) => s.settings.emotePickerAsWindow)
   const translitEnabled = useSettingsStore((s) => s.settings.translitEnabled)
+  const emoteSuggestions = useSettingsStore((s) => s.settings.emoteSuggestions)
   const [text, setText] = useState('')
   const [history, setHistory] = useState<string[]>([])
   const [histIdx, setHistIdx] = useState(-1)
@@ -78,7 +80,15 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
       const d = (e as CustomEvent<InsertEventDetail>).detail
       if (d.paneId !== pane.id) return
       setText((cur) => (cur.length === 0 || cur.endsWith(' ') ? cur + d.text : `${cur} ${d.text}`))
-      taRef.current?.focus()
+      // refocus and drop the caret at the end after React commits the new value — so picking
+      // from the standalone emote window leaves you ready to keep typing instead of caretless
+      requestAnimationFrame(() => {
+        const ta = taRef.current
+        if (!ta) return
+        ta.focus()
+        const len = ta.value.length
+        ta.setSelectionRange(len, len)
+      })
     }
     window.addEventListener('sticki:insert', onInsert)
     return () => window.removeEventListener('sticki:insert', onInsert)
@@ -115,6 +125,14 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     return m ? m[2] : ''
   }, [text, isCommand])
 
+  // @mentions get their own matcher so suggestions appear the moment "@" is typed
+  // (the general currentWord needs 2+ chars, which hid the list until "@x"). Works mid-command
+  // too — "/ban @user" should still suggest nicks after the command name.
+  const mentionQuery = useMemo(() => {
+    const m = /(^|\s)@(\S*)$/.exec(text)
+    return m ? m[2].toLowerCase() : null
+  }, [text])
+
   const suggestions = useMemo((): Suggestion[] => {
     // no autocomplete while browsing sent history — its arrows must keep working even
     // when a recalled message ends with an emote word
@@ -125,24 +143,25 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
       const isMod = canModerate(account, pane.channel, channelId)
       return matchCommands(text, { isMod, isBroadcaster }).map((cmd) => ({ kind: 'command', cmd }))
     }
-    if (!currentWord) return []
-    // @viewer mentions from recent chatters in this channel
-    if (currentWord.startsWith('@')) {
-      const q = currentWord.slice(1).toLowerCase()
+    // @viewer mentions from recent chatters in this channel (fires even on a bare "@")
+    if (mentionQuery !== null) {
+      const q = mentionQuery
       const msgs = useChatStore.getState().messages[pane.channel] ?? []
       const seen = new Set<string>()
       const out: Suggestion[] = []
       for (let i = msgs.length - 1; i >= 0 && out.length < 15; i--) {
         const m = msgs[i]
         if (!m.login || m.system || seen.has(m.login)) continue
-        if (m.login.startsWith(q) || m.displayName.toLowerCase().startsWith(q)) {
+        if (!q || m.login.startsWith(q) || m.displayName.toLowerCase().startsWith(q)) {
           seen.add(m.login)
           out.push({ kind: 'mention', login: m.login, displayName: m.displayName })
         }
       }
       return out
     }
-    // emotes
+    if (!currentWord) return []
+    // emotes — the user can turn these suggestions off (commands and @mentions stay)
+    if (!emoteSuggestions) return []
     const st = useEmotesStore.getState()
     const seen = new Set<string>()
     const out: Suggestion[] = []
@@ -175,19 +194,30 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     })
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWord, text, isCommand, pane.channel, emoteVersion, account, histIdx])
+  }, [currentWord, mentionQuery, text, isCommand, pane.channel, emoteVersion, account, histIdx, emoteSuggestions])
 
   const applySuggestion = (s: Suggestion): void => {
     if (s.kind === 'command') setText(`/${s.cmd.name} `)
-    else if (s.kind === 'mention') setText(text.slice(0, text.length - currentWord.length) + `@${s.login} `)
-    else setText(text.slice(0, text.length - currentWord.length) + s.emote.code + ' ')
+    else if (s.kind === 'mention') {
+      // remove the "@query" the user typed (query may be empty on a bare "@")
+      const typed = mentionQuery !== null ? mentionQuery.length + 1 : currentWord.length
+      setText(text.slice(0, text.length - typed) + `@${s.login} `)
+    } else setText(text.slice(0, text.length - currentWord.length) + s.emote.code + ' ')
     setAcIndex(0)
     taRef.current?.focus()
   }
 
   const insertFromPicker = (code: string): void => {
     setText((cur) => (cur.length === 0 || cur.endsWith(' ') ? cur + code + ' ' : cur + ' ' + code + ' '))
-    taRef.current?.focus()
+    // move focus (and the caret) back to the chat input so Enter sends right away, instead of
+    // leaving it in the picker's search field
+    requestAnimationFrame(() => {
+      const ta = taRef.current
+      if (!ta) return
+      ta.focus()
+      const len = ta.value.length
+      ta.setSelectionRange(len, len)
+    })
   }
 
   const send = async (): Promise<void> => {
@@ -215,6 +245,18 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   }
 
   const onKeyDown = (e: React.KeyboardEvent): void => {
+    // configurable: re-send the previously sent message (default Ctrl+Enter)
+    if (
+      account &&
+      history.length > 0 &&
+      matchHotkey(e, hotkeyFor(useSettingsStore.getState().settings, 'resendLast'))
+    ) {
+      e.preventDefault()
+      chatService.sendMessage(account, pane.channel, history[0]).catch((err) => {
+        useUiStore.getState().toast(String(err), 'error')
+      })
+      return
+    }
     if (suggestions.length > 0) {
       if (e.key === 'Tab') {
         e.preventDefault()
@@ -441,7 +483,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             }}
           >
             {/* monochrome "A ⇄ Ф" layout-swap glyph; currentColor follows the button state */}
-            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+            <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
               <text
                 x="7"
                 y="11.5"

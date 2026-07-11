@@ -23,7 +23,7 @@ export default function HighlightSidebar({ channel }: { channel: string }): Reac
     const filtered =
       mode === 'mentions'
         ? messages.filter((m) => m.isMention || m.replyToMe)
-        : messages.filter((m) => isHighlightedMessage(m, highlightRules, caseSensitiveNicks))
+        : messages.filter((m) => isHighlightedMessage(m, highlightRules, { caseSensitiveNicks }))
     const latest = filtered.slice(-100)
     return order === 'newest-top' ? [...latest].reverse() : latest
   }, [messages, highlightRules, caseSensitiveNicks, mode, order])
