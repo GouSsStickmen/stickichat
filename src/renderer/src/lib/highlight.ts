@@ -23,6 +23,8 @@ export function highlightRuleMatches(msg: ChatMessage, rule: HighlightRule, ctx:
       return !!msg.redeemed
     case 'bits':
       return !!msg.bits
+    case 'raider':
+      return !!msg.raider
     case 'firstMsg':
       return !!msg.isFirstMsg && !msg.system
     case 'firstStream':

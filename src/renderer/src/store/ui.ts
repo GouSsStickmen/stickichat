@@ -31,6 +31,10 @@ export interface EmotePreviewTarget {
 export interface ChannelPrompt {
   /** channel login the user is offered to add */
   channel: string
+  /** who started the raid (for the "X → Y" prompt text) */
+  from?: string
+  /** channel is already open in some tab — offer to SWITCH instead of adding */
+  existing?: boolean
 }
 
 interface UiState {

@@ -49,6 +49,8 @@ export const uk: Record<TranslationKey, string> = {
   // Input
   'input.placeholder': 'Надіслати повідомлення…',
   'input.placeholderReadOnly': 'Додай акаунт, щоб писати',
+  'input.timedOut': 'Ти в таймауті — залишилось {seconds}с',
+  'input.banned': 'Тебе забанено в цьому чаті',
   'input.send': 'Надіслати',
 
   // Reply
@@ -292,6 +294,8 @@ export const uk: Record<TranslationKey, string> = {
   'btn.type.snippet': 'Сніпет',
   'btn.type.link': 'Швидке посилання',
   'btn.type.fill': 'Вставити в поле (без відправки)',
+  'btn.type.resend': 'Надіслати це повідомлення від себе',
+  'btn.type.msgToInput': 'Повідомлення в поле вводу',
 
   // New settings sections
   'set.chat': 'Чат',
@@ -303,9 +307,14 @@ export const uk: Record<TranslationKey, string> = {
 
   // Highlight categories
   'hl.mention': 'Згадки мене',
+  'set.flashColor': 'Колір блимання при переході до повідомлення',
+  'hint.flashColor': 'Колір, яким блимає повідомлення, коли переходиш до нього кліком по реплаю.',
   'hl.kind.own': 'Власні повідомлення',
   'hl.kind.redeem': 'Редімка (бали каналу)',
   'hl.kind.bits': 'Бітси / чир',
+  'hl.kind.raider': 'Рейдер (прийшов з рейдом)',
+  'set.raiderMinutes': 'Тривалість підсвітки рейдерів (хв)',
+  'hint.raiderMinutes': 'Після вхідного рейду глядачі, що вперше пишуть протягом цього часу, отримують підсвітку «рейдер». 0 — вимкнути.',
   'hl.kind.firstMsg': 'Перше повідомлення взагалі',
   'hl.kind.firstStream': 'Перше повідомлення за стрім',
   'hl.kind.watchStreak': 'Стрик перегляду',
@@ -360,10 +369,50 @@ export const uk: Record<TranslationKey, string> = {
   'whisper.new': 'Нове повідомлення',
   'whisper.nick': 'Нікнейм…',
   'whisper.noUser': 'Користувача не знайдено',
+  'whisper.favorite': 'Обраний контакт',
+  'set.whispersAsWindow': 'Відкривати приватні окремим вікном',
+  'set.highlightsAsWindow': 'Відкривати панель виділених окремим вікном',
+  'highlights.redeems': 'Редімки',
+  'highlights.openWindow': 'Відкрити окремим вікном',
+
+  // OBS overlay
+  'set.overlay': 'Оверлей (OBS)',
+  'overlay.hint':
+    'Прозорий оверлей чату для OBS: увімкни сервер, скопіюй URL і додай його в OBS як Browser Source. Зміни стилю застосовуються до щойно підключених джерел.',
+  'overlay.enabled': 'Увімкнути сервер оверлея',
+  'overlay.port': 'Порт',
+  'overlay.style': 'Вигляд',
+  'overlay.liveHint': 'Зміни застосовуються до підключених джерел OBS миттєво — оновлювати нічого не треба.',
+  'overlay.fade': 'Ховати повідомлення через (сек)',
+  'overlay.fade.hint': '0 — повідомлення залишаються, поки їх не витіснять нові.',
+  'overlay.max': 'Максимум рядків на екрані',
+  'overlay.lineGap': 'Відстань між повідомленнями (px)',
+  'overlay.badges': 'Показувати бейджі',
+  'overlay.bold': 'Жирний текст',
+  'overlay.hideCmd': 'Ховати повідомлення-«!команди»',
+  'overlay.textColor': 'Колір тексту',
+  'overlay.outline': 'Обводка тексту (px + колір)',
+  'overlay.outline.hint': 'Обводка тримає текст читабельним поверх гри. 0 — вимкнути.',
+  'overlay.bg': 'Фон рядка (колір + прозорість)',
+  'overlay.bg.hint': 'Плашка під кожним рядком; прозорість 0 = повністю прозоро.',
+  'overlay.content': 'Вміст',
+  'overlay.showRedeems': 'Показувати редімки',
+  'overlay.showBits': 'Показувати бітси / чири',
+  'overlay.showSubs': 'Показувати сабки / події',
+  'overlay.showModActions': 'Показувати мод-дії (таймаути / бани)',
+  'overlay.showModActions.hint': 'Стандартно вимкнено — глядачам зазвичай не треба бачити модерацію на стрімі.',
+  'overlay.hiddenUsers': 'Приховані користувачі (через кому)',
+  'overlay.hiddenUsers.hint': 'Ці користувачі ніколи не зʼявляються на оверлеї (напр. боти).',
+  'overlay.url': 'URL для OBS',
+  'overlay.copy': 'Скопіювати URL',
+  'overlay.copied': 'URL оверлея скопійовано — додай його в OBS як Browser Source',
   'whisper.needReauth': 'Щоб отримувати приватні повідомлення, переавторизуй {login} у Налаштування → Акаунти (потрібен новий дозвіл).',
 
   // Raid prompt
   'raid.addPrompt': 'Рейд! Додати чат {channel}?',
+  'raid.addPromptFull': 'Рейд: {from} → {channel}. Додати чат {channel}?',
+  'raid.raidWord': 'Рейд',
+  'raid.switch': 'Перейти до',
   'raid.add': 'Додати',
   'set.raidDest': 'Куди додавати канал рейду',
   'set.raidDest.tabs': 'Нова вкладка',
@@ -391,6 +440,15 @@ export const uk: Record<TranslationKey, string> = {
 
   // Shoutout
   'mod.shoutoutGiven': '📣 Шатаут для {user}',
+
+  // Full mod-action lines (EventSub channel.moderate)
+  'modact.ban': '🛡 {mod} забанив(-ла) {user}',
+  'modact.timeout': '🛡 {mod} дав(-ла) таймаут {user} на {duration}',
+  'modact.unban': '🛡 {mod} розбанив(-ла) {user}',
+  'modact.delete': '🛡 {mod} видалив(-ла) повідомлення {user}: {text}',
+  'modact.clear': '🛡 {mod} очистив(-ла) чат',
+  'modact.warn': '🛡 {mod} попередив(-ла) {user}',
+  'modact.needReauth': 'Щоб бачити, ХТО з модераторів що зробив, переавторизуй {login} (потрібні нові дозволи).',
 
   // Command token
   'cmd.insertHint': 'ПКМ — вставити команду в поле вводу',

@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useWhispersStore, Whisper } from '../store/whispers'
+import { useWhispersStore, setOpenWhisperThread, Whisper } from '../store/whispers'
+import { Emote } from '../types'
 import { useAccountsStore } from '../store/accounts'
 import { useUiStore } from '../store/ui'
-import { sendWhisper, getUsers } from '../lib/helix'
-import { fallbackColor, ensureReadable } from '../lib/tokenize'
+import { useEmotesStore } from '../store/emotes'
+import { sendWhisper, getUsers, getUserChatColors } from '../lib/helix'
+import EmotePicker from './EmotePicker'
+import { fallbackColor, ensureReadable, tokenizeMessage } from '../lib/tokenize'
 import { useSettingsStore } from '../store/settings'
+import { localizeApiError } from '../lib/apiErrors'
+import EmojiGlyph from './EmojiGlyph'
+import { PinButton } from './EmotePicker'
 import { useT } from '../i18n'
 
 function fmtTime(ts: number): string {
@@ -12,27 +18,106 @@ function fmtTime(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** whisper conversations popover, anchored under the ✉ button in the tab bar */
-export default function WhisperPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
+/** whispers have no channel context — look emotes up EVERYWHERE we know:
+ *  global 3rd-party, every loaded channel set (7TV/BTTV/FFZ), my twitch emotes */
+function whisperEmoteLookup(code: string): Emote | undefined {
+  const st = useEmotesStore.getState()
+  const g = st.globalEmotes.get(code)
+  if (g) return g
+  for (const map of Object.values(st.channelEmotes)) {
+    const e = map.get(code)
+    if (e) return e
+  }
+  for (const list of Object.values(st.twitchByAccount)) {
+    const te = list.find((e) => e.code === code)
+    if (te) return te
+  }
+  return undefined
+}
+
+/** whisper text with emotes + emoji rendered inline */
+function WhisperText({ text }: { text: string }): React.JSX.Element {
+  const emoteVersion = useEmotesStore((s) => s.version)
+  const tokens = useMemo(
+    () => tokenizeMessage({ text }, whisperEmoteLookup),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [text, emoteVersion]
+  )
+  return (
+    <>
+      {tokens.map((tk, i) => {
+        if (tk.kind === 'emote')
+          return <img key={i} className="whisper-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />
+        if (tk.kind === 'emoji') return <EmojiGlyph key={i} char={tk.char} />
+        if (tk.kind === 'link') return <span key={i}>{tk.label}</span>
+        if (tk.kind === 'mention') return <b key={i}>{tk.name}</b>
+        if (tk.kind === 'text' || tk.kind === 'command') return <span key={i}>{tk.text}</span>
+        return null
+      })}
+    </>
+  )
+}
+
+/** whisper conversations: popover under ✉ or a standalone window (standalone prop) */
+export default function WhisperPanel({
+  onClose,
+  standalone
+}: {
+  onClose: () => void
+  standalone?: boolean
+}): React.JSX.Element {
   const t = useT()
   const whispers = useWhispersStore((s) => s.whispers)
   const accounts = useAccountsStore((s) => s.accounts)
   const dark = useSettingsStore((s) => s.settings.theme === 'dark')
+  const favorites = useSettingsStore((s) => s.settings.whisperFavorites)
+  const set = useSettingsStore((s) => s.setSettings)
   const [selected, setSelected] = useState<string | null>(null) // otherLogin
   const [text, setText] = useState('')
   const [composing, setComposing] = useState(false)
   const [composeNick, setComposeNick] = useState('')
   const [composeText, setComposeText] = useState('')
   const [sending, setSending] = useState(false)
+  // sent-message history for ↑/↓ recall, like the chat input
+  const [history, setHistory] = useState<string[]>([])
+  const [histIdx, setHistIdx] = useState(-1)
+  const draftRef = useRef('')
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  // real Twitch chat colors for contacts (EventSub whispers don't carry a color)
+  const [colors, setColors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     useWhispersStore.getState().markRead()
   }, [whispers.length])
 
-  // close on outside click / Escape
   useEffect(() => {
+    const account = accounts[0]
+    if (!account) return
+    const ids = [...new Set(whispers.map((w) => w.otherId).filter(Boolean))].filter((id) => !(id in colors))
+    if (ids.length === 0) return
+    getUserChatColors(account, ids).then((fetched) => {
+      // remember misses too (empty string) so we don't refetch colorless users forever
+      const merged: Record<string, string> = { ...fetched }
+      for (const id of ids) if (!(id in merged)) merged[id] = ''
+      setColors((c) => ({ ...c, ...merged }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whispers, accounts])
+
+  const colorFor = (w: Whisper): string =>
+    ensureReadable(colors[w.otherId] || w.color || fallbackColor(w.otherLogin), dark)
+
+  // publish which conversation is open — the notification sound for it is suppressed
+  useEffect(() => {
+    setOpenWhisperThread(selected)
+    return () => setOpenWhisperThread(null)
+  }, [selected])
+
+  // close on outside click / Escape (popover mode only)
+  useEffect(() => {
+    if (standalone) return
     const onDown = (e: MouseEvent): void => {
       const target = e.target as HTMLElement
       // ignore the ✉ toggle button — otherwise this closes just before its onClick
@@ -49,9 +134,9 @@ export default function WhisperPanel({ onClose }: { onClose: () => void }): Reac
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onEsc)
     }
-  }, [onClose])
+  }, [onClose, standalone])
 
-  // newest conversation first; a conversation = all whispers with one login
+  // favorites first, then newest conversation first
   const conversations = useMemo(() => {
     const byLogin = new Map<string, Whisper[]>()
     for (const w of whispers) {
@@ -59,43 +144,96 @@ export default function WhisperPanel({ onClose }: { onClose: () => void }): Reac
       arr.push(w)
       byLogin.set(w.otherLogin, arr)
     }
-    return [...byLogin.entries()].sort(
-      (a, b) => b[1][b[1].length - 1].timestamp - a[1][a[1].length - 1].timestamp
-    )
-  }, [whispers])
+    return [...byLogin.entries()].sort((a, b) => {
+      const favA = favorites.includes(a[0]) ? 1 : 0
+      const favB = favorites.includes(b[0]) ? 1 : 0
+      if (favA !== favB) return favB - favA
+      return b[1][b[1].length - 1].timestamp - a[1][a[1].length - 1].timestamp
+    })
+  }, [whispers, favorites])
 
   const thread = selected ? (conversations.find(([login]) => login === selected)?.[1] ?? []) : []
+  const threadLast = thread[thread.length - 1]
 
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [thread.length, selected])
 
-  const send = async (): Promise<void> => {
-    const msg = text.trim()
-    if (!msg || !selected) return
-    const last = thread[thread.length - 1]
-    const account =
-      accounts.find((a) => a.id === last?.accountId) ?? accounts[0]
-    if (!account || !last?.otherId) return
-    setText('')
-    const res = await sendWhisper(account, last.otherId, msg)
-    if (res.ok) {
-      useWhispersStore.getState().add({
-        id: `w-out-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        accountId: account.id,
-        otherLogin: last.otherLogin,
-        otherDisplay: last.otherDisplay,
-        otherId: last.otherId,
-        color: last.color,
-        text: msg,
-        timestamp: Date.now(),
-        incoming: false
-      })
-    } else {
-      useUiStore
-        .getState()
-        .toast((res.json as { message?: string })?.message ?? t('mod.actionFail'), 'error')
+  const toggleFavorite = (login: string): void => {
+    set({
+      whisperFavorites: favorites.includes(login)
+        ? favorites.filter((f) => f !== login)
+        : [...favorites, login]
+    })
+  }
+
+  const send = async (msgOverride?: string): Promise<void> => {
+    const msg = (msgOverride ?? text).trim()
+    if (!msg || !selected || sending) return
+    const account = accounts.find((a) => a.id === threadLast?.accountId) ?? accounts[0]
+    if (!account || !threadLast?.otherId) return
+    if (!msgOverride) {
+      setText('')
+      setHistory((h) => [msg, ...h.slice(0, 49)])
+      setHistIdx(-1)
+    }
+    setSending(true)
+    try {
+      const res = await sendWhisper(account, threadLast.otherId, msg)
+      if (res.ok) {
+        useWhispersStore.getState().add({
+          id: `w-out-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          accountId: account.id,
+          otherLogin: threadLast.otherLogin,
+          otherDisplay: threadLast.otherDisplay,
+          otherId: threadLast.otherId,
+          color: threadLast.color,
+          text: msg,
+          timestamp: Date.now(),
+          incoming: false
+        })
+      } else {
+        useUiStore
+          .getState()
+          .toast(localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail'), 'error')
+      }
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const onInputKeyDown = (e: React.KeyboardEvent): void => {
+    // Ctrl+Enter — send the previous message again
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault()
+      if (history[0]) send(history[0])
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      send()
+      return
+    }
+    // ↑/↓ — browse sent messages, like the chat input
+    if (e.key === 'ArrowUp' && (text === '' || histIdx !== -1) && history.length > 0) {
+      e.preventDefault()
+      if (histIdx === -1) draftRef.current = text
+      const next = Math.min(histIdx + 1, history.length - 1)
+      setHistIdx(next)
+      setText(history[next])
+      return
+    }
+    if (e.key === 'ArrowDown' && histIdx !== -1) {
+      e.preventDefault()
+      const next = histIdx - 1
+      if (next < 0) {
+        setHistIdx(-1)
+        setText(draftRef.current)
+      } else {
+        setHistIdx(next)
+        setText(history[next])
+      }
     }
   }
 
@@ -130,22 +268,41 @@ export default function WhisperPanel({ onClose }: { onClose: () => void }): Reac
         setComposeText('')
         setSelected(user.login.toLowerCase())
       } else {
-        useUiStore.getState().toast((res.json as { message?: string })?.message ?? t('mod.actionFail'), 'error')
+        useUiStore
+          .getState()
+          .toast(localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail'), 'error')
       }
     } finally {
       setSending(false)
     }
   }
 
+  const threadColor = threadLast ? colorFor(threadLast) : undefined
+
   return (
-    <div className="whisper-panel" ref={rootRef}>
+    <div className={`whisper-panel ${standalone ? 'whisper-panel-standalone' : ''}`} ref={rootRef}>
       <div className="whisper-head">
         {selected || composing ? (
           <button className="ghost" onClick={() => (composing ? setComposing(false) : setSelected(null))}>
-            ← {t('whisper.back')}
+            ←
           </button>
         ) : (
           <b>✉ {t('whisper.title')}</b>
+        )}
+        {/* who the open conversation is with — nick in their chat color */}
+        {selected && threadLast && (
+          <b className="whisper-thread-title" style={{ color: threadColor }}>
+            {threadLast.otherDisplay}
+          </b>
+        )}
+        {selected && (
+          <button
+            className={`ghost ${favorites.includes(selected) ? 'active' : ''}`}
+            title={t('whisper.favorite')}
+            onClick={() => toggleFavorite(selected)}
+          >
+            {favorites.includes(selected) ? '⭐' : '☆'}
+          </button>
         )}
         <div className="spacer" />
         {!selected && !composing && (
@@ -153,9 +310,12 @@ export default function WhisperPanel({ onClose }: { onClose: () => void }): Reac
             ✎
           </button>
         )}
-        <button className="ghost" onClick={onClose}>
-          ✕
-        </button>
+        {standalone && <PinButton settingKey="whispersPinned" />}
+        {!standalone && (
+          <button className="ghost" onClick={onClose}>
+            ✕
+          </button>
+        )}
       </div>
       {composing ? (
         <div className="whisper-compose">
@@ -166,6 +326,15 @@ export default function WhisperPanel({ onClose }: { onClose: () => void }): Reac
             spellCheck={false}
             onChange={(e) => setComposeNick(e.target.value)}
           />
+          {favorites.length > 0 && (
+            <div className="whisper-fav-row">
+              {favorites.map((f) => (
+                <button key={f} className="chip" onClick={() => setComposeNick(f)}>
+                  ⭐ {f}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             placeholder={t('whisper.placeholder')}
             value={composeText}
@@ -187,10 +356,11 @@ export default function WhisperPanel({ onClose }: { onClose: () => void }): Reac
           {conversations.length === 0 && <div className="picker-empty">{t('whisper.empty')}</div>}
           {conversations.map(([login, msgs]) => {
             const last = msgs[msgs.length - 1]
-            const color = ensureReadable(last.color || fallbackColor(login), dark)
+            const color = colorFor(last)
             return (
               <button key={login} className="whisper-conv" onClick={() => setSelected(login)}>
                 <span className="whisper-conv-nick" style={{ color }}>
+                  {favorites.includes(login) ? '⭐ ' : ''}
                   {last.otherDisplay}
                 </span>
                 <span className="whisper-conv-text">
@@ -206,21 +376,37 @@ export default function WhisperPanel({ onClose }: { onClose: () => void }): Reac
           <div className="whisper-thread" ref={listRef}>
             {thread.map((w) => (
               <div key={w.id} className={`whisper-msg ${w.incoming ? '' : 'out'}`}>
-                <span className="whisper-ts">{fmtTime(w.timestamp)}</span> {w.text}
+                <span className="whisper-ts">{fmtTime(w.timestamp)}</span> <WhisperText text={w.text} />
               </div>
             ))}
           </div>
           <div className="whisper-input">
+            {pickerOpen && (
+              <EmotePicker
+                channel=""
+                channelId=""
+                account={accounts[0]}
+                fixed
+                onPick={(emote) => {
+                  setText((cur) => (cur.length === 0 || cur.endsWith(' ') ? cur + emote.code + ' ' : `${cur} ${emote.code} `))
+                }}
+                onClose={() => setPickerOpen(false)}
+              />
+            )}
             <input
               autoFocus
               placeholder={t('whisper.placeholder')}
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') send()
+              onChange={(e) => {
+                setText(e.target.value)
+                setHistIdx(-1)
               }}
+              onKeyDown={onInputKeyDown}
             />
-            <button className="primary" disabled={!text.trim()} onClick={send}>
+            <button className="ghost picker-btn" title={t('picker.open')} onClick={() => setPickerOpen((v) => !v)}>
+              😊
+            </button>
+            <button className="primary" disabled={!text.trim() || sending} onClick={() => send()}>
               ➤
             </button>
           </div>

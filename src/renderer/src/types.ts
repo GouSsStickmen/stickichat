@@ -61,6 +61,8 @@ export interface ChatMessage {
   groupedUnder?: string
   /** this message is a mass-gift header that can expand its grouped gifts */
   giftGroupId?: string
+  /** subgift line: the gifter's login (lets a late header group earlier lines) */
+  giftFrom?: string
   /** first message we've seen from this login since we joined this channel this session */
   isFirstInSession?: boolean
   /** channel-point redemption (custom reward / highlighted message) */
@@ -69,6 +71,16 @@ export interface ChatMessage {
   watchStreak?: boolean
   /** bits cheered in this message (from the IRC `bits` tag) */
   bits?: number
+  /** incoming raid usernotice: the raider's login (enables the mod shoutout button) */
+  raidFrom?: string
+  /** system line describing a moderation action (timeout/ban/delete/clear) */
+  modAction?: boolean
+  /** system mod-action line: which user it was applied to (for the usercard) */
+  modTargetUserId?: string
+  /** message author arrived with a recent raid (highlighted via the 'raider' rule) */
+  raider?: boolean
+  /** which streamer's raid brought this author (shown as a tag while `raider` is active) */
+  raiderFrom?: string
 }
 
 // ---------- Emotes / badges ----------
@@ -132,13 +144,14 @@ export type HighlightKind =
   | 'own'
   | 'redeem'
   | 'bits'
+  | 'raider'
   | 'firstMsg'
   | 'firstStream'
   | 'watchStreak'
 
 /** kinds that don't need a value input (the category itself is the match) */
 export const VALUELESS_HL_KINDS: ReadonlySet<HighlightKind> = new Set([
-  'own', 'redeem', 'bits', 'firstMsg', 'firstStream', 'watchStreak'
+  'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak'
 ])
 
 export interface HighlightRule {
@@ -188,6 +201,10 @@ export type ModActionType =
   | 'link'
   | 'fill'
   | 'copy'
+  /** send the clicked message's text as your own, immediately */
+  | 'resend'
+  /** put the clicked message's text into the input (no send) */
+  | 'msgToInput'
 
 /** these require real moderator rights via Helix; the rest are plain chat actions anyone can use */
 export const MOD_ONLY_TYPES: ReadonlySet<ModActionType> = new Set([
@@ -303,7 +320,7 @@ export interface Settings {
   showMentionBg: boolean
   showFirstMsgBg: boolean
   /** which tab the highlight sidebar opens on */
-  highlightSidebarDefault: 'highlights' | 'mentions'
+  highlightSidebarDefault: 'highlights' | 'mentions' | 'redeems'
   /** extra px of line-height inside messages (emote rows overlapping) */
   lineSpacing: number
   /** restore the main window's size/position on launch */
@@ -314,16 +331,30 @@ export interface Settings {
   customFonts: { name: string; data: string }[]
   /** 0..1 background opacity of the mention highlight */
   mentionBgOpacity: number
+  /** color of the flash when jumping to a replied-to message */
+  flashColor: string
   /** emote/emoji suggestions while typing (slash commands and @mentions stay on) */
   emoteSuggestions: boolean
   /** open user cards in a separate window instead of the in-app popup */
   usercardAsWindow: boolean
   /** persisted 📌 state of the standalone user-card window */
   usercardPinned: boolean
+  /** open whispers in a separate window instead of the popover */
+  whispersAsWindow: boolean
+  whispersPinned: boolean
+  /** favorite whisper contacts (logins), pinned to the top of the list */
+  whisperFavorites: string[]
+  /** open the highlights panel in a separate window instead of the sidebar */
+  highlightsAsWindow: boolean
+  highlightsPinned: boolean
+  /** px text size in the highlights panel */
+  highlightsFontSize: number
   /** offer to add the channel involved in a raid */
   raidPrompt: boolean
   /** only offer for raids on the channel you're currently watching (active tab) */
   raidPromptActiveOnly: boolean
+  /** how long (minutes) arrivals after a raid keep the 'raider' highlight; 0 = off */
+  raiderHighlightMinutes: number
   /** where accepting a raid prompt puts the channel: a new top tab or the current split */
   raidPromptDest: 'tabs' | 'split'
   /** show bits/cheers in chat */
@@ -340,6 +371,37 @@ export interface Settings {
   hotkeys: Partial<Record<HotkeyAction, string>>
   /** swipe-to-moderate timeout tiers (seconds), shortest→longest */
   swipeTimeouts: number[]
+  /** OBS chat overlay (local SSE server + transparent browser-source page) */
+  overlayEnabled: boolean
+  overlayPort: number
+  overlayFontSize: number
+  /** css font family; empty = default */
+  overlayFont: string
+  /** seconds before a line fades out; 0 = keep forever */
+  overlayFade: number
+  overlayMax: number
+  /** px gap between overlay lines */
+  overlayLineGap: number
+  overlayBadges: boolean
+  overlayBold: boolean
+  /** hide "!command" messages on the overlay */
+  overlayHideCmd: boolean
+  /** message text color (hex) */
+  overlayTextColor: string
+  /** text outline: 0 = off */
+  overlayOutlineWidth: number
+  overlayOutlineColor: string
+  /** per-line background plate: color + 0..1 opacity (0 = fully transparent) */
+  overlayBgColor: string
+  overlayBgOpacity: number
+  /** logins never shown on the overlay */
+  overlayHiddenUsers: string[]
+  /** event visibility on the overlay */
+  overlayShowRedeems: boolean
+  overlayShowBits: boolean
+  overlayShowSubs: boolean
+  /** show moderation lines (timeouts/bans/clears) on the overlay */
+  overlayShowModActions: boolean
   /** one-time migration: mention/first-message colors converted into highlight rules */
   hlMigratedV1: boolean
   /** one-time migration: default redeem + bits highlight rules seeded */
@@ -403,11 +465,19 @@ export const DEFAULT_SETTINGS: Settings = {
   muted: false,
   customFonts: [],
   mentionBgOpacity: 0.2,
+  flashColor: '#a970ff',
   emoteSuggestions: true,
   usercardAsWindow: false,
   usercardPinned: false,
+  whispersAsWindow: false,
+  whispersPinned: false,
+  whisperFavorites: [],
+  highlightsAsWindow: false,
+  highlightsPinned: false,
+  highlightsFontSize: 12,
   raidPrompt: true,
   raidPromptActiveOnly: false,
+  raiderHighlightMinutes: 10,
   raidPromptDest: 'split',
   showBits: true,
   showRedeems: true,
@@ -416,6 +486,26 @@ export const DEFAULT_SETTINGS: Settings = {
   recentColors: [],
   hotkeys: {},
   swipeTimeouts: [60, 300, 600, 1800, 3600, 86400],
+  overlayEnabled: false,
+  overlayPort: 4715,
+  overlayFontSize: 16,
+  overlayFont: '',
+  overlayFade: 0,
+  overlayMax: 15,
+  overlayLineGap: 2,
+  overlayBadges: true,
+  overlayBold: false,
+  overlayHideCmd: false,
+  overlayTextColor: '#ffffff',
+  overlayOutlineWidth: 2,
+  overlayOutlineColor: '#000000',
+  overlayBgColor: '#000000',
+  overlayBgOpacity: 0,
+  overlayHiddenUsers: [],
+  overlayShowRedeems: true,
+  overlayShowBits: true,
+  overlayShowSubs: true,
+  overlayShowModActions: false,
   hlMigratedV1: false,
   hlMigratedV2: false
 }

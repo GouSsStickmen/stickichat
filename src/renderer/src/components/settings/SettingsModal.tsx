@@ -33,11 +33,13 @@ type Section =
   | 'moderation'
   | 'hotkeys'
   | 'windows'
+  | 'overlay'
   | 'advanced'
   | 'about'
 
 const BUTTON_TYPES: ModActionType[] = [
-  'timeout', 'ban', 'unban', 'delete', 'warn', 'shoutout', 'raid', 'announce', 'snippet', 'link', 'fill', 'copy'
+  'timeout', 'ban', 'unban', 'delete', 'warn', 'shoutout', 'raid', 'announce', 'snippet', 'link', 'fill', 'copy',
+  'resend', 'msgToInput'
 ]
 
 const DEVELOPER = 'GouS_Stickmen'
@@ -116,6 +118,7 @@ export default function SettingsModal({
               ['moderation', t('set.moderation')],
               ['hotkeys', t('set.hotkeys')],
               ['windows', t('set.windows')],
+              ['overlay', t('set.overlay')],
               ['advanced', t('set.advanced')],
               ['about', t('set.about')]
             ] as [Section, string][]
@@ -134,6 +137,7 @@ export default function SettingsModal({
           {section === 'moderation' && <ModerationSection />}
           {section === 'hotkeys' && <HotkeysSection />}
           {section === 'windows' && <WindowsSection />}
+          {section === 'overlay' && <OverlaySection />}
           {section === 'advanced' && <AdvancedSection />}
           {section === 'about' && <AboutSection />}
         </div>
@@ -513,10 +517,11 @@ function ChatSection(): React.JSX.Element {
         <label>{t('set.sidebarDefault')}</label>
         <select
           value={settings.highlightSidebarDefault}
-          onChange={(e) => set({ highlightSidebarDefault: e.target.value as 'highlights' | 'mentions' })}
+          onChange={(e) => set({ highlightSidebarDefault: e.target.value as Settings['highlightSidebarDefault'] })}
         >
           <option value="highlights">{t('highlights.title')}</option>
           <option value="mentions">{t('highlights.mentions')}</option>
+          <option value="redeems">{t('highlights.redeems')}</option>
         </select>
       </div>
     </div>
@@ -625,6 +630,18 @@ function WindowsSection(): React.JSX.Element {
         hint={t('hint.usercardAsWindow')}
         value={settings.usercardAsWindow}
         onChange={(v) => set({ usercardAsWindow: v })}
+      />
+      <div className="set-group-title">{t('whisper.title')}</div>
+      <Toggle
+        label={t('set.whispersAsWindow')}
+        value={settings.whispersAsWindow}
+        onChange={(v) => set({ whispersAsWindow: v })}
+      />
+      <div className="set-group-title">{t('highlights.title')}</div>
+      <Toggle
+        label={t('set.highlightsAsWindow')}
+        value={settings.highlightsAsWindow}
+        onChange={(v) => set({ highlightsAsWindow: v })}
       />
       <div className="set-group-title">{t('picker.open')}</div>
       <Toggle
@@ -1164,7 +1181,7 @@ const BADGE_OPTIONS: { id: string; labelKey: string }[] = [
   { id: 'premium', labelKey: 'badge.premium' }
 ]
 
-const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'firstMsg', 'firstStream', 'watchStreak']
+const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak']
 
 function HighlightsSection(): React.JSX.Element {
   const t = useT()
@@ -1191,6 +1208,10 @@ function HighlightsSection(): React.JSX.Element {
       <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
         {t('hl.hint')}
       </p>
+      <div className="set-row" title={t('hint.flashColor')}>
+        <label className="has-hint">{t('set.flashColor')}</label>
+        <ColorField value={settings.flashColor} defaultValue="#a970ff" onChange={(v) => set({ flashColor: v })} />
+      </div>
       {/* mentions: built-in category, same standardized row as the rules below */}
       <div className="hl-row" title={t('hint.mentionBg')}>
         <input
@@ -1288,6 +1309,17 @@ function HighlightsSection(): React.JSX.Element {
       >
         + {t('hl.add')}
       </button>
+      <div className="set-row" style={{ marginTop: 10 }} title={t('hint.raiderMinutes')}>
+        <label className="has-hint">{t('set.raiderMinutes')}</label>
+        <input
+          type="number"
+          min={0}
+          max={180}
+          style={{ width: 70 }}
+          value={settings.raiderHighlightMinutes}
+          onChange={(e) => set({ raiderHighlightMinutes: parseInt(e.target.value, 10) || 0 })}
+        />
+      </div>
 
       <div className="set-group-title" style={{ marginTop: 24 }}>
         {t('muted.title')}
@@ -1446,6 +1478,279 @@ function HotkeysSection(): React.JSX.Element {
           <span className="hotkey-fixed">{keys}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** same combobox as the app-font picker, driving settings.overlayFont */
+function OverlayFontPicker(): React.JSX.Element {
+  const t = useT()
+  const settings = useSettingsStore((s) => s.settings)
+  const set = useSettingsStore((s) => s.setSettings)
+  const [systemFonts, setSystemFonts] = useState<string[]>([])
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const loadSystemFonts = async (): Promise<void> => {
+    if (systemFonts.length) return
+    try {
+      const q = (window as unknown as { queryLocalFonts?: () => Promise<{ family: string }[]> }).queryLocalFonts
+      if (!q) return
+      const fonts = await q()
+      setSystemFonts([...new Set(fonts.map((f) => f.family))].sort())
+    } catch {
+      /* permission denied / unsupported */
+    }
+  }
+  const allFonts = [
+    ...settings.customFonts.map((f) => f.name),
+    ...(systemFonts.length
+      ? systemFonts
+      : ['Inter', 'Verdana', 'Tahoma', 'Arial', 'Calibri', 'Georgia', 'Consolas', 'Comic Sans MS'])
+  ]
+  const matches = query ? allFonts.filter((f) => f.toLowerCase().includes(query.toLowerCase())) : allFonts
+  return (
+    <div className="font-combo">
+      <input
+        style={{ width: 190 }}
+        placeholder={t('set.fontFamily.placeholder')}
+        value={settings.overlayFont}
+        spellCheck={false}
+        onChange={(e) => {
+          set({ overlayFont: e.target.value })
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => {
+          loadSystemFonts()
+          setQuery('')
+          setOpen(true)
+        }}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' || e.key === 'Enter') setOpen(false)
+        }}
+      />
+      {open && matches.length > 0 && (
+        <div className="font-combo-list">
+          {matches.map((f) => (
+            <div
+              key={f}
+              className={`font-combo-item ${f === settings.overlayFont ? 'selected' : ''}`}
+              style={{ fontFamily: `'${f}'` }}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                set({ overlayFont: f })
+                setOpen(false)
+              }}
+            >
+              {f}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OverlaySection(): React.JSX.Element {
+  const t = useT()
+  const settings = useSettingsStore((s) => s.settings)
+  const set = useSettingsStore((s) => s.setSettings)
+  const tabs = useLayoutStore((s) => s.tabs)
+  const toast = useUiStore.getState().toast
+  const knownChannels = [...new Set(tabs.flatMap((tab) => tab.panes.map((p) => p.channel)))]
+  const [urlChannel, setUrlChannel] = useState(knownChannels[0] ?? '')
+
+  // style now travels LIVE over SSE — the URL only needs the channel
+  const overlayUrl = (channel: string): string =>
+    `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(channel)}`
+
+  return (
+    <div>
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {t('overlay.hint')}
+      </p>
+      <Toggle label={t('overlay.enabled')} value={settings.overlayEnabled} onChange={(v) => set({ overlayEnabled: v })} />
+      <div className="set-row">
+        <label>{t('overlay.port')}</label>
+        <input
+          type="number"
+          min={1024}
+          max={65535}
+          style={{ width: 90 }}
+          value={settings.overlayPort}
+          onChange={(e) => set({ overlayPort: parseInt(e.target.value, 10) || 4715 })}
+        />
+      </div>
+      <div className="set-group-title">{t('overlay.style')}</div>
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {t('overlay.liveHint')}
+      </p>
+      <div className="set-row">
+        <label>{t('set.fontSize')}</label>
+        <input
+          type="number"
+          min={10}
+          max={48}
+          style={{ width: 70 }}
+          value={settings.overlayFontSize}
+          onChange={(e) => set({ overlayFontSize: parseInt(e.target.value, 10) || 16 })}
+        />
+      </div>
+      <div className="set-row">
+        <label>{t('set.fontFamily')}</label>
+        <OverlayFontPicker />
+        <label className="ghost" style={{ cursor: 'pointer' }}>
+          <input
+            type="file"
+            accept=".ttf,.otf,.woff,.woff2"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (!file || file.size > 5 * 1024 * 1024) return
+              const reader = new FileReader()
+              reader.onload = () => {
+                const name = file.name.replace(/\.[a-z0-9]+$/i, '')
+                const fresh = useSettingsStore.getState().settings
+                set({
+                  customFonts: [...fresh.customFonts.filter((f) => f.name !== name), { name, data: String(reader.result) }],
+                  overlayFont: name
+                })
+              }
+              reader.readAsDataURL(file)
+              e.target.value = ''
+            }}
+          />
+          <span className="hint">📁 {t('set.fontUpload')}</span>
+        </label>
+      </div>
+      <div className="set-row">
+        <label>{t('overlay.textColor')}</label>
+        <ColorField value={settings.overlayTextColor} defaultValue="#ffffff" onChange={(v) => set({ overlayTextColor: v })} />
+      </div>
+      <div className="set-row" title={t('overlay.outline.hint')}>
+        <label className="has-hint">{t('overlay.outline')}</label>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="number"
+            min={0}
+            max={6}
+            style={{ width: 60 }}
+            value={settings.overlayOutlineWidth}
+            onChange={(e) => set({ overlayOutlineWidth: parseInt(e.target.value, 10) || 0 })}
+          />
+          <ColorField value={settings.overlayOutlineColor} defaultValue="#000000" onChange={(v) => set({ overlayOutlineColor: v })} />
+        </div>
+      </div>
+      <div className="set-row" title={t('overlay.bg.hint')}>
+        <label className="has-hint">{t('overlay.bg')}</label>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <ColorField value={settings.overlayBgColor} defaultValue="#000000" onChange={(v) => set({ overlayBgColor: v })} />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            title={`${Math.round(settings.overlayBgOpacity * 100)}%`}
+            value={Math.round(settings.overlayBgOpacity * 100)}
+            onChange={(e) => set({ overlayBgOpacity: parseInt(e.target.value, 10) / 100 })}
+          />
+          <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>
+            {Math.round(settings.overlayBgOpacity * 100)}%
+          </span>
+        </div>
+      </div>
+      <div className="set-row" title={t('overlay.fade.hint')}>
+        <label className="has-hint">{t('overlay.fade')}</label>
+        <input
+          type="number"
+          min={0}
+          max={600}
+          style={{ width: 70 }}
+          value={settings.overlayFade}
+          onChange={(e) => set({ overlayFade: parseInt(e.target.value, 10) || 0 })}
+        />
+      </div>
+      <div className="set-row">
+        <label>{t('overlay.max')}</label>
+        <input
+          type="number"
+          min={3}
+          max={50}
+          style={{ width: 70 }}
+          value={settings.overlayMax}
+          onChange={(e) => set({ overlayMax: parseInt(e.target.value, 10) || 15 })}
+        />
+      </div>
+      <div className="set-row">
+        <label>{t('overlay.lineGap')}</label>
+        <input
+          type="number"
+          min={0}
+          max={30}
+          style={{ width: 70 }}
+          value={settings.overlayLineGap}
+          onChange={(e) => set({ overlayLineGap: parseInt(e.target.value, 10) || 0 })}
+        />
+      </div>
+      <Toggle label={t('overlay.badges')} value={settings.overlayBadges} onChange={(v) => set({ overlayBadges: v })} />
+      <Toggle label={t('overlay.bold')} value={settings.overlayBold} onChange={(v) => set({ overlayBold: v })} />
+      <div className="set-group-title">{t('overlay.content')}</div>
+      <Toggle label={t('overlay.showRedeems')} value={settings.overlayShowRedeems} onChange={(v) => set({ overlayShowRedeems: v })} />
+      <Toggle label={t('overlay.showBits')} value={settings.overlayShowBits} onChange={(v) => set({ overlayShowBits: v })} />
+      <Toggle label={t('overlay.showSubs')} value={settings.overlayShowSubs} onChange={(v) => set({ overlayShowSubs: v })} />
+      <Toggle
+        label={t('overlay.showModActions')}
+        hint={t('overlay.showModActions.hint')}
+        value={settings.overlayShowModActions}
+        onChange={(v) => set({ overlayShowModActions: v })}
+      />
+      <Toggle label={t('overlay.hideCmd')} value={settings.overlayHideCmd} onChange={(v) => set({ overlayHideCmd: v })} />
+      <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('overlay.hiddenUsers.hint')}>
+        <label className="has-hint">{t('overlay.hiddenUsers')}</label>
+        <textarea
+          rows={3}
+          style={{ flex: 1, resize: 'vertical' }}
+          placeholder="nightbot, streamelements…"
+          value={settings.overlayHiddenUsers.join(', ')}
+          spellCheck={false}
+          onChange={(e) =>
+            set({
+              overlayHiddenUsers: e.target.value
+                .split(',')
+                .map((x) => x.trim().toLowerCase().replace(/^@/, ''))
+                .filter(Boolean)
+            })
+          }
+        />
+      </div>
+      <div className="set-group-title">{t('overlay.url')}</div>
+      <div className="set-row">
+        <label>{t('pane.channelPlaceholder')}</label>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <select value={urlChannel} onChange={(e) => setUrlChannel(e.target.value)}>
+            {knownChannels.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <button
+            className="primary"
+            disabled={!urlChannel}
+            onClick={() => {
+              navigator.clipboard.writeText(overlayUrl(urlChannel))
+              toast(t('overlay.copied'))
+            }}
+          >
+            📋 {t('overlay.copy')}
+          </button>
+        </div>
+      </div>
+      {urlChannel && (
+        <p className="hint" style={{ color: 'var(--text-faint)', userSelect: 'text', overflowWrap: 'anywhere' }}>
+          {overlayUrl(urlChannel)}
+        </p>
+      )}
     </div>
   )
 }

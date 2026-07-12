@@ -89,7 +89,14 @@ export default function TabBar(): React.JSX.Element {
         <button
           className={`icon-btn whisper-btn ${whispersOpen ? 'active' : ''}`}
           title={t('whisper.title')}
-          onClick={() => useUiStore.getState().setWhispersOpen(!whispersOpen)}
+          onClick={() => {
+            if (useSettingsStore.getState().settings.whispersAsWindow) {
+              window.sticki.openWhispersWindow('whispers')
+              useWhispersStore.getState().markRead()
+            } else {
+              useUiStore.getState().setWhispersOpen(!whispersOpen)
+            }
+          }}
         >
           ✉
           {unreadWhispers > 0 && <span className="whisper-badge">{unreadWhispers}</span>}

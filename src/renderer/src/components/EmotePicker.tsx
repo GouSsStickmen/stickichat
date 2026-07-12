@@ -5,6 +5,7 @@ import { useEmotesStore } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
 import { loadTwitchUserEmotes } from '../services/emoteService'
 import { EMOJI_LIST, emojiLabel, emojiSearchText } from '../lib/emojiData'
+import { KAOMOJI } from '../lib/kaomoji'
 import EmojiGlyph from './EmojiGlyph'
 import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
@@ -23,7 +24,7 @@ interface Props {
   fixed?: boolean
 }
 
-type Tab = 'favorites' | 'twitch' | 'thirdparty' | 'emoji'
+type Tab = 'favorites' | 'twitch' | 'thirdparty' | 'emoji' | 'kaomoji'
 
 const PROVIDER_LABEL: Record<EmoteProvider, string> = {
   '7tv': '7TV',
@@ -51,7 +52,7 @@ function groupByProvider(map: Map<string, Emote> | undefined): Map<EmoteProvider
 export function PinButton({
   settingKey
 }: {
-  settingKey: 'emotePickerPinned' | 'settingsPinned' | 'usercardPinned'
+  settingKey: 'emotePickerPinned' | 'settingsPinned' | 'usercardPinned' | 'whispersPinned' | 'highlightsPinned'
 }): React.JSX.Element {
   const remember = useSettingsStore((s) => s.settings.rememberPinState)
   const saved = useSettingsStore((s) => s.settings[settingKey])
@@ -201,6 +202,8 @@ export default function EmotePicker({
   const cell = (e: Emote | FavoriteEmote): React.JSX.Element => {
     const favKey = `${e.provider}:${e.code}`
     const isFav = favSet.has(favKey)
+    // kaomoji live under the 'emoji' provider but are long text — they need a wide cell
+    const isKaomoji = e.provider === 'emoji' && Array.from(e.code).length > 3
     return (
       <button
         key={favKey}
@@ -208,11 +211,13 @@ export default function EmotePicker({
         // not re-trigger the last clicked emote
         tabIndex={-1}
         onMouseDown={(ev) => ev.preventDefault()}
-        className={`emote-cell ${favPop === favKey ? 'fav-pop' : ''}`}
+        className={`emote-cell ${isKaomoji ? 'kaomoji-fav' : ''} ${favPop === favKey ? 'fav-pop' : ''}`}
         title={
-          e.provider === 'emoji'
-            ? emojiLabel(e.code, emojiNameLang)
-            : `${e.code} (${PROVIDER_LABEL[e.provider]})`
+          isKaomoji
+            ? e.code
+            : e.provider === 'emoji'
+              ? emojiLabel(e.code, emojiNameLang)
+              : `${e.code} (${PROVIDER_LABEL[e.provider]})`
         }
         onMouseEnter={() => setPreview(e)}
         onMouseLeave={() => setPreview((cur) => (cur === e ? null : cur))}
@@ -227,7 +232,9 @@ export default function EmotePicker({
         }}
       >
         {isFav && <span className="fav-star">⭐</span>}
-        {e.provider === 'emoji' ? (
+        {isKaomoji ? (
+          <span className="kaomoji-fav-text">{e.code}</span>
+        ) : e.provider === 'emoji' ? (
           <EmojiGlyph char={e.code} className="emoji-cell-char" />
         ) : (
           <img src={e.url} alt={e.code} loading="lazy" />
@@ -256,7 +263,8 @@ export default function EmotePicker({
             ['favorites', `⭐ ${t('picker.favorites')}`],
             ['twitch', 'Twitch'],
             ['thirdparty', '7TV · BTTV · FFZ'],
-            ['emoji', '🙂 Emoji']
+            ['emoji', '🙂 Emoji'],
+            ['kaomoji', '(◕‿◕)']
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button key={key} className={`picker-tab-btn ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
@@ -352,8 +360,39 @@ export default function EmotePicker({
               section(`${t('picker.global')} · ${PROVIDER_LABEL[p]}`, globalGroups.get(p) ?? [])
             )}
           </>
-        ) : (
+        ) : tab === 'emoji' ? (
           <div className="picker-grid">{EMOJI_AS_EMOTES.map(cell)}</div>
+        ) : (
+          // kaomoji: plain-text emoticons, sent as-is
+          <>
+            {KAOMOJI.map((group) => (
+              <div key={group.label}>
+                <div className="picker-section">{group.label}</div>
+                <div className="kaomoji-grid">
+                  {group.items.map((k) => {
+                    const isFav = favSet.has(`emoji:${k}`)
+                    return (
+                      <button
+                        key={k}
+                        tabIndex={-1}
+                        className="kaomoji-cell"
+                        title={`${k} · ${t('picker.favHint')}`}
+                        onMouseDown={(ev) => ev.preventDefault()}
+                        onClick={() => onPick({ code: k, url: '', provider: 'emoji' })}
+                        onContextMenu={(ev) => {
+                          ev.preventDefault()
+                          toggleFavorite({ code: k, url: '', provider: 'emoji' })
+                        }}
+                      >
+                        {isFav && <span className="fav-star">⭐</span>}
+                        {k}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </>
         )}
       </div>
       {/* always the same height — a popover anchored to the input jumps otherwise */}

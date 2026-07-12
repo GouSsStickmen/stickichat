@@ -11,6 +11,7 @@ import { useT } from '../i18n'
 import { formatDuration, tokenizeMessage } from '../lib/tokenize'
 import EmojiGlyph from './EmojiGlyph'
 import { PinButton } from './EmotePicker'
+import { localizeApiError } from '../lib/apiErrors'
 
 const TIMEOUTS = [60, 600, 3600, 86400]
 
@@ -38,9 +39,16 @@ export default function UserCard({
   const [subInfo, setSubInfo] = useState<SubInfo | null | undefined>(undefined)
   const ref = useRef<HTMLDivElement>(null)
 
-  // like the chat itself: every buffered message, oldest → newest, pinned to the bottom
+  // like the chat itself: every buffered message, oldest → newest, pinned to the bottom;
+  // moderation lines that TARGET this user (bans/timeouts/deletes with the acting mod) too
   const userMessages = useMemo(
-    () => presetMessages ?? messages.filter((m) => m.userId === target.userId && !m.system),
+    () =>
+      presetMessages ??
+      messages.filter(
+        (m) =>
+          (m.userId === target.userId && !m.system) ||
+          (m.system && m.modTargetUserId === target.userId)
+      ),
     [messages, target.userId, presetMessages]
   )
 
@@ -112,7 +120,7 @@ export default function UserCard({
   const act = async (fn: () => Promise<{ ok: boolean; json: unknown }>, label: string): Promise<void> => {
     const res = await fn()
     toast(
-      res.ok ? label : ((res.json as { message?: string })?.message ?? t('mod.actionFail')),
+      res.ok ? label : (localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')),
       res.ok ? 'ok' : 'error'
     )
   }
@@ -265,18 +273,34 @@ export default function UserCard({
         {userMessages.length === 0 && <div>{t('user.noMessages')}</div>}
         {userMessages.map((m) => {
           const full = m as Partial<import('../types').ChatMessage>
+          // moderation lines about this user (who banned/timed out/deleted)
+          if (full.system) {
+            return (
+              <div key={m.id} className="m uc-modact">
+                <span className="uc-ts">{new Date(m.timestamp).toLocaleTimeString()}</span>{' '}
+                <span className="sysmsg">{full.systemText}</span>
+              </div>
+            )
+          }
           return (
-            <div key={m.id} className="m">
+            <div key={m.id} className={`m ${full.deleted ? 'uc-deleted' : ''}`}>
               <span className="uc-ts">{new Date(m.timestamp).toLocaleTimeString()}</span>{' '}
               {full.replyParent && (
                 <span className="uc-reply" title={`${full.replyParent.displayName}: ${full.replyParent.text}`}>
                   ↩ @{full.replyParent.displayName}
                 </span>
               )}
+              {(full.badges ?? []).map((b) => {
+                const url = lookupBadgeUrl(target.channel, b.setId, b.version)
+                return url ? (
+                  <img key={`${b.setId}/${b.version}`} className="badge" src={url} alt={b.setId} draggable={false} />
+                ) : null
+              })}
               <span className="uc-nick" style={{ color: target.color }}>
                 {target.displayName}
               </span>
               {': '}
+              {full.deleted && <span className="uc-deleted-tag">🗑 {t('misc.deletedMessage')} </span>}
               {tokenizeMessage(m, emoteLookup).map((tk, i) => {
                 if (tk.kind === 'emote')
                   return <img key={i} className="uc-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />

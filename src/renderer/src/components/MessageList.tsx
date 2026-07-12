@@ -33,7 +33,6 @@ export default function MessageList({
 }: Props): React.JSX.Element {
   const t = useT()
   const allMessages = useChatStore((s) => s.messages[pane.channel]) ?? []
-  const firstIndexBase = useChatStore((s) => s.firstIndex[pane.channel] ?? 1e9)
   const expandedGifts = useUiStore((s) => s.expandedGifts)
   const settings = useSettingsStore((s) => s.settings)
   // sub-gifts of a collapsed mass-gift group stay hidden until the header is clicked;
@@ -58,6 +57,16 @@ export default function MessageList({
   const messagesRef = useRef(messages)
   messagesRef.current = messages
 
+  // history often arrives AFTER the empty list mounted — snap to the bottom on first fill,
+  // otherwise the view stays parked at the top of the freshly-prepended scrollback
+  const hadMessagesRef = useRef(false)
+  useEffect(() => {
+    if (!hadMessagesRef.current && messages.length > 0) {
+      hadMessagesRef.current = true
+      virtuosoRef.current?.scrollToIndex({ index: messages.length - 1 })
+    }
+  }, [messages.length])
+
   // jump-to-message requests (clicking a reply reference)
   useEffect(() => {
     const onJump = (e: Event): void => {
@@ -78,9 +87,9 @@ export default function MessageList({
       <Virtuoso
         ref={virtuosoRef}
         data={messages}
-        // keeps scroll anchored when the ring buffer trims from the front or history is
-        // prepended — otherwise the list visibly jumps up during message floods
-        firstItemIndex={firstIndexBase}
+        // pre-render well beyond the viewport: items popping in at the edge while scrolling
+        // up read as a momentary "duplicate/ghost" flicker
+        increaseViewportBy={{ top: 600, bottom: 300 }}
         followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? 'auto' : false)}
         atBottomStateChange={setAtBottom}
         atBottomThreshold={40}

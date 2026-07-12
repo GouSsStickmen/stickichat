@@ -4,18 +4,9 @@ import { useSettingsStore } from './settings'
 
 export type ConnState = 'connecting' | 'open' | 'closed'
 
-/** large base so prepended history can subtract from it without going negative */
-const FIRST_INDEX_BASE = 1e9
-
 interface ChatState {
   /** channel login -> ring buffer of messages */
   messages: Record<string, ChatMessage[]>
-  /**
-   * channel login -> Virtuoso firstItemIndex. Bumped up when the ring buffer trims from the
-   * front and down when history is prepended, so the list's scroll position stays put instead
-   * of jumping when messages are added/removed at the edges under load.
-   */
-  firstIndex: Record<string, number>
   /** channel login -> twitch channel id (learned from IRC tags or Helix) */
   channelIds: Record<string, string>
   connState: ConnState
@@ -33,9 +24,13 @@ interface ChatState {
   unreadMessages: Record<string, boolean>
   /** channel login -> timestamp up to which the user has "seen" messages */
   lastReadAt: Record<string, number>
+  /** "channel:userId" -> timeout info for MY accounts (until: -1 = permanent ban) */
+  selfTimeouts: Record<string, { until: number; reason?: string }>
   appendMessages: (channel: string, msgs: ChatMessage[]) => void
   prependMessages: (channel: string, msgs: ChatMessage[]) => void
   markDeleted: (channel: string, messageId: string) => void
+  /** retroactively collapse recent subgift lines under a mass-gift header */
+  groupGifts: (channel: string, gifter: string, headerId: string, sinceTs: number) => void
   markUserMessagesDeleted: (channel: string, userId: string) => void
   clearChannel: (channel: string) => void
   dropChannel: (channel: string) => void
@@ -45,6 +40,7 @@ interface ChatState {
   setChannelNames: (names: Record<string, string>) => void
   setChannelAccents: (accents: Record<string, string>) => void
   setStreamInfo: (info: Record<string, { viewers: number; title: string; startedAt: string }>) => void
+  setSelfTimeout: (channel: string, userId: string, until: number, reason?: string) => void
   setUnreadMention: (channel: string) => void
   clearUnreadMentions: (channels: string[]) => void
   setUnreadMessage: (channel: string) => void
@@ -85,7 +81,6 @@ export function lookupUserBadges(channel: string, login: string): BadgeRef[] | u
 
 export const useChatStore = create<ChatState>()((set) => ({
   messages: {},
-  firstIndex: {},
   channelIds: {},
   connState: 'connecting',
   liveChannels: {},
@@ -95,26 +90,18 @@ export const useChatStore = create<ChatState>()((set) => ({
   unreadMentions: {},
   unreadMessages: {},
   lastReadAt: {},
+  selfTimeouts: {},
   appendMessages: (channel, msgs) =>
     set((s) => {
       const limit = useSettingsStore.getState().settings.messageLimit
       const cur = s.messages[channel] ?? []
       let next = [...cur, ...msgs]
-      let removed = 0
       // trim in BATCHES, not every message: at steady-state (buffer full) trimming one item
-      // per incoming message bumps firstItemIndex constantly, which makes Virtuoso nudge the
-      // scroll a few px on every send. Let it overshoot by SLACK, then cut back to the limit.
+      // per incoming message made the scroll nudge a few px on every send. Let it overshoot
+      // by SLACK, then cut back to the limit — so a trim happens once per ~200 messages.
       const SLACK = 200
-      if (next.length > limit + SLACK) {
-        removed = next.length - limit
-        next = next.slice(removed)
-      }
-      const base = s.firstIndex[channel] ?? FIRST_INDEX_BASE
-      return {
-        messages: { ...s.messages, [channel]: next },
-        // trimming from the front shifts every item's absolute index up by `removed`
-        firstIndex: removed ? { ...s.firstIndex, [channel]: base + removed } : s.firstIndex
-      }
+      if (next.length > limit + SLACK) next = next.slice(next.length - limit)
+      return { messages: { ...s.messages, [channel]: next } }
     }),
   prependMessages: (channel, msgs) =>
     set((s) => {
@@ -123,12 +110,21 @@ export const useChatStore = create<ChatState>()((set) => ({
       const seen = new Set(cur.map((m) => m.id))
       const add = msgs.filter((m) => !seen.has(m.id))
       if (add.length === 0) return s
-      const base = s.firstIndex[channel] ?? FIRST_INDEX_BASE
-      return {
-        messages: { ...s.messages, [channel]: [...add, ...cur] },
-        // prepending pushes the first item's absolute index down by however many we added
-        firstIndex: { ...s.firstIndex, [channel]: base - add.length }
-      }
+      return { messages: { ...s.messages, [channel]: [...add, ...cur] } }
+    }),
+  groupGifts: (channel, gifter, headerId, sinceTs) =>
+    set((s) => {
+      const cur = s.messages[channel]
+      if (!cur) return s
+      let changed = false
+      const next = cur.map((m) => {
+        if (m.giftFrom === gifter && !m.groupedUnder && m.id !== headerId && m.timestamp >= sinceTs) {
+          changed = true
+          return { ...m, groupedUnder: headerId }
+        }
+        return m
+      })
+      return changed ? { messages: { ...s.messages, [channel]: next } } : s
     }),
   markDeleted: (channel, messageId) =>
     set((s) => {
@@ -163,9 +159,7 @@ export const useChatStore = create<ChatState>()((set) => ({
     set((s) => {
       const messages = { ...s.messages }
       delete messages[channel]
-      const firstIndex = { ...s.firstIndex }
-      delete firstIndex[channel]
-      return { messages, firstIndex }
+      return { messages }
     }),
   setChannelId: (channel, id) =>
     set((s) =>
@@ -184,6 +178,13 @@ export const useChatStore = create<ChatState>()((set) => ({
   setChannelAccents: (accents) =>
     set((s) => ({ channelAccents: { ...s.channelAccents, ...accents } })),
   setStreamInfo: (streamInfo) => set({ streamInfo }),
+  setSelfTimeout: (channel, userId, until, reason) =>
+    set((s) => {
+      const key = `${channel}:${userId}`
+      // don't let a reason-less IRC CLEARCHAT wipe the reason the mod feed already gave us
+      const kept = reason ?? s.selfTimeouts[key]?.reason
+      return { selfTimeouts: { ...s.selfTimeouts, [key]: { until, reason: kept } } }
+    }),
   setUnreadMention: (channel) =>
     set((s) =>
       s.unreadMentions[channel] ? s : { unreadMentions: { ...s.unreadMentions, [channel]: true } }

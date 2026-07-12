@@ -444,16 +444,26 @@ select:focus {
   background: var(--surface-3);
 }
 .highlight-item-nick {
-  font-size: 11px;
   font-weight: 700;
 }
+/* full text with wrapping — a one-line ellipsis hid most of the message */
 .highlight-item-text {
-  font-size: 11px;
   color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
   max-width: 100%;
+  text-align: left;
+}
+.highlight-item .hl-badge {
+  height: 1.1em;
+  vertical-align: -0.18em;
+  margin-right: 3px;
+  border-radius: 2px;
+}
+.highlight-item .hl-emote {
+  height: 1.5em;
+  vertical-align: -0.35em;
+  margin: 0 1px;
 }
 .msg {
   padding: calc(3px + var(--msg-spacing, 0px)) 10px;
@@ -470,7 +480,7 @@ select:focus {
    first-message/first-in-stream backgrounds moved into the unified highlight rules */
 .msg.mention {
   background: var(--mention-bg);
-  box-shadow: inset 3px 0 0 var(--mention-accent, var(--accent));
+  box-shadow: inset 3px 0 0 var(--mention-accent, var(--accent)), inset -3px 0 0 var(--mention-accent, var(--accent));
 }
 .msg.usernotice {
   box-shadow: inset 4px 0 0 var(--announce-accent, var(--accent)), inset -4px 0 0 var(--announce-accent, var(--accent));
@@ -609,6 +619,18 @@ select:focus {
 .msg .event-header.bits {
   color: var(--warning);
 }
+/* "arrived with X's raid" tag next to the nick */
+.msg .raider-tag {
+  font-size: 0.78em;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 4px;
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+  white-space: nowrap;
+  user-select: none;
+}
 /* cheermote: bit icon + colored amount, like on Twitch */
 .cheer-token {
   display: inline-flex;
@@ -626,7 +648,7 @@ select:focus {
 }
 /* channel-point redemption announcement (from PubSub) — purple, stands out from grey sysmsgs */
 .msg.redeem-info {
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent), inset -3px 0 0 var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .msg.redeem-info .sysmsg {
@@ -657,8 +679,12 @@ select:focus {
 .msg.flash {
   animation: msg-flash 3.2s ease;
 }
+/* bright, unmistakable pulse in the user-configurable --flash-color, stripes on BOTH sides */
 @keyframes msg-flash {
-  0%, 20%, 40%, 60% { background: color-mix(in srgb, var(--mention-bg) 20%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+  0%, 20%, 40%, 60% {
+    background: color-mix(in srgb, var(--flash-color, var(--accent)) 35%, transparent);
+    box-shadow: inset 4px 0 0 var(--flash-color, var(--accent)), inset -4px 0 0 var(--flash-color, var(--accent));
+  }
   10%, 30%, 50%, 80% { background: transparent; box-shadow: none; }
   100% { background: transparent; box-shadow: none; }
 }
@@ -973,6 +999,14 @@ select:focus {
   color: var(--text-faint);
   font-size: 0.85em;
 }
+/* one-click shoutout on an incoming raid line (mods only) */
+.raid-shoutout-btn {
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--accent-strong);
+  color: #fff;
+}
 .autocomplete {
   position: absolute;
   bottom: 100%;
@@ -1199,6 +1233,29 @@ select:focus {
   padding: 2px 0;
   border-bottom: 1px solid var(--border);
   user-select: text;
+}
+.usercard .uc-msgs .m.uc-deleted {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.usercard .uc-deleted-tag {
+  color: var(--danger);
+  font-size: 0.85em;
+  text-decoration: none;
+}
+.usercard .uc-msgs .m.uc-modact .sysmsg {
+  color: var(--warning);
+  font-style: italic;
+}
+/* per-message badges inside the usercard scale with its text, not the chat badge setting */
+.usercard .uc-msgs .badge {
+  height: 1.1em;
+  width: 1.1em;
+  min-width: 0;
+  max-width: none;
+  vertical-align: -0.18em;
+  margin-right: 3px;
+  border-radius: 2px;
 }
 
 /* ---------- Onboarding ---------- */
@@ -1602,17 +1659,19 @@ select:focus {
 /* changelog */
 .changelog {
   margin-top: 8px;
-  max-height: 340px;
+  max-height: 62vh;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   background: var(--surface-2);
   user-select: text;
+  font-size: 14px;
 }
 .changelog-version {
   font-weight: 700;
-  margin-top: 10px;
+  font-size: 15px;
+  margin-top: 14px;
 }
 .changelog-entry:first-child .changelog-version {
   margin-top: 0;
@@ -1621,8 +1680,8 @@ select:focus {
   margin: 6px 0 0 0;
   padding-left: 18px;
   color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.7;
 }
 
 /* ---------- Emote picker ---------- */
@@ -1685,6 +1744,45 @@ select:focus {
   color: var(--text-faint);
   text-align: center;
   padding: 18px 0;
+}
+/* kaomoji: wider text cells */
+.kaomoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 2px;
+}
+.kaomoji-cell {
+  background: transparent;
+  padding: 6px 4px;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kaomoji-cell:hover {
+  background: var(--surface-3);
+}
+.kaomoji-cell {
+  position: relative;
+}
+.kaomoji-cell .fav-star {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  font-size: 9px;
+  pointer-events: none;
+}
+/* kaomoji inside the favorites grid: span several columns so they actually fit */
+.emote-cell.kaomoji-fav {
+  grid-column: span 3;
+  min-width: 0;
+}
+.kaomoji-fav-text {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .picker-hint {
   font-size: 10px;
@@ -2081,27 +2179,73 @@ select:focus {
 .whisper-compose textarea {
   resize: vertical;
 }
+.whisper-fav-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.whisper-thread-title {
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.whisper-emote {
+  height: 1.5em;
+  vertical-align: -0.35em;
+  margin: 0 1px;
+}
+/* standalone whispers window: fill the window, lists take the remaining height */
+.whisper-panel-standalone {
+  position: static;
+  width: 100%;
+  height: 100vh;
+  max-width: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.whisper-panel-standalone .whisper-list,
+.whisper-panel-standalone .whisper-thread {
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+}
+
+/* standalone highlights window */
+.highlight-sidebar-standalone {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border-left: none;
+}
 
 /* ---------- Channel prompt (raids) ---------- */
 
 .channel-prompt {
   position: fixed;
-  bottom: 16px;
-  left: 16px;
+  top: 46px;
+  right: 16px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 12px 14px;
   background: var(--surface-3);
   border: 1px solid var(--accent-strong);
   border-radius: 10px;
   box-shadow: var(--shadow);
   z-index: 200;
   animation: toast-in 0.15s ease;
-  max-width: min(440px, calc(100vw - 32px));
+  max-width: min(380px, calc(100vw - 32px));
 }
 .channel-prompt-text {
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.channel-prompt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 /* ---------- Toasts ---------- */

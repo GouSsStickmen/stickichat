@@ -17,6 +17,9 @@ import { useT } from '../i18n'
 
 export const TWITCH_MESSAGE_LIMIT = 500
 
+/** unsent drafts survive pane unmounts (tab switches) — keyed by pane id, session-lifetime */
+const inputDrafts = new Map<string, string>()
+
 export interface ReplyTarget {
   msgId: string
   login: string
@@ -51,8 +54,32 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const emotePickerAsWindow = useSettingsStore((s) => s.settings.emotePickerAsWindow)
   const translitEnabled = useSettingsStore((s) => s.settings.translitEnabled)
   const emoteSuggestions = useSettingsStore((s) => s.settings.emoteSuggestions)
-  const [text, setText] = useState('')
-  const [history, setHistory] = useState<string[]>([])
+  const [text, setText] = useState(() => inputDrafts.get(pane.id) ?? '')
+  // keep the draft in sync so switching tabs (which unmounts this pane) doesn't lose it
+  useEffect(() => {
+    inputDrafts.set(pane.id, text)
+  }, [pane.id, text])
+  // sent history survives restarts (per channel, shared by all panes of that channel)
+  const [history, setHistory] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`sticki:sentHistory:${pane.channel}`)
+      const list = raw ? (JSON.parse(raw) as string[]) : []
+      return Array.isArray(list) ? list : []
+    } catch {
+      return []
+    }
+  })
+  const pushHistory = (msg: string): void => {
+    setHistory((h) => {
+      const next = [msg, ...h.filter((x) => x !== msg)].slice(0, 50)
+      try {
+        localStorage.setItem(`sticki:sentHistory:${pane.channel}`, JSON.stringify(next))
+      } catch {
+        /* best-effort */
+      }
+      return next
+    })
+  }
   const [histIdx, setHistIdx] = useState(-1)
   const [acIndex, setAcIndex] = useState(0)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -111,6 +138,13 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     ta.style.height = 'auto'
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
   }
+
+  // grow on EVERY text change, not only typing: external inserts (emotes, mod-button fill,
+  // history recall) bypass onChange and used to leave the box at its old height
+  useEffect(() => {
+    autoGrow()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text])
 
   const syncHighlightScroll = (): void => {
     if (highlightRef.current && taRef.current) {
@@ -225,7 +259,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     if (!msg || !account) return
     setText('')
     if (taRef.current) taRef.current.style.height = 'auto'
-    setHistory((h) => [msg, ...h.slice(0, 49)])
+    pushHistory(msg)
     setHistIdx(-1)
     try {
       if (msg.startsWith('/')) {
@@ -306,6 +340,28 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   }
 
   const overLimit = text.length > TWITCH_MESSAGE_LIMIT
+
+  // my account timed out / banned in this channel → lock the input with a live countdown
+  const selfTimeout = useChatStore(
+    (s) => (account ? s.selfTimeouts[`${pane.channel}:${account.id}`] : undefined)
+  )
+  const timeoutUntil = selfTimeout?.until ?? 0
+  const [, tickTimeout] = useState(0)
+  useEffect(() => {
+    if (!timeoutUntil || timeoutUntil === -1 || Date.now() > timeoutUntil) return
+    const id = window.setInterval(() => tickTimeout((v) => v + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [timeoutUntil])
+  const timedOut = timeoutUntil === -1 || timeoutUntil > Date.now()
+  const timeoutLeft = timeoutUntil > 0 ? Math.max(0, Math.ceil((timeoutUntil - Date.now()) / 1000)) : 0
+  // the reason (if the mod feed provided one) — and a compact variant for narrow panes
+  const timeoutPlaceholder = timedOut
+    ? timeoutUntil === -1
+      ? `${narrow ? '🚫' : t('input.banned')}${selfTimeout?.reason ? ` — ${selfTimeout.reason}` : ''}`
+      : narrow
+        ? `⏳ ${timeoutLeft}с`
+        : `${t('input.timedOut', { seconds: timeoutLeft })}${selfTimeout?.reason ? ` — ${selfTimeout.reason}` : ''}`
+    : null
 
   return (
     <div className="input-area">
@@ -453,8 +509,8 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             className={showCharCounter && overLimit ? 'ta-overlaid' : ''}
             value={text}
             rows={1}
-            placeholder={account ? t('input.placeholder') : t('input.placeholderReadOnly')}
-            disabled={!account}
+            placeholder={timeoutPlaceholder ?? (account ? t('input.placeholder') : t('input.placeholderReadOnly'))}
+            disabled={!account || timedOut}
             spellCheck={true}
             lang="uk"
             onChange={(e) => {
@@ -528,7 +584,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
         >
           😊
         </button>
-        <button className="primary" disabled={!account || !text.trim()} onClick={send}>
+        <button className="primary" disabled={!account || !text.trim() || timedOut} onClick={send}>
           ➤
         </button>
       </div>

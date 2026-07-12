@@ -161,9 +161,13 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         <button
           className={`icon-btn ${showHighlightSidebar ? 'active' : ''}`}
           title={t('highlights.title')}
-          onClick={() =>
-            useSettingsStore.getState().setSettings({ showHighlightSidebar: !showHighlightSidebar })
-          }
+          onClick={() => {
+            if (useSettingsStore.getState().settings.highlightsAsWindow) {
+              window.sticki.openHighlightsWindow(`highlights=${encodeURIComponent(pane.channel)}`)
+            } else {
+              useSettingsStore.getState().setSettings({ showHighlightSidebar: !showHighlightSidebar })
+            }
+          }}
         >
           ★
         </button>

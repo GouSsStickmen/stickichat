@@ -15,6 +15,7 @@ import EmojiGlyph from './EmojiGlyph'
 import { ReplyTarget, InsertEventDetail } from './InputBox'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
+import { localizeApiError } from '../lib/apiErrors'
 
 interface Props {
   msg: ChatMessage
@@ -349,7 +350,7 @@ function MessageViewInner({
         ? await deleteChatMessage(account, channelId, msg.id)
         : await banUser(account, channelId, msg.userId, action.seconds)
     if (res.ok) toast(`${action.label} — ${msg.login}`, 'ok')
-    else toast((res.json as { message?: string })?.message ?? t('mod.actionFail'), 'error')
+    else toast(localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail'), 'error')
   }
 
   // swipe-to-moderate starts ONLY from the ⠿ grip — dragging from the message body used to
@@ -451,6 +452,33 @@ function MessageViewInner({
                 {useUiStore.getState().expandedGifts[msg.giftGroupId] ? ' ▲' : ` ▼ ${t('gift.showAll')}`}
               </span>
             )}
+            {/* incoming raid + mod rights → one-click shoutout for the raider */}
+            {msg.raidFrom && isMod && account && !msg.historical && (
+              <button
+                className="raid-shoutout-btn"
+                title={`${t('mod.shoutout')}: ${msg.raidFrom}`}
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  const { resolveUserId } = await import('../services/modActions')
+                  const id = await resolveUserId(account, msg.raidFrom!)
+                  if (!id) {
+                    toast(t('mod.actionFail'), 'error')
+                    return
+                  }
+                  const { sendShoutout } = await import('../lib/helix')
+                  const res = await sendShoutout(account, channelId, id)
+                  if (res.ok) {
+                    toast(`📣 ${msg.raidFrom}`, 'ok')
+                    const { chatService } = await import('../services/chatService')
+                    chatService.localInfo(msg.channel, t('mod.shoutoutGiven', { user: msg.raidFrom! }))
+                  } else {
+                    toast(localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail'), 'error')
+                  }
+                }}
+              >
+                📣 {t('mod.shoutout')}
+              </button>
+            )}
           </span>
         )}
         {msg.replyParent && (
@@ -482,6 +510,13 @@ function MessageViewInner({
           {msg.displayName}
           {msg.displayName.toLowerCase() !== msg.login ? ` (${msg.login})` : ''}
         </span>
+        {/* raider tag: which streamer's raid they arrived with — lives exactly as long as
+            the raider highlight window */}
+        {msg.raider && msg.raiderFrom && (
+          <span className="raider-tag" title={`${t('raid.raidWord')}: ${msg.raiderFrom}`}>
+            🚨 {msg.raiderFrom}
+          </span>
+        )}
         {msg.isAction ? ' ' : ': '}
         {brailleArt && !artLines && (
           <span className="art-width-ctl" title={`${artCols}`}>

@@ -10,12 +10,20 @@ export interface StickiApi {
   onReattach(cb: (payload: string) => void): () => void
   openEmotePickerWindow(hash: string): Promise<void>
   openSettingsWindow(hash: string): Promise<void>
+  openWhispersWindow(hash: string): Promise<void>
+  openHighlightsWindow(hash: string): Promise<void>
   openUserCardWindow(hash: string): Promise<void>
   sendEmotePick(payload: string): Promise<void>
   onEmotePicked(cb: (payload: string) => void): () => void
   setAlwaysOnTop(flag: boolean): Promise<void>
   suspendAlwaysOnTop(): Promise<void>
   resumeAlwaysOnTop(): Promise<void>
+  focusSelf(): Promise<void>
+  jumpToMessage(payload: string): Promise<void>
+  onJumpTo(cb: (payload: string) => void): () => void
+  overlayConfigure(enabled: boolean, port: number, style?: unknown): Promise<void>
+  overlayPush(channel: string, html: string, id: string, user: string): Promise<void>
+  overlayDelete(channel: string, del: { id?: string; user?: string; all?: boolean }): Promise<void>
   closeWindow(): Promise<void>
   notifyConfigChanged(): Promise<void>
   onConfigChanged(cb: () => void): () => void

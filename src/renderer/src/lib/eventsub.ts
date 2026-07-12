@@ -20,14 +20,17 @@ export interface EventSubDesired {
   condition: Record<string, string>
   /** stable id used to avoid creating the same subscription twice in one session */
   key: string
+  /** channel login this subscription concerns (for per-channel bookkeeping) */
+  channelLogin?: string
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EventHandler = (type: string, event: Record<string, any>) => void
+type EventHandler = (type: string, event: Record<string, any>, envelopeId: string) => void
 type SubErrorHandler = (desired: EventSubDesired, status: number) => void
 
 interface EnvelopeMeta {
   message_type: string
+  message_id?: string
 }
 
 export class EventSubClient {
@@ -44,12 +47,19 @@ export class EventSubClient {
   private getDesired: () => EventSubDesired[]
   private onEvent: EventHandler
   private onSubError?: SubErrorHandler
+  private onSubOk?: (desired: EventSubDesired) => void
   private subscribing = false
 
-  constructor(getDesired: () => EventSubDesired[], onEvent: EventHandler, onSubError?: SubErrorHandler) {
+  constructor(
+    getDesired: () => EventSubDesired[],
+    onEvent: EventHandler,
+    onSubError?: SubErrorHandler,
+    onSubOk?: (desired: EventSubDesired) => void
+  ) {
     this.getDesired = getDesired
     this.onEvent = onEvent
     this.onSubError = onSubError
+    this.onSubOk = onSubOk
     this.connect()
   }
 
@@ -123,7 +133,8 @@ export class EventSubClient {
       case 'notification': {
         const type = msg.payload?.subscription?.type
         const event = msg.payload?.event
-        if (type && event) this.onEvent(type, event)
+        // envelope id is stable across windows — used to dedupe persisted lines
+        if (type && event) this.onEvent(type, event, msg.metadata?.message_id ?? '')
         break
       }
     }
@@ -142,6 +153,7 @@ export class EventSubClient {
           // 409 = already exists for this session; both mean "it's active now"
           if (res.ok || res.status === 409) {
             this.created.add(d.key)
+            this.onSubOk?.(d)
           } else {
             console.warn('[eventsub] subscribe failed', d.type, res.status, res.json ?? res.text)
             // a 4xx won't fix itself on retry (bad scope / bad condition) — stop hammering it

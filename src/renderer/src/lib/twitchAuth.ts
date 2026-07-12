@@ -27,7 +27,13 @@ export const TWITCH_SCOPES = [
   // whispers: EventSub user.whisper.message needs the READ scope specifically; manage alone
   // was not enough, which is why inbound whispers never arrived
   'user:read:whispers',
-  'user:manage:whispers'
+  'user:manage:whispers',
+  // EventSub channel.moderate v2 ("who banned/timed out/deleted") requires read access to
+  // EVERY moderation surface; the manage:* scopes above cover most, these fill the gaps
+  'moderator:read:blocked_terms',
+  'moderator:read:unban_requests',
+  'moderator:read:moderators',
+  'moderator:read:vips'
 ].join(' ')
 
 export interface DeviceCodeInfo {

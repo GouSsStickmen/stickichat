@@ -17,6 +17,8 @@ import UpdateBanner from './components/UpdateBanner'
 import EmoteHoverPreview from './components/EmoteHoverPreview'
 import EmotePickerWindow from './components/EmotePickerWindow'
 import UserCardWindow from './components/UserCardWindow'
+import WhispersWindow from './components/WhispersWindow'
+import HighlightsWindow from './components/HighlightsWindow'
 import ChannelPrompt from './components/ChannelPrompt'
 import { hexToRgba } from './lib/tokenize'
 import { hotkeyFor, matchHotkey } from './lib/hotkeys'
@@ -44,6 +46,8 @@ type Special =
   | { kind: 'emotepicker'; data: EmotePickerWindowPayload }
   | { kind: 'settings'; section?: string }
   | { kind: 'usercard'; data: UserCardWindowPayload }
+  | { kind: 'whispers' }
+  | { kind: 'highlights'; channel: string }
   | null
 
 function parseHash(): Special {
@@ -54,6 +58,8 @@ function parseHash(): Special {
     if (h === '#settings') return { kind: 'settings' }
     if (h.startsWith('#settings=')) return { kind: 'settings', section: h.slice(10) }
     if (h.startsWith('#usercard=')) return { kind: 'usercard', data: JSON.parse(decodeURIComponent(h.slice(10))) }
+    if (h === '#whispers') return { kind: 'whispers' }
+    if (h.startsWith('#highlights=')) return { kind: 'highlights', channel: decodeURIComponent(h.slice(12)) }
   } catch {
     /* malformed hash */
   }
@@ -97,7 +103,13 @@ export default function App(): React.JSX.Element | null {
           // layout here is ephemeral, but settings tweaks (font zoom, sounds…) must persist
           startSettingsPersistence()
           setOnboarded(true)
-        } else if (special?.kind === 'emotepicker' || special?.kind === 'settings' || special?.kind === 'usercard') {
+        } else if (
+          special?.kind === 'emotepicker' ||
+          special?.kind === 'settings' ||
+          special?.kind === 'usercard' ||
+          special?.kind === 'whispers' ||
+          special?.kind === 'highlights'
+        ) {
           // utility windows: no chat and no layout persistence, but settings changed here
           // (sounds, pins, mod buttons…) must still reach the disk
           startSettingsPersistence()
@@ -125,6 +137,7 @@ export default function App(): React.JSX.Element | null {
     // background carries the user-picked opacity; the accent stripe stays solid
     root.style.setProperty('--mention-bg', hexToRgba(settings.mentionBgColor, settings.mentionBgOpacity))
     root.style.setProperty('--mention-accent', settings.mentionBgColor)
+    root.style.setProperty('--flash-color', settings.flashColor)
     if (settings.fontFamily.trim()) {
       root.style.setProperty('--app-font', `"${settings.fontFamily.trim()}", 'Segoe UI', sans-serif`)
     } else {
@@ -138,6 +151,7 @@ export default function App(): React.JSX.Element | null {
     settings.badgeSize,
     settings.mentionBgColor,
     settings.mentionBgOpacity,
+    settings.flashColor,
     settings.fontFamily,
     settings.lineSpacing,
     settings.customFonts
@@ -158,15 +172,81 @@ export default function App(): React.JSX.Element | null {
     if (!special) window.sticki.setAlwaysOnTop(settings.alwaysOnTop)
   }, [settings.alwaysOnTop, special])
 
+  // OBS overlay server lifecycle + LIVE style config: every change here is pushed to the
+  // already-connected OBS sources over SSE (main window only)
+  useEffect(() => {
+    if (special) return
+    // uploaded fonts travel to the OBS page as a data URL (@font-face there)
+    const custom = settings.customFonts.find((f) => f.name === settings.overlayFont)
+    window.sticki.overlayConfigure(settings.overlayEnabled, settings.overlayPort, {
+      size: settings.overlayFontSize,
+      font: settings.overlayFont,
+      fontData: custom?.data,
+      fade: settings.overlayFade,
+      max: settings.overlayMax,
+      gap: settings.overlayLineGap,
+      bold: settings.overlayBold,
+      textColor: settings.overlayTextColor,
+      outlineWidth: settings.overlayOutlineWidth,
+      outlineColor: settings.overlayOutlineColor,
+      bg: settings.overlayBgOpacity > 0 ? hexToRgba(settings.overlayBgColor, settings.overlayBgOpacity) : ''
+    })
+  }, [
+    settings.overlayEnabled,
+    settings.overlayPort,
+    settings.overlayFontSize,
+    settings.overlayFont,
+    settings.overlayFade,
+    settings.overlayMax,
+    settings.overlayLineGap,
+    settings.overlayBold,
+    settings.overlayTextColor,
+    settings.overlayOutlineWidth,
+    settings.overlayOutlineColor,
+    settings.overlayBgColor,
+    settings.overlayBgOpacity,
+    settings.customFonts,
+    special
+  ])
+
   useEffect(() => {
     if (!booted || !onboarded) return
-    if (special?.kind === 'emotepicker' || special?.kind === 'settings' || special?.kind === 'usercard') return
+    if (
+      special?.kind === 'emotepicker' ||
+      special?.kind === 'settings' ||
+      special?.kind === 'usercard' ||
+      special?.kind === 'whispers' ||
+      special?.kind === 'highlights'
+    )
+      return
     chatService.start()
     if (!detached && useLayoutStore.getState().tabs.length === 0) {
       useLayoutStore.getState().addTab()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booted, onboarded, special])
+
+  // main window: "jump to message" clicked in a standalone highlights window — bring the
+  // right tab forward, then scroll the chat to that message
+  useEffect(() => {
+    if (special) return
+    return window.sticki.onJumpTo((payload) => {
+      try {
+        const { channel, msgId } = JSON.parse(payload) as { channel: string; msgId: string }
+        const layout = useLayoutStore.getState()
+        const tab = layout.tabs.find((t) => t.panes.some((p) => p.channel === channel))
+        if (!tab) return
+        if (layout.activeTabId !== tab.id) layout.setActiveTab(tab.id)
+        window.sticki.focusSelf()
+        // give the pane a beat to mount before asking it to scroll
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('sticki:jump', { detail: { channel, msgId } }))
+        }, 150)
+      } catch {
+        /* malformed payload */
+      }
+    })
+  }, [special])
 
   // main window: accept tabs coming back from detached windows
   useEffect(() => {
@@ -187,7 +267,23 @@ export default function App(): React.JSX.Element | null {
   useEffect(() => {
     return window.sticki.onEmotePicked((payload) => {
       try {
-        window.dispatchEvent(new CustomEvent('sticki:insert', { detail: JSON.parse(payload) }))
+        const detail = JSON.parse(payload)
+        const { tabs, activeTabId } = useLayoutStore.getState()
+        const ownsPane = tabs.some((t) => t.panes.some((p) => p.id === detail?.paneId))
+        if (ownsPane) {
+          // the picker was opened from a pane that may no longer be VISIBLE (tab switched;
+          // inactive panes are unmounted and don't listen) — retarget to the active tab
+          const activePanes = tabs.find((t) => t.id === activeTabId)?.panes ?? []
+          if (!activePanes.some((p) => p.id === detail.paneId) && activePanes[0]) {
+            detail.paneId = activePanes[0].id
+          }
+          window.dispatchEvent(new CustomEvent('sticki:insert', { detail }))
+          // pull THIS window to the foreground so the input (focused by the insert handler)
+          // is immediately ready for Enter
+          window.sticki.focusSelf()
+        } else {
+          window.dispatchEvent(new CustomEvent('sticki:insert', { detail }))
+        }
       } catch {
         /* malformed payload */
       }
@@ -262,6 +358,14 @@ export default function App(): React.JSX.Element | null {
 
   if (special?.kind === 'usercard') {
     return <UserCardWindow payload={special.data} />
+  }
+
+  if (special?.kind === 'whispers') {
+    return <WhispersWindow />
+  }
+
+  if (special?.kind === 'highlights') {
+    return <HighlightsWindow channel={special.channel} />
   }
 
   if (!onboarded) {

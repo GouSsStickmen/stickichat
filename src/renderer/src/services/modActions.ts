@@ -14,12 +14,13 @@ import { useUiStore } from '../store/ui'
 import { useSettingsStore } from '../store/settings'
 import { translate } from '../i18n'
 import { HttpResponse } from '../lib/http'
+import { localizeApiError } from '../lib/apiErrors'
 
 /** turns a few known raw Twitch API errors into a clearer message */
 function friendlyMessage(raw: string): string {
   const lang = useSettingsStore.getState().settings.language
   if (raw.includes('must match the user ID')) return translate(lang, 'mod.raidBroadcasterOnly')
-  return raw
+  return localizeApiError(raw)
 }
 
 export interface ActionContext {
@@ -123,6 +124,19 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
           await navigator.clipboard.writeText(ctx.targetText)
           toast('📋', 'ok')
         }
+        break
+      }
+      case 'resend': {
+        // echo the clicked message as your own
+        if (!ctx.targetText) return
+        await chatService.sendMessage(ctx.account, ctx.channel, ctx.targetText)
+        break
+      }
+      case 'msgToInput': {
+        if (!ctx.targetText || !ctx.paneId) return
+        window.dispatchEvent(
+          new CustomEvent('sticki:insert', { detail: { paneId: ctx.paneId, text: ctx.targetText } })
+        )
         break
       }
       case 'fill': {

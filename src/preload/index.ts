@@ -16,6 +16,8 @@ const api = {
   },
   openEmotePickerWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openEmotePicker', hash),
   openSettingsWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openSettings', hash),
+  openWhispersWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openWhispers', hash),
+  openHighlightsWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openHighlights', hash),
   openUserCardWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openUserCard', hash),
   sendEmotePick: (payload: string): Promise<void> => ipcRenderer.invoke('app:sendEmotePick', payload),
   onEmotePicked: (cb: (payload: string) => void): (() => void) => {
@@ -26,6 +28,19 @@ const api = {
   setAlwaysOnTop: (flag: boolean): Promise<void> => ipcRenderer.invoke('window:setAlwaysOnTop', flag),
   suspendAlwaysOnTop: (): Promise<void> => ipcRenderer.invoke('window:suspendAlwaysOnTop'),
   resumeAlwaysOnTop: (): Promise<void> => ipcRenderer.invoke('window:resumeAlwaysOnTop'),
+  focusSelf: (): Promise<void> => ipcRenderer.invoke('window:focusSelf'),
+  jumpToMessage: (payload: string): Promise<void> => ipcRenderer.invoke('app:jumpTo', payload),
+  onJumpTo: (cb: (payload: string) => void): (() => void) => {
+    const listener = (_e: unknown, payload: string): void => cb(payload)
+    ipcRenderer.on('app:jumpTo', listener)
+    return () => ipcRenderer.removeListener('app:jumpTo', listener)
+  },
+  overlayConfigure: (enabled: boolean, port: number, style?: unknown): Promise<void> =>
+    ipcRenderer.invoke('overlay:configure', enabled, port, style),
+  overlayPush: (channel: string, html: string, id: string, user: string): Promise<void> =>
+    ipcRenderer.invoke('overlay:push', channel, html, id, user),
+  overlayDelete: (channel: string, del: { id?: string; user?: string; all?: boolean }): Promise<void> =>
+    ipcRenderer.invoke('overlay:delete', channel, del),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:close'),
   notifyConfigChanged: (): Promise<void> => ipcRenderer.invoke('app:notifyConfigChanged'),
   onConfigChanged: (cb: () => void): (() => void) => {

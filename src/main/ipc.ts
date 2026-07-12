@@ -1,6 +1,7 @@
 import { ipcMain, safeStorage, shell, app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
+import { overlayConfigure, overlayDelete, overlayPush, OverlayDelete, OverlayStyle } from './overlayServer'
 
 function rememberEnabled(): boolean {
   const cfg = readConfig() as { settings?: { rememberWindowSize?: boolean } } | null
@@ -119,6 +120,28 @@ export function registerIpc(): void {
     })
   })
 
+  // standalone whispers window
+  ipcMain.handle('app:openWhispers', (e, hash: string) => {
+    createChildWindow(hash, {
+      width: 380,
+      height: 560,
+      title: 'StickiChat — Whispers',
+      stateKey: 'whispers',
+      parent: BrowserWindow.fromWebContents(e.sender)
+    })
+  })
+
+  // standalone highlights window
+  ipcMain.handle('app:openHighlights', (e, hash: string) => {
+    createChildWindow(hash, {
+      width: 340,
+      height: 620,
+      title: 'StickiChat — Highlights',
+      stateKey: 'highlights',
+      parent: BrowserWindow.fromWebContents(e.sender)
+    })
+  })
+
   // standalone settings window
   ipcMain.handle('app:openSettings', (e, hash: string) => {
     createChildWindow(hash, {
@@ -134,6 +157,13 @@ export function registerIpc(): void {
   ipcMain.handle('app:sendEmotePick', (e, payload: string) => {
     for (const w of BrowserWindow.getAllWindows()) {
       if (w.webContents.id !== e.sender.id) w.webContents.send('app:emotePicked', payload)
+    }
+  })
+
+  // "jump to this message" clicked in a standalone highlights window → main chat scrolls there
+  ipcMain.handle('app:jumpTo', (e, payload: string) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w.webContents.id !== e.sender.id) w.webContents.send('app:jumpTo', payload)
     }
   })
 
@@ -162,6 +192,15 @@ export function registerIpc(): void {
     BrowserWindow.fromWebContents(e.sender)?.close()
   })
 
+  // bring the calling window to the OS foreground (e.g. after picking an emote in the
+  // standalone picker the chat input should be ready for Enter immediately)
+  ipcMain.handle('window:focusSelf', (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win || win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  })
+
   // eyedropper: the OS magnifier loupe renders BELOW any always-on-top window (settings can be
   // a separate window while the main chat is pinned), so drop every pinned window for the pick
   // and restore them afterwards
@@ -173,6 +212,17 @@ export function registerIpc(): void {
   ipcMain.handle('window:resumeAlwaysOnTop', () => {
     for (const w of suspendedOnTop) if (!w.isDestroyed()) w.setAlwaysOnTop(true, 'screen-saver')
     suspendedOnTop = []
+  })
+
+  // OBS chat overlay: renderer streams pre-rendered lines; main serves them over SSE
+  ipcMain.handle('overlay:configure', (_e, enabled: boolean, port: number, style?: OverlayStyle) => {
+    overlayConfigure(!!enabled, Math.max(1024, Math.min(65535, port || 4715)), style)
+  })
+  ipcMain.handle('overlay:push', (_e, channel: string, html: string, id: string, user: string) => {
+    overlayPush(channel, html, id ?? '', user ?? '')
+  })
+  ipcMain.handle('overlay:delete', (_e, channel: string, del: OverlayDelete) => {
+    overlayDelete(channel, del ?? {})
   })
 
   // All HTTP goes through the main process so the renderer never hits CORS walls

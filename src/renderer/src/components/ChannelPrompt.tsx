@@ -21,6 +21,13 @@ export default function ChannelPrompt(): React.JSX.Element | null {
 
   const accept = (): void => {
     const layout = useLayoutStore.getState()
+    if (prompt.existing) {
+      // channel already open — just bring its tab forward
+      const tab = layout.tabs.find((t) => t.panes.some((p) => p.channel === prompt.channel))
+      if (tab) layout.setActiveTab(tab.id)
+      useUiStore.getState().setChannelPrompt(null)
+      return
+    }
     const accountId = useAccountsStore.getState().accounts[0]?.id ?? null
     const dest = useSettingsStore.getState().settings.raidPromptDest
     if (dest === 'tabs') {
@@ -37,15 +44,25 @@ export default function ChannelPrompt(): React.JSX.Element | null {
 
   return (
     <div className="channel-prompt">
-      <span className="channel-prompt-text">
-        🚨 {t('raid.addPrompt', { channel: prompt.channel })}
-      </span>
-      <button className="primary" onClick={accept}>
-        {t('raid.add')}
-      </button>
-      <button className="ghost" onClick={() => useUiStore.getState().setChannelPrompt(null)}>
-        ✕
-      </button>
+      {/* raid info on its own line — the nicks and buttons used to blur together */}
+      <div className="channel-prompt-text">
+        🚨{' '}
+        {prompt.from ? (
+          <>
+            {t('raid.raidWord')}: <b>{prompt.from}</b> → <b>{prompt.channel}</b>
+          </>
+        ) : (
+          t('raid.addPrompt', { channel: prompt.channel })
+        )}
+      </div>
+      <div className="channel-prompt-actions">
+        <button className="primary" onClick={accept}>
+          {prompt.existing ? t('raid.switch') : t('raid.add')} {prompt.channel}
+        </button>
+        <button className="ghost" onClick={() => useUiStore.getState().setChannelPrompt(null)}>
+          ✕
+        </button>
+      </div>
     </div>
   )
 }

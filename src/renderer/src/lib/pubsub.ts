@@ -3,18 +3,28 @@ import { ensureFreshToken } from './twitchAuth'
 import { useSettingsStore } from '../store/settings'
 
 /**
- * Twitch PubSub — used ONLY for channel-point redemptions. Unlike the EventSub redemption
- * subscription (which needs the broadcaster's own token), the PubSub topic
- * `community-points-channel-v1.<channelId>` is listenable with any viewer token, so a mod can
- * see every redemption — including the message-less ones that never reach us over IRC — with
- * the full reward name and cost. This is exactly how Chatterino does it.
+ * Twitch PubSub — two viewer-token topics EventSub can't fully replace:
+ *  - `community-points-channel-v1.<id>`: every redemption incl. message-less ones (Chatterino's trick)
+ *  - `raid.<id>`: outgoing raids the MOMENT the countdown starts on the Twitch page —
+ *    EventSub channel.raid only fires when the raid actually executes
  *
  * Caveat: Twitch is deprecating PubSub in favour of EventSub. When it is finally shut down this
- * listener stops working and only message-carrying redemptions (via IRC) remain visible.
+ * listener stops working and the EventSub paths remain as fallback.
  */
 const PUBSUB_URL = 'wss://pubsub-edge.twitch.tv'
 
+export interface RaidEvent {
+  /** raiding channel (one of ours) */
+  channelId: string
+  targetLogin: string
+  targetDisplay: string
+  /** update = countdown tick, go = raid executed, cancel = raid aborted */
+  kind: 'update' | 'go' | 'cancel'
+}
+
 export interface RedemptionEvent {
+  /** redemption id (stable — used for dedupe when persisting) */
+  id: string
   channelId: string
   userLogin: string
   userDisplay: string
@@ -33,15 +43,18 @@ export class PubSubClient {
   private getAccount: () => Account | undefined
   private getChannelIds: () => string[]
   private onRedeem: (e: RedemptionEvent) => void
+  private onRaid?: (e: RaidEvent) => void
 
   constructor(
     getAccount: () => Account | undefined,
     getChannelIds: () => string[],
-    onRedeem: (e: RedemptionEvent) => void
+    onRedeem: (e: RedemptionEvent) => void,
+    onRaid?: (e: RaidEvent) => void
   ) {
     this.getAccount = getAccount
     this.getChannelIds = getChannelIds
     this.onRedeem = onRedeem
+    this.onRaid = onRaid
     this.connect()
   }
 
@@ -84,6 +97,9 @@ export class PubSubClient {
       if (msg.type === 'MESSAGE' && msg.data?.topic?.startsWith('community-points-channel-v1.')) {
         this.handlePointsMessage(msg.data.topic, msg.data.message ?? '')
       }
+      if (msg.type === 'MESSAGE' && msg.data?.topic?.startsWith('raid.')) {
+        this.handleRaidMessage(msg.data.topic, msg.data.message ?? '')
+      }
       // RECONNECT: Twitch asks us to reconnect soon; closing triggers our backoff reconnect
       if (msg.type === 'RECONNECT') {
         try {
@@ -122,12 +138,41 @@ export class PubSubClient {
     const r = payload.data?.redemption
     if (!r) return
     this.onRedeem({
+      id: r.id ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       channelId,
       userLogin: (r.user?.login ?? '').toLowerCase(),
       userDisplay: r.user?.display_name || r.user?.login || '?',
       rewardTitle: r.reward?.title ?? '?',
       rewardCost: r.reward?.cost ?? 0,
       userInput: r.user_input ?? ''
+    })
+  }
+
+  /** outgoing raid updates: fire the countdown ("update") once, then the go event */
+  private handleRaidMessage(topic: string, raw: string): void {
+    if (!this.onRaid) return
+    const channelId = topic.slice('raid.'.length)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let payload: { type?: string; raid?: any }
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      return
+    }
+    const kinds: Record<string, RaidEvent['kind']> = {
+      raid_update_v2: 'update',
+      raid_go_v2: 'go',
+      raid_cancel_v2: 'cancel'
+    }
+    const kind = kinds[payload.type ?? '']
+    if (!kind) return
+    const r = payload.raid
+    if (!r?.target_login) return
+    this.onRaid({
+      channelId,
+      targetLogin: String(r.target_login).toLowerCase(),
+      targetDisplay: r.target_display_name || r.target_login,
+      kind
     })
   }
 
@@ -149,7 +194,7 @@ export class PubSubClient {
       this.send({
         type: 'LISTEN',
         nonce: Math.random().toString(36).slice(2),
-        data: { topics: [`community-points-channel-v1.${id}`], auth_token: token }
+        data: { topics: [`community-points-channel-v1.${id}`, `raid.${id}`], auth_token: token }
       })
     }
   }

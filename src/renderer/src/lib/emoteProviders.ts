@@ -14,7 +14,9 @@ interface SevenTvEmote {
   }
 }
 
-function sevenTvToEmote(e: SevenTvEmote): Emote {
+export type { SevenTvEmote }
+
+export function sevenTvToEmote(e: SevenTvEmote): Emote {
   const ZERO_WIDTH = 1 // ActiveEmoteFlag ZeroWidth
   const baseFile = e.data?.host?.files?.find((f) => f.name.startsWith('1x'))
   return {
@@ -34,11 +36,15 @@ export async function fetch7tvGlobal(): Promise<Emote[]> {
   return (j.emotes ?? []).map(sevenTvToEmote)
 }
 
-export async function fetch7tvChannel(twitchId: string): Promise<Emote[]> {
+export async function fetch7tvChannel(twitchId: string): Promise<{ emotes: Emote[]; setId: string | null }> {
   const res = await httpGet(`https://7tv.io/v3/users/twitch/${twitchId}`)
-  if (!res.ok) return []
-  const j = res.json as { emote_set?: { emotes?: SevenTvEmote[] } }
-  return (j.emote_set?.emotes ?? []).map(sevenTvToEmote)
+  if (!res.ok) return { emotes: [], setId: null }
+  const j = res.json as { emote_set?: { id?: string; emotes?: SevenTvEmote[] } }
+  return {
+    emotes: (j.emote_set?.emotes ?? []).map(sevenTvToEmote),
+    // the active set id — needed to subscribe to live add/remove events
+    setId: j.emote_set?.id ?? null
+  }
 }
 
 // ---------- BTTV ----------

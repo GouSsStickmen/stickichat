@@ -7,6 +7,7 @@ import {
   fetchFfzGlobal,
   mergeEmotes
 } from '../lib/emoteProviders'
+import { SevenTvEvents } from '../lib/seventvEvents'
 import { getChannelBadges, getCheermotes, getGlobalBadges, getUserEmotes, getUsers } from '../lib/helix'
 import type { TwitchUserEmote } from '../lib/helix'
 import { Account } from '../types'
@@ -27,6 +28,16 @@ export async function loadGlobalEmotes(): Promise<void> {
   useEmotesStore.getState().setGlobalEmotes(mergeEmotes(ffz, bttv, stv))
 }
 
+// live 7TV updates: an emote the broadcaster adds/removes appears/disappears instantly
+const sevenTvEvents = new SevenTvEvents(({ channel, added, removed }) => {
+  const cur = useEmotesStore.getState().channelEmotes[channel]
+  if (!cur) return
+  const next = new Map(cur)
+  for (const code of removed) next.delete(code)
+  for (const e of added) next.set(e.code, e)
+  useEmotesStore.getState().setChannelEmotes(channel, next)
+})
+
 export async function loadChannelEmotes(channel: string, twitchId: string): Promise<void> {
   if (channelLoaded.has(channel)) return
   channelLoaded.add(channel)
@@ -35,7 +46,8 @@ export async function loadChannelEmotes(channel: string, twitchId: string): Prom
     fetchBttvChannel(twitchId),
     fetch7tvChannel(twitchId)
   ])
-  useEmotesStore.getState().setChannelEmotes(channel, mergeEmotes(ffz, bttv, stv))
+  useEmotesStore.getState().setChannelEmotes(channel, mergeEmotes(ffz, bttv, stv.emotes))
+  if (stv.setId) sevenTvEvents.watch(channel, stv.setId)
 }
 
 export async function loadGlobalBadges(): Promise<void> {
@@ -189,4 +201,19 @@ export function resetEmoteCache(): void {
   channelLoaded.clear()
   globalBadgesLoaded = false
   channelBadgesLoaded.clear()
+  cheermotesLoaded.clear()
+}
+
+/** F5: force re-fetch EVERYTHING emote/badge-related for every known channel */
+export function reloadAllEmotes(): void {
+  resetEmoteCache()
+  loadGlobalEmotes()
+  loadGlobalBadges()
+  const { channelIds } = useChatStore.getState()
+  for (const [channel, id] of Object.entries(channelIds)) {
+    if (!id) continue
+    loadChannelEmotes(channel, id)
+    loadChannelBadges(channel, id)
+    loadCheermotes(channel, id)
+  }
 }

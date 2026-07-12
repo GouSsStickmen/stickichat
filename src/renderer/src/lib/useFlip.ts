@@ -14,14 +14,19 @@ export function useFlip(
   itemSelector: string,
   dragging: boolean
 ): void {
-  const prevRects = useRef(new Map<string, DOMRect>())
+  const prevRects = useRef(new Map<string, { left: number; top: number }>())
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) return
+    // positions are recorded relative to the CONTAINER, not the viewport: scrolling doesn't
+    // re-render, so viewport-based rects went stale and the next update animated a fake
+    // "jump" equal to however far the user had scrolled
+    const base = container.getBoundingClientRect()
     for (const el of Array.from(container.querySelectorAll<HTMLElement>(itemSelector))) {
       const id = el.dataset.flipid
       if (!id) continue
-      const rect = el.getBoundingClientRect()
+      const r = el.getBoundingClientRect()
+      const rect = { left: r.left - base.left, top: r.top - base.top }
       if (dragging) {
         prevRects.current.set(id, rect)
         continue

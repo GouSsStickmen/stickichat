@@ -127,8 +127,8 @@ export function tokenizeMessage(
         tokens.push({ kind: 'cheer', url: cheer.tier.url, bits: cheer.bits, color: cheer.tier.color })
         continue
       }
-      // a leading "!command" behaves like nicks/emotes: right-click puts it into the input
-      if (tokens.length === 0 && /^![^\s!]\S*$/.test(piece)) {
+      // a "!command" word anywhere in the message (incl. /me): right-click puts it into the input
+      if (/^![^\s!]\S*$/.test(piece)) {
         tokens.push({ kind: 'command', text: piece })
         continue
       }

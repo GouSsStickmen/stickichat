@@ -47,6 +47,8 @@ export const en = {
   // Input
   'input.placeholder': 'Send a message…',
   'input.placeholderReadOnly': 'Add an account to chat',
+  'input.timedOut': 'You are timed out — {seconds}s left',
+  'input.banned': 'You are banned in this chat',
   'input.send': 'Send',
 
   // Reply
@@ -290,6 +292,8 @@ export const en = {
   'btn.type.snippet': 'Snippet',
   'btn.type.link': 'Quick link',
   'btn.type.fill': 'Fill input (no send)',
+  'btn.type.resend': 'Send this message as mine',
+  'btn.type.msgToInput': 'Put message text into input',
 
   // New settings sections
   'set.chat': 'Chat',
@@ -301,9 +305,14 @@ export const en = {
 
   // Highlight categories
   'hl.mention': 'Mentions of me',
+  'set.flashColor': 'Jump-to-message flash color',
+  'hint.flashColor': 'The color a message blinks with when you click a reply reference to jump to it.',
   'hl.kind.own': 'My messages',
   'hl.kind.redeem': 'Channel-point redemption',
   'hl.kind.bits': 'Bits / cheer',
+  'hl.kind.raider': 'Raider (arrived with a raid)',
+  'set.raiderMinutes': 'Raider highlight duration (min)',
+  'hint.raiderMinutes': 'After an incoming raid, viewers writing their first message within this window get the "raider" highlight. 0 turns the tracking off.',
   'hl.kind.firstMsg': 'First message ever',
   'hl.kind.firstStream': 'First message this stream',
   'hl.kind.watchStreak': 'Watch streak',
@@ -358,10 +367,50 @@ export const en = {
   'whisper.new': 'New whisper',
   'whisper.nick': 'Nickname…',
   'whisper.noUser': 'User not found',
+  'whisper.favorite': 'Favorite contact',
+  'set.whispersAsWindow': 'Open whispers in a separate window',
+  'set.highlightsAsWindow': 'Open the highlights panel in a separate window',
+  'highlights.redeems': 'Redeems',
+  'highlights.openWindow': 'Open in a separate window',
+
+  // OBS overlay
+  'set.overlay': 'Overlay (OBS)',
+  'overlay.hint':
+    'Transparent chat overlay for OBS: enable the server, copy the URL and add it in OBS as a Browser Source. Style changes apply to newly connected sources.',
+  'overlay.enabled': 'Enable overlay server',
+  'overlay.port': 'Port',
+  'overlay.style': 'Appearance',
+  'overlay.liveHint': 'Changes apply to connected OBS sources instantly — no refresh needed.',
+  'overlay.fade': 'Hide messages after (sec)',
+  'overlay.fade.hint': '0 — messages stay until pushed out by new ones.',
+  'overlay.max': 'Max lines on screen',
+  'overlay.lineGap': 'Space between messages (px)',
+  'overlay.badges': 'Show badges',
+  'overlay.bold': 'Bold text',
+  'overlay.hideCmd': 'Hide "!command" messages',
+  'overlay.textColor': 'Text color',
+  'overlay.outline': 'Text outline (px + color)',
+  'overlay.outline.hint': 'Outline keeps the text readable over gameplay. 0 turns it off.',
+  'overlay.bg': 'Line background (color + opacity)',
+  'overlay.bg.hint': 'A plate behind each line; opacity 0 = fully transparent.',
+  'overlay.content': 'Content',
+  'overlay.showRedeems': 'Show redemptions',
+  'overlay.showBits': 'Show bits / cheers',
+  'overlay.showSubs': 'Show subs / events',
+  'overlay.showModActions': 'Show mod actions (timeouts / bans)',
+  'overlay.showModActions.hint': 'Off by default — viewers usually don’t need to see moderation on stream.',
+  'overlay.hiddenUsers': 'Hidden users (comma-separated)',
+  'overlay.hiddenUsers.hint': 'These users never appear on the overlay (e.g. bots).',
+  'overlay.url': 'URL for OBS',
+  'overlay.copy': 'Copy URL',
+  'overlay.copied': 'Overlay URL copied — add it as a Browser Source in OBS',
   'whisper.needReauth': 'To receive whispers, re-authorize {login} in Settings → Accounts (a new permission is required).',
 
   // Raid prompt
   'raid.addPrompt': 'Raid! Add the {channel} chat?',
+  'raid.addPromptFull': 'Raid: {from} → {channel}. Add the {channel} chat?',
+  'raid.raidWord': 'Raid',
+  'raid.switch': 'Go to',
   'raid.add': 'Add',
   'set.raidDest': 'Where to add the raided channel',
   'set.raidDest.tabs': 'New tab',
@@ -389,6 +438,15 @@ export const en = {
 
   // Shoutout
   'mod.shoutoutGiven': '📣 Shoutout for {user}',
+
+  // Full mod-action lines (EventSub channel.moderate)
+  'modact.ban': '🛡 {mod} banned {user}',
+  'modact.timeout': '🛡 {mod} timed out {user} for {duration}',
+  'modact.unban': '🛡 {mod} unbanned {user}',
+  'modact.delete': '🛡 {mod} deleted a message by {user}: {text}',
+  'modact.clear': '🛡 {mod} cleared the chat',
+  'modact.warn': '🛡 {mod} warned {user}',
+  'modact.needReauth': 'To see WHO performs mod actions, re-authorize {login} (new permissions required).',
 
   // Command token
   'cmd.insertHint': 'Right click — put the command into the input',

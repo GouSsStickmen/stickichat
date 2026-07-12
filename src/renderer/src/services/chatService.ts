@@ -10,11 +10,11 @@ import { ensureFreshToken } from '../lib/twitchAuth'
 import { translate } from '../i18n'
 import { useAccountsStore } from '../store/accounts'
 import { useUiStore } from '../store/ui'
-import { useWhispersStore } from '../store/whispers'
+import { useWhispersStore, getOpenWhisperThread } from '../store/whispers'
 import { playMentionSound, playFirstMessageSound, playKeywordSound, playStreamUpSound, playWhisperSound } from '../lib/sound'
 import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
 import { EventSubClient, EventSubDesired } from '../lib/eventsub'
-import { PubSubClient, RedemptionEvent } from '../lib/pubsub'
+import { PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -44,6 +44,9 @@ class ChatService {
   private mysteryGifts = new Map<string, { id: string; until: number }>()
   private eventSub: EventSubClient | null = null
   private pubSub: PubSubClient | null = null
+  /** channels with an ACTIVE channel.moderate subscription (their bare IRC ban/timeout
+   *  lines are suppressed — the full "who did it" lines replace them) */
+  private modEventChannels = new Set<string>()
   /** channels we've polled at least once (so we don't fire a "went live" alert on startup) */
   private liveKnown = new Set<string>()
   /** channel -> was live at the previous poll */
@@ -97,19 +100,33 @@ class ChatService {
     // mod status can change while the app is closed — refresh the cached list once per launch.
     // Main window only: utility windows (user card, detached) also call start(), and their
     // parallel refreshes race the token rotation and produce spurious 401s
-    if (!window.location.hash) {
+    const hash = window.location.hash
+    const isMain = !hash
+    if (isMain) {
       import('./accountService').then(({ refreshModeratedChannels }) => {
         for (const a of useAccountsStore.getState().accounts) refreshModeratedChannels(a.id)
       })
-      // EventSub carries what IRC no longer does: whispers (removed from IRC in 2023) and
-      // raids started by another mod / from the Twitch dashboard. Main window only.
+    }
+    // EventSub carries what IRC no longer does: whispers, raids, the who-did-what mod feed.
+    // Whisper/raid subs live in the main window only; the MOD FEED also runs in utility
+    // windows that show chat (usercard/highlights/detached), each with its own store.
+    if (isMain || hash.startsWith('#usercard') || hash.startsWith('#highlights') || hash.startsWith('#detached')) {
       this.eventSub = new EventSubClient(
-        () => this.desiredEventSubs(),
-        (type, event) => this.handleEventSub(type, event),
-        (desired, status) => this.onEventSubError(desired, status)
+        () => this.desiredEventSubs(isMain),
+        (type, event, envelopeId) => this.handleEventSub(type, event, envelopeId),
+        (desired, status) => this.onEventSubError(desired, status),
+        (desired) => {
+          // suppress duplicate IRC lines only once the rich mod feed is REALLY active
+          if (desired.type === 'channel.moderate' && desired.channelLogin) {
+            this.modEventChannels.add(desired.channelLogin)
+          }
+        }
       )
-      // PubSub gives us channel-point redemptions (incl. message-less ones) with full reward
-      // names, which no viewer-token EventSub subscription can — same trick Chatterino uses
+    }
+    // PubSub gives us channel-point redemptions (incl. message-less ones) with full reward
+    // names, which no viewer-token EventSub subscription can — same trick Chatterino uses.
+    // Runs in the main window AND the standalone highlights window (its redeems tab).
+    if (!window.location.hash || window.location.hash.startsWith('#highlights')) {
       this.pubSub = new PubSubClient(
         () => useAccountsStore.getState().accounts.find((a) => a._accessToken),
         () => {
@@ -118,9 +135,38 @@ class ChatService {
             .map((ch) => ids[ch])
             .filter(Boolean)
         },
-        (e) => this.handleRedemption(e)
+        (e) => this.handleRedemption(e),
+        (e) => this.handlePubSubRaid(e)
       )
     }
+  }
+
+  /** "channel:target" raids we've already announced/prompted (PubSub + EventSub overlap) */
+  private raidAnnounced = new Map<string, number>()
+
+  /** outgoing raid seen on PubSub — catches raids started from the Twitch page instantly */
+  private handlePubSubRaid(e: RaidEvent): void {
+    const ids = useChatStore.getState().channelIds
+    const channel = Object.keys(ids).find((login) => ids[login] === e.channelId)
+    if (!channel) return
+    const key = `${channel}:${e.targetLogin}`
+    if (e.kind === 'cancel') {
+      // aborted raid: forget it, so the NEXT raid to the same target prompts again
+      this.raidAnnounced.delete(key)
+      useUiStore.getState().setChannelPrompt(null)
+      return
+    }
+    // the countdown repeats raid_update every second — announce only once per raid,
+    // but a fresh raid after go/cancel prompts again (short 2-minute window)
+    const last = this.raidAnnounced.get(key) ?? 0
+    if (Date.now() - last < 2 * 60_000) {
+      this.raidAnnounced.set(key, Date.now()) // keep the window sliding during the countdown
+      return
+    }
+    this.raidAnnounced.set(key, Date.now())
+    const lang = useSettingsStore.getState().settings.language
+    this.localInfo(channel, translate(lang, 'info.raidStart', { target: e.targetDisplay, count: '…' }))
+    this.promptAddChannel(channel, e.targetLogin)
   }
 
   /** a channel-point redemption from PubSub — announce it with the real reward name/cost */
@@ -138,42 +184,89 @@ class ChatService {
     })
     const full = e.userInput ? `${text}: ${e.userInput}` : text
     const msg = this.systemMessage(channel, full)
+    msg.id = `redeem-${e.id}`
     msg.redeemed = true
     this.queue(channel, msg)
+    this.persistRedeem(channel, msg.id, full, msg.timestamp)
+  }
+
+  /**
+   * Redemption lines exist only in the window that received the PubSub event — persist them
+   * so the highlights window (or a restart) can replay recent ones instead of starting empty.
+   */
+  private redeemKey(channel: string): string {
+    return `sticki:redeems:${channel}`
+  }
+
+  private persistRedeem(channel: string, id: string, text: string, ts: number): void {
+    try {
+      const raw = localStorage.getItem(this.redeemKey(channel))
+      const list = raw ? (JSON.parse(raw) as { id: string; text: string; ts: number }[]) : []
+      if (list.some((r) => r.id === id)) return // the other window already wrote it
+      list.push({ id, text, ts })
+      localStorage.setItem(this.redeemKey(channel), JSON.stringify(list.slice(-100)))
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  private loadPersistedRedeems(channel: string): ChatMessage[] {
+    try {
+      const raw = localStorage.getItem(this.redeemKey(channel))
+      const list = raw ? (JSON.parse(raw) as { id: string; text: string; ts: number }[]) : []
+      return list.map((r) => {
+        const msg = this.systemMessage(channel, r.text)
+        msg.id = r.id
+        msg.timestamp = r.ts
+        msg.redeemed = true
+        msg.historical = true
+        return msg
+      })
+    } catch {
+      return []
+    }
   }
 
   /** a subscription was rejected — the common cause is an account authorized before the
    *  whisper scope existed, so surface a single actionable hint instead of failing silently */
   private eventSubErrorShown = false
+  private modSubErrorShown = false
   private onEventSubError(desired: EventSubDesired, status: number): void {
-    if (desired.type !== 'user.whisper.message') return
-    if (this.eventSubErrorShown) return
-    this.eventSubErrorShown = true
     const lang = useSettingsStore.getState().settings.language
-    // a scope/permission problem (401/403) is fixable by re-auth; show that hint. Any other
-    // status is unexpected — surface the code so it can actually be diagnosed.
-    if (status === 401 || status === 403) {
-      useUiStore.getState().toast(translate(lang, 'whisper.needReauth', { login: desired.account.login }), 'error')
-    } else {
-      useUiStore.getState().toast(`Whisper EventSub: HTTP ${status}`, 'error')
+    if (desired.type === 'user.whisper.message') {
+      if (this.eventSubErrorShown) return
+      this.eventSubErrorShown = true
+      // a scope/permission problem (401/403) is fixable by re-auth; show that hint. Any other
+      // status is unexpected — surface the code so it can actually be diagnosed.
+      if (status === 401 || status === 403) {
+        useUiStore.getState().toast(translate(lang, 'whisper.needReauth', { login: desired.account.login }), 'error')
+      } else {
+        useUiStore.getState().toast(`Whisper EventSub: HTTP ${status}`, 'error')
+      }
+    } else if (desired.type === 'channel.moderate' && (status === 401 || status === 403)) {
+      if (this.modSubErrorShown) return
+      this.modSubErrorShown = true
+      useUiStore.getState().toast(translate(lang, 'modact.needReauth', { login: desired.account.login }), 'error')
     }
   }
 
-  /** whisper (per account) + raid-out (per open channel) subscriptions for the live session */
-  private desiredEventSubs(): EventSubDesired[] {
+  /** whisper (per account, main only) + raid-out + mod-feed subscriptions for this session */
+  private desiredEventSubs(includeGlobal: boolean): EventSubDesired[] {
     const accounts = useAccountsStore.getState().accounts
     const out: EventSubDesired[] = []
-    for (const a of accounts) {
-      if (!a._accessToken) continue
-      out.push({ account: a, type: 'user.whisper.message', version: '1', condition: { user_id: a.id }, key: `whisper:${a.id}` })
+    if (includeGlobal) {
+      for (const a of accounts) {
+        if (!a._accessToken) continue
+        out.push({ account: a, type: 'user.whisper.message', version: '1', condition: { user_id: a.id }, key: `whisper:${a.id}` })
+      }
     }
     const auth = accounts.find((a) => a._accessToken)
-    if (auth) {
-      const ids = useChatStore.getState().channelIds
-      const open = allOpenChannels(useLayoutStore.getState().tabs)
-      for (const ch of open) {
-        const cid = ids[ch]
-        if (!cid) continue // learned from ROOMSTATE shortly after join; resync() picks it up
+    const ids = useChatStore.getState().channelIds
+    const open = allOpenChannels(useLayoutStore.getState().tabs)
+    for (const ch of open) {
+      const cid = ids[ch]
+      if (!cid) continue // learned from ROOMSTATE shortly after join; resync() picks it up
+      if (auth && includeGlobal) {
         out.push({
           account: auth,
           type: 'channel.raid',
@@ -182,13 +275,27 @@ class ChatService {
           key: `raid:${cid}`
         })
       }
+      // full moderation feed ("who banned/deleted whom") for channels one of my accounts mods
+      const modAccount = accounts.find(
+        (a) => a._accessToken && (a.moderatedChannelIds.includes(cid) || a.login.toLowerCase() === ch)
+      )
+      if (modAccount) {
+        out.push({
+          account: modAccount,
+          type: 'channel.moderate',
+          version: '2',
+          condition: { broadcaster_user_id: cid, moderator_user_id: modAccount.id },
+          key: `mod:${cid}`,
+          channelLogin: ch
+        })
+      }
     }
     return out
   }
 
   /** dispatch an EventSub event to the right handler */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private handleEventSub(type: string, event: Record<string, any>): void {
+  private handleEventSub(type: string, event: Record<string, any>, envelopeId = ''): void {
     if (type === 'user.whisper.message') {
       const account = useAccountsStore.getState().accounts.find((a) => a.id === event.to_user_id)
       if (!account) return
@@ -203,7 +310,11 @@ class ChatService {
         incoming: true
       })
       const settings = useSettingsStore.getState().settings
-      if (settings.whisperSound) playWhisperSound(settings)
+      // no ping for the conversation the user is looking at right now (any window)
+      const openThread = getOpenWhisperThread()
+      if (settings.whisperSound && openThread !== (event.from_user_login ?? '').toLowerCase()) {
+        playWhisperSound(settings)
+      }
     } else if (type === 'channel.raid') {
       const fromLogin = (event.from_broadcaster_user_login ?? '').toLowerCase()
       const toLogin = (event.to_broadcaster_user_login ?? '').toLowerCase()
@@ -211,10 +322,131 @@ class ChatService {
       const viewers = event.viewers ?? 0
       const open = allOpenChannels(useLayoutStore.getState().tabs)
       if (!open.includes(fromLogin)) return
+      // PubSub usually announces the raid first (at countdown start) — don't repeat
+      const key = `${fromLogin}:${toLogin}`
+      const last = this.raidAnnounced.get(key) ?? 0
+      if (Date.now() - last < 2 * 60_000) return
+      this.raidAnnounced.set(key, Date.now())
       const lang = useSettingsStore.getState().settings.language
       this.localInfo(fromLogin, translate(lang, 'info.raidStart', { target: toName, count: String(viewers) }))
       // outgoing raid from an open channel — offer to follow it to the target
       this.promptAddChannel(fromLogin, toLogin)
+    } else if (type === 'channel.moderate') {
+      this.handleModerateEvent(event, envelopeId)
+    }
+  }
+
+  /** channel.moderate v2 — the full "who did what to whom" moderation feed */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private handleModerateEvent(event: Record<string, any>, envelopeId = ''): void {
+    const channel = (event.broadcaster_user_login ?? '').toLowerCase()
+    if (!channel) return
+    const lang = useSettingsStore.getState().settings.language
+    const mod = event.moderator_user_name || event.moderator_user_login || '?'
+    const action = event.action as string
+    let text = ''
+    let targetId = ''
+    switch (action) {
+      case 'ban': {
+        targetId = event.ban?.user_id ?? ''
+        const reason = event.ban?.reason ? ` (${event.ban.reason})` : ''
+        text = translate(lang, 'modact.ban', { mod, user: event.ban?.user_name ?? '?' }) + reason
+        if (targetId && useAccountsStore.getState().accounts.some((a) => a.id === targetId)) {
+          useChatStore.getState().setSelfTimeout(channel, targetId, -1, event.ban?.reason || undefined)
+        }
+        break
+      }
+      case 'timeout': {
+        targetId = event.timeout?.user_id ?? ''
+        const until = event.timeout?.expires_at ? new Date(event.timeout.expires_at).getTime() : 0
+        const secs = until ? Math.max(1, Math.round((until - Date.now()) / 1000)) : 0
+        const reason = event.timeout?.reason ? ` (${event.timeout.reason})` : ''
+        text =
+          translate(lang, 'modact.timeout', {
+            mod,
+            user: event.timeout?.user_name ?? '?',
+            duration: secs >= 60 ? `${formatDuration(secs)} (${secs}с)` : `${secs}с`
+          }) + reason
+        // my own account: remember the reason for the locked-input placeholder
+        if (targetId && until && useAccountsStore.getState().accounts.some((a) => a.id === targetId)) {
+          useChatStore.getState().setSelfTimeout(channel, targetId, until, event.timeout?.reason || undefined)
+        }
+        break
+      }
+      case 'unban':
+        targetId = event.unban?.user_id ?? ''
+        text = translate(lang, 'modact.unban', { mod, user: event.unban?.user_name ?? '?' })
+        break
+      case 'untimeout':
+        targetId = event.untimeout?.user_id ?? ''
+        text = translate(lang, 'modact.unban', { mod, user: event.untimeout?.user_name ?? '?' })
+        break
+      case 'delete': {
+        targetId = event.delete?.user_id ?? ''
+        const body = String(event.delete?.message_body ?? '')
+        const short = body.length > 80 ? `${body.slice(0, 80)}…` : body
+        text = translate(lang, 'modact.delete', { mod, user: event.delete?.user_name ?? '?', text: short })
+        break
+      }
+      case 'clear':
+        text = translate(lang, 'modact.clear', { mod })
+        break
+      case 'warn':
+        targetId = event.warn?.user_id ?? ''
+        text = translate(lang, 'modact.warn', { mod, user: event.warn?.user_name ?? '?' })
+        break
+      default:
+        // mode toggles (slow, emoteonly, followers…) and the rest — compact generic line
+        text = `🛡 ${mod}: ${action}`
+    }
+    if (!text) return
+    const msg = this.systemMessage(channel, text)
+    if (envelopeId) msg.id = `modact-${envelopeId}` // stable across windows for persistence
+    msg.modAction = true
+    if (targetId) msg.modTargetUserId = targetId
+    this.queue(channel, msg)
+    this.persistModAction(channel, msg)
+  }
+
+  /**
+   * Mod-action lines exist only in windows with a live mod feed — persist them (like
+   * redemptions) so a reopened usercard/highlights window replays the recent ones.
+   */
+  private modActKey(channel: string): string {
+    return `sticki:modacts:${channel}`
+  }
+
+  private persistModAction(channel: string, msg: ChatMessage): void {
+    try {
+      const raw = localStorage.getItem(this.modActKey(channel))
+      const list = raw
+        ? (JSON.parse(raw) as { id: string; text: string; ts: number; target?: string }[])
+        : []
+      if (list.some((r) => r.id === msg.id)) return // another window already wrote it
+      list.push({ id: msg.id, text: msg.systemText ?? '', ts: msg.timestamp, target: msg.modTargetUserId })
+      localStorage.setItem(this.modActKey(channel), JSON.stringify(list.slice(-100)))
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  private loadPersistedModActions(channel: string): ChatMessage[] {
+    try {
+      const raw = localStorage.getItem(this.modActKey(channel))
+      const list = raw
+        ? (JSON.parse(raw) as { id: string; text: string; ts: number; target?: string }[])
+        : []
+      return list.map((r) => {
+        const msg = this.systemMessage(channel, r.text)
+        msg.id = r.id
+        msg.timestamp = r.ts
+        msg.modAction = true
+        msg.modTargetUserId = r.target
+        msg.historical = true
+        return msg
+      })
+    } catch {
+      return []
     }
   }
 
@@ -353,6 +585,14 @@ class ChatService {
             const m = this.privmsgToChatMessage(parsed)
             if (m) {
               m.historical = true
+              // mentions/keywords must be flagged for history too, or the "mentions" tab of
+              // the highlights panel starts empty after every launch (no sounds: historical)
+              const myLogins = useAccountsStore.getState().accounts.map((a) => a.login.toLowerCase())
+              if (m.replyParent && myLogins.includes(m.replyParent.login.toLowerCase())) {
+                m.replyToMe = true
+                m.isMention = true
+              }
+              this.detectMention(m)
               msgs.push(m)
             }
           } else if (parsed.command === 'USERNOTICE') {
@@ -361,7 +601,11 @@ class ChatService {
             if (m) msgs.push(m)
           }
         }
-        if (msgs.length) useChatStore.getState().prependMessages(channel, msgs)
+        // replay recent redemptions + mod actions (they never come from IRC history)
+        const redeems = this.loadPersistedRedeems(channel)
+        const modacts = this.loadPersistedModActions(channel)
+        const all = [...msgs, ...redeems, ...modacts].sort((a, b) => a.timestamp - b.timestamp)
+        if (all.length) useChatStore.getState().prependMessages(channel, all)
       })
     }
   }
@@ -382,6 +626,23 @@ class ChatService {
             seen.add(msg.login)
             msg.isFirstInSession = true
             this.persistFirstSeen(msg.channel)
+          }
+          // raid window: viewers whose first message lands shortly after a raid are raiders
+          const raidUntil = this.raidWindow.get(msg.channel)
+          if (raidUntil) {
+            if (Date.now() > raidUntil) {
+              this.raidWindow.delete(msg.channel)
+              this.raiders.delete(msg.channel)
+              this.raidSource.delete(msg.channel)
+            } else {
+              const raiders = this.raiders.get(msg.channel)
+              if (raiders?.has(msg.login)) msg.raider = true
+              else if (msg.isFirstInSession && raiders) {
+                raiders.add(msg.login)
+                msg.raider = true
+              }
+              if (msg.raider) msg.raiderFrom = this.raidSource.get(msg.channel)
+            }
           }
           const myLogins = useAccountsStore.getState().accounts.map((a) => a.login.toLowerCase())
           if (msg.replyParent && myLogins.includes(msg.replyParent.login.toLowerCase())) {
@@ -420,6 +681,10 @@ class ChatService {
           if (userId) useChatStore.getState().markUserMessagesDeleted(channel, userId)
           const dur = m.tags['ban-duration']
           const secs = dur ? parseInt(dur, 10) : 0
+          // one of MY accounts got timed out / banned here → the input locks with a countdown
+          if (userId && useAccountsStore.getState().accounts.some((a) => a.id === userId)) {
+            useChatStore.getState().setSelfTimeout(channel, userId, dur ? Date.now() + secs * 1000 : -1)
+          }
           const text = dur
             ? translate(lang, 'misc.timedOut', {
                 user: m.trailing,
@@ -427,16 +692,31 @@ class ChatService {
                 duration: secs >= 60 ? `${formatDuration(secs)} (${secs}с)` : `${secs}с`
               })
             : translate(lang, 'misc.banned', { user: m.trailing })
-          this.queue(channel, this.systemMessage(channel, text))
+          // full "who did it" lines come from channel.moderate where we're a mod — the bare
+          // IRC line would duplicate them there
+          if (!this.modEventChannels.has(channel)) {
+            const sys = this.systemMessage(channel, text)
+            sys.modAction = true
+            sys.modTargetUserId = userId
+            this.queue(channel, sys)
+          }
+          // the overlay drops that user's lines either way
+          if (!window.location.hash && userId) window.sticki.overlayDelete(channel, { user: userId })
         } else {
           useChatStore.getState().clearChannel(channel)
-          this.queue(channel, this.systemMessage(channel, translate(lang, 'misc.chatCleared')))
+          const sys = this.systemMessage(channel, translate(lang, 'misc.chatCleared'))
+          sys.modAction = true
+          this.queue(channel, sys)
+          if (!window.location.hash) window.sticki.overlayDelete(channel, { all: true })
         }
         break
       }
       case 'CLEARMSG': {
         const id = m.tags['target-msg-id']
-        if (id && m.channel) useChatStore.getState().markDeleted(m.channel, id)
+        if (id && m.channel) {
+          useChatStore.getState().markDeleted(m.channel, id)
+          if (!window.location.hash) window.sticki.overlayDelete(m.channel, { id })
+        }
         break
       }
       case 'USERNOTICE': {
@@ -450,14 +730,23 @@ class ChatService {
             msg.announceColor = (m.tags['msg-param-color'] || 'PRIMARY').toLowerCase()
           }
           if (m.tags['msg-id'] === 'viewermilestone') msg.watchStreak = true
-          if (m.tags['msg-id'] === 'raid') this.maybePromptRaidChannel(m)
-          // mass gifts: the "X дарує N підписок" header groups the individual
-          // subgift lines that follow — they stay collapsed until clicked
+          if (m.tags['msg-id'] === 'raid') this.onIncomingRaid(m, msg)
+          // mass gifts: the "X дарує N підписок" header groups the individual subgift lines.
+          // Twitch delivers them in ANY order — a late header must also swallow subgifts
+          // that already went through (pending queue + store).
           const login = (m.tags['login'] || '').toLowerCase()
           if (m.tags['msg-id'] === 'submysterygift') {
             msg.giftGroupId = msg.id
             this.mysteryGifts.set(`${m.channel}:${login}`, { id: msg.id, until: Date.now() + 90_000 })
+            const since = Date.now() - 90_000
+            // subgifts still waiting in the flush queue
+            for (const p of this.pendingByChannel.get(m.channel) ?? []) {
+              if (p.giftFrom === login && !p.groupedUnder && p.timestamp >= since) p.groupedUnder = msg.id
+            }
+            // subgifts already rendered
+            useChatStore.getState().groupGifts(m.channel, login, msg.id, since)
           } else if (m.tags['msg-id'] === 'subgift') {
+            msg.giftFrom = login
             const g = this.mysteryGifts.get(`${m.channel}:${login}`)
             if (g && Date.now() < g.until) msg.groupedUnder = g.id
           }
@@ -561,9 +850,12 @@ class ChatService {
     const login = m.tags['login'] || m.nick
     if (!login) return null
     const replyLogin = m.tags['reply-parent-user-login']
-    // channel-point redemptions: custom rewards carry custom-reward-id,
-    // "highlight my message" arrives as msg-id=highlighted-message
-    const redeemed = !!m.tags['custom-reward-id'] || m.tags['msg-id'] === 'highlighted-message'
+    // channel-point redemptions: custom rewards carry custom-reward-id, "highlight my
+    // message" arrives as msg-id=highlighted-message. First-ever messages sometimes carry a
+    // highlight msg-id too — without a reward id those are NOT redemptions.
+    const redeemed =
+      !!m.tags['custom-reward-id'] ||
+      (m.tags['msg-id'] === 'highlighted-message' && m.tags['first-msg'] !== '1')
     const bits = m.tags['bits'] ? parseInt(m.tags['bits'], 10) || undefined : undefined
     return {
       redeemed: redeemed || undefined,
@@ -694,6 +986,14 @@ class ChatService {
     if (this.flushTimer === null) {
       this.flushTimer = window.setTimeout(() => this.flush(), 60)
     }
+    // OBS overlay: stream rendered lines to the local SSE server (main window only —
+    // detached/usercard windows join channels too and would duplicate every line)
+    if (!window.location.hash && useSettingsStore.getState().settings.overlayEnabled) {
+      import('../lib/overlayRender').then(({ renderOverlayHtml }) => {
+        const html = renderOverlayHtml(msg)
+        if (html) window.sticki.overlayPush(channel, html, msg.id, msg.userId)
+      })
+    }
   }
 
   private flush(): void {
@@ -713,20 +1013,41 @@ class ChatService {
   private promptAddChannel(contextChannel: string, targetChannel: string): void {
     const s = useSettingsStore.getState().settings
     if (!s.raidPrompt || !targetChannel) return
-    const open = allOpenChannels(useLayoutStore.getState().tabs)
-    if (open.includes(targetChannel)) return
     if (s.raidPromptActiveOnly) {
       const { tabs, activeTabId } = useLayoutStore.getState()
       const active = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
       if (!active.includes(contextChannel)) return
     }
-    useUiStore.getState().setChannelPrompt({ channel: targetChannel })
+    // channel already open somewhere → offer to switch to that tab instead of adding
+    const open = allOpenChannels(useLayoutStore.getState().tabs)
+    useUiStore.getState().setChannelPrompt({
+      channel: targetChannel,
+      from: contextChannel,
+      existing: open.includes(targetChannel)
+    })
   }
 
-  /** an incoming raid (someone raids a channel we watch) — offer to add the raider's channel */
-  private maybePromptRaidChannel(m: IrcMessage): void {
+  /** channel -> raid-arrival window: viewers whose first message lands inside it are raiders */
+  private raidWindow = new Map<string, number>()
+  /** channel -> logins marked as raiders (highlighted while the raid window lasts) */
+  private raiders = new Map<string, Set<string>>()
+  /** channel -> the streamer whose raid the current raider window belongs to */
+  private raidSource = new Map<string, string>()
+
+  /**
+   * An incoming raid (someone raids a channel we watch). No "add channel" prompt here —
+   * only OUTGOING raids offer that. Instead: enable the mod shoutout button on the raid
+   * message and open the raider-highlight window.
+   */
+  private onIncomingRaid(m: IrcMessage, msg: ChatMessage): void {
     const raider = (m.tags['msg-param-login'] || m.tags['login'] || '').toLowerCase()
-    if (m.channel) this.promptAddChannel(m.channel, raider)
+    if (raider) msg.raidFrom = raider
+    const minutes = useSettingsStore.getState().settings.raiderHighlightMinutes
+    if (m.channel && minutes > 0) {
+      this.raidWindow.set(m.channel, Date.now() + minutes * 60_000)
+      this.raiders.set(m.channel, new Set(raider ? [raider] : []))
+      if (raider) this.raidSource.set(m.channel, raider)
+    }
   }
 
   /** injects a local system line into a channel (client-side actions like shoutouts) */
@@ -792,6 +1113,11 @@ class ChatService {
       onClose: () => useChatStore.getState().setConnState('closed')
     })
     for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.reader.join(ch)
+    // F5 is the "something's stuck" button — refresh emotes/badges too, and re-establish
+    // the EventSub/PubSub subscriptions in case those sockets silently died
+    import('./emoteService').then(({ reloadAllEmotes }) => reloadAllEmotes())
+    this.eventSub?.resync()
+    this.pubSub?.resync()
   }
 }
 

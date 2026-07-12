@@ -6,6 +6,7 @@ import { runModButton, resolveUserId } from '../services/modActions'
 import { ChatSettingsPatch, getChatSettings, sendAnnouncement, startRaid, updateChatSettings } from '../lib/helix'
 import BtnIcon from './BtnIcon'
 import { useT } from '../i18n'
+import { localizeApiError } from '../lib/apiErrors'
 
 interface Props {
   pane: Pane
@@ -38,7 +39,7 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
     setModes((m) => ({ ...m, ...patch }))
     const res = await updateChatSettings(account, channelId, patch)
     if (!res.ok) {
-      useUiStore.getState().toast((res.json as { message?: string })?.message ?? t('mod.actionFail'), 'error')
+      useUiStore.getState().toast(localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail'), 'error')
       const s = await getChatSettings(account, channelId)
       setModes(s ?? {})
     }
@@ -96,7 +97,7 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
     setAnnounceText('')
     const res = await sendAnnouncement(account, channelId, text, announceColor)
     toast(
-      res.ok ? '📢' : ((res.json as { message?: string })?.message ?? t('mod.actionFail')),
+      res.ok ? '📢' : (localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')),
       res.ok ? 'ok' : 'error'
     )
   }
