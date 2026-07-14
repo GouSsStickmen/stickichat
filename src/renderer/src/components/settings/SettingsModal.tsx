@@ -953,6 +953,7 @@ function ModerationSection(): React.JSX.Element {
   const [favInput, setFavInput] = useState('')
   const [iconPickerFor, setIconPickerFor] = useState<string | null>(null)
   const [draggingBtn, setDraggingBtn] = useState<string | null>(null)
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'message' | 'toolbar'>('all')
   const modListRef = useRef<HTMLDivElement>(null)
   const firstAccount = useAccountsStore((s) => s.accounts[0])
 
@@ -990,19 +991,29 @@ function ModerationSection(): React.JSX.Element {
       <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
         {t('set.modBtn.hint')}
       </p>
-      <button
-        className="primary"
-        style={{ marginBottom: 10 }}
-        onClick={() =>
-          setModButtons([
-            { id: nextId('mb'), label: 'New', icon: '⭐', type: 'snippet', text: '', scope: 'toolbar' },
-            ...modButtons
-          ])
-        }
-      >
-        + {t('set.modBtn.add')}
-      </button>
-      {modButtons.map((b, index) => (
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <button
+          className="primary"
+          onClick={() =>
+            setModButtons([
+              { id: nextId('mb'), label: 'New', icon: '⭐', type: 'snippet', text: '', scope: 'toolbar' },
+              ...modButtons
+            ])
+          }
+        >
+          + {t('set.modBtn.add')}
+        </button>
+        <div className="spacer" style={{ flex: 1 }} />
+        <label className="hint" style={{ color: 'var(--text-faint)' }}>
+          {t('set.modBtn.filter')}
+        </label>
+        <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value as typeof scopeFilter)}>
+          <option value="all">{t('set.modBtn.filter.all')}</option>
+          <option value="message">{t('set.modBtn.scope.message')}</option>
+          <option value="toolbar">{t('set.modBtn.scope.toolbar')}</option>
+        </select>
+      </div>
+      {(scopeFilter === 'all' ? modButtons : modButtons.filter((b) => b.scope === scopeFilter)).map((b, index) => (
         <div key={b.id} data-flipid={b.id} className={`modbtn-card ${draggingBtn === b.id ? 'dragging' : ''}`}>
           <div className="modbtn-line">
             <span
@@ -1010,6 +1021,9 @@ function ModerationSection(): React.JSX.Element {
               title="⠿"
               onPointerDown={(e) => {
                 if (!modListRef.current) return
+                // drag-reorder maps DOM index → full-array index, which only lines up when the
+                // whole list is shown
+                if (scopeFilter !== 'all') return
                 e.preventDefault()
                 startPointerReorder({
                   e,

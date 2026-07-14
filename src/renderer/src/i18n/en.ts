@@ -293,6 +293,8 @@ export const en = {
   'set.modBtn.seconds': 'Seconds',
   'set.modBtn.text': 'Text / URL',
   'set.modBtn.color': 'Color',
+  'set.modBtn.filter': 'Show',
+  'set.modBtn.filter.all': 'All',
   'set.modBtn.scope': 'Where',
   'set.modBtn.scope.message': 'On message',
   'set.modBtn.scope.toolbar': 'Toolbar',

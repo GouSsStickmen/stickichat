@@ -32,6 +32,17 @@ export default function HighlightsWindow({ channel }: { channel: string }): Reac
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // redeems arrive via PubSub in the MAIN window and are persisted to localStorage; pick up
+  // new ones live (the storage event fires in this other window) so the redeems tab + colors
+  // stay fresh without waiting for a reopen
+  useEffect(() => {
+    const onStorage = (e: StorageEvent): void => {
+      if (e.key === `sticki:redeems:${channel}`) chatService.syncPersistedRedeems(channel)
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [channel])
+
   return (
     <div className="app">
       <div className="detached-bar">

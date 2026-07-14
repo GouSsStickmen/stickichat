@@ -295,6 +295,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.modBtn.seconds': 'Секунди',
   'set.modBtn.text': 'Текст / URL',
   'set.modBtn.color': 'Колір',
+  'set.modBtn.filter': 'Показати',
+  'set.modBtn.filter.all': 'Усі',
   'set.modBtn.scope': 'Де показувати',
   'set.modBtn.scope.message': 'На повідомленні',
   'set.modBtn.scope.toolbar': 'Панель зверху',

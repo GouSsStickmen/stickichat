@@ -1146,6 +1146,17 @@ class ChatService {
     this.queue(channel, this.systemMessage(channel, text))
   }
 
+  /**
+   * Re-ingest persisted redeems for a channel. Redeems arrive via PubSub in the MAIN window
+   * only and are written to localStorage; a standalone highlights window listens for the
+   * storage event and calls this so newly-redeemed lines (with the user's color) appear live
+   * instead of only after a reopen. prependMessages dedupes by id, so re-adds are no-ops.
+   */
+  syncPersistedRedeems(channel: string): void {
+    const redeems = this.loadPersistedRedeems(channel)
+    if (redeems.length) useChatStore.getState().prependMessages(channel, redeems)
+  }
+
   // ---------- outgoing ----------
 
   /** authenticated per-account connection, used only for sending PRIVMSG */
