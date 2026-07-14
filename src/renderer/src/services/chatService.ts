@@ -1,6 +1,6 @@
 import { IrcClient, IrcMessage, parseIrcLine } from '../lib/irc'
 import { ChatMessage, Account } from '../types'
-import { useChatStore } from '../store/chat'
+import { useChatStore, lookupUserColor } from '../store/chat'
 import { useLayoutStore, allOpenChannels } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
 import { formatDuration } from '../lib/tokenize'
@@ -8,16 +8,37 @@ import { fetchRecentMessages } from '../lib/recentMessages'
 import { loadChannelBadges, loadChannelEmotes, loadCheermotes, loadGlobalBadges, loadGlobalEmotes } from './emoteService'
 import { ensureFreshToken } from '../lib/twitchAuth'
 import { translate } from '../i18n'
-import { useAccountsStore } from '../store/accounts'
+import { useAccountsStore, getAccount } from '../store/accounts'
 import { useUiStore } from '../store/ui'
 import { useWhispersStore, getOpenWhisperThread } from '../store/whispers'
-import { playMentionSound, playFirstMessageSound, playKeywordSound, playStreamUpSound, playWhisperSound } from '../lib/sound'
+import {
+  playMentionSound,
+  playFirstMessageSound,
+  playKeywordSound,
+  playStreamUpSound,
+  playWhisperSound,
+  playRaidSound
+} from '../lib/sound'
 import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
 import { EventSubClient, EventSubDesired } from '../lib/eventsub'
 import { PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** persisted redemption record (localStorage) — replayed into reopened windows/restarts */
+interface PersistedRedeem {
+  id: string
+  text: string
+  ts: number
+  login?: string
+  name?: string
+  color?: string
+  title?: string
+  cost?: number
+  icon?: string
+  input?: string
 }
 
 /**
@@ -30,6 +51,7 @@ function escapeRegExp(s: string): string {
 class ChatService {
   private reader: IrcClient | null = null
   private senders = new Map<string, IrcClient>() // accountId -> client
+  private senderTokens = new Map<string, string>() // accountId -> token the sender logged in with
   private pendingByChannel = new Map<string, ChatMessage[]>()
   private flushTimer: number | null = null
   private historyLoaded = new Set<string>()
@@ -143,6 +165,7 @@ class ChatService {
 
   /** "channel:target" raids we've already announced/prompted (PubSub + EventSub overlap) */
   private raidAnnounced = new Map<string, number>()
+  private shoutoutAnnounced = new Map<string, number>()
 
   /** outgoing raid seen on PubSub — catches raids started from the Twitch page instantly */
   private handlePubSubRaid(e: RaidEvent): void {
@@ -186,8 +209,18 @@ class ChatService {
     const msg = this.systemMessage(channel, full)
     msg.id = `redeem-${e.id}`
     msg.redeemed = true
+    // structured reward data so the chat line can render the points icon + reward name + cost
+    msg.rewardTitle = e.rewardTitle
+    msg.rewardCost = e.rewardCost
+    msg.rewardIcon = e.rewardIcon
+    msg.text = e.userInput ?? ''
+    // who redeemed — with their Twitch chat color (from the local buffer when known),
+    // so the highlights panel can render the nick properly
+    msg.login = e.userLogin
+    msg.displayName = e.userDisplay
+    msg.color = lookupUserColor(channel, e.userLogin)
     this.queue(channel, msg)
-    this.persistRedeem(channel, msg.id, full, msg.timestamp)
+    this.persistRedeem(channel, msg)
   }
 
   /**
@@ -198,12 +231,23 @@ class ChatService {
     return `sticki:redeems:${channel}`
   }
 
-  private persistRedeem(channel: string, id: string, text: string, ts: number): void {
+  private persistRedeem(channel: string, msg: ChatMessage): void {
     try {
       const raw = localStorage.getItem(this.redeemKey(channel))
-      const list = raw ? (JSON.parse(raw) as { id: string; text: string; ts: number }[]) : []
-      if (list.some((r) => r.id === id)) return // the other window already wrote it
-      list.push({ id, text, ts })
+      const list = raw ? (JSON.parse(raw) as PersistedRedeem[]) : []
+      if (list.some((r) => r.id === msg.id)) return // the other window already wrote it
+      list.push({
+        id: msg.id,
+        text: msg.systemText ?? '',
+        ts: msg.timestamp,
+        login: msg.login,
+        name: msg.displayName,
+        color: msg.color,
+        title: msg.rewardTitle,
+        cost: msg.rewardCost,
+        icon: msg.rewardIcon,
+        input: msg.text
+      })
       localStorage.setItem(this.redeemKey(channel), JSON.stringify(list.slice(-100)))
     } catch {
       /* best-effort */
@@ -213,13 +257,20 @@ class ChatService {
   private loadPersistedRedeems(channel: string): ChatMessage[] {
     try {
       const raw = localStorage.getItem(this.redeemKey(channel))
-      const list = raw ? (JSON.parse(raw) as { id: string; text: string; ts: number }[]) : []
+      const list = raw ? (JSON.parse(raw) as PersistedRedeem[]) : []
       return list.map((r) => {
         const msg = this.systemMessage(channel, r.text)
         msg.id = r.id
         msg.timestamp = r.ts
         msg.redeemed = true
         msg.historical = true
+        msg.login = r.login ?? ''
+        msg.displayName = r.name ?? ''
+        msg.color = r.color
+        msg.rewardTitle = r.title
+        msg.rewardCost = r.cost
+        msg.rewardIcon = r.icon
+        msg.text = r.input ?? ''
         return msg
       })
     } catch {
@@ -288,6 +339,15 @@ class ChatService {
           key: `mod:${cid}`,
           channelLogin: ch
         })
+        // shoutouts GIVEN in this channel — surface who was shouted out + offer to open them
+        out.push({
+          account: modAccount,
+          type: 'channel.shoutout.create',
+          version: '1',
+          condition: { broadcaster_user_id: cid, moderator_user_id: modAccount.id },
+          key: `sho:${cid}`,
+          channelLogin: ch
+        })
       }
     }
     return out
@@ -333,7 +393,30 @@ class ChatService {
       this.promptAddChannel(fromLogin, toLogin)
     } else if (type === 'channel.moderate') {
       this.handleModerateEvent(event, envelopeId)
+    } else if (type === 'channel.shoutout.create') {
+      this.handleShoutout(event)
     }
+  }
+
+  /** channel.shoutout.create — the broadcaster gave a shoutout; show it + offer to open the target */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private handleShoutout(event: Record<string, any>): void {
+    const channel = (event.broadcaster_user_login ?? '').toLowerCase()
+    const target = (event.to_broadcaster_user_login ?? '').toLowerCase()
+    const targetName = event.to_broadcaster_user_name || target
+    if (!channel || !target) return
+    const open = allOpenChannels(useLayoutStore.getState().tabs)
+    if (!open.includes(channel)) return
+    // dedupe: EventSub can redeliver; one shoutout per target per 30s is plenty
+    const key = `${channel}:${target}`
+    const last = this.shoutoutAnnounced.get(key) ?? 0
+    if (Date.now() - last < 30_000) return
+    this.shoutoutAnnounced.set(key, Date.now())
+    const lang = useSettingsStore.getState().settings.language
+    this.localInfo(channel, translate(lang, 'info.shoutout', { target: targetName }))
+    // offer to open the shouted-out channel's chat (+ follow via their Twitch page)
+    const existing = open.includes(target)
+    useUiStore.getState().setChannelPrompt({ channel: target, from: channel, existing, shoutout: true })
   }
 
   /** channel.moderate v2 — the full "who did what to whom" moderation feed */
@@ -627,22 +710,16 @@ class ChatService {
             msg.isFirstInSession = true
             this.persistFirstSeen(msg.channel)
           }
-          // raid window: viewers whose first message lands shortly after a raid are raiders
+          // NOTE: we intentionally do NOT auto-tag chat messages as "raider" any more.
+          // Twitch gives no per-user signal for who arrived from a raid, so the old
+          // "first message shortly after a raid" heuristic tagged ordinary new chatters as
+          // raiders (false positives). The raid itself is still announced as a system line.
           const raidUntil = this.raidWindow.get(msg.channel)
-          if (raidUntil) {
-            if (Date.now() > raidUntil) {
-              this.raidWindow.delete(msg.channel)
-              this.raiders.delete(msg.channel)
-              this.raidSource.delete(msg.channel)
-            } else {
-              const raiders = this.raiders.get(msg.channel)
-              if (raiders?.has(msg.login)) msg.raider = true
-              else if (msg.isFirstInSession && raiders) {
-                raiders.add(msg.login)
-                msg.raider = true
-              }
-              if (msg.raider) msg.raiderFrom = this.raidSource.get(msg.channel)
-            }
+          if (raidUntil && Date.now() > raidUntil) {
+            this.raidWindow.delete(msg.channel)
+            this.raidDetectUntil.delete(msg.channel)
+            this.raiders.delete(msg.channel)
+            this.raidSource.delete(msg.channel)
           }
           const myLogins = useAccountsStore.getState().accounts.map((a) => a.login.toLowerCase())
           if (msg.replyParent && myLogins.includes(msg.replyParent.login.toLowerCase())) {
@@ -857,9 +934,14 @@ class ChatService {
       !!m.tags['custom-reward-id'] ||
       (m.tags['msg-id'] === 'highlighted-message' && m.tags['first-msg'] !== '1')
     const bits = m.tags['bits'] ? parseInt(m.tags['bits'], 10) || undefined : undefined
+    // bits power-ups: "Gigantify an Emote" and "Message Effect" (animated background)
+    const gigantified = m.tags['msg-id'] === 'gigantified-emote-message' || undefined
+    const messageEffect = m.tags['animation-id'] || undefined
     return {
       redeemed: redeemed || undefined,
       bits,
+      gigantified,
+      messageEffect,
       id: m.tags['id'] ?? `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       channel: m.channel,
       channelId: m.tags['room-id'] ?? '',
@@ -991,7 +1073,7 @@ class ChatService {
     if (!window.location.hash && useSettingsStore.getState().settings.overlayEnabled) {
       import('../lib/overlayRender').then(({ renderOverlayHtml }) => {
         const html = renderOverlayHtml(msg)
-        if (html) window.sticki.overlayPush(channel, html, msg.id, msg.userId)
+        if (html) window.sticki.overlayPush(channel, html, msg.id, msg.userId, msg.login)
       })
     }
   }
@@ -1025,10 +1107,17 @@ class ChatService {
       from: contextChannel,
       existing: open.includes(targetChannel)
     })
+    if (s.raidSound) playRaidSound(s)
   }
 
-  /** channel -> raid-arrival window: viewers whose first message lands inside it are raiders */
+  /** channel -> highlight expiry: known raiders keep the tag until this time */
   private raidWindow = new Map<string, number>()
+  /**
+   * channel -> DETECTION cutoff: raiders flood in as a burst right after the raid, so only
+   * first-messages within this short window are counted as raiders. Regulars trickle in over
+   * the whole stream and would otherwise all get falsely tagged.
+   */
+  private raidDetectUntil = new Map<string, number>()
   /** channel -> logins marked as raiders (highlighted while the raid window lasts) */
   private raiders = new Map<string, Set<string>>()
   /** channel -> the streamer whose raid the current raider window belongs to */
@@ -1045,6 +1134,8 @@ class ChatService {
     const minutes = useSettingsStore.getState().settings.raiderHighlightMinutes
     if (m.channel && minutes > 0) {
       this.raidWindow.set(m.channel, Date.now() + minutes * 60_000)
+      // raiders arrive in a ~90s burst; only tag first-messages inside it
+      this.raidDetectUntil.set(m.channel, Date.now() + 90_000)
       this.raiders.set(m.channel, new Set(raider ? [raider] : []))
       if (raider) this.raidSource.set(m.channel, raider)
     }
@@ -1066,9 +1157,18 @@ class ChatService {
     // ensureFreshToken awaits — a parallel call may have created the sender meanwhile
     const raced = this.senders.get(account.id)
     if (raced) return raced
+    this.senderTokens.set(account.id, token)
     const sender = new IrcClient({
       nick: account.login,
       token,
+      // re-fetch a fresh (auto-refreshing) token on every reconnect so an expired token can
+      // never silently lock the user out — the reconnect logs back in with a refreshed one
+      getToken: () => {
+        const fresh = getAccount(account.id) ?? account
+        return ensureFreshToken(useSettingsStore.getState().clientId, fresh).catch(() => undefined)
+      },
+      // refresh token itself is dead — surface a persistent "re-authorize" banner
+      onAuthFailed: () => useUiStore.getState().markReauthNeeded(account.id, account.login),
       // sender connections only care about being kicked / notices
       onMessage: (m) => {
         if (m.command === 'NOTICE' && m.channel) {
@@ -1080,6 +1180,12 @@ class ChatService {
     return sender
   }
 
+  /** after a successful re-authorization, resume the account's dead sender connection */
+  retrySenderAuth(accountId: string): void {
+    this.senders.get(accountId)?.retryAuth()
+    useUiStore.getState().clearReauthNeeded(accountId)
+  }
+
   async sendMessage(
     account: Account,
     channel: string,
@@ -1087,6 +1193,19 @@ class ChatService {
     replyParentMsgId?: string
   ): Promise<void> {
     const sender = await this.ensureSender(account)
+    // proactively rotate: if the (cached, cheap) fresh token differs from the one this live
+    // connection logged in with, the old token is expiring — reconnect onto the new one BEFORE
+    // Twitch drops us, so this very send doesn't land in the dead-token window
+    try {
+      const clientId = useSettingsStore.getState().clientId
+      const fresh = await ensureFreshToken(clientId, getAccount(account.id) ?? account)
+      if (fresh !== this.senderTokens.get(account.id)) {
+        this.senderTokens.set(account.id, fresh)
+        sender.reconnectWithToken(fresh)
+      }
+    } catch {
+      /* refresh failed — the onAuthFailed path will surface the re-auth banner */
+    }
     sender.join(channel)
     sender.say(channel, text, replyParentMsgId)
   }
@@ -1094,6 +1213,7 @@ class ChatService {
   dropSender(accountId: string): void {
     this.senders.get(accountId)?.close()
     this.senders.delete(accountId)
+    this.senderTokens.delete(accountId)
   }
 
   /** accounts/channels changed in another window — refresh EventSub + PubSub subscriptions */

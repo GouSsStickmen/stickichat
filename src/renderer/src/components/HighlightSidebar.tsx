@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useChatStore } from '../store/chat'
+import { useChatStore, lookupUserColor } from '../store/chat'
 import { useSettingsStore } from '../store/settings'
-import { useEmotesStore, lookupBadgeUrl, lookupEmote } from '../store/emotes'
+import { lookupBadgeUrl } from '../store/emotes'
 import { isHighlightedMessage } from '../lib/highlight'
-import { tokenizeMessage, ensureReadable, fallbackColor } from '../lib/tokenize'
+import { ensureReadable, fallbackColor } from '../lib/tokenize'
 import { ChatMessage } from '../types'
-import EmojiGlyph from './EmojiGlyph'
+import RichText from './RichText'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 
@@ -37,34 +37,10 @@ function loadSaved(channel: string): Map<string, SavedItem> {
   }
 }
 
-/** compact message body with emotes/emoji rendered inline */
+/** compact message body: system lines are plain text, chat lines get the rich renderer */
 function ItemText({ msg }: { msg: ChatMessage }): React.JSX.Element {
-  const emoteVersion = useEmotesStore((s) => s.version)
-  const tokens = useMemo(
-    () => (msg.system ? [] : tokenizeMessage(msg, lookupEmote(msg.channel))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [msg, emoteVersion]
-  )
   if (msg.system) return <>{msg.systemText}</>
-  return (
-    <>
-      {tokens.map((tk, i) => {
-        if (tk.kind === 'emote')
-          return <img key={i} className="hl-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />
-        if (tk.kind === 'emoji') return <EmojiGlyph key={i} char={tk.char} />
-        if (tk.kind === 'link') return <span key={i}>{tk.label}</span>
-        if (tk.kind === 'mention') return <b key={i}>{tk.name}</b>
-        if (tk.kind === 'cheer')
-          return (
-            <b key={i} style={{ color: tk.color }}>
-              {tk.bits}
-            </b>
-          )
-        if (tk.kind === 'text' || tk.kind === 'command') return <span key={i}>{tk.text}</span>
-        return null
-      })}
-    </>
-  )
+  return <RichText msg={msg} />
 }
 
 export default function HighlightSidebar({
@@ -216,9 +192,35 @@ export default function HighlightSidebar({
       <div className="highlight-list" ref={listRef} onScroll={onScroll} style={{ fontSize }}>
         {items.length === 0 && <div className="picker-empty">{t('highlights.empty')}</div>}
         {items.map((m) => {
-          const color = m.system
-            ? undefined
-            : ensureReadable(m.color || fallbackColor(m.login || 'x'), dark)
+          // redeem lines are "system" but carry the redeemer's login/color — color them too;
+          // prefer the live buffer color (the stored one may be a fallback hash)
+          const color = m.login
+            ? ensureReadable(lookupUserColor(m.channel, m.login) || m.color || fallbackColor(m.login), dark)
+            : undefined
+          // redemptions: channel-points icon + colored nick + reward name + cost (no dup nick)
+          if (m.redeemed && m.rewardTitle) {
+            return (
+              <button
+                key={m.id}
+                className={`highlight-item ${m.timestamp > lastReadAt ? 'unread' : ''}`}
+                onClick={() => jumpTo(m.id)}
+              >
+                <span className="highlight-item-nick" style={{ color }}>
+                  {m.rewardIcon ? (
+                    <img className="hl-redeem-icon" src={m.rewardIcon} alt="" />
+                  ) : (
+                    '🔴 '
+                  )}
+                  {m.displayName}
+                </span>
+                <span className="highlight-item-text">
+                  <span className="redeem-reward">{m.rewardTitle}</span>
+                  {m.rewardCost != null && <span className="redeem-cost"> · {m.rewardCost.toLocaleString('uk-UA')}</span>}
+                  {m.text ? <span>: {m.text}</span> : null}
+                </span>
+              </button>
+            )
+          }
           return (
             <button
               key={m.id}
@@ -226,7 +228,7 @@ export default function HighlightSidebar({
               onClick={() => jumpTo(m.id)}
             >
               <span className="highlight-item-nick" style={{ color }}>
-                {m.redeemed && '🎁 '}
+                {m.redeemed && '🔴 '}
                 {!m.system &&
                   m.badges.map((b) => {
                     const url = lookupBadgeUrl(m.channel, b.setId, b.version)

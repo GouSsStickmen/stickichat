@@ -5,6 +5,7 @@ import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
 import { useWhispersStore } from '../store/whispers'
 import { startPointerReorder, justReordered } from '../lib/pointerReorder'
+import { buildChannelSeed } from '../lib/detachSeed'
 import { useFlip } from '../lib/useFlip'
 import WhisperPanel from './WhisperPanel'
 import { useT } from '../i18n'
@@ -19,6 +20,8 @@ export default function TabBar(): React.JSX.Element {
   const unreadMessages = useChatStore((s) => s.unreadMessages)
   const alwaysOnTop = useSettingsStore((s) => s.settings.alwaysOnTop)
   const muted = useSettingsStore((s) => s.settings.muted)
+  const tabScale = useSettingsStore((s) => s.settings.tabScale)
+  const tabFilter = useSettingsStore((s) => s.settings.tabFilter)
   const setSettings = useSettingsStore((s) => s.setSettings)
   const channelNames = useChatStore((s) => s.channelNames)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -58,16 +61,45 @@ export default function TabBar(): React.JSX.Element {
     if (!tab || tab.panes.length === 0) return
     const payload = {
       name: tab.name ?? tab.panes.map((p) => p.channel).join(' · '),
-      panes: tab.panes.map((p) => ({ channel: p.channel, accountId: p.accountId }))
+      panes: tab.panes.map((p) => ({ channel: p.channel, accountId: p.accountId })),
+      // hand over the live buffer so the detached window keeps state instead of reloading
+      // everything as dimmed "historical" scrollback
+      seed: buildChannelSeed(tab.panes.map((p) => p.channel))
     }
     window.sticki.detach(`detached=${encodeURIComponent(JSON.stringify(payload))}`)
     useLayoutStore.getState().closeTab(id)
   }
 
+  const isLiveTab = (tab: (typeof tabs)[number]): boolean =>
+    tab.panes.some((p) => liveChannels[p.channel])
+  // filter by live status; 'all' keeps the full list (and normal drag-reorder)
+  const visibleTabs =
+    tabFilter === 'all'
+      ? tabs
+      : tabs.filter((tab) => (tabFilter === 'online' ? isLiveTab(tab) : !isLiveTab(tab)))
+  const cycleFilter = (): void =>
+    setSettings({ tabFilter: tabFilter === 'all' ? 'online' : tabFilter === 'online' ? 'offline' : 'all' })
+  const filterIcon = tabFilter === 'online' ? '🟢' : tabFilter === 'offline' ? '⚫' : '≡'
+
   return (
-    <div className="tabbar">
+    <div className="tabbar" style={{ zoom: tabScale }}>
       {/* floated right — must precede the tab flow so rows wrap around it */}
       <div className="tabbar-actions">
+      <button
+        className={`icon-btn ${tabFilter !== 'all' ? 'active' : ''}`}
+        title={t(`tab.filter.${tabFilter}`)}
+        onClick={cycleFilter}
+      >
+        {filterIcon}
+      </button>
+      <span className="tab-zoom">
+        <button className="icon-btn" title={t('tab.zoomOut')} onClick={() => setSettings({ tabScale: Math.max(0.6, Math.round((tabScale - 0.1) * 10) / 10) })}>
+          A−
+        </button>
+        <button className="icon-btn" title={t('tab.zoomIn')} onClick={() => setSettings({ tabScale: Math.min(1.8, Math.round((tabScale + 0.1) * 10) / 10) })}>
+          A+
+        </button>
+      </span>
       {activeTab && activeTab.panes.length > 1 && (
         <select
           title={t('pane.columns')}
@@ -137,7 +169,7 @@ export default function TabBar(): React.JSX.Element {
         title={connState === 'open' ? t('misc.connected') : t('misc.disconnected')}
         style={{ background: connState === 'open' ? 'var(--success)' : 'var(--danger)' }}
       />
-      {tabs.map((tab, index) => {
+      {visibleTabs.map((tab, index) => {
         const hasLive = tab.panes.some((p) => liveChannels[p.channel])
         const hasMention = tab.panes.some((p) => unreadMentions[p.channel])
         const hasUnread = !hasMention && tab.panes.some((p) => unreadMessages[p.channel])
@@ -151,6 +183,8 @@ export default function TabBar(): React.JSX.Element {
               if (renaming === tab.id) return
               if ((e.target as HTMLElement).closest('.close, input')) return
               if (!tabsRef.current) return
+              // reorder indices only line up with the DOM when the full list is shown
+              if (tabFilter !== 'all') return
               startPointerReorder({
                 e,
                 container: tabsRef.current,

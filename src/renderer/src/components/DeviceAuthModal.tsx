@@ -40,6 +40,10 @@ export default function DeviceAuthModal({ onClose }: { onClose: () => void }): R
         // write straight to disk: the settings window has no store persistence, and without
         // this a re-auth done there would evaporate on close (leaving dead tokens on disk)
         await persistAccountTokens(account.id)
+        // if this was a re-authorization of a locked-out account, resume its sender socket
+        // and drop the "needs re-auth" banner
+        const { chatService } = await import('../services/chatService')
+        chatService.retrySenderAuth(account.id)
         // a fresh token may fix previously-failed fetches (badges cache empty results)
         reloadAllBadges()
         useUiStore.getState().toast(t('auth.success'))

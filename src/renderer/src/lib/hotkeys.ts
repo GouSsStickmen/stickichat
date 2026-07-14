@@ -39,3 +39,15 @@ export function matchHotkey(e: KeyboardEvent | React.KeyboardEvent, accel: strin
   if (!accel) return false
   return eventToAccel(e) === accel
 }
+
+/**
+ * For hold-style hotkeys (press-and-hold to pause). Handles bare modifier accelerators
+ * ("Alt", "Ctrl", "Shift") — which `eventToAccel` returns null for — by matching the
+ * modifier key itself, so keydown/keyup on the modifier register. Falls back to matchHotkey.
+ */
+const BARE_MOD: Record<string, string> = { Alt: 'Alt', Ctrl: 'Control', Shift: 'Shift' }
+export function matchHoldKey(e: KeyboardEvent, accel: string): boolean {
+  if (!accel) return false
+  if (BARE_MOD[accel]) return e.key === BARE_MOD[accel]
+  return matchHotkey(e, accel)
+}

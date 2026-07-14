@@ -44,10 +44,14 @@ export default function ChannelPrompt(): React.JSX.Element | null {
 
   return (
     <div className="channel-prompt">
-      {/* raid info on its own line — the nicks and buttons used to blur together */}
+      {/* raid/shoutout info on its own line — the nicks and buttons used to blur together */}
       <div className="channel-prompt-text">
-        🚨{' '}
-        {prompt.from ? (
+        {prompt.shoutout ? '📣 ' : '🚨 '}
+        {prompt.shoutout ? (
+          <>
+            {t('shoutout.word')}: <b>{prompt.from}</b> → <b>{prompt.channel}</b>
+          </>
+        ) : prompt.from ? (
           <>
             {t('raid.raidWord')}: <b>{prompt.from}</b> → <b>{prompt.channel}</b>
           </>
@@ -57,8 +61,17 @@ export default function ChannelPrompt(): React.JSX.Element | null {
       </div>
       <div className="channel-prompt-actions">
         <button className="primary" onClick={accept}>
-          {prompt.existing ? t('raid.switch') : t('raid.add')} {prompt.channel}
+          {prompt.existing ? t('raid.switch') : prompt.shoutout ? t('shoutout.openChat') : t('raid.add')} {prompt.channel}
         </button>
+        {prompt.shoutout && (
+          <button
+            className="ghost"
+            title={t('shoutout.follow.hint')}
+            onClick={() => window.sticki.openExternal(`https://www.twitch.tv/${prompt.channel}`)}
+          >
+            ↗ {t('shoutout.follow')}
+          </button>
+        )}
         <button className="ghost" onClick={() => useUiStore.getState().setChannelPrompt(null)}>
           ✕
         </button>

@@ -51,6 +51,8 @@ export interface HelixUser {
   display_name: string
   profile_image_url: string
   created_at: string
+  /** the channel's "About" bio — the closest thing Helix exposes to chat rules */
+  description?: string
 }
 
 export async function getUsers(

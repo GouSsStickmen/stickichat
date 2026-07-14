@@ -3,17 +3,20 @@ import { useUiStore, UserCardTarget } from '../store/ui'
 import { useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { useSettingsStore } from '../store/settings'
-import { lookupBadgeUrl, lookupEmote } from '../store/emotes'
+import { lookupBadgeUrl } from '../store/emotes'
 import { canModerate } from '../services/accountService'
 import { getFollowDate, getSubInfo, getUsers, HelixUser, SubInfo } from '../lib/helix'
 import { banUser, unbanUser, warnUser } from '../lib/helix'
 import { useT } from '../i18n'
-import { formatDuration, tokenizeMessage } from '../lib/tokenize'
-import EmojiGlyph from './EmojiGlyph'
+import { formatDuration } from '../lib/tokenize'
+import RichText from './RichText'
 import { PinButton } from './EmotePicker'
 import { localizeApiError } from '../lib/apiErrors'
 
 const TIMEOUTS = [60, 600, 3600, 86400]
+
+/** a UserCard row: a full ChatMessage or a snapshot of one — id/timestamp always present */
+type UcMsg = Partial<import('../types').ChatMessage> & { id: string; timestamp: number }
 
 export default function UserCard({
   target,
@@ -22,7 +25,7 @@ export default function UserCard({
 }: {
   target: UserCardTarget
   standalone?: boolean
-  presetMessages?: { id: string; timestamp: number; text: string; emotesTag?: string }[]
+  presetMessages?: UcMsg[]
 }): React.JSX.Element {
   const t = useT()
   const close = (): void => {
@@ -37,20 +40,37 @@ export default function UserCard({
   const [info, setInfo] = useState<HelixUser | null>(null)
   const [followedAt, setFollowedAt] = useState<string | null | undefined>(undefined)
   const [subInfo, setSubInfo] = useState<SubInfo | null | undefined>(undefined)
+  const [chatRules, setChatRules] = useState<string[]>([])
+  const [showBio, setShowBio] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const isChannelOwner = target.userId === target.channelId
+
+  // the broadcaster's own card: fetch the channel's chat rules (the list shown to first-time
+  // chatters) — only available via GQL, falls back to the channel bio when empty
+  useEffect(() => {
+    if (!isChannelOwner) return
+    import('../lib/twitchGql').then(({ fetchChatRules }) =>
+      fetchChatRules(target.login).then(setChatRules)
+    )
+  }, [isChannelOwner, target.login])
 
   // like the chat itself: every buffered message, oldest → newest, pinned to the bottom;
   // moderation lines that TARGET this user (bans/timeouts/deletes with the acting mod) too
-  const userMessages = useMemo(
-    () =>
-      presetMessages ??
-      messages.filter(
-        (m) =>
-          (m.userId === target.userId && !m.system) ||
-          (m.system && m.modTargetUserId === target.userId)
-      ),
-    [messages, target.userId, presetMessages]
-  )
+  const userMessages = useMemo(() => {
+    const live = messages.filter(
+      (m) =>
+        (m.userId === target.userId && !m.system) ||
+        (m.system && m.modTargetUserId === target.userId)
+    )
+    // standalone window: seed with the snapshot the panel passed (its own fresh reader only
+    // backfills recent-messages, so without the seed it shows fewer/no lines than the panel),
+    // then merge live arrivals on top, deduped by id
+    if (!presetMessages) return live as UcMsg[]
+    const byId = new Map<string, UcMsg>()
+    for (const m of presetMessages) byId.set(m.id, m)
+    for (const m of live) byId.set(m.id, m)
+    return [...byId.values()].sort((a, b) => a.timestamp - b.timestamp)
+  }, [messages, target.userId, presetMessages])
 
   // keep the list glued to the bottom as new messages arrive
   const msgsRef = useRef<HTMLDivElement>(null)
@@ -114,8 +134,6 @@ export default function UserCard({
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
   }
-
-  const emoteLookup = lookupEmote(target.channel)
 
   const act = async (fn: () => Promise<{ ok: boolean; json: unknown }>, label: string): Promise<void> => {
     const res = await fn()
@@ -189,6 +207,37 @@ export default function UserCard({
           </div>
         </div>
       </div>
+      {/* broadcaster's card: chat rules (first-time-chatter list) and/or the channel bio, with
+          a toggle to switch between them when both exist */}
+      {isChannelOwner &&
+        (() => {
+          const hasRules = chatRules.length > 0
+          const hasBio = !!info?.description
+          if (!hasRules && !hasBio) return null
+          // default to rules when we have them; the toggle flips to the bio
+          const showRules = hasRules && !showBio
+          return (
+            <div className="uc-rules">
+              <div className="uc-rules-title">
+                <span>{showRules ? `📜 ${t('user.channelRules')}` : `ℹ️ ${t('user.channelAbout')}`}</span>
+                {hasRules && hasBio && (
+                  <button className="ghost uc-rules-toggle" onClick={() => setShowBio((v) => !v)}>
+                    {showRules ? t('user.showAbout') : t('user.showRules')}
+                  </button>
+                )}
+              </div>
+              {showRules ? (
+                <ul className="uc-rules-list">
+                  {chatRules.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="uc-rules-body">{info?.description}</div>
+              )}
+            </div>
+          )
+        })()}
       <div className="uc-actions">
         <button
           onClick={() => {
@@ -221,15 +270,9 @@ export default function UserCard({
           <button
             title={t('user.openWindow')}
             onClick={() => {
-              const payload = {
-                target,
-                messages: userMessages.map((m) => ({
-                  id: m.id,
-                  timestamp: m.timestamp,
-                  text: m.text,
-                  emotesTag: (m as { emotesTag?: string }).emotesTag
-                }))
-              }
+              // pass the full message objects so the window renders badges/system/reply lines
+              // and has the same history the panel is showing right now
+              const payload = { target, messages: userMessages }
               window.sticki.openUserCardWindow(`usercard=${encodeURIComponent(JSON.stringify(payload))}`)
               close()
             }}
@@ -301,27 +344,8 @@ export default function UserCard({
               </span>
               {': '}
               {full.deleted && <span className="uc-deleted-tag">🗑 {t('misc.deletedMessage')} </span>}
-              {tokenizeMessage(m, emoteLookup).map((tk, i) => {
-                if (tk.kind === 'emote')
-                  return <img key={i} className="uc-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />
-                if (tk.kind === 'emoji') return <EmojiGlyph key={i} char={tk.char} />
-                if (tk.kind === 'link') return <span key={i}>{tk.label}</span>
-                if (tk.kind === 'mention')
-                  return (
-                    <span key={i} style={{ color: tk.color, fontWeight: 600 }}>
-                      {tk.name}
-                    </span>
-                  )
-                if (tk.kind === 'cheer')
-                  return (
-                    <span key={i} style={{ color: tk.color, fontWeight: 700 }}>
-                      {tk.bits}
-                    </span>
-                  )
-                if (tk.kind === 'command') return <span key={i}>{tk.text}</span>
-                if (tk.kind === 'text') return <span key={i}>{tk.text}</span>
-                return null
-              })}
+              <RichText msg={{ text: m.text ?? '', emotesTag: full.emotesTag, channel: target.channel }} />
+
             </div>
           )
         })}

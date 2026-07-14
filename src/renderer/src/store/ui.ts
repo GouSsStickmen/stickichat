@@ -31,10 +31,12 @@ export interface EmotePreviewTarget {
 export interface ChannelPrompt {
   /** channel login the user is offered to add */
   channel: string
-  /** who started the raid (for the "X → Y" prompt text) */
+  /** who started the raid / gave the shoutout (for the "X → Y" prompt text) */
   from?: string
   /** channel is already open in some tab — offer to SWITCH instead of adding */
   existing?: boolean
+  /** this prompt is a shoutout (adds a "follow ↗" action + different wording) */
+  shoutout?: boolean
 }
 
 interface UiState {
@@ -50,6 +52,8 @@ interface UiState {
   /** small "add this channel?" prompt (raids) */
   channelPrompt: ChannelPrompt | null
   whispersOpen: boolean
+  /** accounts whose token died and need a full re-authorization (persistent banner) */
+  reauthAccounts: { id: string; login: string }[]
   setSettingsOpen: (v: boolean) => void
   setSettingsSection: (v: string | null) => void
   toggleGiftGroup: (id: string) => void
@@ -60,6 +64,8 @@ interface UiState {
   setEmotePreview: (v: EmotePreviewTarget | null) => void
   setChannelPrompt: (v: ChannelPrompt | null) => void
   setWhispersOpen: (v: boolean) => void
+  markReauthNeeded: (id: string, login: string) => void
+  clearReauthNeeded: (id: string) => void
 }
 
 let toastId = 0
@@ -74,6 +80,7 @@ export const useUiStore = create<UiState>()((set) => ({
   expandedGifts: {},
   channelPrompt: null,
   whispersOpen: false,
+  reauthAccounts: [],
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setSettingsSection: (settingsSection) => set({ settingsSection }),
   toggleGiftGroup: (id) =>
@@ -83,6 +90,10 @@ export const useUiStore = create<UiState>()((set) => ({
   toast: (text, kind = 'ok') => {
     const id = ++toastId
     set((s) => ({ toasts: [...s.toasts, { id, text, kind }] }))
+    // error toasts can optionally chime; lazy import avoids a static ui⇄sound cycle
+    if (kind === 'error') {
+      import('../lib/sound').then((m) => m.playErrorSound()).catch(() => {})
+    }
     setTimeout(() => {
       useUiStore.getState().dismissToast(id)
     }, 3500)
@@ -90,5 +101,13 @@ export const useUiStore = create<UiState>()((set) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setEmotePreview: (emotePreview) => set({ emotePreview }),
   setChannelPrompt: (channelPrompt) => set({ channelPrompt }),
-  setWhispersOpen: (whispersOpen) => set({ whispersOpen })
+  setWhispersOpen: (whispersOpen) => set({ whispersOpen }),
+  markReauthNeeded: (id, login) =>
+    set((s) =>
+      s.reauthAccounts.some((a) => a.id === id)
+        ? s
+        : { reauthAccounts: [...s.reauthAccounts, { id, login }] }
+    ),
+  clearReauthNeeded: (id) =>
+    set((s) => ({ reauthAccounts: s.reauthAccounts.filter((a) => a.id !== id) }))
 }))

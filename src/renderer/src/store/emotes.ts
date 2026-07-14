@@ -13,6 +13,8 @@ interface EmotesState {
   twitchByAccount: Record<string, TwitchUserEmote[]>
   /** twitch user id -> display name, for labeling emote groups by channel */
   ownerNames: Record<string, string>
+  /** twitch user id -> avatar url, for the emote-picker owner rail */
+  ownerAvatars: Record<string, string>
   globalBadges: BadgeMap
   channelBadges: Record<string, BadgeMap>
   /** channel login -> cheermotes (bit icons), includes global ones */
@@ -23,6 +25,7 @@ interface EmotesState {
   setChannelEmotes: (channel: string, m: EmoteMap) => void
   setTwitchEmotes: (accountId: string, list: TwitchUserEmote[]) => void
   setOwnerNames: (names: Record<string, string>) => void
+  setOwnerAvatars: (avatars: Record<string, string>) => void
   setGlobalBadges: (b: BadgeMap) => void
   setChannelBadges: (channel: string, b: BadgeMap) => void
   setCheermotes: (channel: string, list: Cheermote[]) => void
@@ -33,6 +36,7 @@ export const useEmotesStore = create<EmotesState>()((set) => ({
   channelEmotes: {},
   twitchByAccount: {},
   ownerNames: {},
+  ownerAvatars: {},
   globalBadges: {},
   channelBadges: {},
   cheermotes: {},
@@ -50,6 +54,8 @@ export const useEmotesStore = create<EmotesState>()((set) => ({
     })),
   setOwnerNames: (names) =>
     set((s) => ({ ownerNames: { ...s.ownerNames, ...names }, version: s.version + 1 })),
+  setOwnerAvatars: (avatars) =>
+    set((s) => ({ ownerAvatars: { ...s.ownerAvatars, ...avatars }, version: s.version + 1 })),
   setGlobalBadges: (b) => set((s) => ({ globalBadges: b, version: s.version + 1 })),
   setChannelBadges: (channel, b) =>
     set((s) => ({

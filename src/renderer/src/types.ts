@@ -67,10 +67,20 @@ export interface ChatMessage {
   isFirstInSession?: boolean
   /** channel-point redemption (custom reward / highlighted message) */
   redeemed?: boolean
+  /** redemption reward name (shown instead of a generic "redeems" label) */
+  rewardTitle?: string
+  /** redemption cost in channel points */
+  rewardCost?: number
+  /** redemption reward icon (the channel-points image, instead of an emoji) */
+  rewardIcon?: string
   /** watch-streak milestone usernotice */
   watchStreak?: boolean
   /** bits cheered in this message (from the IRC `bits` tag) */
   bits?: number
+  /** "Gigantify an Emote" bits power-up — the message's emote is shown huge */
+  gigantified?: boolean
+  /** "Message Effect" bits power-up — the effect/animation id (e.g. "rainbow-eclipse") */
+  messageEffect?: string
   /** incoming raid usernotice: the raider's login (enables the mod shoutout button) */
   raidFrom?: string
   /** system line describing a moderation action (timeout/ban/delete/clear) */
@@ -175,15 +185,99 @@ export interface MutedUser {
   opacity: number
 }
 
+// ---------- OBS overlay profiles ----------
+
+/**
+ * One named visual style for the OBS overlay. The same chat can be added to several OBS
+ * sources with different profiles (each profile has its own /overlay URL).
+ */
+export interface OverlayProfile {
+  id: string
+  name: string
+  font: string
+  fontSize: number
+  bold: boolean
+  textColor: string
+  textAlign: 'left' | 'center' | 'right'
+  /** hard letter outline (text stroke), 0 = off */
+  outlineWidth: number
+  outlineColor: string
+  /** soft drop shadow behind the text, 0 = off */
+  shadowBlur: number
+  shadowColor: string
+  /** colored glow around the text, 0 = off */
+  glowSize: number
+  glowColor: string
+  /** none · fit = plate hugs the text · line = full-width plate · panel = one backdrop under the whole chat */
+  bgMode: 'none' | 'fit' | 'line' | 'panel'
+  bgColor: string
+  bgOpacity: number
+  bgRadius: number
+  /** drop shadow under the plate/panel, 0 = off */
+  bgShadowBlur: number
+  bgShadowColor: string
+  /** custom background image (data URL) — used by panel AND per-line (fit/line) plates */
+  bgImage?: string
+  /** opacity of the custom background image, 0..1 (lets the plate image be made transparent) */
+  bgImageOpacity: number
+  /** users hidden in THIS profile only (global `overlayHiddenUsers` hides in every overlay) */
+  hiddenUsers: string[]
+  lineGap: number
+  fade: number
+  max: number
+}
+
+export const DEFAULT_OVERLAY_STYLE: Omit<OverlayProfile, 'id' | 'name'> = {
+  font: '',
+  fontSize: 16,
+  bold: false,
+  textColor: '#ffffff',
+  textAlign: 'left',
+  outlineWidth: 2,
+  outlineColor: '#000000',
+  shadowBlur: 0,
+  shadowColor: '#000000',
+  glowSize: 0,
+  glowColor: '#a970ff',
+  bgMode: 'none',
+  bgColor: '#000000',
+  bgOpacity: 0.4,
+  bgRadius: 8,
+  bgShadowBlur: 0,
+  bgShadowColor: '#000000',
+  bgImageOpacity: 1,
+  hiddenUsers: [],
+  lineGap: 2,
+  fade: 0,
+  max: 15
+}
+
 // ---------- Hotkeys ----------
 
-export type HotkeyAction = 'reconnect' | 'scrollLock' | 'translit' | 'resendLast'
+/** built-in synthesized notification sounds */
+export type SoundPreset = 'ping' | 'pop' | 'bell' | 'chime' | 'blip' | 'knock' | 'coin' | 'chirp' | 'buzz'
+/** a sound choice: a built-in preset or an uploaded custom sound */
+export type SoundChoice = SoundPreset | 'custom'
+export const SOUND_PRESETS: SoundPreset[] = ['ping', 'pop', 'bell', 'chime', 'blip', 'knock', 'coin', 'chirp', 'buzz']
+
+export type HotkeyAction =
+  | 'reconnect'
+  | 'scrollLock'
+  | 'pauseHold'
+  | 'translit'
+  | 'resendLast'
+  | 'sendKeep'
 
 export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   reconnect: 'F5',
   scrollLock: 'Ctrl+L',
+  /** hold to pause the chat (scroll lock while held); releasing resumes */
+  pauseHold: 'Alt',
   translit: 'Ctrl+Shift+T',
-  resendLast: 'Ctrl+Enter'
+  /** send the input's text WITHOUT clearing it */
+  sendKeep: 'Ctrl+Enter',
+  /** re-send the previously sent message */
+  resendLast: 'Ctrl+Shift+Enter'
 }
 
 // ---------- Mod buttons ----------
@@ -257,12 +351,12 @@ export interface Settings {
   loadHistory: boolean // recent-messages.robotty.de
   highlightMentions: boolean
   mentionSound: boolean
-  mentionSoundType: 'ping' | 'pop' | 'bell' | 'custom'
+  mentionSoundType: SoundChoice
   mentionSoundVolume: number // 0..1
   /** data URL of a user-provided sound file */
   mentionSoundCustomId?: string
   firstMessageSound: boolean
-  firstMessageSoundType: 'ping' | 'pop' | 'bell' | 'custom'
+  firstMessageSoundType: SoundChoice
   firstMessageSoundVolume: number // 0..1
   firstMessageSoundCustomId?: string
   /** library of uploaded sound files, shared between mention/first-message pickers */
@@ -275,6 +369,12 @@ export interface Settings {
   showCharCounter: boolean
   messageSpacing: number // px, extra vertical padding per message
   caseSensitiveNicks: boolean
+  /** use a user's 7TV cosmetic nick color when they have one */
+  sevenTvNickColors: boolean
+  /** independent zoom for the tab bar (1 = default) */
+  tabScale: number
+  /** filter tabs by live status: all · only live · only offline */
+  tabFilter: 'all' | 'online' | 'offline'
   alwaysOnTop: boolean
   /** open Settings as a separate window instead of the in-app modal */
   settingsAsWindow: boolean
@@ -288,6 +388,8 @@ export interface Settings {
   badgeSize: number
   /** px size of the big hover preview in the emote picker */
   emotePreviewSize: number
+  /** px size of the preview shown when hovering an emote in a chat message */
+  chatEmoteHoverSize: number
   /** show viewer count / stream title / uptime in the pane header */
   showStreamInfo: boolean
   /** custom highlight colors (hex) */
@@ -296,22 +398,34 @@ export interface Settings {
   /** words/phrases that trigger the keyword alert sound */
   keywordAlerts: string[]
   keywordSound: boolean
-  keywordSoundType: 'ping' | 'pop' | 'bell' | 'custom'
+  keywordSoundType: SoundChoice
   keywordSoundVolume: number
   keywordSoundCustomId?: string
   /** sound + banner when a watched channel goes live */
   streamUpSound: boolean
-  streamUpSoundType: 'ping' | 'pop' | 'bell' | 'custom'
+  streamUpSoundType: SoundChoice
   streamUpSoundVolume: number
   streamUpSoundCustomId?: string
   streamUpNotify: boolean
   /** sound when an incoming whisper arrives */
   whisperSound: boolean
-  whisperSoundType: 'ping' | 'pop' | 'bell' | 'custom'
+  whisperSoundType: SoundChoice
   whisperSoundVolume: number
   whisperSoundCustomId?: string
+  /** sound when a raid prompt appears */
+  raidSound: boolean
+  raidSoundType: SoundChoice
+  raidSoundVolume: number
+  raidSoundCustomId?: string
+  /** sound when an error notification (red toast) appears */
+  errorSound: boolean
+  errorSoundType: SoundChoice
+  errorSoundVolume: number
+  errorSoundCustomId?: string
   /** the укр⇄eng wrong-layout converter (Aа button + Ctrl+Shift+T) */
   translitEnabled: boolean
+  /** words the layout converter must never touch (e.g. "!followage") */
+  translitExcludeWords: string[]
   /** custom UI font family; empty = default system stack */
   fontFamily: string
   /** text size in the standalone user-card window */
@@ -402,6 +516,8 @@ export interface Settings {
   overlayShowSubs: boolean
   /** show moderation lines (timeouts/bans/clears) on the overlay */
   overlayShowModActions: boolean
+  /** named visual styles; each gets its own /overlay URL for a separate OBS source */
+  overlayProfiles: OverlayProfile[]
   /** one-time migration: mention/first-message colors converted into highlight rules */
   hlMigratedV1: boolean
   /** one-time migration: default redeem + bits highlight rules seeded */
@@ -432,6 +548,9 @@ export const DEFAULT_SETTINGS: Settings = {
   showCharCounter: true,
   messageSpacing: 3,
   caseSensitiveNicks: false,
+  sevenTvNickColors: false,
+  tabScale: 1,
+  tabFilter: 'all',
   alwaysOnTop: false,
   settingsAsWindow: false,
   rememberPinState: true,
@@ -440,6 +559,7 @@ export const DEFAULT_SETTINGS: Settings = {
   emojiNameLang: 'both',
   badgeSize: 18,
   emotePreviewSize: 112,
+  chatEmoteHoverSize: 128,
   showStreamInfo: true,
   mentionBgColor: '#8b5cf6',
   firstMessageBgColor: '#22c55e',
@@ -454,7 +574,14 @@ export const DEFAULT_SETTINGS: Settings = {
   whisperSound: true,
   whisperSoundType: 'pop',
   whisperSoundVolume: 0.5,
+  raidSound: true,
+  raidSoundType: 'bell',
+  raidSoundVolume: 0.5,
+  errorSound: false,
+  errorSoundType: 'pop',
+  errorSoundVolume: 0.5,
   translitEnabled: true,
+  translitExcludeWords: ['!followage', '!drop', '!time', '!uptime'],
   fontFamily: '',
   usercardFontSize: 14,
   showMentionBg: true,
@@ -506,6 +633,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayShowBits: true,
   overlayShowSubs: true,
   overlayShowModActions: false,
+  overlayProfiles: [],
   hlMigratedV1: false,
   hlMigratedV2: false
 }

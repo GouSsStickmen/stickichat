@@ -20,6 +20,8 @@ import UserCardWindow from './components/UserCardWindow'
 import WhispersWindow from './components/WhispersWindow'
 import HighlightsWindow from './components/HighlightsWindow'
 import ChannelPrompt from './components/ChannelPrompt'
+import ReauthBanner from './components/ReauthBanner'
+import { buildChannelSeed, injectChannelSeed } from './lib/detachSeed'
 import { hexToRgba } from './lib/tokenize'
 import { hotkeyFor, matchHotkey } from './lib/hotkeys'
 import { useT } from './i18n'
@@ -27,6 +29,9 @@ import { useT } from './i18n'
 interface DetachedPayload {
   name?: string
   panes: { channel: string; accountId: string | null }[]
+  /** recent message buffer per channel, handed over so the other window keeps live state
+   *  instead of reloading everything as dimmed "historical" scrollback */
+  seed?: Record<string, import('./types').ChatMessage[]>
 }
 
 export interface EmotePickerWindowPayload {
@@ -38,7 +43,9 @@ export interface EmotePickerWindowPayload {
 
 export interface UserCardWindowPayload {
   target: import('./store/ui').UserCardTarget
-  messages: { id: string; timestamp: number; text: string; emotesTag?: string }[]
+  /** snapshot of this user's messages from the main window — seeds the window's list so it
+   *  shows the same history the panel had, before/while its own reader backfills live ones */
+  messages: (Partial<import('./types').ChatMessage> & { id: string; timestamp: number })[]
 }
 
 type Special =
@@ -100,6 +107,9 @@ export default function App(): React.JSX.Element | null {
             tabId
           )
           if (detached.name) document.title = `StickiChat — ${detached.name}`
+          // seed the buffer from the main window BEFORE the reader starts, so messages keep
+          // their live state instead of the fresh reader marking them all "historical"
+          injectChannelSeed(detached.seed)
           // layout here is ephemeral, but settings tweaks (font zoom, sounds…) must persist
           startSettingsPersistence()
           setOnboarded(true)
@@ -172,42 +182,42 @@ export default function App(): React.JSX.Element | null {
     if (!special) window.sticki.setAlwaysOnTop(settings.alwaysOnTop)
   }, [settings.alwaysOnTop, special])
 
-  // OBS overlay server lifecycle + LIVE style config: every change here is pushed to the
-  // already-connected OBS sources over SSE (main window only)
+  // OBS overlay server lifecycle + LIVE style config: every profile's style is pushed to the
+  // already-connected OBS sources over SSE the moment it changes (main window only)
   useEffect(() => {
     if (special) return
-    // uploaded fonts travel to the OBS page as a data URL (@font-face there)
-    const custom = settings.customFonts.find((f) => f.name === settings.overlayFont)
-    window.sticki.overlayConfigure(settings.overlayEnabled, settings.overlayPort, {
-      size: settings.overlayFontSize,
-      font: settings.overlayFont,
-      fontData: custom?.data,
-      fade: settings.overlayFade,
-      max: settings.overlayMax,
-      gap: settings.overlayLineGap,
-      bold: settings.overlayBold,
-      textColor: settings.overlayTextColor,
-      outlineWidth: settings.overlayOutlineWidth,
-      outlineColor: settings.overlayOutlineColor,
-      bg: settings.overlayBgOpacity > 0 ? hexToRgba(settings.overlayBgColor, settings.overlayBgOpacity) : ''
-    })
-  }, [
-    settings.overlayEnabled,
-    settings.overlayPort,
-    settings.overlayFontSize,
-    settings.overlayFont,
-    settings.overlayFade,
-    settings.overlayMax,
-    settings.overlayLineGap,
-    settings.overlayBold,
-    settings.overlayTextColor,
-    settings.overlayOutlineWidth,
-    settings.overlayOutlineColor,
-    settings.overlayBgColor,
-    settings.overlayBgOpacity,
-    settings.customFonts,
-    special
-  ])
+    const styles: Record<string, unknown> = {}
+    for (const p of settings.overlayProfiles) {
+      // uploaded fonts travel to the OBS page as a data URL (@font-face there)
+      const custom = settings.customFonts.find((f) => f.name === p.font)
+      styles[p.id] = {
+        size: p.fontSize,
+        font: p.font,
+        fontData: custom?.data,
+        bold: p.bold,
+        textColor: p.textColor,
+        textAlign: p.textAlign,
+        outlineWidth: p.outlineWidth,
+        outlineColor: p.outlineColor,
+        shadowBlur: p.shadowBlur,
+        shadowColor: p.shadowColor,
+        glowSize: p.glowSize,
+        glowColor: p.glowColor,
+        bgMode: p.bgMode,
+        bg: p.bgMode !== 'none' && p.bgOpacity > 0 ? hexToRgba(p.bgColor, p.bgOpacity) : '',
+        bgRadius: p.bgRadius,
+        bgShadowBlur: p.bgShadowBlur,
+        bgShadowColor: p.bgShadowColor,
+        bgImage: p.bgImage,
+        bgImageOpacity: p.bgImageOpacity ?? 1,
+        hiddenUsers: p.hiddenUsers ?? [],
+        gap: p.lineGap,
+        fade: p.fade,
+        max: p.max
+      }
+    }
+    window.sticki.overlayConfigure(settings.overlayEnabled, settings.overlayPort, styles)
+  }, [settings.overlayEnabled, settings.overlayPort, settings.overlayProfiles, settings.customFonts, special])
 
   useEffect(() => {
     if (!booted || !onboarded) return
@@ -257,6 +267,8 @@ export default function App(): React.JSX.Element | null {
         const layout = useLayoutStore.getState()
         const id = layout.addTab(data.name)
         for (const p of data.panes) layout.addPane(id, p.channel, p.accountId)
+        // restore the buffer the detached window handed back, so returning doesn't dim it all
+        injectChannelSeed(data.seed)
       } catch {
         /* malformed payload */
       }
@@ -333,9 +345,12 @@ export default function App(): React.JSX.Element | null {
   const returnToMain = (): void => {
     if (!detached) return
     const tab = useLayoutStore.getState().tabs[0]
+    const panes = (tab?.panes ?? detached.panes).map((p) => ({ channel: p.channel, accountId: p.accountId }))
     const payload: DetachedPayload = {
       name: detached.name,
-      panes: (tab?.panes ?? detached.panes).map((p) => ({ channel: p.channel, accountId: p.accountId }))
+      panes,
+      // hand the accumulated buffer back so the main window doesn't reload it as dimmed history
+      seed: buildChannelSeed(panes.map((p) => p.channel))
     }
     window.sticki.reattach(JSON.stringify(payload)).then(() => window.close())
   }
@@ -381,6 +396,7 @@ export default function App(): React.JSX.Element | null {
     <div className="app">
       {!detached && <TabBar />}
       {!detached && <UpdateBanner />}
+      {!detached && <ReauthBanner />}
       {detached && (
         <div className="detached-bar">
           <span className="detached-title">{detached.name}</span>

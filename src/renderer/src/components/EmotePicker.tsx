@@ -3,7 +3,7 @@ import { Account, Emote, EmoteProvider, FavoriteEmote, Settings } from '../types
 import type { TwitchUserEmote } from '../lib/helix'
 import { useEmotesStore } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
-import { loadTwitchUserEmotes } from '../services/emoteService'
+import { loadTwitchUserEmotes, loadEmoteOwnerNames } from '../services/emoteService'
 import { EMOJI_LIST, emojiLabel, emojiSearchText } from '../lib/emojiData'
 import { KAOMOJI } from '../lib/kaomoji'
 import EmojiGlyph from './EmojiGlyph'
@@ -128,9 +128,18 @@ export default function EmotePicker({
 
   const ownerLabel = (ownerId: string): string => {
     if (!ownerId || ownerId === '0') return 'Twitch'
-    if (channelId && ownerId === channelId) return `#${channel}`
-    return ownerNames[ownerId] ? `#${ownerNames[ownerId]}` : '…'
+    if (channelId && ownerId === channelId) return channel
+    return ownerNames[ownerId] ?? '…'
   }
+
+  // make sure the owning streamers' names + avatars are loaded (for the Twitch-tab rail),
+  // even in a standalone picker window where nobody else preloaded them
+  useEffect(() => {
+    if (!account || twitchEmotes.length === 0) return
+    const ids = [...new Set(twitchEmotes.map((e) => e.ownerId).filter((id) => id && id !== '0'))]
+    if (ids.length) loadEmoteOwnerNames(account, ids)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, twitchEmotes.length])
 
   // group all twitch emotes by owning channel, current channel pinned first
   const twitchGroups = useMemo(() => {
@@ -243,9 +252,13 @@ export default function EmotePicker({
     )
   }
 
+  // refs to each twitch owner-group section, so the avatar rail can scroll to one
+  const groupRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const ownerAvatars = useEmotesStore((s) => s.ownerAvatars)
+
   const section = (title: string, emotes: (Emote | FavoriteEmote)[], key?: string): React.JSX.Element | null =>
     emotes.length === 0 ? null : (
-      <div key={key ?? title}>
+      <div key={key ?? title} ref={key ? (el) => (groupRefs.current[key] = el) : undefined}>
         <div className="picker-section">{title}</div>
         <div className="picker-grid">{emotes.map(cell)}</div>
       </div>
@@ -289,7 +302,7 @@ export default function EmotePicker({
         spellCheck={false}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <div className="picker-body">
+      <div className={`picker-body ${!query.trim() && tab === 'twitch' ? 'picker-body-twitch' : ''}`}>
         {query.trim() ? (
           searchResults.length > 0 ? (
             <div className="picker-grid">{searchResults.map(cell)}</div>
@@ -349,7 +362,29 @@ export default function EmotePicker({
           twitchEmotes.length === 0 ? (
             <div className="picker-empty">{account ? '…' : t('picker.empty')}</div>
           ) : (
-            <>{twitchGroups.map((g) => section(g.label, g.emotes, g.key))}</>
+            <div className="picker-twitch">
+              {/* avatar rail: one per emote-owning streamer, click scrolls to their group */}
+              <div className="picker-owner-rail">
+                {twitchGroups.map((g) => (
+                  <button
+                    key={g.key}
+                    className="picker-owner-avatar"
+                    title={g.label}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => groupRefs.current[g.key]?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+                  >
+                    {ownerAvatars[g.key] ? (
+                      <img src={ownerAvatars[g.key]} alt={g.label} loading="lazy" />
+                    ) : (
+                      <span>{g.label.replace('#', '').slice(0, 2)}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="picker-twitch-groups">
+                {twitchGroups.map((g) => section(g.label, g.emotes, g.key))}
+              </div>
+            </div>
           )
         ) : tab === 'thirdparty' ? (
           <>

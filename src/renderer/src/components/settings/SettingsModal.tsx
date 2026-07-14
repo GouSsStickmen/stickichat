@@ -1,16 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { Children, isValidElement, useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../../store/settings'
 import { useAccountsStore } from '../../store/accounts'
 import { useUiStore } from '../../store/ui'
 import { useT } from '../../i18n'
 import {
   DEFAULT_HOTKEYS,
+  DEFAULT_OVERLAY_STYLE,
   HighlightKind,
   HighlightRule,
   HotkeyAction,
   ModButton,
   ModActionType,
+  OverlayProfile,
   Settings,
+  SOUND_PRESETS,
   VALUELESS_HL_KINDS
 } from '../../types'
 import { nextId, useLayoutStore } from '../../store/layout'
@@ -19,7 +22,15 @@ import { useFlip } from '../../lib/useFlip'
 import { eventToAccel, hotkeyFor } from '../../lib/hotkeys'
 import { hexToRgba } from '../../lib/tokenize'
 import { removeAccountEverywhere, refreshModeratedChannels } from '../../services/accountService'
-import { playMentionSound, playFirstMessageSound, playKeywordSound, playStreamUpSound, playWhisperSound } from '../../lib/sound'
+import {
+  playMentionSound,
+  playFirstMessageSound,
+  playKeywordSound,
+  playStreamUpSound,
+  playWhisperSound,
+  playRaidSound,
+  playErrorSound
+} from '../../lib/sound'
 import { CHANGELOG } from '../../changelog'
 import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
@@ -339,7 +350,7 @@ function AppearanceSection(): React.JSX.Element {
     ? allFonts.filter((f) => f.toLowerCase().includes(fontQuery.toLowerCase()))
     : allFonts
   return (
-    <div>
+    <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
       <div className="set-row">
         <label>{t('set.theme')}</label>
@@ -461,7 +472,18 @@ function AppearanceSection(): React.JSX.Element {
           <option value="both">{t('set.emojiNameLang.both')}</option>
         </select>
       </div>
-    </div>
+      <div className="set-row" title={t('hint.chatHoverSize')}>
+        <label className="has-hint">{t('set.chatHoverSize')}</label>
+        <input
+          type="number"
+          min={48}
+          max={320}
+          style={{ width: 70 }}
+          value={settings.chatEmoteHoverSize}
+          onChange={(e) => set({ chatEmoteHoverSize: parseInt(e.target.value, 10) || 128 })}
+        />
+      </div>
+    </Framed>
   )
 }
 
@@ -470,7 +492,7 @@ function ChatSection(): React.JSX.Element {
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
   return (
-    <div>
+    <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
       <Toggle label={t('set.timestamps')} value={settings.showTimestamps} onChange={(v) => set({ showTimestamps: v })} />
       <Toggle label={t('set.timestampSeconds')} value={settings.timestampSeconds} onChange={(v) => set({ timestampSeconds: v })} />
@@ -505,7 +527,23 @@ function ChatSection(): React.JSX.Element {
       <Toggle label={t('set.emoteSuggestions')} hint={t('hint.emoteSuggestions')} value={settings.emoteSuggestions} onChange={(v) => set({ emoteSuggestions: v })} />
       <Toggle label={t('set.charCounter')} hint={t('hint.charCounter')} value={settings.showCharCounter} onChange={(v) => set({ showCharCounter: v })} />
       <Toggle label={t('set.translit')} hint={t('hint.translit')} value={settings.translitEnabled} onChange={(v) => set({ translitEnabled: v })} />
+      {settings.translitEnabled && (
+        <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('hint.translitExclude')}>
+          <label className="has-hint">{t('set.translitExclude')}</label>
+          <textarea
+            rows={2}
+            style={{ flex: 1, resize: 'vertical' }}
+            placeholder="!followage, !drop"
+            value={settings.translitExcludeWords.join(', ')}
+            spellCheck={false}
+            onChange={(e) =>
+              set({ translitExcludeWords: e.target.value.split(',').map((w) => w.trim()).filter(Boolean) })
+            }
+          />
+        </div>
+      )}
       <Toggle label={t('set.caseSensitiveNicks')} hint={t('hint.caseSensitiveNicks')} value={settings.caseSensitiveNicks} onChange={(v) => set({ caseSensitiveNicks: v })} />
+      <Toggle label={t('set.sevenTvColors')} hint={t('hint.sevenTvColors')} value={settings.sevenTvNickColors} onChange={(v) => set({ sevenTvNickColors: v })} />
       <div className="set-group-title">{t('highlights.title')}</div>
       <Toggle
         label={t('set.highlightSidebar')}
@@ -524,7 +562,7 @@ function ChatSection(): React.JSX.Element {
           <option value="redeems">{t('highlights.redeems')}</option>
         </select>
       </div>
-    </div>
+    </Framed>
   )
 }
 
@@ -533,7 +571,7 @@ function NotificationsSection(): React.JSX.Element {
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
   return (
-    <div>
+    <Framed>
       <Toggle label={t('set.mentionSound')} hint={t('hint.mentionSound')} value={settings.mentionSound} onChange={(v) => set({ mentionSound: v })} />
       {settings.mentionSound && <SoundSettings kind="mention" />}
       <Toggle
@@ -571,6 +609,8 @@ function NotificationsSection(): React.JSX.Element {
       {settings.streamUpSound && <SoundSettings kind="streamUp" />}
       <div className="set-group-title">{t('mod.raid')}</div>
       <Toggle label={t('set.raidPrompt')} hint={t('hint.raidPrompt')} value={settings.raidPrompt} onChange={(v) => set({ raidPrompt: v })} />
+      <Toggle label={t('set.raidSound')} value={settings.raidSound} onChange={(v) => set({ raidSound: v })} />
+      {settings.raidSound && <SoundSettings kind="raid" />}
       {settings.raidPrompt && (
         <>
           <div className="set-row">
@@ -588,7 +628,10 @@ function NotificationsSection(): React.JSX.Element {
           />
         </>
       )}
-    </div>
+      <div className="set-group-title">{t('set.group.errors')}</div>
+      <Toggle label={t('set.errorSound')} hint={t('hint.errorSound')} value={settings.errorSound} onChange={(v) => set({ errorSound: v })} />
+      {settings.errorSound && <SoundSettings kind="error" />}
+    </Framed>
   )
 }
 
@@ -597,7 +640,7 @@ function WindowsSection(): React.JSX.Element {
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
   return (
-    <div>
+    <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
       <Toggle
         label={t('set.alwaysOnTop')}
@@ -672,11 +715,11 @@ function WindowsSection(): React.JSX.Element {
           onChange={(e) => set({ emotePreviewSize: parseInt(e.target.value, 10) || 112 })}
         />
       </div>
-    </div>
+    </Framed>
   )
 }
 
-type SoundKind = 'mention' | 'firstMessage' | 'keyword' | 'streamUp' | 'whisper'
+type SoundKind = 'mention' | 'firstMessage' | 'keyword' | 'streamUp' | 'whisper' | 'raid' | 'error'
 
 const SOUND_KEYS = {
   mention: { type: 'mentionSoundType', volume: 'mentionSoundVolume', customId: 'mentionSoundCustomId' },
@@ -687,7 +730,9 @@ const SOUND_KEYS = {
   },
   keyword: { type: 'keywordSoundType', volume: 'keywordSoundVolume', customId: 'keywordSoundCustomId' },
   streamUp: { type: 'streamUpSoundType', volume: 'streamUpSoundVolume', customId: 'streamUpSoundCustomId' },
-  whisper: { type: 'whisperSoundType', volume: 'whisperSoundVolume', customId: 'whisperSoundCustomId' }
+  whisper: { type: 'whisperSoundType', volume: 'whisperSoundVolume', customId: 'whisperSoundCustomId' },
+  raid: { type: 'raidSoundType', volume: 'raidSoundVolume', customId: 'raidSoundCustomId' },
+  error: { type: 'errorSoundType', volume: 'errorSoundVolume', customId: 'errorSoundCustomId' }
 } as const
 
 const SOUND_PLAYERS: Record<SoundKind, (s: Settings, force?: boolean) => void> = {
@@ -695,7 +740,9 @@ const SOUND_PLAYERS: Record<SoundKind, (s: Settings, force?: boolean) => void> =
   firstMessage: playFirstMessageSound,
   keyword: playKeywordSound,
   streamUp: playStreamUpSound,
-  whisper: playWhisperSound
+  whisper: playWhisperSound,
+  raid: playRaidSound,
+  error: (_s, force) => playErrorSound(force)
 }
 
 function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
@@ -750,9 +797,11 @@ function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
         <label>{t('set.sound.type')}</label>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <select value={selectValue} onChange={(e) => onSelectChange(e.target.value)}>
-            <option value="ping">{t('set.sound.ping')}</option>
-            <option value="pop">{t('set.sound.pop')}</option>
-            <option value="bell">{t('set.sound.bell')}</option>
+            {SOUND_PRESETS.map((p) => (
+              <option key={p} value={p}>
+                {t(`set.sound.${p}`)}
+              </option>
+            ))}
             {settings.customSounds.map((c) => (
               <option key={c.id} value={`custom:${c.id}`}>
                 🎵 {c.name}
@@ -798,6 +847,40 @@ function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
           style={{ maxWidth: 240 }}
         />
       </div>
+    </>
+  )
+}
+
+/**
+ * Splits a section's flat rows into framed cards, breaking at each `.set-group-title`.
+ * Lets sections keep their simple flat markup while rendering as visually separated blocks —
+ * a group title starts a new card; rows before the first title form an untitled leading card.
+ */
+function Framed({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const isTitle = (k: React.ReactNode): boolean =>
+    isValidElement(k) &&
+    String((k.props as { className?: string }).className ?? '')
+      .split(' ')
+      .includes('set-group-title')
+
+  const cards: React.ReactNode[][] = []
+  let cur: React.ReactNode[] = []
+  for (const kid of Children.toArray(children)) {
+    if (isTitle(kid) && cur.length) {
+      cards.push(cur)
+      cur = []
+    }
+    cur.push(kid)
+  }
+  if (cur.length) cards.push(cur)
+
+  return (
+    <>
+      {cards.map((c, i) => (
+        <div className="set-card" key={i}>
+          {c}
+        </div>
+      ))}
     </>
   )
 }
@@ -979,6 +1062,18 @@ function ModerationSection(): React.JSX.Element {
       <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
         {t('set.modBtn.hint')}
       </p>
+      <button
+        className="primary"
+        style={{ marginBottom: 10 }}
+        onClick={() =>
+          setModButtons([
+            { id: nextId('mb'), label: 'New', icon: '⭐', type: 'snippet', text: '', scope: 'toolbar' },
+            ...modButtons
+          ])
+        }
+      >
+        + {t('set.modBtn.add')}
+      </button>
       {modButtons.map((b, index) => (
         <div key={b.id} data-flipid={b.id} className={`modbtn-card ${draggingBtn === b.id ? 'dragging' : ''}`}>
           <div className="modbtn-line">
@@ -1121,18 +1216,6 @@ function ModerationSection(): React.JSX.Element {
           )}
         </div>
       ))}
-      <button
-        style={{ marginTop: 8 }}
-        onClick={() =>
-          setModButtons([
-            ...modButtons,
-            { id: nextId('mb'), label: 'New', icon: '⭐', type: 'snippet', text: '', scope: 'toolbar' }
-          ])
-        }
-      >
-        + {t('set.modBtn.add')}
-      </button>
-
       <h4 style={{ marginTop: 22, marginBottom: 6 }}>{t('set.swipeTiers')}</h4>
       <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
         {t('set.swipeTiers.hint')}
@@ -1386,7 +1469,7 @@ function HighlightsSection(): React.JSX.Element {
   )
 }
 
-const EDITABLE_HOTKEYS: HotkeyAction[] = ['reconnect', 'scrollLock', 'translit', 'resendLast']
+const EDITABLE_HOTKEYS: HotkeyAction[] = ['reconnect', 'scrollLock', 'pauseHold', 'translit', 'sendKeep', 'resendLast']
 
 function HotkeyInput({ action }: { action: HotkeyAction }): React.JSX.Element {
   const t = useT()
@@ -1447,7 +1530,9 @@ function HotkeysSection(): React.JSX.Element {
   const labels: Record<HotkeyAction, string> = {
     reconnect: t('hk.reconnect'),
     scrollLock: t('hk.scrollLock'),
+    pauseHold: t('hk.pauseHold'),
     translit: t('hk.translit'),
+    sendKeep: t('hk.sendKeep'),
     resendLast: t('hk.resendLast')
   }
   const builtin: [string, string][] = [
@@ -1482,11 +1567,16 @@ function HotkeysSection(): React.JSX.Element {
   )
 }
 
-/** same combobox as the app-font picker, driving settings.overlayFont */
-function OverlayFontPicker(): React.JSX.Element {
+/** font combobox (system fonts + uploaded), driving one overlay profile's font */
+function OverlayFontPicker({
+  value,
+  onChange
+}: {
+  value: string
+  onChange: (v: string) => void
+}): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
-  const set = useSettingsStore((s) => s.setSettings)
   const [systemFonts, setSystemFonts] = useState<string[]>([])
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -1513,10 +1603,10 @@ function OverlayFontPicker(): React.JSX.Element {
       <input
         style={{ width: 190 }}
         placeholder={t('set.fontFamily.placeholder')}
-        value={settings.overlayFont}
+        value={value}
         spellCheck={false}
         onChange={(e) => {
-          set({ overlayFont: e.target.value })
+          onChange(e.target.value)
           setQuery(e.target.value)
           setOpen(true)
         }}
@@ -1535,11 +1625,11 @@ function OverlayFontPicker(): React.JSX.Element {
           {matches.map((f) => (
             <div
               key={f}
-              className={`font-combo-item ${f === settings.overlayFont ? 'selected' : ''}`}
+              className={`font-combo-item ${f === value ? 'selected' : ''}`}
               style={{ fontFamily: `'${f}'` }}
               onMouseDown={(e) => {
                 e.preventDefault()
-                set({ overlayFont: f })
+                onChange(f)
                 setOpen(false)
               }}
             >
@@ -1552,6 +1642,93 @@ function OverlayFontPicker(): React.JSX.Element {
   )
 }
 
+/** live approximation of how the overlay renders with this profile */
+function OverlayPreview({ p }: { p: OverlayProfile }): React.JSX.Element {
+  const shadowParts: string[] = []
+  const w = p.outlineWidth
+  if (w > 0) {
+    for (let x = -w; x <= w; x++)
+      for (let y = -w; y <= w; y++) if (x || y) shadowParts.push(`${x}px ${y}px 0 ${p.outlineColor}`)
+  }
+  if (p.shadowBlur > 0) shadowParts.push(`0 2px ${p.shadowBlur}px ${p.shadowColor}`)
+  if (p.glowSize > 0) {
+    shadowParts.push(`0 0 ${p.glowSize}px ${p.glowColor}`, `0 0 ${p.glowSize * 2}px ${p.glowColor}`)
+  }
+  const bg = p.bgMode !== 'none' && p.bgOpacity > 0 ? hexToRgba(p.bgColor, p.bgOpacity) : ''
+  const perLine = p.bgMode === 'fit' || p.bgMode === 'line'
+  const imgOp = p.bgImageOpacity ?? 1
+  // custom image as its own layer so its opacity is independent of the plate/text
+  const imgLayer = (radius: number): React.JSX.Element | null =>
+    p.bgImage ? (
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `url('${p.bgImage}')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: imgOp,
+          borderRadius: radius,
+          zIndex: 0,
+          pointerEvents: 'none'
+        }}
+      />
+    ) : null
+  const lineStyle: React.CSSProperties = {
+    position: 'relative',
+    textShadow: shadowParts.length ? shadowParts.join(', ') : undefined,
+    background: perLine && bg ? bg : undefined,
+    borderRadius: perLine ? p.bgRadius : undefined,
+    boxShadow: perLine && p.bgShadowBlur > 0 ? `0 2px ${p.bgShadowBlur}px ${p.bgShadowColor}` : undefined,
+    width: p.bgMode === 'fit' ? 'fit-content' : undefined,
+    maxWidth: '100%',
+    padding: '2px 8px',
+    boxSizing: 'border-box'
+  }
+  const samples: [string, string, string][] = [
+    ['#ff69b4', 'Bobik069', 'привіт чат! 💜'],
+    ['#1e90ff', 'Bobik069', 'GG кльовий стрім'],
+    ['#9acd32', 'Bobik069', 'Kappa PogChamp 🎉']
+  ]
+  return (
+    <div className="overlay-preview">
+      <div
+        className="overlay-preview-chat"
+        style={{
+          position: 'relative',
+          fontFamily: p.font ? `'${p.font}', 'Segoe UI', sans-serif` : undefined,
+          fontSize: p.fontSize,
+          fontWeight: p.bold ? 600 : 400,
+          color: p.textColor,
+          gap: p.lineGap,
+          textAlign: p.textAlign,
+          alignItems:
+            p.bgMode === 'fit'
+              ? p.textAlign === 'center'
+                ? 'center'
+                : p.textAlign === 'right'
+                  ? 'flex-end'
+                  : 'flex-start'
+              : 'stretch',
+          background: p.bgMode === 'panel' ? bg || undefined : undefined,
+          borderRadius: p.bgMode === 'panel' ? p.bgRadius : undefined,
+          boxShadow:
+            p.bgMode === 'panel' && p.bgShadowBlur > 0 ? `0 4px ${p.bgShadowBlur}px ${p.bgShadowColor}` : undefined
+        }}
+      >
+        {p.bgMode === 'panel' && imgLayer(p.bgRadius)}
+        {samples.map(([color, nick, text]) => (
+          <div key={nick} style={lineStyle}>
+            {perLine && imgLayer(p.bgRadius)}
+            <b style={{ color, position: 'relative', zIndex: 1 }}>{nick}</b>
+            <span style={{ position: 'relative', zIndex: 1 }}>: {text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function OverlaySection(): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
@@ -1560,10 +1737,35 @@ function OverlaySection(): React.JSX.Element {
   const toast = useUiStore.getState().toast
   const knownChannels = [...new Set(tabs.flatMap((tab) => tab.panes.map((p) => p.channel)))]
   const [urlChannel, setUrlChannel] = useState(knownChannels[0] ?? '')
+  const profiles = settings.overlayProfiles
+  const [activeId, setActiveId] = useState(profiles[0]?.id ?? '')
+  const active = profiles.find((p) => p.id === activeId) ?? profiles[0]
 
-  // style now travels LIVE over SSE — the URL only needs the channel
+  const update = (patch: Partial<OverlayProfile>): void => {
+    if (!active) return
+    set({ overlayProfiles: profiles.map((p) => (p.id === active.id ? { ...p, ...patch } : p)) })
+  }
+
+  const addProfile = (): void => {
+    const id = nextId('ovp')
+    set({
+      overlayProfiles: [
+        ...profiles,
+        { ...DEFAULT_OVERLAY_STYLE, ...(active ?? {}), id, name: `${t('overlay.profile')} ${profiles.length + 1}` }
+      ]
+    })
+    setActiveId(id)
+  }
+
+  const removeProfile = (): void => {
+    if (!active || profiles.length <= 1) return
+    const rest = profiles.filter((p) => p.id !== active.id)
+    set({ overlayProfiles: rest })
+    setActiveId(rest[0].id)
+  }
+
   const overlayUrl = (channel: string): string =>
-    `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(channel)}`
+    `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(channel)}&profile=${encodeURIComponent(active?.id ?? '')}`
 
   return (
     <div>
@@ -1582,119 +1784,336 @@ function OverlaySection(): React.JSX.Element {
           onChange={(e) => set({ overlayPort: parseInt(e.target.value, 10) || 4715 })}
         />
       </div>
-      <div className="set-group-title">{t('overlay.style')}</div>
-      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
-        {t('overlay.liveHint')}
-      </p>
+
+      {/* URL to copy into OBS — kept at the top since it's the first thing you need */}
+      <div className="set-group-title">{t('overlay.url')}</div>
       <div className="set-row">
-        <label>{t('set.fontSize')}</label>
-        <input
-          type="number"
-          min={10}
-          max={48}
-          style={{ width: 70 }}
-          value={settings.overlayFontSize}
-          onChange={(e) => set({ overlayFontSize: parseInt(e.target.value, 10) || 16 })}
-        />
+        <label>{t('pane.channelPlaceholder')}</label>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <select value={urlChannel} onChange={(e) => setUrlChannel(e.target.value)}>
+            {knownChannels.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <button
+            className="primary"
+            disabled={!urlChannel || !active}
+            onClick={() => {
+              navigator.clipboard.writeText(overlayUrl(urlChannel))
+              toast(t('overlay.copied'))
+            }}
+          >
+            📋 {t('overlay.copy')}
+          </button>
+        </div>
       </div>
-      <div className="set-row">
-        <label>{t('set.fontFamily')}</label>
-        <OverlayFontPicker />
-        <label className="ghost" style={{ cursor: 'pointer' }}>
-          <input
-            type="file"
-            accept=".ttf,.otf,.woff,.woff2"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (!file || file.size > 5 * 1024 * 1024) return
-              const reader = new FileReader()
-              reader.onload = () => {
-                const name = file.name.replace(/\.[a-z0-9]+$/i, '')
-                const fresh = useSettingsStore.getState().settings
-                set({
-                  customFonts: [...fresh.customFonts.filter((f) => f.name !== name), { name, data: String(reader.result) }],
-                  overlayFont: name
+      {urlChannel && active && (
+        <p className="hint" style={{ color: 'var(--text-faint)', userSelect: 'text', overflowWrap: 'anywhere' }}>
+          {overlayUrl(urlChannel)}
+        </p>
+      )}
+
+      {/* named profiles: same chat, different looks for different OBS sources */}
+      <div className="set-group-title">{t('overlay.profiles')}</div>
+      <div className="overlay-profile-chips">
+        {profiles.map((p) => (
+          <button
+            key={p.id}
+            className={`chip ${p.id === (active?.id ?? '') ? 'active' : ''}`}
+            onClick={() => setActiveId(p.id)}
+          >
+            {p.name}
+          </button>
+        ))}
+        <button className="ghost" title={t('overlay.addProfile')} onClick={addProfile}>
+          +
+        </button>
+      </div>
+      {active && (
+        <>
+          <div className="set-row">
+            <label>{t('overlay.profileName')}</label>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                style={{ width: 160 }}
+                value={active.name}
+                onChange={(e) => update({ name: e.target.value })}
+              />
+              <button
+                title={t('overlay.reset')}
+                onClick={() => update({ ...DEFAULT_OVERLAY_STYLE })}
+              >
+                ↺ {t('overlay.reset')}
+              </button>
+              <button
+                className="danger"
+                title={t('set.modBtn.delete')}
+                disabled={profiles.length <= 1}
+                onClick={removeProfile}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <OverlayPreview p={active} />
+
+          <div className="set-group-title">{t('overlay.style')}</div>
+          <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+            {t('overlay.liveHint')}
+          </p>
+          <div className="set-row">
+            <label>{t('set.fontFamily')}</label>
+            <OverlayFontPicker value={active.font} onChange={(v) => update({ font: v })} />
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept=".ttf,.otf,.woff,.woff2"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file || file.size > 5 * 1024 * 1024) return
+                  const reader = new FileReader()
+                  reader.onload = () => {
+                    const name = file.name.replace(/\.[a-z0-9]+$/i, '')
+                    const fresh = useSettingsStore.getState().settings
+                    set({
+                      customFonts: [...fresh.customFonts.filter((f) => f.name !== name), { name, data: String(reader.result) }]
+                    })
+                    update({ font: name })
+                  }
+                  reader.readAsDataURL(file)
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 {t('set.fontUpload')}</span>
+            </label>
+          </div>
+          <div className="set-row">
+            <label>{t('set.fontSize')}</label>
+            <input
+              type="number"
+              min={10}
+              max={48}
+              style={{ width: 70 }}
+              value={active.fontSize}
+              onChange={(e) => update({ fontSize: parseInt(e.target.value, 10) || 16 })}
+            />
+          </div>
+          <Toggle label={t('overlay.bold')} value={active.bold} onChange={(v) => update({ bold: v })} />
+          <div className="set-row">
+            <label>{t('overlay.textAlign')}</label>
+            <select value={active.textAlign} onChange={(e) => update({ textAlign: e.target.value as OverlayProfile['textAlign'] })}>
+              <option value="left">{t('overlay.align.left')}</option>
+              <option value="center">{t('overlay.align.center')}</option>
+              <option value="right">{t('overlay.align.right')}</option>
+            </select>
+          </div>
+          <div className="set-row">
+            <label>{t('overlay.textColor')}</label>
+            <ColorField value={active.textColor} defaultValue="#ffffff" onChange={(v) => update({ textColor: v })} />
+          </div>
+          <div className="set-row" title={t('overlay.outline.hint')}>
+            <label className="has-hint">{t('overlay.outline')}</label>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="number"
+                min={0}
+                max={6}
+                style={{ width: 60 }}
+                value={active.outlineWidth}
+                onChange={(e) => update({ outlineWidth: parseInt(e.target.value, 10) || 0 })}
+              />
+              <ColorField value={active.outlineColor} defaultValue="#000000" onChange={(v) => update({ outlineColor: v })} />
+            </div>
+          </div>
+          <div className="set-row">
+            <label>{t('overlay.textShadow')}</label>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="number"
+                min={0}
+                max={30}
+                style={{ width: 60 }}
+                value={active.shadowBlur}
+                onChange={(e) => update({ shadowBlur: parseInt(e.target.value, 10) || 0 })}
+              />
+              <ColorField value={active.shadowColor} defaultValue="#000000" onChange={(v) => update({ shadowColor: v })} />
+            </div>
+          </div>
+          <div className="set-row">
+            <label>{t('overlay.glow')}</label>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="number"
+                min={0}
+                max={30}
+                style={{ width: 60 }}
+                value={active.glowSize}
+                onChange={(e) => update({ glowSize: parseInt(e.target.value, 10) || 0 })}
+              />
+              <ColorField value={active.glowColor} defaultValue="#a970ff" onChange={(v) => update({ glowColor: v })} />
+            </div>
+          </div>
+
+          <div className="set-group-title">{t('overlay.bgTitle')}</div>
+          <div className="set-row" title={t('overlay.bgMode.hint')}>
+            <label className="has-hint">{t('overlay.bgMode')}</label>
+            <select value={active.bgMode} onChange={(e) => update({ bgMode: e.target.value as OverlayProfile['bgMode'] })}>
+              <option value="none">{t('overlay.bgMode.none')}</option>
+              <option value="fit">{t('overlay.bgMode.fit')}</option>
+              <option value="line">{t('overlay.bgMode.line')}</option>
+              <option value="panel">{t('overlay.bgMode.panel')}</option>
+            </select>
+          </div>
+          {active.bgMode !== 'none' && (
+            <>
+              <div className="set-row">
+                <label>{t('overlay.bg')}</label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <ColorField value={active.bgColor} defaultValue="#000000" onChange={(v) => update({ bgColor: v })} />
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    title={`${Math.round(active.bgOpacity * 100)}%`}
+                    value={Math.round(active.bgOpacity * 100)}
+                    onChange={(e) => update({ bgOpacity: parseInt(e.target.value, 10) / 100 })}
+                  />
+                  <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>
+                    {Math.round(active.bgOpacity * 100)}%
+                  </span>
+                </div>
+              </div>
+              <div className="set-row">
+                <label>{t('overlay.bgRadius')}</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={40}
+                  style={{ width: 70 }}
+                  value={active.bgRadius}
+                  onChange={(e) => update({ bgRadius: parseInt(e.target.value, 10) || 0 })}
+                />
+              </div>
+              <div className="set-row">
+                <label>{t('overlay.bgShadow')}</label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    min={0}
+                    max={40}
+                    style={{ width: 60 }}
+                    value={active.bgShadowBlur}
+                    onChange={(e) => update({ bgShadowBlur: parseInt(e.target.value, 10) || 0 })}
+                  />
+                  <ColorField value={active.bgShadowColor} defaultValue="#000000" onChange={(v) => update({ bgShadowColor: v })} />
+                </div>
+              </div>
+              <div className="set-row">
+                <label>{t('overlay.bgImage')}</label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <label className="ghost" style={{ cursor: 'pointer' }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (!file || file.size > 4 * 1024 * 1024) return
+                        const reader = new FileReader()
+                        reader.onload = () => update({ bgImage: String(reader.result) })
+                        reader.readAsDataURL(file)
+                        e.target.value = ''
+                      }}
+                    />
+                    <span className="hint">📁 {t('overlay.bgImage.upload')}</span>
+                  </label>
+                  {active.bgImage && (
+                    <button className="danger" onClick={() => update({ bgImage: undefined })}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+              {active.bgImage && (
+                <div className="set-row" title={t('overlay.bgImageOpacity.hint')}>
+                  <label className="has-hint">{t('overlay.bgImageOpacity')}</label>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={Math.round((active.bgImageOpacity ?? 1) * 100)}
+                      onChange={(e) => update({ bgImageOpacity: parseInt(e.target.value, 10) / 100 })}
+                    />
+                    <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>
+                      {Math.round((active.bgImageOpacity ?? 1) * 100)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="set-row" title={t('overlay.fade.hint')}>
+            <label className="has-hint">{t('overlay.fade')}</label>
+            <input
+              type="number"
+              min={0}
+              max={600}
+              style={{ width: 70 }}
+              value={active.fade}
+              onChange={(e) => update({ fade: parseInt(e.target.value, 10) || 0 })}
+            />
+          </div>
+          <div className="set-row">
+            <label>{t('overlay.max')}</label>
+            <input
+              type="number"
+              min={3}
+              max={50}
+              style={{ width: 70 }}
+              value={active.max}
+              onChange={(e) => update({ max: parseInt(e.target.value, 10) || 15 })}
+            />
+          </div>
+          <div className="set-row">
+            <label>{t('overlay.lineGap')}</label>
+            <input
+              type="number"
+              min={0}
+              max={30}
+              style={{ width: 70 }}
+              value={active.lineGap}
+              onChange={(e) => update({ lineGap: parseInt(e.target.value, 10) || 0 })}
+            />
+          </div>
+          <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('overlay.profileHidden.hint')}>
+            <label className="has-hint">{t('overlay.profileHidden')}</label>
+            <textarea
+              rows={2}
+              style={{ flex: 1, resize: 'vertical' }}
+              placeholder="nightbot, streamelements…"
+              value={(active.hiddenUsers ?? []).join(', ')}
+              spellCheck={false}
+              onChange={(e) =>
+                update({
+                  hiddenUsers: e.target.value
+                    .split(',')
+                    .map((x) => x.trim().toLowerCase().replace(/^@/, ''))
+                    .filter(Boolean)
                 })
               }
-              reader.readAsDataURL(file)
-              e.target.value = ''
-            }}
-          />
-          <span className="hint">📁 {t('set.fontUpload')}</span>
-        </label>
-      </div>
-      <div className="set-row">
-        <label>{t('overlay.textColor')}</label>
-        <ColorField value={settings.overlayTextColor} defaultValue="#ffffff" onChange={(v) => set({ overlayTextColor: v })} />
-      </div>
-      <div className="set-row" title={t('overlay.outline.hint')}>
-        <label className="has-hint">{t('overlay.outline')}</label>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input
-            type="number"
-            min={0}
-            max={6}
-            style={{ width: 60 }}
-            value={settings.overlayOutlineWidth}
-            onChange={(e) => set({ overlayOutlineWidth: parseInt(e.target.value, 10) || 0 })}
-          />
-          <ColorField value={settings.overlayOutlineColor} defaultValue="#000000" onChange={(v) => set({ overlayOutlineColor: v })} />
-        </div>
-      </div>
-      <div className="set-row" title={t('overlay.bg.hint')}>
-        <label className="has-hint">{t('overlay.bg')}</label>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <ColorField value={settings.overlayBgColor} defaultValue="#000000" onChange={(v) => set({ overlayBgColor: v })} />
-          <input
-            type="range"
-            min={0}
-            max={100}
-            title={`${Math.round(settings.overlayBgOpacity * 100)}%`}
-            value={Math.round(settings.overlayBgOpacity * 100)}
-            onChange={(e) => set({ overlayBgOpacity: parseInt(e.target.value, 10) / 100 })}
-          />
-          <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>
-            {Math.round(settings.overlayBgOpacity * 100)}%
-          </span>
-        </div>
-      </div>
-      <div className="set-row" title={t('overlay.fade.hint')}>
-        <label className="has-hint">{t('overlay.fade')}</label>
-        <input
-          type="number"
-          min={0}
-          max={600}
-          style={{ width: 70 }}
-          value={settings.overlayFade}
-          onChange={(e) => set({ overlayFade: parseInt(e.target.value, 10) || 0 })}
-        />
-      </div>
-      <div className="set-row">
-        <label>{t('overlay.max')}</label>
-        <input
-          type="number"
-          min={3}
-          max={50}
-          style={{ width: 70 }}
-          value={settings.overlayMax}
-          onChange={(e) => set({ overlayMax: parseInt(e.target.value, 10) || 15 })}
-        />
-      </div>
-      <div className="set-row">
-        <label>{t('overlay.lineGap')}</label>
-        <input
-          type="number"
-          min={0}
-          max={30}
-          style={{ width: 70 }}
-          value={settings.overlayLineGap}
-          onChange={(e) => set({ overlayLineGap: parseInt(e.target.value, 10) || 0 })}
-        />
-      </div>
-      <Toggle label={t('overlay.badges')} value={settings.overlayBadges} onChange={(v) => set({ overlayBadges: v })} />
-      <Toggle label={t('overlay.bold')} value={settings.overlayBold} onChange={(v) => set({ overlayBold: v })} />
+            />
+          </div>
+        </>
+      )}
+
       <div className="set-group-title">{t('overlay.content')}</div>
+      <Toggle label={t('overlay.badges')} value={settings.overlayBadges} onChange={(v) => set({ overlayBadges: v })} />
       <Toggle label={t('overlay.showRedeems')} value={settings.overlayShowRedeems} onChange={(v) => set({ overlayShowRedeems: v })} />
       <Toggle label={t('overlay.showBits')} value={settings.overlayShowBits} onChange={(v) => set({ overlayShowBits: v })} />
       <Toggle label={t('overlay.showSubs')} value={settings.overlayShowSubs} onChange={(v) => set({ overlayShowSubs: v })} />
@@ -1723,34 +2142,7 @@ function OverlaySection(): React.JSX.Element {
           }
         />
       </div>
-      <div className="set-group-title">{t('overlay.url')}</div>
-      <div className="set-row">
-        <label>{t('pane.channelPlaceholder')}</label>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <select value={urlChannel} onChange={(e) => setUrlChannel(e.target.value)}>
-            {knownChannels.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <button
-            className="primary"
-            disabled={!urlChannel}
-            onClick={() => {
-              navigator.clipboard.writeText(overlayUrl(urlChannel))
-              toast(t('overlay.copied'))
-            }}
-          >
-            📋 {t('overlay.copy')}
-          </button>
-        </div>
-      </div>
-      {urlChannel && (
-        <p className="hint" style={{ color: 'var(--text-faint)', userSelect: 'text', overflowWrap: 'anywhere' }}>
-          {overlayUrl(urlChannel)}
-        </p>
-      )}
+
     </div>
   )
 }
@@ -1763,7 +2155,7 @@ function AdvancedSection(): React.JSX.Element {
   const set = useSettingsStore((s) => s.setSettings)
 
   return (
-    <div>
+    <Framed>
       <div className="set-row" title={t('hint.clientId')}>
         <label>{t('set.clientId')}</label>
         <input style={{ width: 260 }} value={clientId} spellCheck={false} onChange={(e) => setClientId(e.target.value.trim())} />
@@ -1779,7 +2171,7 @@ function AdvancedSection(): React.JSX.Element {
           onChange={(e) => set({ messageLimit: parseInt(e.target.value, 10) || 800 })}
         />
       </div>
-    </div>
+    </Framed>
   )
 }
 
@@ -1793,7 +2185,7 @@ function AboutSection(): React.JSX.Element {
   }, [])
 
   return (
-    <div>
+    <Framed>
       <div className="set-row">
         <label>
           <b>StickiChat</b> · {t('set.version')} v{version}
@@ -1834,6 +2226,6 @@ function AboutSection(): React.JSX.Element {
           ))}
         </div>
       )}
-    </div>
+    </Framed>
   )
 }

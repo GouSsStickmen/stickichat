@@ -37,8 +37,8 @@ const api = {
   },
   overlayConfigure: (enabled: boolean, port: number, style?: unknown): Promise<void> =>
     ipcRenderer.invoke('overlay:configure', enabled, port, style),
-  overlayPush: (channel: string, html: string, id: string, user: string): Promise<void> =>
-    ipcRenderer.invoke('overlay:push', channel, html, id, user),
+  overlayPush: (channel: string, html: string, id: string, user: string, login: string): Promise<void> =>
+    ipcRenderer.invoke('overlay:push', channel, html, id, user, login),
   overlayDelete: (channel: string, del: { id?: string; user?: string; all?: boolean }): Promise<void> =>
     ipcRenderer.invoke('overlay:delete', channel, del),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:close'),

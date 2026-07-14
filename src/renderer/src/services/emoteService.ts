@@ -176,20 +176,29 @@ export async function loadTwitchUserEmotes(account: Account): Promise<void> {
 
 /** resolves twitch user ids -> display names, used to label emote groups by channel */
 export async function loadEmoteOwnerNames(account: Account, ids: string[]): Promise<void> {
-  const known = useEmotesStore.getState().ownerNames
+  const st = useEmotesStore.getState()
+  const known = st.ownerNames
+  const knownAvatars = st.ownerAvatars
+  // fetch when EITHER the name or the avatar is missing (older sessions cached names but not
+  // avatars, which left the Twitch-tab owner rail without pictures)
   const missing = [...new Set(ids)].filter(
-    (id) => id && id !== '0' && !known[id] && !ownerNamesLoading.has(id)
+    (id) => id && id !== '0' && !ownerNamesLoading.has(id) && (!known[id] || !knownAvatars[id])
   )
   if (missing.length === 0) return
   missing.forEach((id) => ownerNamesLoading.add(id))
   try {
     const names: Record<string, string> = {}
+    const avatars: Record<string, string> = {}
     for (let i = 0; i < missing.length; i += 100) {
       const batch = missing.slice(i, i + 100)
       const users = await getUsers(account, { ids: batch })
-      for (const u of users) names[u.id] = u.display_name
+      for (const u of users) {
+        names[u.id] = u.display_name
+        if (u.profile_image_url) avatars[u.id] = u.profile_image_url
+      }
     }
     useEmotesStore.getState().setOwnerNames(names)
+    useEmotesStore.getState().setOwnerAvatars(avatars)
   } finally {
     missing.forEach((id) => ownerNamesLoading.delete(id))
   }

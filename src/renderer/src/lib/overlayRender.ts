@@ -2,6 +2,7 @@ import { ChatMessage } from '../types'
 import { tokenizeMessage, ensureReadable, fallbackColor } from './tokenize'
 import { lookupBadgeUrl, lookupCheermote, lookupEmote } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
+import { ensureSevenTvColor } from './seventvCosmetics'
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -44,7 +45,13 @@ export function renderOverlayHtml(msg: ChatMessage): string | null {
     }
   }
 
-  const color = ensureReadable(msg.color || fallbackColor(msg.login), true)
+  // optional 7TV cosmetic nick color (same setting as the chat pane)
+  let baseColor = msg.color
+  if (s.sevenTvNickColors && msg.userId) {
+    const stv = ensureSevenTvColor(msg.userId)
+    if (stv) baseColor = stv
+  }
+  const color = ensureReadable(baseColor || fallbackColor(msg.login), true)
   out += `<span class="nick" style="color:${esc(color)}">${esc(msg.displayName)}</span>`
   out += msg.isAction ? ' ' : ': '
 

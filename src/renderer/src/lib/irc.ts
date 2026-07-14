@@ -74,6 +74,14 @@ export interface IrcClientOptions {
   nick: string
   /** oauth token WITHOUT the 'oauth:' prefix; omit for anonymous */
   token?: string
+  /**
+   * Called on EVERY (re)connect to obtain a fresh token — this is what stops the "silent
+   * logout": a reconnect after the token expired fetches a refreshed one instead of
+   * re-sending the dead token in a loop. Return undefined if a token can't be produced.
+   */
+  getToken?: () => Promise<string | undefined>
+  /** the login itself was rejected and couldn't be refreshed — needs full re-authorization */
+  onAuthFailed?: () => void
   onMessage: (msg: IrcMessage) => void
   onOpen?: () => void
   onClose?: () => void
@@ -92,6 +100,9 @@ export class IrcClient {
   private opts: IrcClientOptions
   private sendQueue: string[] = []
   private reconnectTimer: number | null = null
+  // consecutive login rejections; after a couple we stop looping and ask for re-auth
+  private authFailures = 0
+  private authStopped = false
   ready = false
 
   constructor(opts: IrcClientOptions) {
@@ -124,13 +135,34 @@ export class IrcClient {
       return
     }
     this.ws = ws
-    ws.onopen = () => {
+    ws.onopen = async () => {
       if (this.ws !== ws) return
       this.backoff = 1000
-      const pass = this.opts.token ? `oauth:${this.opts.token}` : 'SCHMOOPIIE'
-      const nick = this.opts.token
-        ? this.opts.nick
-        : `justinfan${Math.floor(10000 + Math.random() * 80000)}`
+      // authenticated clients re-fetch a fresh token on every connect, so a reconnect after
+      // the token expired logs in with a refreshed one instead of the dead one
+      let token = this.opts.token
+      if (this.opts.getToken) {
+        try {
+          token = await this.opts.getToken()
+        } catch {
+          token = undefined
+        }
+        if (this.ws !== ws) return // socket was replaced while awaiting the token
+        if (!token) {
+          // no token could be produced — refresh itself failed; stop hammering and surface it
+          this.authStopped = true
+          this.opts.onAuthFailed?.()
+          try {
+            ws.close()
+          } catch {
+            /* noop */
+          }
+          return
+        }
+        this.opts.token = token
+      }
+      const pass = token ? `oauth:${token}` : 'SCHMOOPIIE'
+      const nick = token ? this.opts.nick : `justinfan${Math.floor(10000 + Math.random() * 80000)}`
       this.rawSend(`CAP REQ :twitch.tv/tags twitch.tv/commands`)
       this.rawSend(`PASS ${pass}`)
       this.rawSend(`NICK ${nick}`)
@@ -148,10 +180,28 @@ export class IrcClient {
         }
         if (msg.command === '001') {
           this.ready = true
+          this.authFailures = 0 // a successful login clears the failure streak
           for (const ch of this.channels) this.rawSend(`JOIN #${ch}`)
           for (const q of this.sendQueue) this.rawSend(q)
           this.sendQueue = []
           this.opts.onOpen?.()
+          continue
+        }
+        // Twitch rejects a bad/expired token with an un-channelled NOTICE then drops the socket.
+        // Reconnecting re-fetches a fresh token (getToken); but if it keeps failing the refresh
+        // token is dead — stop the reconnect loop and ask for a full re-authorization.
+        if (
+          msg.command === 'NOTICE' &&
+          !msg.channel &&
+          /login authentication failed|improperly formatted auth|login unsuccessful/i.test(
+            msg.trailing ?? ''
+          )
+        ) {
+          this.authFailures++
+          if (this.opts.getToken && this.authFailures >= 3) {
+            this.authStopped = true
+            this.opts.onAuthFailed?.()
+          }
           continue
         }
         this.opts.onMessage(msg)
@@ -175,6 +225,7 @@ export class IrcClient {
 
   private scheduleReconnect(): void {
     if (this.closed) return
+    if (this.authStopped) return // login is dead — wait for retryAuth() after re-authorization
     if (this.reconnectTimer !== null) return // only ever one pending reconnect
     const delay = this.backoff
     this.backoff = Math.min(this.backoff * 2, 30000)
@@ -214,6 +265,37 @@ export class IrcClient {
   say(channel: string, text: string, replyParentMsgId?: string): void {
     const tag = replyParentMsgId ? `@reply-parent-msg-id=${replyParentMsgId} ` : ''
     this.sendOrQueue(`${tag}PRIVMSG #${channel.toLowerCase()} :${text}`)
+  }
+
+  /** manually swap in a fresh token (e.g. right after a successful re-authorization) */
+  updateToken(token: string): void {
+    this.opts.token = token
+  }
+
+  /**
+   * Apply a fresh token and reconnect NOW, so a long-lived session is proactively rotated onto
+   * a new token before the old one expires — the user never hits the "can't send after a while"
+   * dead-token window.
+   */
+  reconnectWithToken(token: string): void {
+    this.opts.token = token
+    if (this.closed) return
+    this.authStopped = false
+    this.authFailures = 0
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    this.connect()
+  }
+
+  /** re-authorization succeeded — clear the failure state and reconnect immediately */
+  retryAuth(): void {
+    this.authFailures = 0
+    if (!this.authStopped) return
+    this.authStopped = false
+    this.backoff = 1000
+    this.connect()
   }
 
   close(): void {

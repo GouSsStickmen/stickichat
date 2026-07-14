@@ -1,4 +1,4 @@
-import { AppConfig, DEFAULT_MOD_BUTTONS, DEFAULT_SETTINGS } from '../types'
+import { AppConfig, DEFAULT_MOD_BUTTONS, DEFAULT_OVERLAY_STYLE, DEFAULT_SETTINGS } from '../types'
 import { useAccountsStore } from '../store/accounts'
 import { useLayoutStore } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
@@ -35,6 +35,34 @@ function migrateHighlightRules(): void {
   st.setSettings({ hlMigratedV1: true })
 }
 
+/** overlay styles moved into named profiles — seed the first one from the legacy fields */
+function migrateOverlayProfiles(): void {
+  const st = useSettingsStore.getState()
+  if (st.settings.overlayProfiles.length > 0) return
+  const s = st.settings
+  st.setSettings({
+    overlayProfiles: [
+      {
+        ...DEFAULT_OVERLAY_STYLE,
+        id: 'ovp-main',
+        name: 'Основний',
+        font: s.overlayFont,
+        fontSize: s.overlayFontSize,
+        bold: s.overlayBold,
+        textColor: s.overlayTextColor,
+        outlineWidth: s.overlayOutlineWidth,
+        outlineColor: s.overlayOutlineColor,
+        bgMode: s.overlayBgOpacity > 0 ? 'line' : 'none',
+        bgColor: s.overlayBgColor,
+        bgOpacity: s.overlayBgOpacity,
+        lineGap: s.overlayLineGap,
+        fade: s.overlayFade,
+        max: s.overlayMax
+      }
+    ]
+  })
+}
+
 /** seed default redeem + bits highlight rules so both are visible out of the box (editable) */
 function migrateHighlightRulesV2(): void {
   const st = useSettingsStore.getState()
@@ -54,9 +82,10 @@ function migrateHighlightRulesV2(): void {
 export async function loadConfig(): Promise<boolean> {
   const raw = (await window.sticki.getConfig()) as Partial<AppConfig> | null
   if (!raw) {
-    // fresh install: still seed the default highlight rules
+    // fresh install: still seed the default highlight rules + overlay profile
     migrateHighlightRules()
     migrateHighlightRulesV2()
+    migrateOverlayProfiles()
     return false
   }
 
@@ -83,6 +112,7 @@ export async function loadConfig(): Promise<boolean> {
   useLayoutStore.getState().setAll(raw.tabs ?? [], raw.activeTabId ?? raw.tabs?.[0]?.id ?? null)
   migrateHighlightRules()
   migrateHighlightRulesV2()
+  migrateOverlayProfiles()
   return !!raw.clientId
 }
 

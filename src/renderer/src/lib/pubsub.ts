@@ -31,6 +31,8 @@ export interface RedemptionEvent {
   rewardTitle: string
   rewardCost: number
   userInput: string
+  /** the reward's channel-points icon (custom image, or the channel's default points icon) */
+  rewardIcon?: string
 }
 
 export class PubSubClient {
@@ -144,7 +146,13 @@ export class PubSubClient {
       userDisplay: r.user?.display_name || r.user?.login || '?',
       rewardTitle: r.reward?.title ?? '?',
       rewardCost: r.reward?.cost ?? 0,
-      userInput: r.user_input ?? ''
+      userInput: r.user_input ?? '',
+      // custom reward image when set, else the channel's default channel-points icon
+      rewardIcon:
+        r.reward?.image?.url_2x ??
+        r.reward?.image?.url_1x ??
+        r.reward?.default_image?.url_2x ??
+        r.reward?.default_image?.url_1x
     })
   }
 

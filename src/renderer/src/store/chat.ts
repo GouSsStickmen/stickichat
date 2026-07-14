@@ -28,6 +28,9 @@ interface ChatState {
   selfTimeouts: Record<string, { until: number; reason?: string }>
   appendMessages: (channel: string, msgs: ChatMessage[]) => void
   prependMessages: (channel: string, msgs: ChatMessage[]) => void
+  /** merge a message snapshot (e.g. handed over from another window on detach/reattach)
+   *  into the channel, deduped by id and sorted by time — preserves live state, not "historical" */
+  seedMessages: (channel: string, msgs: ChatMessage[]) => void
   markDeleted: (channel: string, messageId: string) => void
   /** retroactively collapse recent subgift lines under a mass-gift header */
   groupGifts: (channel: string, gifter: string, headerId: string, sinceTs: number) => void
@@ -95,7 +98,13 @@ export const useChatStore = create<ChatState>()((set) => ({
     set((s) => {
       const limit = useSettingsStore.getState().settings.messageLimit
       const cur = s.messages[channel] ?? []
-      let next = [...cur, ...msgs]
+      // dedupe by id: a message id must be unique in the buffer, otherwise the virtualized
+      // list (keyed on id) renders duplicates and breaks scrolling. This guards against any
+      // double-delivery (e.g. a reconnecting reader replaying, or a stray second connection).
+      const seen = new Set(cur.map((m) => m.id))
+      const add = msgs.filter((m) => !seen.has(m.id))
+      if (add.length === 0) return s
+      let next = [...cur, ...add]
       // trim in BATCHES, not every message: at steady-state (buffer full) trimming one item
       // per incoming message made the scroll nudge a few px on every send. Let it overshoot
       // by SLACK, then cut back to the limit — so a trim happens once per ~200 messages.
@@ -111,6 +120,18 @@ export const useChatStore = create<ChatState>()((set) => ({
       const add = msgs.filter((m) => !seen.has(m.id))
       if (add.length === 0) return s
       return { messages: { ...s.messages, [channel]: [...add, ...cur] } }
+    }),
+  seedMessages: (channel, msgs) =>
+    set((s) => {
+      if (msgs.length === 0) return s
+      const limit = useSettingsStore.getState().settings.messageLimit
+      const cur = s.messages[channel] ?? []
+      const seen = new Set(cur.map((m) => m.id))
+      const merged = [...cur, ...msgs.filter((m) => !seen.has(m.id))].sort(
+        (a, b) => a.timestamp - b.timestamp
+      )
+      const next = merged.length > limit ? merged.slice(merged.length - limit) : merged
+      return { messages: { ...s.messages, [channel]: next } }
     }),
   groupGifts: (channel, gifter, headerId, sinceTs) =>
     set((s) => {

@@ -82,6 +82,12 @@ const HAS_NATIVE_FLAGS = typeof document !== 'undefined' ? flagsSupported() : tr
  * Windows has no native flag glyphs — those emoji fall back to Twemoji images.
  * Returns the image URL when the char can't be rendered by the system font.
  */
+/** user-requested substitutions applied wherever an emoji is displayed */
+const EMOJI_SUBST: Record<string, string> = { '🇷🇺': '💩' }
+export function displayEmoji(char: string): string {
+  return EMOJI_SUBST[char] ?? char
+}
+
 export function emojiImageUrl(char: string): string | null {
   if (HAS_NATIVE_FLAGS || !REGIONAL_PAIR_RE.test(char)) return null
   const code = [...char].map((c) => c.codePointAt(0)!.toString(16)).join('-')
@@ -90,7 +96,7 @@ export function emojiImageUrl(char: string): string | null {
 
 // The glyph-support scan (~2000 canvas renders) is expensive and identical in every
 // window — cache the resulting list of supported chars so only the FIRST window pays.
-const SUPPORT_CACHE_KEY = 'sticki:emojiSupported:v2'
+const SUPPORT_CACHE_KEY = 'sticki:emojiSupported:v3'
 
 function buildList(): EmojiEntry[] {
   let supported: Set<string> | null = null
@@ -114,7 +120,11 @@ function buildList(): EmojiEntry[] {
 
   const supports = makeGlyphSupportTester()
   for (const g of emojiGroups as EmojiGroup[]) {
+    // "component" = bare skin-tone / hair modifiers; they render as dotted-box placeholders
+    // and aren't standalone emoji — never list them
+    if (g.slug === 'component') continue
     for (const e of g.emojis) {
+      if (e.emoji === '🇷🇺') continue // substituted with 💩 (already in the list)
       const isFlagPair = REGIONAL_PAIR_RE.test(e.emoji)
       // subdivision/tag-sequence flags render broken without native support — drop those;
       // country flags are kept and rendered as Twemoji images instead

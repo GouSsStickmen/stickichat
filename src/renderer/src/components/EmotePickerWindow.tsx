@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useAccountsStore } from '../store/accounts'
-import { loadGlobalBadges, loadGlobalEmotes, loadChannelBadges, loadChannelEmotes } from '../services/emoteService'
+import {
+  loadGlobalBadges,
+  loadGlobalEmotes,
+  loadChannelBadges,
+  loadChannelEmotes,
+  loadTwitchUserEmotes
+} from '../services/emoteService'
 import EmotePicker from './EmotePicker'
 import Toasts from './Toasts'
 import type { EmotePickerWindowPayload } from '../App'
@@ -27,6 +33,12 @@ export default function EmotePickerWindow({
       loadChannelBadges(payload.channel, payload.channelId)
     }
   }, [payload.channel, payload.channelId])
+
+  // load this account's Twitch emotes + owner names/avatars (the Twitch tab's rail) — without
+  // this the standalone window's Twitch tab had emotes but no streamer avatars
+  useEffect(() => {
+    if (account) loadTwitchUserEmotes(account)
+  }, [account])
 
   if (closed) return <div className="app" />
 

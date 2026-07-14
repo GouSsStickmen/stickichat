@@ -132,11 +132,18 @@ export function tokenizeMessage(
         tokens.push({ kind: 'command', text: piece })
         continue
       }
-      if (URL_RE.test(piece)) {
-        tokens.push({ kind: 'link', url: piece, label: piece })
+      // a real http(s):// link, even when glued to text ("текстhttps://x.com"): split off the
+      // leading text and make the URL part clickable
+      const embedded = /https?:\/\/\S+/i.exec(piece)
+      if (embedded) {
+        if (embedded.index > 0) pushText(piece.slice(0, embedded.index))
+        tokens.push({ kind: 'link', url: embedded[0], label: embedded[0] })
         continue
       }
-      if (BARE_URL_RE.test(piece) && !piece.includes('@')) {
+      // protocol-less domains (www.foo.bar) — only when NOT glued to other letters, since a
+      // bare word with a dot is far too ambiguous
+      const glued = /[Ѐ-ӿ]/.test(piece)
+      if (BARE_URL_RE.test(piece) && !piece.includes('@') && !glued) {
         // open with https, but show the text exactly as the user typed it
         tokens.push({ kind: 'link', url: `https://${piece}`, label: piece })
         continue
@@ -177,7 +184,12 @@ export function fallbackColor(login: string): string {
   return DEFAULT_COLORS[h % DEFAULT_COLORS.length]
 }
 
-/** readable version of a nick color on dark background */
+/**
+ * Nudges a nick color so it stays readable against the current theme, keeping its hue.
+ * Too-dark colors on the dark theme (down to pure black) blend toward white; too-light
+ * colors on the light theme (up to pure white) blend toward black — proportionally, so a
+ * barely-dark color barely moves while pure black lifts to a clearly-visible grey.
+ */
 export function ensureReadable(color: string, dark: boolean): string {
   const m = /^#([0-9a-f]{6})$/i.exec(color)
   if (!m) return color
@@ -186,17 +198,20 @@ export function ensureReadable(color: string, dark: boolean): string {
   let g = (n >> 8) & 0xff
   let b = n & 0xff
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-  if (dark && lum < 60) {
-    const f = 60 / Math.max(lum, 1)
-    r = Math.min(255, Math.round(r * f + 40))
-    g = Math.min(255, Math.round(g * f + 40))
-    b = Math.min(255, Math.round(b * f + 40))
+  if (dark && lum < 90) {
+    // 0 lum (black) → 0.78 toward white; 90 lum → no change
+    const amt = ((90 - lum) / 90) * 0.78
+    r = Math.round(r + (255 - r) * amt)
+    g = Math.round(g + (255 - g) * amt)
+    b = Math.round(b + (255 - b) * amt)
     return `rgb(${r},${g},${b})`
   }
-  if (!dark && lum > 200) {
-    r = Math.round(r * 0.6)
-    g = Math.round(g * 0.6)
-    b = Math.round(b * 0.6)
+  if (!dark && lum > 190) {
+    // 255 lum (white) → 0.72 toward black; 190 lum → no change
+    const amt = ((lum - 190) / 65) * 0.72
+    r = Math.round(r * (1 - amt))
+    g = Math.round(g * (1 - amt))
+    b = Math.round(b * (1 - amt))
     return `rgb(${r},${g},${b})`
   }
   return color

@@ -2,25 +2,53 @@
  * "Forgot to switch the layout" converter: remaps text typed on the wrong keyboard
  * layout between QWERTY and the Ukrainian ЙЦУКЕН layout (both directions).
  */
+import { useSettingsStore } from '../store/settings'
 
-const LAT = "qwertyuiop[]asdfghjkl;'zxcvbnm,./`"
-const UKR = 'йцукенгшщзхїфівапролджєячсмитьбю.ґ'
+// letter keys only (both cases handled below). Punctuation lives in the pair tables so it
+// isn't wrongly upper-cased — "[".toUpperCase() === "[", which used to clobber "["→х into "["→Х.
+const LAT_LETTERS = 'qwertyuiopasdfghjklzxcvbnm'
+const UKR_LETTERS = 'йцукенгшщзфівапролдячсмить'
 
-// shifted symbol pairs that differ between the layouts (digits row etc.)
-const LAT_SYM = '@#$^&?'
-const UKR_SYM = '"№;:?,'
+// unshifted punctuation keys: Latin (QWERTY) → Ukrainian (ЙЦУКЕН)
+const PUNCT: [string, string][] = [
+  ['[', 'х'],
+  [']', 'ї'],
+  [';', 'ж'],
+  ["'", 'є'],
+  [',', 'б'],
+  ['.', 'ю'],
+  ['/', '.'],
+  ['`', "'"] // key left of "1": apostrophe on the Ukrainian layout, not ґ
+]
+
+// shifted keys: Latin (shift+…) → Ukrainian (shift+…)
+const SHIFTED: [string, string][] = [
+  ['{', 'Х'],
+  ['}', 'Ї'],
+  [':', 'Ж'],
+  ['"', 'Є'],
+  ['<', 'Б'],
+  ['>', 'Ю'],
+  ['?', ','],
+  ['~', '₴'],
+  // Ukrainian digit-row shifted symbols
+  ['@', '"'],
+  ['#', '№']
+]
 
 const latToUkr = new Map<string, string>()
 const ukrToLat = new Map<string, string>()
-for (let i = 0; i < LAT.length; i++) {
-  latToUkr.set(LAT[i], UKR[i])
-  ukrToLat.set(UKR[i], LAT[i])
-  latToUkr.set(LAT[i].toUpperCase(), UKR[i].toUpperCase())
-  ukrToLat.set(UKR[i].toUpperCase(), LAT[i].toUpperCase())
+for (let i = 0; i < LAT_LETTERS.length; i++) {
+  const l = LAT_LETTERS[i]
+  const u = UKR_LETTERS[i]
+  latToUkr.set(l, u)
+  ukrToLat.set(u, l)
+  latToUkr.set(l.toUpperCase(), u.toUpperCase())
+  ukrToLat.set(u.toUpperCase(), l.toUpperCase())
 }
-for (let i = 0; i < LAT_SYM.length; i++) {
-  latToUkr.set(LAT_SYM[i], UKR_SYM[i])
-  ukrToLat.set(UKR_SYM[i], LAT_SYM[i])
+for (const [l, u] of [...PUNCT, ...SHIFTED]) {
+  latToUkr.set(l, u)
+  ukrToLat.set(u, l)
 }
 
 function convert(text: string, map: Map<string, string>): string {
@@ -37,7 +65,16 @@ export function swapLayout(text: string): string {
     if (/[a-z]/i.test(ch)) lat++
     else if (/[а-щьюяіїєґ]/i.test(ch)) cyr++
   }
-  return cyr > lat ? convert(text, ukrToLat) : convert(text, latToUkr)
+  const map = cyr > lat ? ukrToLat : latToUkr
+  // words on the exclude list (chat commands like "!followage") are left untouched, so a
+  // whole-field swap doesn't mangle them
+  const exclude = new Set(
+    useSettingsStore.getState().settings.translitExcludeWords.map((w) => w.toLowerCase())
+  )
+  return text
+    .split(/(\s+)/)
+    .map((tok) => (/^\s+$/.test(tok) || exclude.has(tok.toLowerCase()) ? tok : convert(tok, map)))
+    .join('')
 }
 
 /**

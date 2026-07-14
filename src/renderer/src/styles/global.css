@@ -329,6 +329,51 @@ select:focus {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.pane-header .channel-name.clickable {
+  cursor: pointer;
+}
+.pane-header .channel-name.clickable:hover {
+  text-decoration: underline;
+}
+/* broadcaster channel bio shown in the usercard ("rules / about") */
+.uc-rules {
+  margin: 6px 0;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.uc-rules-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.uc-rules-toggle {
+  font-size: 11px;
+  padding: 1px 8px;
+}
+.uc-rules-body {
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.uc-rules-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  max-height: 160px;
+  overflow-y: auto;
+}
+.uc-rules-list li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
 .pane-header .mod-badge {
   font-size: 10px;
   padding: 2px 6px;
@@ -460,6 +505,13 @@ select:focus {
   margin-right: 3px;
   border-radius: 2px;
 }
+.highlight-item .hl-redeem-icon {
+  height: 1.2em;
+  width: 1.2em;
+  vertical-align: -0.22em;
+  margin-right: 4px;
+  border-radius: 3px;
+}
 .highlight-item .hl-emote {
   height: 1.5em;
   vertical-align: -0.35em;
@@ -583,6 +635,20 @@ select:focus {
   text-decoration: underline;
   cursor: context-menu;
 }
+/* base emote sizing for RichText contexts (usercard, highlights, whispers) — without this the
+   img falls back to its natural resolution and renders huge. .msg rules below are more
+   specific, so the chat pane keeps its own scaled size. */
+.emote-wrap {
+  display: inline-grid;
+  vertical-align: middle;
+  justify-items: center;
+  align-items: center;
+}
+.emote-wrap img {
+  grid-area: 1 / 1;
+  height: 20px;
+  max-width: none;
+}
 .msg .emote-wrap {
   display: inline-grid;
   vertical-align: middle;
@@ -594,6 +660,50 @@ select:focus {
   grid-area: 1 / 1;
   height: calc(24px * var(--emote-scale));
   max-width: none;
+  /* reserve at least a square before the image loads, so text doesn't reflow (and jolt the
+     scroll) when a not-yet-loaded emote pops from 0 width to its real width */
+  min-width: calc(24px * var(--emote-scale));
+}
+
+/* ---------- Bits power-ups (Twitch-style) ---------- */
+/* Gigantify an Emote: the message's emote(s) shown large */
+.msg.gigantified .emote-wrap {
+  margin: 2px 0;
+}
+.msg.gigantified .emote-wrap img {
+  height: calc(96px * var(--emote-scale));
+}
+/* Message Effect: animated tinted background behind the whole line. A generic shimmer
+   covers every effect id; a couple of the named ones get their own gradient. */
+.msg.msg-effect {
+  position: relative;
+  border-radius: 6px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent),
+    color-mix(in srgb, var(--accent) 22%, transparent));
+  background-size: 200% 100%;
+  animation: msg-effect-shimmer 3s linear infinite;
+}
+.msg.effect-rainbow-eclipse {
+  background: linear-gradient(90deg, #ff2400, #e81d1d, #e8b71d, #1de840, #1ddde8, #2b1de8, #dd00f3);
+  background-size: 400% 100%;
+  animation: msg-effect-shimmer 5s linear infinite;
+  color: #fff;
+}
+.msg.effect-simmer {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, #ff7b00 28%, transparent),
+    color-mix(in srgb, #ffb703 10%, transparent),
+    color-mix(in srgb, #ff7b00 28%, transparent));
+  background-size: 200% 100%;
+  animation: msg-effect-shimmer 2.4s linear infinite;
+}
+@keyframes msg-effect-shimmer {
+  from { background-position: 0% 0; }
+  to { background-position: 200% 0; }
 }
 .msg .sysmsg {
   color: var(--system-text);
@@ -656,6 +766,30 @@ select:focus {
   font-style: normal;
   font-weight: 600;
 }
+/* structured redeem line: points icon + colored nick + reward name + cost */
+.redeem-icon {
+  height: 1.2em;
+  width: 1.2em;
+  vertical-align: -0.22em;
+  margin-right: 4px;
+  border-radius: 3px;
+}
+.redeem-icon-emoji {
+  margin-right: 4px;
+}
+.redeem-nick {
+  font-weight: 700;
+}
+.redeem-reward {
+  color: var(--accent);
+  font-weight: 600;
+}
+.redeem-cost {
+  color: var(--text-muted);
+}
+.redeem-input {
+  color: var(--text);
+}
 .msg .reply-ref {
   display: block;
   color: var(--text-faint);
@@ -708,20 +842,38 @@ select:focus {
   display: none;
   position: absolute;
   right: 6px;
-  top: 1px;
+  /* INSIDE the message's top-right corner — sitting above the row (negative top) let it be
+     clipped by the scroller and overlapped by the neighbouring row */
+  top: 2px;
   gap: 3px;
   background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: 7px;
-  padding: 2px 4px;
+  padding: 3px 5px;
   z-index: 5;
-  box-shadow: var(--shadow);
+  /* small, tight shadow — the full drop shadow spilled below and got clipped by the next row */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   flex-wrap: wrap;
   justify-content: flex-end;
   max-width: calc(100% - 30px);
 }
 .msg:hover .hover-actions {
   display: flex;
+}
+/* invisible safe-zone around the hover buttons: hovering it still counts as hovering THIS
+   message (it's a descendant), so brushing near the buttons doesn't flip to the row above */
+.msg .hover-actions::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  right: -8px;
+  top: -6px;
+  bottom: -6px;
+  z-index: -1;
+}
+/* lift the hovered row (and its buttons) above its neighbours */
+.msg:hover {
+  z-index: 5;
 }
 
 /* grab handle for swipe moderation */
@@ -1329,6 +1481,28 @@ select:focus {
 .set-group-title:first-child {
   margin-top: 0;
 }
+
+/* framed option groups: each card is a self-contained block, separated by spacing */
+.set-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 14px;
+  margin-bottom: 14px;
+}
+.set-card:last-child {
+  margin-bottom: 0;
+}
+/* the group title heads its card — pull it flush and drop the divider line */
+.set-card > .set-group-title {
+  margin: 6px 0 4px;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+/* last row inside a card shouldn't draw a divider against the card edge */
+.set-card > .set-row:last-child {
+  border-bottom: none;
+}
 .settings-nav {
   width: 160px;
   border-right: 1px solid var(--border);
@@ -1656,6 +1830,41 @@ select:focus {
   padding: 3px 8px;
 }
 
+/* overlay profiles */
+.overlay-profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.overlay-profile-chips .chip {
+  cursor: pointer;
+  padding: 4px 12px;
+}
+.overlay-profile-chips .chip.active {
+  background: var(--accent-strong);
+  color: #fff;
+  border-color: var(--accent-strong);
+}
+/* checkerboard behind the preview so transparency is obvious (like image editors) */
+.overlay-preview {
+  margin: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background:
+    repeating-conic-gradient(#2a2a30 0% 25%, #202024 0% 50%) 0 0 / 18px 18px;
+  overflow: hidden;
+}
+.overlay-preview-chat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 8px;
+  min-height: 90px;
+  line-height: 1.45;
+}
+
 /* changelog */
 .changelog {
   margin-top: 8px;
@@ -1722,12 +1931,89 @@ select:focus {
   grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
   gap: 2px;
 }
+/* Twitch tab: streamer avatar rail (sticky) + emote groups */
+.picker-twitch {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.picker-owner-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+/* Twitch tab: rail + emote groups are two independently-scrolling columns. Flexbox (not
+   percentage heights) reliably bounds the columns whether the body is a fixed-height popover
+   or a flex-filled standalone window. */
+.picker-body-twitch {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.picker-body-twitch .picker-twitch {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+.picker-body-twitch .picker-owner-rail,
+.picker-body-twitch .picker-twitch-groups {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+/* no visible scrollbars in the picker — wheel-scroll on hover only */
+.picker-body-twitch .picker-owner-rail::-webkit-scrollbar,
+.picker-body-twitch .picker-twitch-groups::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.picker-body-twitch .picker-owner-rail,
+.picker-body-twitch .picker-twitch-groups {
+  scrollbar-width: none;
+}
+.picker-owner-avatar {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-3);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.picker-owner-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.picker-owner-avatar:hover {
+  outline: 2px solid var(--accent);
+}
+.picker-twitch-groups {
+  flex: 1;
+  min-width: 0;
+}
 .emote-cell {
   background: transparent;
   padding: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* wide ZWJ emoji (families, couples) must not spill into neighbouring grid cells */
+  overflow: hidden;
+}
+.emoji-cell-char {
+  /* inline-block so max-width/overflow actually apply — an inline span ignores them, which is
+     why some wide ZWJ emoji still spilled across neighbouring cells */
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .emote-cell:hover {
   background: var(--surface-3);
@@ -2008,6 +2294,39 @@ select:focus {
   color: #fff;
 }
 .update-banner button.ghost:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- Re-auth banner (token died — visible, blocking-looking warning) ---------- */
+
+.reauth-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--danger, #c0392b);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.reauth-banner-text {
+  flex: 1;
+}
+.reauth-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.reauth-banner button.primary {
+  background: #fff;
+  color: var(--danger, #c0392b);
+  font-weight: 700;
+}
+.reauth-banner button.ghost {
+  color: #fff;
+}
+.reauth-banner button.ghost:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 

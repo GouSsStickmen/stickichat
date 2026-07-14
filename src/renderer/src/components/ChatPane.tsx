@@ -8,7 +8,7 @@ import { useSettingsStore } from '../store/settings'
 import { canModerate } from '../services/accountService'
 import { loadTwitchUserEmotes } from '../services/emoteService'
 import { openUserCard } from '../lib/openUserCard'
-import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
+import { hotkeyFor, matchHotkey, matchHoldKey } from '../lib/hotkeys'
 import MessageList from './MessageList'
 import InputBox, { ReplyTarget } from './InputBox'
 import ModToolbar from './ModToolbar'
@@ -58,7 +58,10 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const addBtnRef = useRef<HTMLButtonElement>(null)
   const [addPanePos, setAddPanePos] = useState<{ top: number; right: number } | null>(null)
   const [scrollLocked, setScrollLocked] = useState(false)
+  // hold-to-pause: chat is paused only while the hotkey is held down (separate from the toggle)
+  const [holdPaused, setHoldPaused] = useState(false)
   const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
+  const keyupHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
 
   const onReply = useCallback((target: ReplyTarget) => setReplyTo(target), [])
 
@@ -94,26 +97,61 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const bindHotkeys = (): void => {
     if (keydownHandlerRef.current) return
     const onKey = (e: KeyboardEvent): void => {
+      const s = useSettingsStore.getState().settings
       // physical key, not the produced character — works on the Ukrainian layout too
-      if (matchHotkey(e, hotkeyFor(useSettingsStore.getState().settings, 'scrollLock'))) {
+      if (matchHotkey(e, hotkeyFor(s, 'scrollLock'))) {
         e.preventDefault()
         setScrollLocked((v) => !v)
       }
+      // hold-to-pause: pause while the key is held (keydown repeats — setState is idempotent)
+      if (matchHoldKey(e, hotkeyFor(s, 'pauseHold'))) setHoldPaused(true)
+    }
+    const onKeyUp = (e: KeyboardEvent): void => {
+      if (matchHoldKey(e, hotkeyFor(useSettingsStore.getState().settings, 'pauseHold'))) {
+        setHoldPaused(false)
+      }
     }
     keydownHandlerRef.current = onKey
+    keyupHandlerRef.current = onKeyUp
     document.addEventListener('keydown', onKey)
+    document.addEventListener('keyup', onKeyUp)
   }
   const unbindHotkeys = (): void => {
     if (keydownHandlerRef.current) {
       document.removeEventListener('keydown', keydownHandlerRef.current)
       keydownHandlerRef.current = null
     }
+    if (keyupHandlerRef.current) {
+      document.removeEventListener('keyup', keyupHandlerRef.current)
+      keyupHandlerRef.current = null
+    }
+    // leaving the pane while holding the key would otherwise leave it stuck paused
+    setHoldPaused(false)
   }
 
   return (
     <div className="pane" onMouseEnter={bindHotkeys} onMouseLeave={unbindHotkeys}>
       <div className="pane-header">
-        <span className="channel-name">{channelName ?? pane.channel}</span>
+        <span
+          className="channel-name clickable"
+          title={t('pane.openStreamerCard')}
+          onClick={(e) => {
+            if (!channelId) return
+            openUserCard({
+              channel: pane.channel,
+              channelId,
+              userId: channelId, // the broadcaster's user id equals the channel id
+              login: pane.channel,
+              displayName: channelName ?? pane.channel,
+              badges: lookupUserBadges(pane.channel, pane.channel) ?? [],
+              accountId: pane.accountId,
+              x: e.clientX,
+              y: e.clientY
+            })
+          }}
+        >
+          {channelName ?? pane.channel}
+        </span>
         {isLive && <span className="live-badge">{t('pane.live')}</span>}
         {isMod && (
           <span className={`mod-badge ${isBroadcaster ? 'broadcaster' : ''}`}>
@@ -214,7 +252,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           channelId={channelId}
           isMod={isMod}
           onReply={onReply}
-          scrollLocked={scrollLocked}
+          scrollLocked={scrollLocked || holdPaused}
         />
         {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
       </div>

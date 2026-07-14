@@ -33,7 +33,7 @@ export default function UserCardWindow({ payload }: { payload: UserCardWindowPay
 
   return (
     <div className="app">
-      <UserCard target={payload.target} standalone />
+      <UserCard target={payload.target} standalone presetMessages={payload.messages} />
       <Toasts />
     </div>
   )

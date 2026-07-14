@@ -215,11 +215,14 @@ export function registerIpc(): void {
   })
 
   // OBS chat overlay: renderer streams pre-rendered lines; main serves them over SSE
-  ipcMain.handle('overlay:configure', (_e, enabled: boolean, port: number, style?: OverlayStyle) => {
-    overlayConfigure(!!enabled, Math.max(1024, Math.min(65535, port || 4715)), style)
-  })
-  ipcMain.handle('overlay:push', (_e, channel: string, html: string, id: string, user: string) => {
-    overlayPush(channel, html, id ?? '', user ?? '')
+  ipcMain.handle(
+    'overlay:configure',
+    (_e, enabled: boolean, port: number, styles?: Record<string, OverlayStyle>) => {
+      overlayConfigure(!!enabled, Math.max(1024, Math.min(65535, port || 4715)), styles)
+    }
+  )
+  ipcMain.handle('overlay:push', (_e, channel: string, html: string, id: string, user: string, login: string) => {
+    overlayPush(channel, html, id ?? '', user ?? '', login ?? '')
   })
   ipcMain.handle('overlay:delete', (_e, channel: string, del: OverlayDelete) => {
     overlayDelete(channel, del ?? {})

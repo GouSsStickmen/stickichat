@@ -90,6 +90,8 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
   const grouped = useMemo(() => {
     const groups: Record<Role, Chatter[]> = { moderator: [], vip: [], viewer: [], broadcaster: [] }
     for (const c of filtered) groups[roleOf(pane.channel, c.user_login)].push(c)
+    // A→Z within each role group
+    for (const g of Object.values(groups)) g.sort((a, b) => a.user_login.localeCompare(b.user_login))
     return groups
   }, [filtered, pane.channel])
 

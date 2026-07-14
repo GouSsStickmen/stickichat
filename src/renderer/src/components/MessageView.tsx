@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Account, ChatMessage, MOD_ONLY_TYPES, Settings } from '../types'
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration } from '../lib/tokenize'
 import { lookupBadgeUrl, lookupEmote, lookupCheermote } from '../store/emotes'
@@ -16,6 +16,7 @@ import { ReplyTarget, InsertEventDetail } from './InputBox'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
+import { useSevenTvColors, ensureSevenTvColor } from '../lib/seventvCosmetics'
 
 interface Props {
   msg: ChatMessage
@@ -39,22 +40,26 @@ function formatTime(ts: number, withSeconds: boolean): string {
   return `${hh}:${mm}:${String(d.getSeconds()).padStart(2, '0')}`
 }
 
+/** RMB inserts into the input; Ctrl+RMB sends the token to chat immediately */
+function tokenContextHandler(paneId: string, text: string) {
+  return (e: React.MouseEvent): void => {
+    e.preventDefault()
+    window.dispatchEvent(
+      new CustomEvent<InsertEventDetail>(e.ctrlKey ? 'sticki:send' : 'sticki:insert', {
+        detail: { paneId, text }
+      })
+    )
+  }
+}
+
 function TokenView({ token, paneId }: { token: Token; paneId: string }): React.JSX.Element {
   switch (token.kind) {
     case 'text':
       return <>{token.text}</>
     case 'command': {
-      // "!command" at message start: right-click puts it into the input, like nicks/emotes
-      const insert = (e: React.MouseEvent): void => {
-        e.preventDefault()
-        window.dispatchEvent(
-          new CustomEvent<InsertEventDetail>('sticki:insert', {
-            detail: { paneId, text: `${token.text} ` }
-          })
-        )
-      }
+      // "!command": right-click puts it into the input, Ctrl+right-click sends it
       return (
-        <span className="command-token" title={token.text} onContextMenu={insert}>
+        <span className="command-token" title={token.text} onContextMenu={tokenContextHandler(paneId, `${token.text} `)}>
           {token.text}
         </span>
       )
@@ -73,12 +78,6 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
       )
     case 'mention': {
       const login = token.name.replace(/^@/, '').replace(/[^\w]+$/, '')
-      const insertMention = (e: React.MouseEvent): void => {
-        e.preventDefault()
-        window.dispatchEvent(
-          new CustomEvent<InsertEventDetail>('sticki:insert', { detail: { paneId, text: `@${login} ` } })
-        )
-      }
       return (
         <span
           className="mention-token"
@@ -91,26 +90,18 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
               })
             )
           }}
-          onContextMenu={insertMention}
+          onContextMenu={tokenContextHandler(paneId, `@${login} `)}
         >
           {token.name}
         </span>
       )
     }
     case 'emote': {
-      const insert = (e: React.MouseEvent): void => {
-        e.preventDefault()
-        window.dispatchEvent(
-          new CustomEvent<InsertEventDetail>('sticki:insert', {
-            detail: { paneId, text: `${token.emote.code} ` }
-          })
-        )
-      }
       return (
         <span
           className="emote-wrap"
           title={[token.emote, ...token.overlays].map((e) => e.code).join(' ')}
-          onContextMenu={insert}
+          onContextMenu={tokenContextHandler(paneId, `${token.emote.code} `)}
           onMouseEnter={(e) =>
             useUiStore
               .getState()
@@ -122,24 +113,18 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
           }}
           onMouseLeave={() => useUiStore.getState().setEmotePreview(null)}
         >
-          <img src={token.emote.url} alt={token.emote.code} loading="lazy" />
+          {/* NOT lazy: lazy images loaded mid-scroll, reflowing text and jolting the virtualized
+              list. Eager load happens while the row is still in the overscan zone. */}
+          <img src={token.emote.url} alt={token.emote.code} />
           {token.overlays.map((o, i) => (
-            <img key={i} src={o.url} alt={o.code} loading="lazy" />
+            <img key={i} src={o.url} alt={o.code} />
           ))}
         </span>
       )
     }
     case 'emoji': {
-      const insert = (e: React.MouseEvent): void => {
-        e.preventDefault()
-        window.dispatchEvent(
-          new CustomEvent<InsertEventDetail>('sticki:insert', {
-            detail: { paneId, text: `${token.char} ` }
-          })
-        )
-      }
       return (
-        <span className="emoji-token" title={token.char} onContextMenu={insert}>
+        <span className="emoji-token" title={token.char} onContextMenu={tokenContextHandler(paneId, `${token.char} `)}>
           <EmojiGlyph char={token.char} />
         </span>
       )
@@ -249,20 +234,40 @@ function MessageViewInner({
   const [dragX, setDragX] = useState(0)
   const draggingRef = useRef(false)
 
-  const tokens = useMemo(
-    () =>
-      msg.system === 'info'
-        ? []
-        : tokenizeMessage(
-            msg,
-            lookupEmote(msg.channel),
-            (login) => lookupUserColor(msg.channel, login),
-            settings.theme === 'dark',
-            msg.bits ? lookupCheermote(msg.channel) : undefined
-          ),
+  const tokens = useMemo(() => {
+    if (msg.system === 'info') return []
+    const toks = tokenizeMessage(
+      msg,
+      lookupEmote(msg.channel),
+      (login) => lookupUserColor(msg.channel, login),
+      settings.theme === 'dark',
+      msg.bits ? lookupCheermote(msg.channel) : undefined
+    )
+    // Twitch prefixes reply bodies with "@nick " — the nick already shows greyed on the
+    // reply-ref line above, so drop the duplicate leading @mention (and its trailing space)
+    const parentLogin = msg.replyParent?.login?.toLowerCase()
+    const first = toks[0]
+    if (parentLogin && first?.kind === 'mention') {
+      if (first.name.slice(1).replace(/[^\w]+$/, '').toLowerCase() === parentLogin) {
+        toks.shift()
+        const next = toks[0]
+        if (next?.kind === 'text') {
+          if (next.text.trimStart() === '') toks.shift()
+          else toks[0] = { kind: 'text', text: next.text.replace(/^\s+/, '') }
+        }
+      }
+    }
+    return toks
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [msg, emoteVersion, settings.theme]
+  }, [msg, emoteVersion, settings.theme])
+
+  // optional 7TV cosmetic nick color: subscribe so the nick recolors when the lazy fetch lands
+  const stvColor = useSevenTvColors((s) =>
+    settings.sevenTvNickColors && msg.userId ? s.colors[msg.userId] : undefined
   )
+  useEffect(() => {
+    if (settings.sevenTvNickColors && !msg.system) ensureSevenTvColor(msg.userId)
+  }, [settings.sevenTvNickColors, msg.userId, msg.system])
 
   const isMention = settings.highlightMentions && !!msg.isMention
 
@@ -281,6 +286,37 @@ function MessageViewInner({
   )
 
   if (msg.system === 'info') {
+    // channel-point redemption: real points icon + colored nick + reward name + cost,
+    // instead of an emoji and a generic "redeems" label
+    if (msg.redeemed && msg.rewardTitle) {
+      const rdark = settings.theme === 'dark'
+      // prefer the user's CURRENT chat color from the live buffer (the redeem's stored color
+      // is a snapshot and is often just a fallback hash if they hadn't spoken yet)
+      const nickColor = ensureReadable(
+        lookupUserColor(msg.channel, msg.login) || msg.color || fallbackColor(msg.login || ''),
+        rdark
+      )
+      return (
+        <div className="msg redeem-info">
+          {settings.showTimestamps && (
+            <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>
+          )}
+          {msg.rewardIcon ? (
+            <img className="redeem-icon" src={msg.rewardIcon} alt="" loading="lazy" />
+          ) : (
+            <span className="redeem-icon-emoji">🔴</span>
+          )}
+          {msg.displayName && (
+            <span className="redeem-nick" style={{ color: nickColor }}>
+              {msg.displayName}
+            </span>
+          )}{' '}
+          <span className="redeem-reward">{msg.rewardTitle}</span>
+          {msg.rewardCost != null && <span className="redeem-cost"> · {msg.rewardCost.toLocaleString('uk-UA')}</span>}
+          {msg.text ? <span className="redeem-input">: {msg.text}</span> : null}
+        </div>
+      )
+    }
     return (
       <div className={`msg ${msg.redeemed ? 'redeem-info' : ''}`}>
         {settings.showTimestamps && <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>}
@@ -290,7 +326,7 @@ function MessageViewInner({
   }
 
   const dark = settings.theme === 'dark'
-  const color = ensureReadable(msg.color || fallbackColor(msg.login), dark)
+  const color = ensureReadable(stvColor || msg.color || fallbackColor(msg.login), dark)
   const classes = ['msg']
   if (settings.alternatingBackground && index % 2 === 1) classes.push('alt')
   if (isMention && settings.showMentionBg) classes.push('mention')
@@ -299,6 +335,9 @@ function MessageViewInner({
   if (flash) classes.push('flash')
   if (msg.system === 'usernotice') classes.push('usernotice')
   if (dragX > 0) classes.push('swiping')
+  // bits power-ups (Twitch-style): gigantified emote + animated message effect
+  if (settings.showBits && msg.gigantified) classes.push('gigantified')
+  if (settings.showBits && msg.messageEffect) classes.push('msg-effect', `effect-${msg.messageEffect}`)
 
   const canAct = !!account && !!msg.userId
   // moderators/broadcasters can't be timed out or banned by another mod — only their messages can be deleted
@@ -380,14 +419,8 @@ function MessageViewInner({
     window.addEventListener('pointerup', onUp)
   }
 
-  const insertNick = (e: React.MouseEvent): void => {
-    e.preventDefault()
-    window.dispatchEvent(
-      new CustomEvent<{ paneId: string; text: string }>('sticki:insert', {
-        detail: { paneId, text: `@${msg.login} ` }
-      })
-    )
-  }
+  // RMB inserts the nick; Ctrl+RMB sends "@nick" to chat immediately
+  const insertNick = tokenContextHandler(paneId, `@${msg.login} `)
 
   const swipeAction = dragX > 0 ? swipeActionFor(dragX, swipeLabels, swipeTiers, targetIsProtected) : null
 

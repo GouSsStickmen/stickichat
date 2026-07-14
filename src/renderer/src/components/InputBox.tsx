@@ -101,6 +101,21 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
 
   const isCommand = text.startsWith('/')
 
+  // Ctrl+RMB on a clickable token — send it to chat as a message immediately
+  useEffect(() => {
+    const onQuickSend = (e: Event): void => {
+      const d = (e as CustomEvent<InsertEventDetail>).detail
+      if (d.paneId !== pane.id || !account) return
+      const msg = d.text.trim()
+      if (!msg) return
+      chatService.sendMessage(account, pane.channel, msg).catch((err) => {
+        useUiStore.getState().toast(String(err), 'error')
+      })
+    }
+    window.addEventListener('sticki:send', onQuickSend)
+    return () => window.removeEventListener('sticki:send', onQuickSend)
+  }, [pane.id, pane.channel, account])
+
   // external nick/emote inserts: right-click on a nick/emote, chatters list, etc.
   useEffect(() => {
     const onInsert = (e: Event): void => {
@@ -276,17 +291,26 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     } catch (e) {
       useUiStore.getState().toast(String(e), 'error')
     }
+    // let a paused (scroll-locked) message list snap back to the bottom to show the sent line
+    window.dispatchEvent(new CustomEvent('sticki:sent', { detail: { channel: pane.channel } }))
   }
 
   const onKeyDown = (e: React.KeyboardEvent): void => {
-    // configurable: re-send the previously sent message (default Ctrl+Enter)
-    if (
-      account &&
-      history.length > 0 &&
-      matchHotkey(e, hotkeyFor(useSettingsStore.getState().settings, 'resendLast'))
-    ) {
+    const hotkeySettings = useSettingsStore.getState().settings
+    // configurable: re-send the previously sent message (default Ctrl+Shift+Enter)
+    if (account && history.length > 0 && matchHotkey(e, hotkeyFor(hotkeySettings, 'resendLast'))) {
       e.preventDefault()
       chatService.sendMessage(account, pane.channel, history[0]).catch((err) => {
+        useUiStore.getState().toast(String(err), 'error')
+      })
+      return
+    }
+    // configurable: send the input's text but KEEP it in the field (default Ctrl+Enter)
+    if (account && text.trim() && matchHotkey(e, hotkeyFor(hotkeySettings, 'sendKeep'))) {
+      e.preventDefault()
+      const msg = text.trim()
+      pushHistory(msg)
+      chatService.sendMessage(account, pane.channel, msg, replyTo?.msgId).catch((err) => {
         useUiStore.getState().toast(String(err), 'error')
       })
       return

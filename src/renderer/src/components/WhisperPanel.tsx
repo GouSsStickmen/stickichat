@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useWhispersStore, setOpenWhisperThread, Whisper } from '../store/whispers'
-import { Emote } from '../types'
 import { useAccountsStore } from '../store/accounts'
 import { useUiStore } from '../store/ui'
-import { useEmotesStore } from '../store/emotes'
 import { sendWhisper, getUsers, getUserChatColors } from '../lib/helix'
 import EmotePicker from './EmotePicker'
-import { fallbackColor, ensureReadable, tokenizeMessage } from '../lib/tokenize'
+import { fallbackColor, ensureReadable } from '../lib/tokenize'
 import { useSettingsStore } from '../store/settings'
 import { localizeApiError } from '../lib/apiErrors'
-import EmojiGlyph from './EmojiGlyph'
+import RichText from './RichText'
 import { PinButton } from './EmotePicker'
 import { useT } from '../i18n'
 
@@ -18,44 +16,9 @@ function fmtTime(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** whispers have no channel context — look emotes up EVERYWHERE we know:
- *  global 3rd-party, every loaded channel set (7TV/BTTV/FFZ), my twitch emotes */
-function whisperEmoteLookup(code: string): Emote | undefined {
-  const st = useEmotesStore.getState()
-  const g = st.globalEmotes.get(code)
-  if (g) return g
-  for (const map of Object.values(st.channelEmotes)) {
-    const e = map.get(code)
-    if (e) return e
-  }
-  for (const list of Object.values(st.twitchByAccount)) {
-    const te = list.find((e) => e.code === code)
-    if (te) return te
-  }
-  return undefined
-}
-
-/** whisper text with emotes + emoji rendered inline */
+/** whisper text: emotes from every set (no channel context), links + RMB copy */
 function WhisperText({ text }: { text: string }): React.JSX.Element {
-  const emoteVersion = useEmotesStore((s) => s.version)
-  const tokens = useMemo(
-    () => tokenizeMessage({ text }, whisperEmoteLookup),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [text, emoteVersion]
-  )
-  return (
-    <>
-      {tokens.map((tk, i) => {
-        if (tk.kind === 'emote')
-          return <img key={i} className="whisper-emote" src={tk.emote.url} alt={tk.emote.code} loading="lazy" />
-        if (tk.kind === 'emoji') return <EmojiGlyph key={i} char={tk.char} />
-        if (tk.kind === 'link') return <span key={i}>{tk.label}</span>
-        if (tk.kind === 'mention') return <b key={i}>{tk.name}</b>
-        if (tk.kind === 'text' || tk.kind === 'command') return <span key={i}>{tk.text}</span>
-        return null
-      })}
-    </>
-  )
+  return <RichText msg={{ text, emotesTag: undefined, channel: '' }} />
 }
 
 /** whisper conversations: popover under ✉ or a standalone window (standalone prop) */
