@@ -4,10 +4,6 @@
 
 > Неофіційний застосунок. Не пов'язаний з Twitch Interactive, Inc.
 
-![Огляд інтерфейсу StickiChat](docs/preview-chat.svg)
-
-> Зображення — стилізований мокап (ніки-заглушки `Bobik069`), не реальні користувачі.
-
 ---
 
 ## Можливості
@@ -61,12 +57,6 @@ npm run dist       # інсталятор Windows (electron-builder)
 ```
 
 **Стек:** Electron + React 18 + Zustand + TypeScript, electron-vite, react-virtuoso. Twitch IRC (WebSocket), Helix, EventSub, PubSub.
-
----
-
-## Скріншоти
-
-Реальні знімки з живого чату варто додати сюди (у `docs/`), використовуючи тестовий канал і ніки-заглушки замість реальних користувачів. Мокап вище показує загальний вигляд.
 
 ---
 
