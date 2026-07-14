@@ -323,32 +323,6 @@ function AppearanceSection(): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
-  const [systemFonts, setSystemFonts] = useState<string[]>([])
-  // custom combobox instead of <datalist>: the native dropdown filters by the CURRENT
-  // value (with a font already picked nothing else is selectable) and doesn't scroll
-  const [fontOpen, setFontOpen] = useState(false)
-  const [fontQuery, setFontQuery] = useState('')
-  // Windows-installed fonts via the Local Font Access API (needs a user gesture)
-  const loadSystemFonts = async (): Promise<void> => {
-    if (systemFonts.length) return
-    try {
-      const q = (window as unknown as { queryLocalFonts?: () => Promise<{ family: string }[]> }).queryLocalFonts
-      if (!q) return
-      const fonts = await q()
-      setSystemFonts([...new Set(fonts.map((f) => f.family))].sort())
-    } catch {
-      /* permission denied / unsupported — keep the short built-in list */
-    }
-  }
-  const allFonts = [
-    ...settings.customFonts.map((f) => f.name),
-    ...(systemFonts.length
-      ? systemFonts
-      : ['Inter', 'Verdana', 'Tahoma', 'Arial', 'Calibri', 'Georgia', 'Consolas', 'Comic Sans MS'])
-  ]
-  const fontMatches = fontQuery
-    ? allFonts.filter((f) => f.toLowerCase().includes(fontQuery.toLowerCase()))
-    : allFonts
   return (
     <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
@@ -361,72 +335,7 @@ function AppearanceSection(): React.JSX.Element {
       </div>
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
-        <div className="font-combo">
-          <input
-            style={{ width: 190 }}
-            placeholder={t('set.fontFamily.placeholder')}
-            value={settings.fontFamily}
-            spellCheck={false}
-            onChange={(e) => {
-              set({ fontFamily: e.target.value })
-              setFontQuery(e.target.value)
-              setFontOpen(true)
-            }}
-            onFocus={() => {
-              loadSystemFonts()
-              // opening shows the FULL list; only typing after that narrows it
-              setFontQuery('')
-              setFontOpen(true)
-            }}
-            onBlur={() => setFontOpen(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape' || e.key === 'Enter') setFontOpen(false)
-            }}
-          />
-          {fontOpen && fontMatches.length > 0 && (
-            <div className="font-combo-list">
-              {fontMatches.map((f) => (
-                <div
-                  key={f}
-                  className={`font-combo-item ${f === settings.fontFamily ? 'selected' : ''}`}
-                  style={{ fontFamily: `'${f}'` }}
-                  // mousedown, not click: click fires after the input's blur closes the list
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    set({ fontFamily: f })
-                    setFontOpen(false)
-                  }}
-                >
-                  {f}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <label className="ghost" style={{ cursor: 'pointer' }}>
-          <input
-            type="file"
-            accept=".ttf,.otf,.woff,.woff2"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              if (file.size > 5 * 1024 * 1024) return
-              const reader = new FileReader()
-              reader.onload = () => {
-                const name = file.name.replace(/\.[a-z0-9]+$/i, '')
-                const fresh = useSettingsStore.getState().settings
-                set({
-                  customFonts: [...fresh.customFonts.filter((f) => f.name !== name), { name, data: String(reader.result) }],
-                  fontFamily: name
-                })
-              }
-              reader.readAsDataURL(file)
-              e.target.value = ''
-            }}
-          />
-          <span className="hint">📁 {t('set.fontUpload')}</span>
-        </label>
+        <FontPicker value={settings.fontFamily} onChange={(v) => set({ fontFamily: v })} />
       </div>
       <div className="set-row">
         <label>{t('set.fontSize')}</label>
@@ -1586,16 +1495,17 @@ function HotkeysSection(): React.JSX.Element {
   )
 }
 
-/** font combobox (system fonts + uploaded), driving one overlay profile's font */
-function OverlayFontPicker({
-  value,
-  onChange
-}: {
-  value: string
-  onChange: (v: string) => void
-}): React.JSX.Element {
+const DEFAULT_FONTS = ['Inter', 'Verdana', 'Tahoma', 'Arial', 'Calibri', 'Georgia', 'Consolas', 'Comic Sans MS']
+
+/**
+ * Shared font picker: type-to-filter combobox with a dropdown chevron, an upload icon, uploaded
+ * fonts listed (and deletable) above the system fonts. `queryLocalFonts` is deduped by family
+ * so a font with several styles shows once. Used for the UI font and each overlay profile.
+ */
+function FontPicker({ value, onChange }: { value: string; onChange: (v: string) => void }): React.JSX.Element {
   const t = useT()
-  const settings = useSettingsStore((s) => s.settings)
+  const customFonts = useSettingsStore((s) => s.settings.customFonts)
+  const set = useSettingsStore((s) => s.setSettings)
   const [systemFonts, setSystemFonts] = useState<string[]>([])
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -1607,20 +1517,33 @@ function OverlayFontPicker({
       const fonts = await q()
       setSystemFonts([...new Set(fonts.map((f) => f.family))].sort())
     } catch {
-      /* permission denied / unsupported */
+      /* permission denied / unsupported — keep the built-in list */
     }
   }
-  const allFonts = [
-    ...settings.customFonts.map((f) => f.name),
-    ...(systemFonts.length
-      ? systemFonts
-      : ['Inter', 'Verdana', 'Tahoma', 'Arial', 'Calibri', 'Georgia', 'Consolas', 'Comic Sans MS'])
-  ]
-  const matches = query ? allFonts.filter((f) => f.toLowerCase().includes(query.toLowerCase())) : allFonts
+  const q = query.toLowerCase()
+  const uploaded = customFonts.map((f) => f.name).filter((n) => !q || n.toLowerCase().includes(q))
+  const system = (systemFonts.length ? systemFonts : DEFAULT_FONTS).filter(
+    (n) => !q || n.toLowerCase().includes(q)
+  )
+  const deleteFont = (name: string): void => {
+    const fresh = useSettingsStore.getState().settings
+    set({ customFonts: fresh.customFonts.filter((f) => f.name !== name) })
+    if (value === name) onChange('')
+  }
+  const uploadFont = (file: File | undefined): void => {
+    if (!file || file.size > 5 * 1024 * 1024) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const name = file.name.replace(/\.[a-z0-9]+$/i, '')
+      const fresh = useSettingsStore.getState().settings
+      set({ customFonts: [...fresh.customFonts.filter((f) => f.name !== name), { name, data: String(reader.result) }] })
+      onChange(name)
+    }
+    reader.readAsDataURL(file)
+  }
   return (
     <div className="font-combo">
       <input
-        style={{ width: 190 }}
         placeholder={t('set.fontFamily.placeholder')}
         value={value}
         spellCheck={false}
@@ -1639,11 +1562,63 @@ function OverlayFontPicker({
           if (e.key === 'Escape' || e.key === 'Enter') setOpen(false)
         }}
       />
-      {open && matches.length > 0 && (
+      {/* chevron: reopen the list without having to blur+refocus the input */}
+      <button
+        className="font-combo-caret"
+        title={t('set.fontFamily')}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => {
+          loadSystemFonts()
+          setQuery('')
+          setOpen((o) => !o)
+        }}
+      >
+        ▾
+      </button>
+      <label className="font-upload-icon" title={t('set.fontUpload')}>
+        <input
+          type="file"
+          accept=".ttf,.otf,.woff,.woff2"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            uploadFont(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+        📁
+      </label>
+      {open && (uploaded.length > 0 || system.length > 0) && (
         <div className="font-combo-list">
-          {matches.map((f) => (
+          {uploaded.length > 0 && <div className="font-combo-group">{t('set.fontsUploaded')}</div>}
+          {uploaded.map((f) => (
             <div
-              key={f}
+              key={`u:${f}`}
+              className={`font-combo-item ${f === value ? 'selected' : ''}`}
+              style={{ fontFamily: `'${f}'` }}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                onChange(f)
+                setOpen(false)
+              }}
+            >
+              <span className="font-combo-name">{f}</span>
+              <span
+                className="font-combo-del"
+                title={t('set.fontDelete')}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  deleteFont(f)
+                }}
+              >
+                ✕
+              </span>
+            </div>
+          ))}
+          {uploaded.length > 0 && system.length > 0 && <div className="font-combo-divider" />}
+          {system.map((f) => (
+            <div
+              key={`s:${f}`}
               className={`font-combo-item ${f === value ? 'selected' : ''}`}
               style={{ fontFamily: `'${f}'` }}
               onMouseDown={(e) => {
@@ -1885,30 +1860,7 @@ function OverlaySection(): React.JSX.Element {
           </p>
           <div className="set-row">
             <label>{t('set.fontFamily')}</label>
-            <OverlayFontPicker value={active.font} onChange={(v) => update({ font: v })} />
-            <label className="ghost" style={{ cursor: 'pointer' }}>
-              <input
-                type="file"
-                accept=".ttf,.otf,.woff,.woff2"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (!file || file.size > 5 * 1024 * 1024) return
-                  const reader = new FileReader()
-                  reader.onload = () => {
-                    const name = file.name.replace(/\.[a-z0-9]+$/i, '')
-                    const fresh = useSettingsStore.getState().settings
-                    set({
-                      customFonts: [...fresh.customFonts.filter((f) => f.name !== name), { name, data: String(reader.result) }]
-                    })
-                    update({ font: name })
-                  }
-                  reader.readAsDataURL(file)
-                  e.target.value = ''
-                }}
-              />
-              <span className="hint">📁 {t('set.fontUpload')}</span>
-            </label>
+            <FontPicker value={active.font} onChange={(v) => update({ font: v })} />
           </div>
           <div className="set-row">
             <label>{t('set.fontSize')}</label>

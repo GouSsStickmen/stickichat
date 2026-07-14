@@ -168,6 +168,8 @@ export const en = {
   'set.group.msgColors': 'Message background colors',
   'set.fontDefault': 'default',
   'set.fontUpload': 'Upload a font…',
+  'set.fontsUploaded': 'Uploaded',
+  'set.fontDelete': 'Delete this uploaded font',
   'set.lineSpacing': 'Line spacing inside messages (px)',
   'set.sidebarDefault': 'Highlights panel opens on',
   'set.rememberWindowSize': 'Remember window size and position',

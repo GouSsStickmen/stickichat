@@ -85,11 +85,7 @@ export default function TabBar(): React.JSX.Element {
     <div className="tabbar">
       {/* floated right — must precede the tab flow so rows wrap around it */}
       <div className="tabbar-actions">
-      <button
-        className={`icon-btn ${tabFilter !== 'all' ? 'active' : ''}`}
-        title={t(`tab.filter.${tabFilter}`)}
-        onClick={cycleFilter}
-      >
+      <button className="icon-btn" title={t(`tab.filter.${tabFilter}`)} onClick={cycleFilter}>
         {filterIcon}
       </button>
       <span className="tab-zoom">

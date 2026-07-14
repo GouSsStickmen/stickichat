@@ -170,6 +170,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.group.msgColors': 'Кольори підкладки повідомлень',
   'set.fontDefault': 'стандартний',
   'set.fontUpload': 'Завантажити шрифт…',
+  'set.fontsUploaded': 'Завантажені',
+  'set.fontDelete': 'Видалити цей завантажений шрифт',
   'set.lineSpacing': 'Міжрядковий інтервал у повідомленнях (px)',
   'set.sidebarDefault': 'Панель виділених відкривати з',
   'set.rememberWindowSize': 'Запамʼятовувати розмір і позицію вікна',

@@ -227,6 +227,13 @@ select:focus {
   color: var(--text-muted);
   font-size: 15px;
 }
+/* action icons all the same width so they don't shift when the glyph changes (🟢/⚫/≡) */
+.tabbar-actions .icon-btn {
+  min-width: 32px;
+  padding: 5px 0;
+  text-align: center;
+  justify-content: center;
+}
 .tabbar .icon-btn:hover {
   background: var(--surface-3);
   color: var(--text);
@@ -1115,7 +1122,63 @@ select:focus {
 /* font picker: editable input + scrollable dropdown of installed fonts */
 .font-combo {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.font-combo > input {
+  width: 180px;
+}
+/* dropdown chevron — reopen the list without blur+refocus */
+.font-combo-caret {
+  padding: 4px 7px;
+  font-size: 11px;
+  line-height: 1;
+}
+/* upload as a small icon button */
+.font-upload-icon {
+  cursor: pointer;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-3);
+  font-size: 13px;
+  line-height: 1;
+}
+.font-upload-icon:hover {
+  background: var(--surface-2);
+}
+/* uploaded-vs-system separation in the dropdown */
+.font-combo-group {
+  padding: 4px 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+}
+.font-combo-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 3px 0;
+}
+.font-combo-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.font-combo-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.font-combo-del {
+  color: var(--text-faint);
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+.font-combo-del:hover {
+  color: var(--danger);
 }
 .font-combo-list {
   position: absolute;
