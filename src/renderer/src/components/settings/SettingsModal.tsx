@@ -1696,8 +1696,10 @@ function OverlayPreview({ p }: { p: OverlayProfile }): React.JSX.Element {
   const samples: [string, string, string][] = [
     ['#ff69b4', 'Bobik069', 'привіт чат! 💜'],
     ['#1e90ff', 'Bobik069', 'GG кльовий стрім'],
-    ['#9acd32', 'Bobik069', 'Kappa PogChamp 🎉']
+    // a pangram-ish line so every letter shape is visible for judging the font
+    ['#9acd32', 'Bobik069', 'Їжте щедрі ґрона! Quick brown fox 0123']
   ]
+  const ordered = p.messageDir === 'down' ? [...samples].reverse() : samples
   return (
     <div className="overlay-preview">
       <div
@@ -1725,8 +1727,8 @@ function OverlayPreview({ p }: { p: OverlayProfile }): React.JSX.Element {
         }}
       >
         {p.bgMode === 'panel' && imgLayer(p.bgRadius)}
-        {samples.map(([color, nick, text]) => (
-          <div key={nick} style={lineStyle}>
+        {ordered.map(([color, nick, text], i) => (
+          <div key={i} style={lineStyle}>
             {perLine && imgLayer(p.bgRadius)}
             <b style={{ color, position: 'relative', zIndex: 1 }}>{nick}</b>
             <span style={{ position: 'relative', zIndex: 1 }}>: {text}</span>
@@ -1783,14 +1785,26 @@ function OverlaySection(): React.JSX.Element {
       <Toggle label={t('overlay.enabled')} value={settings.overlayEnabled} onChange={(v) => set({ overlayEnabled: v })} />
       <div className="set-row">
         <label>{t('overlay.port')}</label>
-        <input
-          type="number"
-          min={1024}
-          max={65535}
-          style={{ width: 90 }}
-          value={settings.overlayPort}
-          onChange={(e) => set({ overlayPort: parseInt(e.target.value, 10) || 4715 })}
-        />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="number"
+            min={1024}
+            max={65535}
+            style={{ width: 90 }}
+            value={settings.overlayPort}
+            onChange={(e) => set({ overlayPort: parseInt(e.target.value, 10) || 4715 })}
+          />
+          {/* escape hatch when OBS shows nothing (port was busy at startup etc.) */}
+          <button
+            title={t('overlay.restart.hint')}
+            onClick={() => {
+              window.sticki.overlayRestart()
+              toast(t('overlay.restarted'))
+            }}
+          >
+            ↻ {t('overlay.restart')}
+          </button>
+        </div>
       </div>
 
       {/* URL to copy into OBS — kept at the top since it's the first thing you need */}
@@ -2075,6 +2089,16 @@ function OverlaySection(): React.JSX.Element {
               value={active.lineGap}
               onChange={(e) => update({ lineGap: parseInt(e.target.value, 10) || 0 })}
             />
+          </div>
+          <div className="set-row">
+            <label>{t('overlay.messageDir')}</label>
+            <select
+              value={active.messageDir ?? 'up'}
+              onChange={(e) => update({ messageDir: e.target.value as OverlayProfile['messageDir'] })}
+            >
+              <option value="up">{t('overlay.messageDir.up')}</option>
+              <option value="down">{t('overlay.messageDir.down')}</option>
+            </select>
           </div>
           <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('overlay.profileHidden.hint')}>
             <label className="has-hint">{t('overlay.profileHidden')}</label>

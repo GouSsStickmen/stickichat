@@ -116,7 +116,12 @@ function broadcastStyles(): void {
   }
 }
 
+let lastEnabled = false
+let lastPort = 4715
+
 export function overlayConfigure(enabled: boolean, port: number, newStyles?: Record<string, OverlayStyle>): void {
+  lastEnabled = enabled
+  lastPort = port
   if (newStyles) {
     styles = newStyles
     broadcastStyles()
@@ -174,6 +179,29 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
     currentPort = 0
   })
   server.listen(port, '127.0.0.1')
+}
+
+/** Force a full teardown + fresh start with the last config — the manual "reload server"
+ *  escape hatch for when OBS shows nothing (e.g. the port was momentarily busy at startup). */
+export function overlayRestart(): void {
+  for (const c of clients) {
+    try {
+      c.res.end()
+    } catch {
+      /* noop */
+    }
+  }
+  clients.clear()
+  if (server) {
+    try {
+      server.close()
+    } catch {
+      /* noop */
+    }
+  }
+  server = null
+  currentPort = 0
+  overlayConfigure(lastEnabled, lastPort, styles)
 }
 
 /** Self-contained overlay page; ALL styling arrives live via the `cfg` SSE event. */
@@ -245,7 +273,7 @@ const OVERLAY_HTML = `<!doctype html>
               outlineWidth: 2, outlineColor: '#000000', shadowBlur: 0, shadowColor: '#000000',
               glowSize: 0, glowColor: '#a970ff', bgMode: 'none', bg: '', bgRadius: 8,
               bgShadowBlur: 0, bgShadowColor: '#000000', bgImage: '', bgImageOpacity: 1,
-              hiddenUsers: [], gap: 2, fade: 0, max: 15 }
+              hiddenUsers: [], messageDir: 'up', gap: 2, fade: 0, max: 15 }
   const fontFace = document.createElement('style')
   document.head.appendChild(fontFace)
 
@@ -282,6 +310,12 @@ const OVERLAY_HTML = `<!doctype html>
     // (body overflow:hidden used to cut off shadows once the blur exceeded the 8px padding)
     const room = Math.max(8, cfg.bgShadowBlur || 0, cfg.shadowBlur || 0, cfg.glowSize || 0)
     chat.style.padding = room + 'px'
+    // message direction: 'up' = newest at the bottom (anchor bottom); 'down' = newest at top
+    if (cfg.messageDir === 'down') {
+      chat.style.top = '0'; chat.style.bottom = 'auto'; chat.style.justifyContent = 'flex-start'
+    } else {
+      chat.style.top = 'auto'; chat.style.bottom = '0'; chat.style.justifyContent = 'flex-end'
+    }
     // panel: one backdrop under the whole chat column
     if (cfg.bgMode === 'panel') {
       chat.style.background = cfg.bg || 'transparent'
@@ -340,8 +374,12 @@ const OVERLAY_HTML = `<!doctype html>
     if (d.login) div.dataset.login = d.login
     styleLine(div)
     div.innerHTML = d.html
-    chat.appendChild(div)
-    while (chat.children.length > cfg.max) chat.removeChild(chat.firstChild)
+    // 'down' = newest at the top: prepend and trim the oldest (last); else append + trim first
+    if (cfg.messageDir === 'down') chat.insertBefore(div, chat.firstChild)
+    else chat.appendChild(div)
+    while (chat.children.length > cfg.max) {
+      chat.removeChild(cfg.messageDir === 'down' ? chat.lastChild : chat.firstChild)
+    }
     if (cfg.fade > 0) {
       setTimeout(() => { div.style.opacity = '0' }, cfg.fade * 1000)
       setTimeout(() => { div.remove() }, cfg.fade * 1000 + 700)

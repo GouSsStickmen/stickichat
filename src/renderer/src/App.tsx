@@ -211,6 +211,7 @@ export default function App(): React.JSX.Element | null {
         bgImage: p.bgImage,
         bgImageOpacity: p.bgImageOpacity ?? 1,
         hiddenUsers: p.hiddenUsers ?? [],
+        messageDir: p.messageDir ?? 'up',
         gap: p.lineGap,
         fade: p.fade,
         max: p.max

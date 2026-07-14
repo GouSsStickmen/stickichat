@@ -222,6 +222,8 @@ export interface OverlayProfile {
   bgImageOpacity: number
   /** users hidden in THIS profile only (global `overlayHiddenUsers` hides in every overlay) */
   hiddenUsers: string[]
+  /** where new messages appear: 'up' = newest at the bottom (default), 'down' = newest at top */
+  messageDir: 'up' | 'down'
   lineGap: number
   fade: number
   max: number
@@ -247,6 +249,7 @@ export const DEFAULT_OVERLAY_STYLE: Omit<OverlayProfile, 'id' | 'name'> = {
   bgShadowColor: '#000000',
   bgImageOpacity: 1,
   hiddenUsers: [],
+  messageDir: 'up',
   lineGap: 2,
   fade: 0,
   max: 15

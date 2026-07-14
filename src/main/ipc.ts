@@ -1,7 +1,7 @@
 import { ipcMain, safeStorage, shell, app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
-import { overlayConfigure, overlayDelete, overlayPush, OverlayDelete, OverlayStyle } from './overlayServer'
+import { overlayConfigure, overlayDelete, overlayPush, overlayRestart, OverlayDelete, OverlayStyle } from './overlayServer'
 
 function rememberEnabled(): boolean {
   const cfg = readConfig() as { settings?: { rememberWindowSize?: boolean } } | null
@@ -226,6 +226,9 @@ export function registerIpc(): void {
   })
   ipcMain.handle('overlay:delete', (_e, channel: string, del: OverlayDelete) => {
     overlayDelete(channel, del ?? {})
+  })
+  ipcMain.handle('overlay:restart', () => {
+    overlayRestart()
   })
 
   // All HTTP goes through the main process so the renderer never hits CORS walls
