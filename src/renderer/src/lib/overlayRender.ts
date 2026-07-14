@@ -2,7 +2,7 @@ import { ChatMessage } from '../types'
 import { tokenizeMessage, ensureReadable, fallbackColor } from './tokenize'
 import { lookupBadgeUrl, lookupCheermote, lookupEmote } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
-import { ensureSevenTvColor } from './seventvCosmetics'
+import { ensureSevenTvCosmetic } from './seventvCosmetics'
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -45,14 +45,14 @@ export function renderOverlayHtml(msg: ChatMessage): string | null {
     }
   }
 
-  // optional 7TV cosmetic nick color (same setting as the chat pane)
-  let baseColor = msg.color
-  if (s.sevenTvNickColors && msg.userId) {
-    const stv = ensureSevenTvColor(msg.userId)
-    if (stv) baseColor = stv
+  // optional 7TV cosmetic nick color / gradient paint (same setting as the chat pane)
+  const cosmetic = s.sevenTvNickColors && msg.userId ? ensureSevenTvCosmetic(msg.userId) : undefined
+  if (cosmetic?.paint) {
+    out += `<span class="nick" style="background:${esc(cosmetic.paint)};-webkit-background-clip:text;background-clip:text;color:transparent">${esc(msg.displayName)}</span>`
+  } else {
+    const color = ensureReadable(cosmetic?.color || msg.color || fallbackColor(msg.login), true)
+    out += `<span class="nick" style="color:${esc(color)}">${esc(msg.displayName)}</span>`
   }
-  const color = ensureReadable(baseColor || fallbackColor(msg.login), true)
-  out += `<span class="nick" style="color:${esc(color)}">${esc(msg.displayName)}</span>`
   out += msg.isAction ? ' ' : ': '
 
   const tokens = tokenizeMessage(

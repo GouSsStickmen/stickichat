@@ -16,7 +16,7 @@ import { ReplyTarget, InsertEventDetail } from './InputBox'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
-import { useSevenTvColors, ensureSevenTvColor } from '../lib/seventvCosmetics'
+import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
 
 interface Props {
   msg: ChatMessage
@@ -261,12 +261,12 @@ function MessageViewInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msg, emoteVersion, settings.theme])
 
-  // optional 7TV cosmetic nick color: subscribe so the nick recolors when the lazy fetch lands
-  const stvColor = useSevenTvColors((s) =>
-    settings.sevenTvNickColors && msg.userId ? s.colors[msg.userId] : undefined
+  // optional 7TV cosmetic nick color/paint: subscribe so the nick restyles when the fetch lands
+  const stvCosmetic = useSevenTvColors((s) =>
+    settings.sevenTvNickColors && msg.userId ? s.cosmetics[msg.userId] : undefined
   )
   useEffect(() => {
-    if (settings.sevenTvNickColors && !msg.system) ensureSevenTvColor(msg.userId)
+    if (settings.sevenTvNickColors && !msg.system) ensureSevenTvCosmetic(msg.userId)
   }, [settings.sevenTvNickColors, msg.userId, msg.system])
 
   const isMention = settings.highlightMentions && !!msg.isMention
@@ -326,7 +326,20 @@ function MessageViewInner({
   }
 
   const dark = settings.theme === 'dark'
-  const color = ensureReadable(stvColor || msg.color || fallbackColor(msg.login), dark)
+  const color = ensureReadable(
+    stvCosmetic?.color || stvCosmetic?.paintColor || msg.color || fallbackColor(msg.login),
+    dark
+  )
+  // a 7TV gradient/image paint renders as the nick's own text fill (clipped background)
+  const paintStyle: React.CSSProperties | undefined = stvCosmetic?.paint
+    ? {
+        background: stvCosmetic.paint,
+        backgroundClip: 'text',
+        WebkitBackgroundClip: 'text',
+        color: 'transparent',
+        WebkitTextFillColor: 'transparent'
+      }
+    : undefined
   const classes = ['msg']
   if (settings.alternatingBackground && index % 2 === 1) classes.push('alt')
   if (isMention && settings.showMentionBg) classes.push('mention')
@@ -539,7 +552,12 @@ function MessageViewInner({
           const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
           return url ? <img key={`${b.setId}/${b.version}`} className="badge" src={url} alt={b.setId} draggable={false} /> : null
         })}
-        <span className="nick" style={{ color }} onClick={openUserCard} onContextMenu={insertNick}>
+        <span
+          className="nick"
+          style={paintStyle ?? { color }}
+          onClick={openUserCard}
+          onContextMenu={insertNick}
+        >
           {msg.displayName}
           {msg.displayName.toLowerCase() !== msg.login ? ` (${msg.login})` : ''}
         </span>
