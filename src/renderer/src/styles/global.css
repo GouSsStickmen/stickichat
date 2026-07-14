@@ -594,6 +594,10 @@ select:focus {
   color: var(--text-faint);
   font-size: 0.85em;
   margin-right: 5px;
+  /* fixed-advance digits so the message text doesn't shift left/right as the time changes
+     (especially with seconds shown) */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
 }
 .msg .badge,
 .chatter-row .badge,
@@ -1942,7 +1946,11 @@ select:focus {
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
-  padding-top: 2px;
+  /* horizontal padding so the hover/selection outline isn't clipped; right border divides
+     the avatar rail from the emote groups */
+  padding: 2px 8px 2px 2px;
+  border-right: 1px solid var(--border);
+  margin-right: 4px;
 }
 /* Twitch tab: rail + emote groups are two independently-scrolling columns. Flexbox (not
    percentage heights) reliably bounds the columns whether the body is a fixed-height popover
@@ -1991,8 +1999,21 @@ select:focus {
   height: 100%;
   object-fit: cover;
 }
+.picker-owner-avatar {
+  position: relative;
+}
 .picker-owner-avatar:hover {
   outline: 2px solid var(--accent);
+}
+.picker-owner-avatar.pinned {
+  outline: 2px solid var(--accent);
+}
+.picker-owner-pin {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  font-size: 9px;
+  pointer-events: none;
 }
 .picker-twitch-groups {
   flex: 1;

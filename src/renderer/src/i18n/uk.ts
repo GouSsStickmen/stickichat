@@ -71,6 +71,7 @@ export const uk: Record<TranslationKey, string> = {
   'picker.open': 'Емоути',
   'picker.search': 'Пошук емоутів…',
   'picker.favorites': 'Обрані',
+  'picker.pinOwnerHint': 'ПКМ: додати емоути стрімера в обране + закріпити зверху',
   'picker.channel': 'Канал',
   'picker.global': 'Глобальні',
   'picker.favHint': 'Правий клік по емоуту — додати/прибрати з обраних',
@@ -324,6 +325,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.hotkeys': 'Хоткеї',
   'set.about': 'Про застосунок',
   'set.emoteSuggestions': 'Підказки емоутів та емодзі при введенні',
+  'set.botCommands': 'Команди бота у підказках на "!" (через кому)',
+  'hint.botCommands': 'Введення "!" підказує ці команди чат-бота (StreamElements тощо). Свої можна дописати тут.',
   'set.usercardAsWindow': 'Відкривати картку користувача окремим вікном',
   'set.raidPrompt': 'Пропонувати додати канал під час рейду',
 

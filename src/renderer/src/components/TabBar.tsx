@@ -82,7 +82,7 @@ export default function TabBar(): React.JSX.Element {
   const filterIcon = tabFilter === 'online' ? '🟢' : tabFilter === 'offline' ? '⚫' : '≡'
 
   return (
-    <div className="tabbar" style={{ zoom: tabScale }}>
+    <div className="tabbar">
       {/* floated right — must precede the tab flow so rows wrap around it */}
       <div className="tabbar-actions">
       <button
@@ -163,7 +163,7 @@ export default function TabBar(): React.JSX.Element {
         ⚙
       </button>
       </div>
-      <div className="tabbar-tabs" ref={tabsRef}>
+      <div className="tabbar-tabs" ref={tabsRef} style={{ zoom: tabScale }}>
       <span
         className="conn-dot"
         title={connState === 'open' ? t('misc.connected') : t('misc.disconnected')}

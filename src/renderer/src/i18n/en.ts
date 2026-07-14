@@ -69,6 +69,7 @@ export const en = {
   'picker.open': 'Emotes',
   'picker.search': 'Search emotes…',
   'picker.favorites': 'Favorites',
+  'picker.pinOwnerHint': 'Right-click: favorite this streamer’s emotes + pin to top',
   'picker.channel': 'Channel',
   'picker.global': 'Global',
   'picker.favHint': 'Right click on an emote — add/remove favorite',
@@ -322,6 +323,8 @@ export const en = {
   'set.hotkeys': 'Hotkeys',
   'set.about': 'About',
   'set.emoteSuggestions': 'Emote & emoji suggestions while typing',
+  'set.botCommands': 'Bot commands suggested on "!" (comma-separated)',
+  'hint.botCommands': 'Typing "!" suggests these chat-bot commands (StreamElements etc.). Add your own here.',
   'set.usercardAsWindow': 'Open user cards in a separate window',
   'set.raidPrompt': 'Offer to add the channel when a raid happens',
 

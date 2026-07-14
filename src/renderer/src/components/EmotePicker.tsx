@@ -125,6 +125,7 @@ export default function EmotePicker({
 
   const twitchEmotes = useEmotesStore((s) => (account ? s.twitchByAccount[account.id] : undefined)) ?? []
   const ownerNames = useEmotesStore((s) => s.ownerNames)
+  const pinnedOwners = useSettingsStore((s) => s.settings.pinnedEmoteOwners)
 
   const ownerLabel = (ownerId: string): string => {
     if (!ownerId || ownerId === '0') return 'Twitch'
@@ -151,8 +152,13 @@ export default function EmotePicker({
       else groups.set(key, { label: ownerLabel(key), emotes: [e] })
     }
     for (const g of groups.values()) g.emotes.sort((a, b) => a.code.localeCompare(b.code))
+    const pinned = pinnedOwners
     const entries = [...groups.entries()]
     entries.sort(([keyA, a], [keyB, b]) => {
+      // user-pinned streamers (RMB on their avatar) float to the very top, in pin order
+      const pa = pinned.indexOf(keyA)
+      const pb = pinned.indexOf(keyB)
+      if (pa !== -1 || pb !== -1) return (pa === -1 ? 1e9 : pa) - (pb === -1 ? 1e9 : pb)
       if (channelId && keyA === channelId) return -1
       if (channelId && keyB === channelId) return 1
       if (keyA === '0') return 1
@@ -163,7 +169,7 @@ export default function EmotePicker({
     // is '…', and duplicate keys across sections corrupt React's reconciliation (frozen UI)
     return entries.map(([key, g]) => ({ key, ...g }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [twitchEmotes, channelId, ownerNames])
+  }, [twitchEmotes, channelId, ownerNames, pinnedOwners])
 
   const { channelGroups, globalGroups } = useMemo(() => {
     const st = useEmotesStore.getState()
@@ -368,16 +374,33 @@ export default function EmotePicker({
                 {twitchGroups.map((g) => (
                   <button
                     key={g.key}
-                    className="picker-owner-avatar"
-                    title={g.label}
+                    className={`picker-owner-avatar ${pinnedOwners.includes(g.key) ? 'pinned' : ''}`}
+                    title={`${g.label}\n${t('picker.pinOwnerHint')}`}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => groupRefs.current[g.key]?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      // add all of this streamer's emotes to favorites (skip already-favorited)
+                      for (const em of g.emotes) {
+                        if (!favSet.has(`twitch:${em.code}`)) {
+                          toggleFavorite({ code: em.code, url: em.url, provider: 'twitch' })
+                        }
+                      }
+                      // toggle-pin the streamer to the top of the rail/list
+                      const cur = useSettingsStore.getState().settings.pinnedEmoteOwners
+                      useSettingsStore.getState().setSettings({
+                        pinnedEmoteOwners: cur.includes(g.key)
+                          ? cur.filter((k) => k !== g.key)
+                          : [g.key, ...cur]
+                      })
+                    }}
                   >
                     {ownerAvatars[g.key] ? (
                       <img src={ownerAvatars[g.key]} alt={g.label} loading="lazy" />
                     ) : (
                       <span>{g.label.replace('#', '').slice(0, 2)}</span>
                     )}
+                    {pinnedOwners.includes(g.key) && <span className="picker-owner-pin">📌</span>}
                   </button>
                 ))}
               </div>

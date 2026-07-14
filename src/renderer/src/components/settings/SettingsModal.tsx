@@ -525,6 +525,25 @@ function ChatSection(): React.JSX.Element {
       </div>
       <div className="set-group-title">{t('input.send')}</div>
       <Toggle label={t('set.emoteSuggestions')} hint={t('hint.emoteSuggestions')} value={settings.emoteSuggestions} onChange={(v) => set({ emoteSuggestions: v })} />
+      <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('hint.botCommands')}>
+        <label className="has-hint">{t('set.botCommands')}</label>
+        <textarea
+          rows={3}
+          style={{ flex: 1, resize: 'vertical' }}
+          placeholder="!followage, !points, !song"
+          value={settings.botCommands.join(', ')}
+          spellCheck={false}
+          onChange={(e) =>
+            set({
+              botCommands: e.target.value
+                .split(',')
+                .map((w) => w.trim())
+                .filter(Boolean)
+                .map((w) => (w.startsWith('!') ? w : `!${w}`))
+            })
+          }
+        />
+      </div>
       <Toggle label={t('set.charCounter')} hint={t('hint.charCounter')} value={settings.showCharCounter} onChange={(v) => set({ showCharCounter: v })} />
       <Toggle label={t('set.translit')} hint={t('hint.translit')} value={settings.translitEnabled} onChange={(v) => set({ translitEnabled: v })} />
       {settings.translitEnabled && (

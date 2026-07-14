@@ -45,6 +45,7 @@ type Suggestion =
   | { kind: 'emote'; emote: Emote }
   | { kind: 'command'; cmd: SlashCommand }
   | { kind: 'mention'; login: string; displayName: string }
+  | { kind: 'botcmd'; cmd: string }
 
 export default function InputBox({ tabId, pane, account, channelId, replyTo, onCancelReply }: Props): React.JSX.Element {
   const t = useT()
@@ -54,6 +55,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const emotePickerAsWindow = useSettingsStore((s) => s.settings.emotePickerAsWindow)
   const translitEnabled = useSettingsStore((s) => s.settings.translitEnabled)
   const emoteSuggestions = useSettingsStore((s) => s.settings.emoteSuggestions)
+  const botCommands = useSettingsStore((s) => s.settings.botCommands)
   const [text, setText] = useState(() => inputDrafts.get(pane.id) ?? '')
   // keep the draft in sync so switching tabs (which unmounts this pane) doesn't lose it
   useEffect(() => {
@@ -121,15 +123,33 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     const onInsert = (e: Event): void => {
       const d = (e as CustomEvent<InsertEventDetail>).detail
       if (d.paneId !== pane.id) return
+      const ta = taRef.current
+      const focused = ta && document.activeElement === ta
+      if (focused && ta) {
+        // insert at the caret (replacing any selection), adding a space only when gluing to text
+        const start = ta.selectionStart ?? ta.value.length
+        const end = ta.selectionEnd ?? start
+        const before = ta.value.slice(0, start)
+        const after = ta.value.slice(end)
+        const glue = before.length > 0 && !before.endsWith(' ') ? ' ' : ''
+        const chunk = glue + d.text
+        const next = before + chunk + after
+        setText(next)
+        requestAnimationFrame(() => {
+          ta.focus()
+          const pos = (before + chunk).length
+          ta.setSelectionRange(pos, pos)
+        })
+        return
+      }
+      // input not focused — append at the end and drop the caret there so you can keep typing
       setText((cur) => (cur.length === 0 || cur.endsWith(' ') ? cur + d.text : `${cur} ${d.text}`))
-      // refocus and drop the caret at the end after React commits the new value — so picking
-      // from the standalone emote window leaves you ready to keep typing instead of caretless
       requestAnimationFrame(() => {
-        const ta = taRef.current
-        if (!ta) return
-        ta.focus()
-        const len = ta.value.length
-        ta.setSelectionRange(len, len)
+        const t = taRef.current
+        if (!t) return
+        t.focus()
+        const len = t.value.length
+        t.setSelectionRange(len, len)
       })
     }
     window.addEventListener('sticki:insert', onInsert)
@@ -209,6 +229,12 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
       return out
     }
     if (!currentWord) return []
+    // "!" bot commands (StreamElements etc.) — suggested from the configurable list
+    if (currentWord.startsWith('!') && currentWord.length >= 1) {
+      const q = currentWord.toLowerCase()
+      const hits = botCommands.filter((c) => c.toLowerCase().startsWith(q))
+      if (hits.length) return hits.slice(0, 15).map((cmd) => ({ kind: 'botcmd', cmd }))
+    }
     // emotes — the user can turn these suggestions off (commands and @mentions stay)
     if (!emoteSuggestions) return []
     const st = useEmotesStore.getState()
@@ -243,7 +269,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     })
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWord, mentionQuery, text, isCommand, pane.channel, emoteVersion, account, histIdx, emoteSuggestions])
+  }, [currentWord, mentionQuery, text, isCommand, pane.channel, emoteVersion, account, histIdx, emoteSuggestions, botCommands])
 
   const applySuggestion = (s: Suggestion): void => {
     if (s.kind === 'command') setText(`/${s.cmd.name} `)
@@ -251,6 +277,8 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
       // remove the "@query" the user typed (query may be empty on a bare "@")
       const typed = mentionQuery !== null ? mentionQuery.length + 1 : currentWord.length
       setText(text.slice(0, text.length - typed) + `@${s.login} `)
+    } else if (s.kind === 'botcmd') {
+      setText(text.slice(0, text.length - currentWord.length) + s.cmd + ' ')
     } else setText(text.slice(0, text.length - currentWord.length) + s.emote.code + ' ')
     setAcIndex(0)
     taRef.current?.focus()
@@ -404,7 +432,13 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
           <div className="autocomplete">
             {suggestions.map((s, i) => {
               const key =
-                s.kind === 'emote' ? `e:${s.emote.provider}:${s.emote.code}` : s.kind === 'command' ? `c:${s.cmd.name}` : `m:${s.login}`
+                s.kind === 'emote'
+                  ? `e:${s.emote.provider}:${s.emote.code}`
+                  : s.kind === 'command'
+                    ? `c:${s.cmd.name}`
+                    : s.kind === 'botcmd'
+                      ? `b:${s.cmd}`
+                      : `m:${s.login}`
               return (
                 <div
                   key={key}
@@ -444,6 +478,12 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
                       <span className="provider" style={{ textTransform: 'none' }}>
                         {s.login}
                       </span>
+                    </>
+                  )}
+                  {s.kind === 'botcmd' && (
+                    <>
+                      <span style={{ fontWeight: 600 }}>{s.cmd}</span>
+                      <span className="provider">bot</span>
                     </>
                   )}
                 </div>

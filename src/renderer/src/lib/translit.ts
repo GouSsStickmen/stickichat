@@ -23,17 +23,20 @@ const PUNCT: [string, string][] = [
 
 // shifted keys: Latin (shift+…) → Ukrainian (shift+…)
 const SHIFTED: [string, string][] = [
+  // punctuation-key shifts
   ['{', 'Х'],
   ['}', 'Ї'],
   [':', 'Ж'],
   ['"', 'Є'],
   ['<', 'Б'],
   ['>', 'Ю'],
-  ['?', ','],
   ['~', '₴'],
-  // Ukrainian digit-row shifted symbols
-  ['@', '"'],
-  ['#', '№']
+  // digit-row shifts that differ between the US and Ukrainian layouts
+  ['@', '"'], // shift+2
+  ['#', '№'], // shift+3
+  ['$', ';'], // shift+4
+  ['^', ':'], // shift+6
+  ['&', '?'] // shift+7
 ]
 
 const latToUkr = new Map<string, string>()

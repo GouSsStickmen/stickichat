@@ -365,6 +365,8 @@ export interface Settings {
   showHighlightSidebar: boolean
   messageLimit: number // ring buffer per channel
   emotePickerDefaultTab: 'favorites' | 'twitch' | 'thirdparty'
+  /** twitch emote owner ids pinned to the top of the Twitch-tab list/rail */
+  pinnedEmoteOwners: string[]
   emotePickerAsWindow: boolean
   showCharCounter: boolean
   messageSpacing: number // px, extra vertical padding per message
@@ -422,6 +424,8 @@ export interface Settings {
   errorSoundType: SoundChoice
   errorSoundVolume: number
   errorSoundCustomId?: string
+  /** chat bot commands ("!followage"…) suggested in the input when you type "!" */
+  botCommands: string[]
   /** the укр⇄eng wrong-layout converter (Aа button + Ctrl+Shift+T) */
   translitEnabled: boolean
   /** words the layout converter must never touch (e.g. "!followage") */
@@ -544,6 +548,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showHighlightSidebar: false,
   messageLimit: 800,
   emotePickerDefaultTab: 'favorites',
+  pinnedEmoteOwners: [],
   emotePickerAsWindow: false,
   showCharCounter: true,
   messageSpacing: 3,
@@ -580,6 +585,17 @@ export const DEFAULT_SETTINGS: Settings = {
   errorSound: false,
   errorSoundType: 'pop',
   errorSoundVolume: 0.5,
+  botCommands: [
+    '!accountage',
+    '!followage',
+    '!leaderboard',
+    '!points',
+    '!queue',
+    '!slots',
+    '!song',
+    '!vanish',
+    '!watchtime'
+  ],
   translitEnabled: true,
   translitExcludeWords: ['!followage', '!drop', '!time', '!uptime'],
   fontFamily: '',
