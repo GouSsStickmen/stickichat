@@ -409,6 +409,24 @@ select:focus {
 .pane-header .spacer {
   flex: 1;
 }
+/* second header row: current stream category/game */
+.pane-subheader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.pane-subheader .si-icon {
+  font-size: 13px;
+}
 .pane-header .icon-btn {
   background: transparent;
   color: var(--text-muted);
@@ -1796,6 +1814,16 @@ select:focus {
   font-size: 12px;
   border: 1px solid var(--border);
 }
+/* "adapt to nick color" tag shown in place of the color swatch when adaptColor is on */
+.hl-adapt-tag {
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+}
 /* standardized highlight-rule / muted-user row */
 .hl-row {
   display: flex;
@@ -1922,6 +1950,17 @@ select:focus {
   background:
     repeating-conic-gradient(#2a2a30 0% 25%, #202024 0% 50%) 0 0 / 18px 18px;
   overflow: hidden;
+}
+/* keep the live preview stuck to the bottom of the scroll area while tweaking options */
+.overlay-preview-pin {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+.overlay-preview-pin .overlay-preview {
+  /* opaque backdrop so scrolling options don't show through the pinned preview */
+  background-color: var(--surface-1);
+  box-shadow: 0 -6px 12px -6px rgba(0, 0, 0, 0.5);
 }
 .overlay-preview-chat {
   display: flex;

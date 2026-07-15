@@ -32,6 +32,7 @@ import {
   playErrorSound
 } from '../../lib/sound'
 import { CHANGELOG } from '../../changelog'
+import { exportConfigJson, importConfigJson } from '../../services/config'
 import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
 
@@ -396,6 +397,37 @@ function AppearanceSection(): React.JSX.Element {
   )
 }
 
+// One command per line so a command may contain spaces/commas (e.g. "!followage @user").
+// Uses a local text buffer committed on blur so editing never re-collapses your whitespace.
+function BotCommandsEditor(): React.JSX.Element {
+  const stored = useSettingsStore((s) => s.settings.botCommands)
+  const set = useSettingsStore((s) => s.setSettings)
+  const [buf, setBuf] = useState(stored.join('\n'))
+  // resync the buffer when the underlying list changes from elsewhere (e.g. settings import)
+  const storedKey = stored.join('\n')
+  useEffect(() => setBuf(storedKey), [storedKey])
+  const commit = (): void => {
+    const list = buf
+      .split('\n')
+      .map((w) => w.trim())
+      .filter(Boolean)
+      .map((w) => (w.startsWith('!') ? w : `!${w}`))
+    set({ botCommands: list })
+    setBuf(list.join('\n'))
+  }
+  return (
+    <textarea
+      rows={4}
+      style={{ flex: 1, resize: 'vertical' }}
+      placeholder={'!followage\n!points\n!song request'}
+      value={buf}
+      spellCheck={false}
+      onChange={(e) => setBuf(e.target.value)}
+      onBlur={commit}
+    />
+  )
+}
+
 function ChatSection(): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
@@ -436,22 +468,7 @@ function ChatSection(): React.JSX.Element {
       <Toggle label={t('set.emoteSuggestions')} hint={t('hint.emoteSuggestions')} value={settings.emoteSuggestions} onChange={(v) => set({ emoteSuggestions: v })} />
       <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('hint.botCommands')}>
         <label className="has-hint">{t('set.botCommands')}</label>
-        <textarea
-          rows={3}
-          style={{ flex: 1, resize: 'vertical' }}
-          placeholder="!followage, !points, !song"
-          value={settings.botCommands.join(', ')}
-          spellCheck={false}
-          onChange={(e) =>
-            set({
-              botCommands: e.target.value
-                .split(',')
-                .map((w) => w.trim())
-                .filter(Boolean)
-                .map((w) => (w.startsWith('!') ? w : `!${w}`))
-            })
-          }
-        />
+        <BotCommandsEditor />
       </div>
       <Toggle label={t('set.charCounter')} hint={t('hint.charCounter')} value={settings.showCharCounter} onChange={(v) => set({ showCharCounter: v })} />
       <Toggle label={t('set.translit')} hint={t('hint.translit')} value={settings.translitEnabled} onChange={(v) => set({ translitEnabled: v })} />
@@ -979,6 +996,9 @@ function ModerationSection(): React.JSX.Element {
   const needsText = (type: ModActionType): boolean =>
     ['announce', 'snippet', 'link', 'warn', 'timeout', 'ban', 'fill'].includes(type)
 
+  const visibleButtons =
+    scopeFilter === 'all' ? modButtons : modButtons.filter((b) => b.scope === scopeFilter)
+
   const addFavorite = (): void => {
     const v = favInput.trim().replace(/^[#@]/, '').toLowerCase()
     if (!v || raidFavorites.includes(v)) return
@@ -1013,7 +1033,7 @@ function ModerationSection(): React.JSX.Element {
           <option value="toolbar">{t('set.modBtn.scope.toolbar')}</option>
         </select>
       </div>
-      {(scopeFilter === 'all' ? modButtons : modButtons.filter((b) => b.scope === scopeFilter)).map((b, index) => (
+      {visibleButtons.map((b, index) => (
         <div key={b.id} data-flipid={b.id} className={`modbtn-card ${draggingBtn === b.id ? 'dragging' : ''}`}>
           <div className="modbtn-line">
             <span
@@ -1021,9 +1041,6 @@ function ModerationSection(): React.JSX.Element {
               title="⠿"
               onPointerDown={(e) => {
                 if (!modListRef.current) return
-                // drag-reorder maps DOM index → full-array index, which only lines up when the
-                // whole list is shown
-                if (scopeFilter !== 'all') return
                 e.preventDefault()
                 startPointerReorder({
                   e,
@@ -1033,8 +1050,13 @@ function ModerationSection(): React.JSX.Element {
                   axis: 'y',
                   threshold: 3,
                   onMove: (from, to) => {
-                    const list = useSettingsStore.getState().modButtons
-                    reorder(list[from].id, list[to].id)
+                    // startPointerReorder reports indices into the *visible* rows; recompute the
+                    // visible slice from live state each move (the list reflows after every swap)
+                    // and map back to ids, so drag works even while a filter is active
+                    const full = useSettingsStore.getState().modButtons
+                    const vis = scopeFilter === 'all' ? full : full.filter((x) => x.scope === scopeFilter)
+                    if (from < 0 || to < 0 || from >= vis.length || to >= vis.length) return
+                    reorder(vis[from].id, vis[to].id)
                   },
                   onDragState: (d) => setDraggingBtn(d ? b.id : null)
                 })
@@ -1305,7 +1327,20 @@ function HighlightsSection(): React.JSX.Element {
               onChange={(e) => update(r.id, { value: e.target.value.toLowerCase().trim() })}
             />
           )}
-          <ColorField value={r.color} defaultValue="#9147ff" onChange={(v) => update(r.id, { color: v })} />
+          {r.adaptColor ? (
+            <span className="hl-adapt-tag" title={t('hl.adapt.hint')}>
+              🎨 {t('hl.adaptShort')}
+            </span>
+          ) : (
+            <ColorField value={r.color} defaultValue="#9147ff" onChange={(v) => update(r.id, { color: v })} />
+          )}
+          <button
+            className={`icon-btn ${r.adaptColor ? 'active' : ''}`}
+            title={t('hl.adapt.hint')}
+            onClick={() => update(r.id, { adaptColor: !r.adaptColor })}
+          >
+            🎨
+          </button>
           <input
             type="range"
             title={`${t('hl.opacity')}: ${Math.round(r.opacity * 100)}%`}
@@ -1314,7 +1349,10 @@ function HighlightsSection(): React.JSX.Element {
             value={Math.round(r.opacity * 100)}
             onChange={(e) => update(r.id, { opacity: parseInt(e.target.value, 10) / 100 })}
           />
-          <span className="hl-preview" style={{ background: hexToRgba(r.color, r.opacity) }}>
+          <span
+            className="hl-preview"
+            style={{ background: hexToRgba(r.adaptColor ? '#888888' : r.color, r.opacity) }}
+          >
             Text
           </span>
           <div className="spacer" />
@@ -1523,13 +1561,16 @@ function FontPicker({ value, onChange }: { value: string; onChange: (v: string) 
   const [systemFonts, setSystemFonts] = useState<string[]>([])
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  // Re-query on every open so fonts installed while the app is running show up live
+  // (no restart needed). queryLocalFonts is cheap and returns the current OS font set.
   const loadSystemFonts = async (): Promise<void> => {
-    if (systemFonts.length) return
     try {
       const q = (window as unknown as { queryLocalFonts?: () => Promise<{ family: string }[]> }).queryLocalFonts
       if (!q) return
       const fonts = await q()
-      setSystemFonts([...new Set(fonts.map((f) => f.family))].sort())
+      const next = [...new Set(fonts.map((f) => f.family))].sort()
+      // only touch state when the list actually changed, to avoid needless re-renders
+      setSystemFonts((prev) => (prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next))
     } catch {
       /* permission denied / unsupported — keep the built-in list */
     }
@@ -1673,8 +1714,9 @@ function OverlayPreview({ p }: { p: OverlayProfile }): React.JSX.Element {
           position: 'absolute',
           inset: 0,
           backgroundImage: `url('${p.bgImage}')`,
-          backgroundSize: 'cover',
+          backgroundSize: p.bgKeepAspect ? 'contain' : 'cover',
           backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
           opacity: imgOp,
           borderRadius: radius,
           zIndex: 0,
@@ -1688,7 +1730,8 @@ function OverlayPreview({ p }: { p: OverlayProfile }): React.JSX.Element {
     background: perLine && bg ? bg : undefined,
     borderRadius: perLine ? p.bgRadius : undefined,
     boxShadow: perLine && p.bgShadowBlur > 0 ? `0 2px ${p.bgShadowBlur}px ${p.bgShadowColor}` : undefined,
-    width: p.bgMode === 'fit' ? 'fit-content' : undefined,
+    width: perLine && p.bgWidth > 0 ? p.bgWidth : p.bgMode === 'fit' ? 'fit-content' : undefined,
+    height: perLine && p.bgHeight > 0 ? p.bgHeight : undefined,
     maxWidth: '100%',
     padding: '2px 8px',
     boxSizing: 'border-box'
@@ -1722,6 +1765,8 @@ function OverlayPreview({ p }: { p: OverlayProfile }): React.JSX.Element {
               : 'stretch',
           background: p.bgMode === 'panel' ? bg || undefined : undefined,
           borderRadius: p.bgMode === 'panel' ? p.bgRadius : undefined,
+          width: p.bgMode === 'panel' && p.bgWidth > 0 ? p.bgWidth : undefined,
+          height: p.bgMode === 'panel' && p.bgHeight > 0 ? p.bgHeight : undefined,
           boxShadow:
             p.bgMode === 'panel' && p.bgShadowBlur > 0 ? `0 4px ${p.bgShadowBlur}px ${p.bgShadowColor}` : undefined
         }}
@@ -1880,7 +1925,16 @@ function OverlaySection(): React.JSX.Element {
             </div>
           </div>
 
-          <OverlayPreview p={active} />
+          {/* when pinned, the preview is moved to a sticky footer at the end of the section
+              (a sticky element only stays visible while scrolling if it sits at the bottom of
+              the flow) — see the overlay-preview-pin block near the section's end */}
+          {!settings.overlayPreviewPinned && <OverlayPreview p={active} />}
+          <Toggle
+            label={t('overlay.pinPreview')}
+            hint={t('overlay.pinPreview.hint')}
+            value={settings.overlayPreviewPinned}
+            onChange={(v) => set({ overlayPreviewPinned: v })}
+          />
 
           <div className="set-group-title">{t('overlay.style')}</div>
           <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
@@ -1997,6 +2051,33 @@ function OverlaySection(): React.JSX.Element {
                   onChange={(e) => update({ bgRadius: parseInt(e.target.value, 10) || 0 })}
                 />
               </div>
+              <div className="set-row" title={t('overlay.plateSize.hint')}>
+                <label className="has-hint">{t('overlay.plateSize')}</label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2000}
+                    style={{ width: 72 }}
+                    placeholder={t('overlay.plateSize.auto')}
+                    title={t('overlay.plateSize.width')}
+                    value={active.bgWidth || ''}
+                    onChange={(e) => update({ bgWidth: parseInt(e.target.value, 10) || 0 })}
+                  />
+                  <span style={{ color: 'var(--text-faint)' }}>×</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2000}
+                    style={{ width: 72 }}
+                    placeholder={t('overlay.plateSize.auto')}
+                    title={t('overlay.plateSize.height')}
+                    value={active.bgHeight || ''}
+                    onChange={(e) => update({ bgHeight: parseInt(e.target.value, 10) || 0 })}
+                  />
+                  <span style={{ color: 'var(--text-muted)' }}>px</span>
+                </div>
+              </div>
               <div className="set-row">
                 <label>{t('overlay.bgShadow')}</label>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -2053,6 +2134,14 @@ function OverlaySection(): React.JSX.Element {
                     </span>
                   </div>
                 </div>
+              )}
+              {active.bgImage && (
+                <Toggle
+                  label={t('overlay.keepAspect')}
+                  hint={t('overlay.keepAspect.hint')}
+                  value={active.bgKeepAspect ?? false}
+                  onChange={(v) => update({ bgKeepAspect: v })}
+                />
               )}
             </>
           )}
@@ -2152,6 +2241,11 @@ function OverlaySection(): React.JSX.Element {
         />
       </div>
 
+      {settings.overlayPreviewPinned && active && (
+        <div className="overlay-preview-pin">
+          <OverlayPreview p={active} />
+        </div>
+      )}
     </div>
   )
 }
@@ -2162,6 +2256,30 @@ function AdvancedSection(): React.JSX.Element {
   const setClientId = useSettingsStore((s) => s.setClientId)
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
+  const importRef = useRef<HTMLInputElement>(null)
+  const [ioMsg, setIoMsg] = useState('')
+
+  const doExport = (): void => {
+    const blob = new Blob([exportConfigJson()], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const stamp = new Date().toISOString().slice(0, 10)
+    a.href = url
+    a.download = `stickichat-settings-${stamp}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setIoMsg(t('set.io.exported'))
+  }
+
+  const doImport = (file: File | undefined): void => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const ok = importConfigJson(String(reader.result))
+      setIoMsg(ok ? t('set.io.imported') : t('set.io.importErr'))
+    }
+    reader.readAsText(file)
+  }
 
   return (
     <Framed>
@@ -2179,6 +2297,28 @@ function AdvancedSection(): React.JSX.Element {
           value={settings.messageLimit}
           onChange={(e) => set({ messageLimit: parseInt(e.target.value, 10) || 800 })}
         />
+      </div>
+      <div className="set-row" title={t('hint.io')} style={{ alignItems: 'flex-start' }}>
+        <label className="has-hint">{t('set.io')}</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+          <span style={{ display: 'inline-flex', gap: 8 }}>
+            <button onClick={doExport}>⭳ {t('set.io.export')}</button>
+            <button onClick={() => importRef.current?.click()}>⭱ {t('set.io.import')}</button>
+            <input
+              ref={importRef}
+              type="file"
+              accept="application/json,.json"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                doImport(e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+          </span>
+          <span className="hint" style={{ color: 'var(--text-faint)' }}>
+            {ioMsg || t('set.io.note')}
+          </span>
+        </div>
       </div>
     </Framed>
   )

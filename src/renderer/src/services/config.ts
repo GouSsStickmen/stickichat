@@ -116,6 +116,51 @@ export async function loadConfig(): Promise<boolean> {
   return !!raw.clientId
 }
 
+const EXPORT_VERSION = 1
+
+/**
+ * Serialize the user's full configuration (everything except accounts/tokens, which are
+ * device-bound secrets) to a portable JSON string for backup or transfer between machines.
+ */
+export function exportConfigJson(): string {
+  const s = useSettingsStore.getState()
+  return JSON.stringify(
+    {
+      _app: 'stickichat',
+      _version: EXPORT_VERSION,
+      exportedAt: new Date().toISOString(),
+      settings: s.settings,
+      modButtons: s.modButtons,
+      raidFavorites: s.raidFavorites,
+      highlightRules: s.highlightRules,
+      favoriteEmotes: s.favoriteEmotes
+    },
+    null,
+    2
+  )
+}
+
+/**
+ * Apply a config produced by {@link exportConfigJson}. Returns false when the text is not a
+ * valid StickiChat export. Store persistence picks up the change and writes it to disk.
+ */
+export function importConfigJson(text: string): boolean {
+  let data: Partial<AppConfig> & { _app?: string } = {}
+  try {
+    data = JSON.parse(text)
+  } catch {
+    return false
+  }
+  if (!data || data._app !== 'stickichat') return false
+  const s = useSettingsStore.getState()
+  if (data.settings) s.setSettings({ ...DEFAULT_SETTINGS, ...data.settings })
+  if (Array.isArray(data.modButtons)) s.setModButtons(data.modButtons.length ? data.modButtons : DEFAULT_MOD_BUTTONS)
+  if (Array.isArray(data.raidFavorites)) s.setRaidFavorites(data.raidFavorites)
+  if (Array.isArray(data.highlightRules)) s.setHighlightRules(data.highlightRules)
+  if (Array.isArray(data.favoriteEmotes)) s.setFavoriteEmotes(data.favoriteEmotes)
+  return true
+}
+
 function snapshot(): AppConfig {
   const s = useSettingsStore.getState()
   const a = useAccountsStore.getState()

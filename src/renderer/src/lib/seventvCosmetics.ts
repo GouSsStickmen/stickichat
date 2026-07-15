@@ -45,7 +45,9 @@ export const useSevenTvColors = create<SevenTvState>()((set) => ({
     })
 }))
 
-const inFlight = new Set<string>()
+// in-flight fetches are stored as shared promises so both the sync `ensure` and the async
+// `await` variant hook onto the same request (the overlay needs to await before it pushes)
+const inFlight = new Map<string, Promise<Cosmetic | undefined>>()
 const negative = new Set<string>()
 
 /** 7TV colors are signed 32-bit RGBA ints (0xRRGGBBAA) */
@@ -108,18 +110,15 @@ async function fetchPaint(sevenTvUserId: string): Promise<Paint | null> {
   }
 }
 
-/**
- * Returns the cached 7TV cosmetic for a user, or undefined — triggering a background fetch that
- * updates the store (and re-renders subscribers) when it lands. Safe to call every render.
- */
-export function ensureSevenTvCosmetic(twitchId?: string): Cosmetic | undefined {
-  if (!twitchId) return undefined
+/** does the actual REST (+GQL) fetch once, caches the result, and resolves with the cosmetic */
+function fetchCosmetic(twitchId: string): Promise<Cosmetic | undefined> {
   const cached = useSevenTvColors.getState().cosmetics[twitchId]
-  if (cached) return cached
-  if (inFlight.has(twitchId) || negative.has(twitchId)) return undefined
-  inFlight.add(twitchId)
+  if (cached) return Promise.resolve(cached)
+  if (negative.has(twitchId)) return Promise.resolve(undefined)
+  const existing = inFlight.get(twitchId)
+  if (existing) return existing
   // through the main process — a raw renderer fetch to 7tv.io is blocked by the app CSP
-  window.sticki
+  const p = window.sticki
     .fetchJson(`https://7tv.io/v3/users/twitch/${twitchId}`)
     .then(async (res) => {
       const j = res.json as {
@@ -142,12 +141,38 @@ export function ensureSevenTvCosmetic(twitchId?: string): Cosmetic | undefined {
       if (!cosmetic && color) cosmetic = { color }
       if (cosmetic) useSevenTvColors.getState().setCosmetic(twitchId, cosmetic)
       else negative.add(twitchId)
+      return cosmetic
     })
     .catch(() => {
       /* offline / rate-limited — try again next session */
+      return undefined
     })
     .finally(() => inFlight.delete(twitchId))
+  inFlight.set(twitchId, p)
+  return p
+}
+
+/**
+ * Returns the cached 7TV cosmetic for a user, or undefined — triggering a background fetch that
+ * updates the store (and re-renders subscribers) when it lands. Safe to call every render.
+ */
+export function ensureSevenTvCosmetic(twitchId?: string): Cosmetic | undefined {
+  if (!twitchId) return undefined
+  const cached = useSevenTvColors.getState().cosmetics[twitchId]
+  if (cached) return cached
+  if (negative.has(twitchId)) return undefined
+  void fetchCosmetic(twitchId)
   return undefined
+}
+
+/**
+ * Async variant: resolves with the cosmetic (from cache or a completed fetch). The OBS overlay
+ * renders each line exactly once — it has no store subscription to re-render on a late fetch —
+ * so it must await this before generating the HTML, otherwise 7TV colors never appear there.
+ */
+export async function awaitSevenTvCosmetic(twitchId?: string): Promise<Cosmetic | undefined> {
+  if (!twitchId) return undefined
+  return fetchCosmetic(twitchId)
 }
 
 /** back-compat solid-color helper (chat pane / overlay that only want a flat color) */

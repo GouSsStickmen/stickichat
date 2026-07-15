@@ -387,12 +387,14 @@ export interface HelixStream {
   started_at: string
   viewer_count: number
   title: string
+  game_name?: string
 }
 
 export interface LiveInfo {
   startedAt: string
   viewers: number
   title: string
+  game: string
 }
 
 /** the user's chosen chat color (used as the channel accent for PRIMARY announcements) */
@@ -424,7 +426,8 @@ export async function getLiveChannels(account: Account, logins: string[]): Promi
       live.set(s.user_login.toLowerCase(), {
         startedAt: s.started_at,
         viewers: s.viewer_count ?? 0,
-        title: s.title ?? ''
+        title: s.title ?? '',
+        game: s.game_name ?? ''
       })
     }
   }

@@ -246,7 +246,7 @@ const OVERLAY_HTML = `<!doctype html>
     position: absolute;
     inset: 0;
     background-image: var(--bg-img);
-    background-size: cover;
+    background-size: var(--bg-img-size, cover);
     background-position: center;
     background-repeat: no-repeat;
     opacity: var(--bg-img-op, 1);
@@ -273,6 +273,7 @@ const OVERLAY_HTML = `<!doctype html>
               outlineWidth: 2, outlineColor: '#000000', shadowBlur: 0, shadowColor: '#000000',
               glowSize: 0, glowColor: '#a970ff', bgMode: 'none', bg: '', bgRadius: 8,
               bgShadowBlur: 0, bgShadowColor: '#000000', bgImage: '', bgImageOpacity: 1,
+              bgWidth: 0, bgHeight: 0, bgKeepAspect: false,
               hiddenUsers: [], messageDir: 'up', gap: 2, fade: 0, max: 15 }
   const fontFace = document.createElement('style')
   document.head.appendChild(fontFace)
@@ -322,11 +323,13 @@ const OVERLAY_HTML = `<!doctype html>
       chat.style.borderRadius = cfg.bgRadius + 'px'
       chat.style.boxShadow = cfg.bgShadowBlur > 0 ? '0 4px ' + cfg.bgShadowBlur + 'px ' + cfg.bgShadowColor : 'none'
       applyImage(chat)
+      applyPlateSize(chat)
     } else {
       chat.style.background = 'transparent'
       chat.style.borderRadius = '0'
       chat.style.boxShadow = 'none'
       applyImage(chat, true)
+      chat.style.width = ''; chat.style.height = ''
     }
     for (const el of [...chat.children]) {
       // a live hidden-users edit should drop lines already on screen
@@ -346,6 +349,14 @@ const OVERLAY_HTML = `<!doctype html>
     el.classList.add('has-img')
     el.style.setProperty('--bg-img', "url('" + cfg.bgImage + "')")
     el.style.setProperty('--bg-img-op', String(cfg.bgImageOpacity == null ? 1 : cfg.bgImageOpacity))
+    // keep-aspect = 'contain' (whole image, may letterbox); otherwise 'cover' (fill, may crop)
+    el.style.setProperty('--bg-img-size', cfg.bgKeepAspect ? 'contain' : 'cover')
+  }
+
+  // fixed plate/panel width & height (0 = auto). Applied to the panel column or per-line plates.
+  function applyPlateSize(el) {
+    el.style.width = cfg.bgWidth > 0 ? cfg.bgWidth + 'px' : ''
+    el.style.height = cfg.bgHeight > 0 ? cfg.bgHeight + 'px' : ''
   }
 
   function styleLine(div) {
@@ -355,9 +366,12 @@ const OVERLAY_HTML = `<!doctype html>
     div.style.borderRadius = perLine ? cfg.bgRadius + 'px' : '0'
     div.style.boxShadow = perLine && cfg.bgShadowBlur > 0 ? '0 2px ' + cfg.bgShadowBlur + 'px ' + cfg.bgShadowColor : 'none'
     div.style.width = cfg.bgMode === 'fit' ? 'fit-content' : ''
+    div.style.height = ''
     div.style.maxWidth = '100%'
     // per-message plates can carry the custom image too (transparent-capable)
     applyImage(div, !perLine)
+    // fixed plate size only makes sense on an actual per-line plate
+    if (perLine) applyPlateSize(div)
   }
 
   function isHidden(login) {

@@ -48,7 +48,7 @@ export function renderOverlayHtml(msg: ChatMessage): string | null {
   // optional 7TV cosmetic nick color / gradient paint (same setting as the chat pane)
   const cosmetic = s.sevenTvNickColors && msg.userId ? ensureSevenTvCosmetic(msg.userId) : undefined
   if (cosmetic?.paint) {
-    out += `<span class="nick" style="background:${esc(cosmetic.paint)};-webkit-background-clip:text;background-clip:text;color:transparent">${esc(msg.displayName)}</span>`
+    out += `<span class="nick" style="background:${esc(cosmetic.paint)};-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent">${esc(msg.displayName)}</span>`
   } else {
     const color = ensureReadable(cosmetic?.color || msg.color || fallbackColor(msg.login), true)
     out += `<span class="nick" style="color:${esc(color)}">${esc(msg.displayName)}</span>`

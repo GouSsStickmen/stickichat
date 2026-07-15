@@ -149,6 +149,11 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
               y: e.clientY
             })
           }}
+          onContextMenu={(e) => {
+            // RMB: copy the streamer's login to the clipboard
+            e.preventDefault()
+            navigator.clipboard?.writeText(pane.channel).catch(() => {})
+          }}
         >
           {channelName ?? pane.channel}
         </span>
@@ -242,6 +247,11 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           ✕
         </button>
       </div>
+      {showStreamInfo && streamInfo?.game && (
+        <div className="pane-subheader" title={streamInfo.game}>
+          <span className="si-icon">🎮</span> {streamInfo.game}
+        </div>
+      )}
       {(isMod || hasToolbarButtons) && account && (
         <ModToolbar pane={pane} account={account} channelId={channelId} isMod={isMod} />
       )}

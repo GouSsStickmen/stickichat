@@ -276,8 +276,11 @@ function MessageViewInner({
     const myAccountIds = useAccountsStore.getState().accounts.map((a) => a.id)
     const ctx = { caseSensitiveNicks: settings.caseSensitiveNicks, myAccountIds }
     const rule = highlightRules.find((r) => highlightRuleMatches(msg, r, ctx))
-    return rule ? hexToRgba(rule.color, rule.opacity) : undefined
-  }, [highlightRules, msg, isMention, settings.caseSensitiveNicks])
+    if (!rule) return undefined
+    // adaptColor: tint from the sender's own nick color instead of the rule's fixed color
+    const base = rule.adaptColor ? stvCosmetic?.color || msg.color || fallbackColor(msg.login) : rule.color
+    return hexToRgba(base, rule.opacity)
+  }, [highlightRules, msg, isMention, settings.caseSensitiveNicks, stvCosmetic])
 
   // muted users: 'hide' is filtered out in MessageList; 'dim' renders semi-transparent here
   const muted = useMemo(

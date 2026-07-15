@@ -173,6 +173,8 @@ export interface HighlightRule {
   /** 0..1 background opacity */
   opacity: number
   enabled: boolean
+  /** derive the highlight tint from the sender's nick color instead of the fixed `color` */
+  adaptColor?: boolean
 }
 
 // ---------- Muted (dimmed/hidden) users ----------
@@ -220,6 +222,12 @@ export interface OverlayProfile {
   bgImage?: string
   /** opacity of the custom background image, 0..1 (lets the plate image be made transparent) */
   bgImageOpacity: number
+  /** fixed plate/panel width in px, 0 = auto (hug content / full width) */
+  bgWidth: number
+  /** fixed plate/panel height in px, 0 = auto */
+  bgHeight: number
+  /** keep the background image's aspect ratio (contain) instead of stretching to fill (cover) */
+  bgKeepAspect: boolean
   /** users hidden in THIS profile only (global `overlayHiddenUsers` hides in every overlay) */
   hiddenUsers: string[]
   /** where new messages appear: 'up' = newest at the bottom (default), 'down' = newest at top */
@@ -248,6 +256,9 @@ export const DEFAULT_OVERLAY_STYLE: Omit<OverlayProfile, 'id' | 'name'> = {
   bgShadowBlur: 0,
   bgShadowColor: '#000000',
   bgImageOpacity: 1,
+  bgWidth: 0,
+  bgHeight: 0,
+  bgKeepAspect: false,
   hiddenUsers: [],
   messageDir: 'up',
   lineGap: 2,
@@ -525,6 +536,8 @@ export interface Settings {
   overlayShowModActions: boolean
   /** named visual styles; each gets its own /overlay URL for a separate OBS source */
   overlayProfiles: OverlayProfile[]
+  /** keep the overlay live preview pinned to the bottom of the settings while scrolling options */
+  overlayPreviewPinned: boolean
   /** one-time migration: mention/first-message colors converted into highlight rules */
   hlMigratedV1: boolean
   /** one-time migration: default redeem + bits highlight rules seeded */
@@ -653,6 +666,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayShowSubs: true,
   overlayShowModActions: false,
   overlayProfiles: [],
+  overlayPreviewPinned: false,
   hlMigratedV1: false,
   hlMigratedV2: false
 }

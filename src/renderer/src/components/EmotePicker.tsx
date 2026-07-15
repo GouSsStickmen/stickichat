@@ -380,13 +380,8 @@ export default function EmotePicker({
                     onClick={() => groupRefs.current[g.key]?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
                     onContextMenu={(e) => {
                       e.preventDefault()
-                      // add all of this streamer's emotes to favorites (skip already-favorited)
-                      for (const em of g.emotes) {
-                        if (!favSet.has(`twitch:${em.code}`)) {
-                          toggleFavorite({ code: em.code, url: em.url, provider: 'twitch' })
-                        }
-                      }
-                      // toggle-pin the streamer to the top of the rail/list
+                      // toggle-pin the streamer to the top of the rail/list (does NOT touch the
+                      // favorites tab)
                       const cur = useSettingsStore.getState().settings.pinnedEmoteOwners
                       useSettingsStore.getState().setSettings({
                         pinnedEmoteOwners: cur.includes(g.key)

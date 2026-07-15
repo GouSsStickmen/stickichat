@@ -44,7 +44,12 @@ export async function refreshModeratedChannels(accountId: string): Promise<void>
   try {
     const ids = await getModeratedChannelIds(account)
     // null = API failure — keep the old cache instead of wiping mod rights
-    if (ids) useAccountsStore.getState().updateAccount(accountId, { moderatedChannelIds: ids })
+    if (!ids) return
+    // only write when the set actually changed, so the 2-min poll doesn't churn the store
+    // (which would re-render chat panes and trigger a config save every tick)
+    const prev = account.moderatedChannelIds
+    const changed = ids.length !== prev.length || ids.some((id) => !prev.includes(id))
+    if (changed) useAccountsStore.getState().updateAccount(accountId, { moderatedChannelIds: ids })
   } catch {
     /* keep old cache */
   }

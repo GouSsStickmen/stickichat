@@ -119,14 +119,34 @@ class ChatService {
     this.pollLive()
     window.setInterval(() => this.pollLive(), 60000)
 
-    // mod status can change while the app is closed — refresh the cached list once per launch.
-    // Main window only: utility windows (user card, detached) also call start(), and their
-    // parallel refreshes race the token rotation and produce spurious 401s
+    // mod status can change at any time (a broadcaster mods/unmods you mid-stream) — poll the
+    // cached list so mod rights appear/disappear without an app restart. Main window only:
+    // utility windows (user card, detached) also call start(), and their parallel refreshes
+    // race the token rotation and produce spurious 401s
     const hash = window.location.hash
     const isMain = !hash
     if (isMain) {
-      import('./accountService').then(({ refreshModeratedChannels }) => {
-        for (const a of useAccountsStore.getState().accounts) refreshModeratedChannels(a.id)
+      const refreshMods = (): void => {
+        import('./accountService').then(({ refreshModeratedChannels }) => {
+          for (const a of useAccountsStore.getState().accounts) refreshModeratedChannels(a.id)
+        })
+      }
+      refreshMods()
+      window.setInterval(refreshMods, 120000)
+      // and immediately when the user returns to the window (they likely just got modded)
+      window.addEventListener('focus', refreshMods)
+      // when the moderated-channel set actually changes, resync EventSub so the mod feed +
+      // shoutout subscriptions (which need moderator authorization) come online without a
+      // restart — the layout-only `sync` above never fires on a pure mod-status change
+      let modSig = ''
+      useAccountsStore.subscribe(() => {
+        const sig = useAccountsStore
+          .getState()
+          .accounts.map((a) => `${a.id}:${[...a.moderatedChannelIds].sort().join(',')}`)
+          .join('|')
+        if (sig === modSig) return
+        modSig = sig
+        this.eventSub?.resync()
       })
     }
     // EventSub carries what IRC no longer does: whispers, raids, the who-did-what mod feed.
@@ -566,7 +586,7 @@ class ChatService {
         Object.fromEntries(
           channels.flatMap((c) => {
             const info = live.get(c)
-            return info ? [[c, { viewers: info.viewers, title: info.title, startedAt: info.startedAt }]] : []
+            return info ? [[c, { viewers: info.viewers, title: info.title, startedAt: info.startedAt, game: info.game }]] : []
           })
         )
       )
@@ -1071,7 +1091,17 @@ class ChatService {
     // OBS overlay: stream rendered lines to the local SSE server (main window only —
     // detached/usercard windows join channels too and would duplicate every line)
     if (!window.location.hash && useSettingsStore.getState().settings.overlayEnabled) {
-      import('../lib/overlayRender').then(({ renderOverlayHtml }) => {
+      import('../lib/overlayRender').then(async ({ renderOverlayHtml }) => {
+        // the overlay line is rendered once; resolve the 7TV cosmetic FIRST (cached after the
+        // first message per user) so the custom color/gradient is baked into the pushed HTML.
+        // Cap the wait so a slow 7TV fetch never stalls the overlay line.
+        if (useSettingsStore.getState().settings.sevenTvNickColors && msg.userId && !msg.system) {
+          const { awaitSevenTvCosmetic } = await import('../lib/seventvCosmetics')
+          await Promise.race([
+            awaitSevenTvCosmetic(msg.userId),
+            new Promise((r) => setTimeout(r, 1500))
+          ])
+        }
         const html = renderOverlayHtml(msg)
         if (html) window.sticki.overlayPush(channel, html, msg.id, msg.userId, msg.login)
       })

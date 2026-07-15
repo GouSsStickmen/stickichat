@@ -17,7 +17,7 @@ interface ChatState {
   /** channel login -> broadcaster's chat color (accent for PRIMARY announcements) */
   channelAccents: Record<string, string>
   /** channel login -> live stream info for the pane header */
-  streamInfo: Record<string, { viewers: number; title: string; startedAt: string }>
+  streamInfo: Record<string, { viewers: number; title: string; startedAt: string; game: string }>
   /** channel login -> has an unseen mention of one of my accounts */
   unreadMentions: Record<string, boolean>
   /** channel login -> has any unseen message at all (inactive tabs only) */
@@ -42,7 +42,7 @@ interface ChatState {
   setLiveChannels: (live: Record<string, boolean>) => void
   setChannelNames: (names: Record<string, string>) => void
   setChannelAccents: (accents: Record<string, string>) => void
-  setStreamInfo: (info: Record<string, { viewers: number; title: string; startedAt: string }>) => void
+  setStreamInfo: (info: Record<string, { viewers: number; title: string; startedAt: string; game: string }>) => void
   setSelfTimeout: (channel: string, userId: string, until: number, reason?: string) => void
   setUnreadMention: (channel: string) => void
   clearUnreadMentions: (channels: string[]) => void
