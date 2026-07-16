@@ -229,8 +229,8 @@ const OVERLAY_HTML = `<!doctype html>
   .body img.emote { height: var(--emote-h, 1.4em); vertical-align: -0.3em; margin: 0 1px; }
   .decor { position: absolute; pointer-events: none; }
   /* custom plate image as its own layer (opacity independent of text) */
-  .content.has-img, #zone.has-img { isolation: isolate; }
-  .content.has-img::before, #zone.has-img::before {
+  .content.has-img, #zone.has-img, .meta.has-img { isolation: isolate; }
+  .content.has-img::before, #zone.has-img::before, .meta.has-img::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -268,6 +268,7 @@ const OVERLAY_HTML = `<!doctype html>
 </style>
 <style id="customCss"></style>
 <style id="fontFace"></style>
+<style id="fxCss"></style>
 </head>
 <body>
 <div id="zone"></div>
@@ -281,6 +282,7 @@ const OVERLAY_HTML = `<!doctype html>
   var zone = document.getElementById('zone')
   var customCss = document.getElementById('customCss')
   var fontFace = document.getElementById('fontFace')
+  var fxCss = document.getElementById('fxCss')
 
   // defaults until the first cfg event lands (mirrors DEFAULT_CHAT_OVERLAY)
   var cfg = {
@@ -300,6 +302,8 @@ const OVERLAY_HTML = `<!doctype html>
     plateBorderOpacity: 1, plateBorderBlur: 0,
     plateShadowBlur: 0, plateShadowColor: '#000000', plateShadowX: 0, plateShadowY: 2,
     plateGlowSize: 0, plateGlowColor: '#a970ff', plateBlur: 0, plateEdgeBlur: 0,
+    plateShapeSize: 12, plateDepth: 0,
+    plateAnim: 'none', plateAnimSpeed: 2, plateAnimColors: ['#9147ff', '#5cffe0', '#ff5c8a'], plateAnimSync: true,
     plateImage: '', plateImageOpacity: 1, plateImageFit: 'cover', plateMask: '',
     plateWidth: 0, plateHeight: 0, platePadX: 10, platePadY: 4,
     nickPos: 'inline', nickColorMode: 'twitch', nickFixedColor: '#a970ff',
@@ -308,7 +312,8 @@ const OVERLAY_HTML = `<!doctype html>
     nickBgEnabled: false,
     nickBg: { kind: 'solid', color: '#9147ff', opacity: 1, color2: '#3a0ca3', angle: 135 },
     nickBgRadius: 8, nickPadX: 8, nickPadY: 1, nickOffsetX: 0, nickOffsetY: 0,
-    nickAlign: 'left', msgAlign: 'left',
+    nickFloat: false, nickAlign: 'left', msgAlign: 'left',
+    zoneOffsetX: 0, zoneOffsetY: 0,
     nickBorderWidth: 0, nickBorderColor: '#ffffff', nickShadowBlur: 0, nickShadowColor: '#000000',
     nickGlowSize: 0, nickGlowColor: '#a970ff', nickBlur: 0, nickImage: '', nickImageOpacity: 1,
     avatarShow: false, avatarPos: 'left', avatarSize: 28, avatarRadius: 50,
@@ -412,10 +417,52 @@ const OVERLAY_HTML = `<!doctype html>
     return s
   }
   function shapeClip(shape) {
-    if (shape === 'slant') return 'polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%)'
+    var s = (cfg.plateShapeSize == null ? 12 : cfg.plateShapeSize) + 'px'
+    if (shape === 'slant') return 'polygon(' + s + ' 0, 100% 0, calc(100% - ' + s + ') 100%, 0 100%)'
     if (shape === 'notch')
-      return 'polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px)'
+      return 'polygon(' + s + ' 0, calc(100% - ' + s + ') 0, 100% ' + s + ', 100% calc(100% - ' + s + '), calc(100% - ' + s + ') 100%, ' + s + ' 100%, 0 calc(100% - ' + s + '), 0 ' + s + ')'
     return ''
+  }
+  /** darken a #rrggbb color by the given factor (0..1) — used for the 3D extrude faces */
+  function shade(hex, k) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '')
+    if (!m) return 'rgba(0,0,0,0.5)'
+    var n = parseInt(m[1], 16)
+    var r = Math.round(((n >> 16) & 255) * k), g = Math.round(((n >> 8) & 255) * k), b = Math.round((n & 255) * k)
+    return 'rgb(' + r + ',' + g + ',' + b + ')'
+  }
+
+  // ---------- animated border/glow keyframes ----------
+  function buildFxKeyframes() {
+    if (!cfg.plateAnim || cfg.plateAnim === 'none') return ''
+    var colors = (cfg.plateAnimColors && cfg.plateAnimColors.length ? cfg.plateAnimColors : ['#9147ff']).slice()
+    var g = cfg.plateGlowSize > 0 ? cfg.plateGlowSize : 12
+    var bw = cfg.plateBorderWidth > 0 ? cfg.plateBorderWidth : 0
+    var sync = cfg.plateAnimSync !== false
+    function frame(color, alpha) {
+      var out = ''
+      if (bw > 0) out += 'border-color: ' + hexToRgba(color, (cfg.plateBorderOpacity == null ? 1 : cfg.plateBorderOpacity) * alpha) + ';'
+      if (sync) {
+        out += 'box-shadow: 0 0 ' + Math.round(g * alpha) + 'px ' + color + ', 0 0 ' + Math.round(g * 2 * alpha) + 'px ' + color + ';'
+      }
+      return out
+    }
+    var kf = '@keyframes pa-fx {'
+    if (cfg.plateAnim === 'candle') {
+      // flicker: irregular intensity of the first color, like a candle flame
+      var flicker = [1, 0.75, 0.95, 0.6, 1, 0.8, 0.55, 0.9, 0.7, 1]
+      for (var i = 0; i < flicker.length; i++) {
+        kf += Math.round((i / (flicker.length - 1)) * 100) + '% {' + frame(colors[0], flicker[i]) + '}'
+      }
+    } else {
+      // blink (hard steps) and flow (smooth) both cycle through the color list; the
+      // timing function chosen in applyPlate makes the difference
+      colors.push(colors[0]) // wrap around for a seamless loop
+      for (var j = 0; j < colors.length; j++) {
+        kf += Math.round((j / (colors.length - 1)) * 100) + '% {' + frame(colors[j], 1) + '}'
+      }
+    }
+    return kf + '}'
   }
 
   // ---------- plate ----------
@@ -431,10 +478,20 @@ const OVERLAY_HTML = `<!doctype html>
     el.style.border = active && cfg.plateBorderWidth > 0
       ? cfg.plateBorderWidth + 'px ' + cfg.plateBorderStyle + ' ' + hexToRgba(cfg.plateBorderColor, cfg.plateBorderOpacity == null ? 1 : cfg.plateBorderOpacity)
       : ''
-    // stacked box-shadows: real drop shadow (with direction) + colored glow + soft border halo
+    // translucent borders showed the background sticking out under them at the corners —
+    // clip the background to the padding box so the border is a clean OUTER stroke
+    el.style.backgroundClip = active && cfg.plateBorderWidth > 0 ? 'padding-box' : ''
+    // stacked box-shadows: real drop shadow (with direction) + colored glow + soft border
+    // halo + 3D extrude (stacked darker layers under the plate)
     var shadows = []
+    if (active && cfg.plateDepth > 0) {
+      var base = cfg.plateBg && cfg.plateBg.color ? cfg.plateBg.color : '#000000'
+      for (var di = 1; di <= cfg.plateDepth; di++) {
+        shadows.push('0 ' + di + 'px 0 ' + shade(base, 0.55 - (di / cfg.plateDepth) * 0.2))
+      }
+    }
     if (active && cfg.plateShadowBlur > 0)
-      shadows.push((cfg.plateShadowX || 0) + 'px ' + (cfg.plateShadowY == null ? 2 : cfg.plateShadowY) + 'px ' + cfg.plateShadowBlur + 'px ' + cfg.plateShadowColor)
+      shadows.push((cfg.plateShadowX || 0) + 'px ' + ((cfg.plateShadowY == null ? 2 : cfg.plateShadowY) + (cfg.plateDepth || 0)) + 'px ' + cfg.plateShadowBlur + 'px ' + cfg.plateShadowColor)
     if (active && cfg.plateGlowSize > 0) {
       shadows.push('0 0 ' + cfg.plateGlowSize + 'px ' + cfg.plateGlowColor)
       shadows.push('0 0 ' + cfg.plateGlowSize * 2 + 'px ' + cfg.plateGlowColor)
@@ -442,6 +499,12 @@ const OVERLAY_HTML = `<!doctype html>
     if (active && cfg.plateBorderBlur > 0)
       shadows.push('0 0 ' + cfg.plateBorderBlur + 'px ' + hexToRgba(cfg.plateBorderColor, cfg.plateBorderOpacity == null ? 1 : cfg.plateBorderOpacity))
     el.style.boxShadow = shadows.length ? shadows.join(', ') : ''
+    // animated border/glow effect (keyframes generated in applyCfg)
+    if (!isZone) {
+      el.style.animation = active && cfg.plateAnim && cfg.plateAnim !== 'none'
+        ? 'pa-fx ' + (cfg.plateAnimSpeed || 2) + 's infinite ' + (cfg.plateAnim === 'blink' ? 'step-end' : 'linear')
+        : ''
+    }
     // frosted glass behind the plate
     el.style.backdropFilter = active && cfg.plateBlur > 0 ? 'blur(' + cfg.plateBlur + 'px)' : ''
     el.style.webkitBackdropFilter = el.style.backdropFilter
@@ -596,6 +659,24 @@ const OVERLAY_HTML = `<!doctype html>
         meta.style.setProperty('--bg-img-size', 'cover')
       }
     }
+    if (cfg.nickFloat && effNickPos() === 'above') {
+      // FREE nick: absolutely positioned over the plate — it stops pushing the message
+      // down, the text centers in its own plate, and align + offsets move the chip anywhere
+      meta.style.position = 'absolute'
+      meta.style.width = 'fit-content'
+      meta.style.whiteSpace = 'nowrap'
+      meta.style.zIndex = '3'
+      meta.style.top = (cfg.nickOffsetY || 0) + 'px'
+      if (cfg.nickAlign === 'center') {
+        meta.style.left = 'calc(50% + ' + (cfg.nickOffsetX || 0) + 'px)'
+        meta.style.transform = 'translateX(-50%)'
+      } else if (cfg.nickAlign === 'right') {
+        meta.style.right = (-(cfg.nickOffsetX || 0)) + 'px'
+      } else {
+        meta.style.left = (cfg.nickOffsetX || 0) + 'px'
+      }
+      return meta
+    }
     // free nudge, e.g. a cap that overlaps the plate edge
     if (cfg.nickOffsetX || cfg.nickOffsetY) {
       meta.style.position = 'relative'
@@ -678,8 +759,9 @@ const OVERLAY_HTML = `<!doctype html>
     }
 
     applyPlate(content, false)
-    addDecors(content, 'message')
     el.appendChild(content)
+    // decors live on the LINE, not the content — clip-path shapes must not cut them off
+    addDecors(el, 'message')
 
     // zone-level alignment of fit plates
     if (cfg.layout !== 'horizontal') {
@@ -688,11 +770,16 @@ const OVERLAY_HTML = `<!doctype html>
     // message text aligns within ITS OWN plate independently of the zone alignment
     content.style.textAlign = cfg.msgAlign || 'left'
 
-    // entrance animation (direction-aware)
+    // entrance animation (direction-aware). The animation is REMOVED once it finishes:
+    // a lingering filled animation keeps a stacking/containing context on the line, which
+    // silently disabled backdrop-filter (the "glass" effect) on the plates inside it.
     var an = animName()
     if (an && an !== 'none') {
       animVars(el)
       el.style.animation = 'a-' + an + ' ' + (cfg.animMs || 200) + 'ms ease both'
+      el.addEventListener('animationend', function (ev) {
+        if (ev.target === el) el.style.animation = ''
+      }, { once: true })
     }
     // scheduled fade-out
     if (cfg.fadeAfter > 0) {
@@ -751,6 +838,8 @@ const OVERLAY_HTML = `<!doctype html>
       ? "@font-face { font-family: '" + (cfg.font || 'OverlayFont').replace(/'/g, '') + "'; src: url('" + cfg.fontData + "'); }"
       : ''
     customCss.textContent = cfg.customCss || ''
+    // generated keyframes for the animated border/glow effect
+    fxCss.textContent = buildFxKeyframes()
     zone.className =
       'layout-' + cfg.layout + ' dir-' + cfg.direction + ' anchor-' + cfg.anchor + ' align-' + cfg.align
     zone.style.fontFamily = cfg.font ? "'" + cfg.font.replace(/'/g, '') + "', 'Segoe UI', sans-serif" : "'Segoe UI', sans-serif"
@@ -808,15 +897,18 @@ const OVERLAY_HTML = `<!doctype html>
     for (var i = 0; i < old.length; i++) old[i].remove()
     addDecors(zone, 'zone')
 
-    // 3D perspective of the whole chat zone
+    // 3D perspective + free shift of the whole chat zone
     var tf = ''
+    if (cfg.zoneOffsetX || cfg.zoneOffsetY) {
+      tf += 'translate(' + (cfg.zoneOffsetX || 0) + 'px, ' + (cfg.zoneOffsetY || 0) + 'px) '
+    }
     if (cfg.tiltX || cfg.tiltY || cfg.rotate) {
-      tf = 'perspective(' + (cfg.perspDepth || 800) + 'px)'
+      tf += 'perspective(' + (cfg.perspDepth || 800) + 'px)'
       if (cfg.tiltX) tf += ' rotateX(' + cfg.tiltX + 'deg)'
       if (cfg.tiltY) tf += ' rotateY(' + cfg.tiltY + 'deg)'
       if (cfg.rotate) tf += ' rotate(' + cfg.rotate + 'deg)'
     }
-    zone.style.transform = tf
+    zone.style.transform = tf.trim()
     zone.style.transformOrigin = cfg.anchor === 'top' || cfg.direction === 'down' ? '50% 0%' : '50% 100%'
 
     // rebuild all visible lines with the new structure/styles

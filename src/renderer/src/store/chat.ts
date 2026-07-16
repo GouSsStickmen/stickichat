@@ -20,6 +20,8 @@ interface ChatState {
   streamInfo: Record<string, { viewers: number; title: string; startedAt: string; game: string }>
   /** channel login -> has an unseen mention of one of my accounts */
   unreadMentions: Record<string, boolean>
+  /** channel login -> the custom keyword/phrase that fired while the tab was inactive */
+  unreadKeywords: Record<string, string>
   /** channel login -> has any unseen message at all (inactive tabs only) */
   unreadMessages: Record<string, boolean>
   /** channel login -> timestamp up to which the user has "seen" messages */
@@ -46,6 +48,8 @@ interface ChatState {
   setSelfTimeout: (channel: string, userId: string, until: number, reason?: string) => void
   setUnreadMention: (channel: string) => void
   clearUnreadMentions: (channels: string[]) => void
+  setUnreadKeyword: (channel: string, word: string) => void
+  clearUnreadKeywords: (channels: string[]) => void
   setUnreadMessage: (channel: string) => void
   clearUnreadMessages: (channels: string[]) => void
   markChannelsRead: (channels: string[]) => void
@@ -91,6 +95,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   channelAccents: {},
   streamInfo: {},
   unreadMentions: {},
+  unreadKeywords: {},
   unreadMessages: {},
   lastReadAt: {},
   selfTimeouts: {},
@@ -217,6 +222,17 @@ export const useChatStore = create<ChatState>()((set) => ({
       for (const c of channels) delete unreadMentions[c]
       return { unreadMentions }
     }),
+  setUnreadKeyword: (channel, word) =>
+    set((s) =>
+      s.unreadKeywords[channel] ? s : { unreadKeywords: { ...s.unreadKeywords, [channel]: word } }
+    ),
+  clearUnreadKeywords: (channels) =>
+    set((s) => {
+      if (!channels.some((c) => s.unreadKeywords[c])) return s
+      const unreadKeywords = { ...s.unreadKeywords }
+      for (const c of channels) delete unreadKeywords[c]
+      return { unreadKeywords }
+    }),
   setUnreadMessage: (channel) =>
     set((s) =>
       s.unreadMessages[channel] ? s : { unreadMessages: { ...s.unreadMessages, [channel]: true } }
@@ -233,6 +249,8 @@ export const useChatStore = create<ChatState>()((set) => ({
       const now = Date.now()
       const lastReadAt = { ...s.lastReadAt }
       for (const c of channels) lastReadAt[c] = now
-      return { lastReadAt }
+      const unreadKeywords = { ...s.unreadKeywords }
+      for (const c of channels) delete unreadKeywords[c]
+      return { lastReadAt, unreadKeywords }
     })
 }))

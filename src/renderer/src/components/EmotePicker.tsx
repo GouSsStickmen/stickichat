@@ -155,12 +155,14 @@ export default function EmotePicker({
     const pinned = pinnedOwners
     const entries = [...groups.entries()]
     entries.sort(([keyA, a], [keyB, b]) => {
-      // user-pinned streamers (RMB on their avatar) float to the very top, in pin order
+      // the streamer of the channel the picker was opened on ALWAYS sits first —
+      // above even the pinned ones (avatar rail and emote sections alike)
+      if (channelId && keyA === channelId) return -1
+      if (channelId && keyB === channelId) return 1
+      // then user-pinned streamers (RMB on their avatar), in pin order
       const pa = pinned.indexOf(keyA)
       const pb = pinned.indexOf(keyB)
       if (pa !== -1 || pb !== -1) return (pa === -1 ? 1e9 : pa) - (pb === -1 ? 1e9 : pb)
-      if (channelId && keyA === channelId) return -1
-      if (channelId && keyB === channelId) return 1
       if (keyA === '0') return 1
       if (keyB === '0') return -1
       return a.label.localeCompare(b.label)
@@ -316,8 +318,14 @@ export default function EmotePicker({
             <div className="picker-empty">{t('picker.empty')}</div>
           )
         ) : tab === 'favorites' ? (
-          favorites.length > 0 ? (
+          favorites.length > 0 || (channelId && twitchGroups.some((g) => g.key === channelId)) ? (
             <>
+              {/* the current channel's streamer sits above even the favorites */}
+              {channelId &&
+                (() => {
+                  const cur = twitchGroups.find((g) => g.key === channelId)
+                  return cur ? section(cur.label, cur.emotes, `fav-cur-${cur.key}`) : null
+                })()}
               <button
                 className={`ghost fav-edit-btn ${editFavs ? 'active' : ''}`}
                 onClick={() => setEditFavs((v) => !v)}

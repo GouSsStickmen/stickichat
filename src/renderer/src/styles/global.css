@@ -1942,6 +1942,38 @@ select:focus {
   border-color: var(--accent-strong);
 }
 /* checkerboard behind the preview so transparency is obvious (like image editors) */
+/* Ctrl+F in-pane message search */
+.chat-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.chat-search input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* pinned tab marker + keyword tag chip on tabs */
+.tab-pin {
+  font-size: 10px;
+  margin-right: 2px;
+}
+.keyword-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: #fff;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- number inputs (app-wide) ----------
    The native spinner arrows ate half the field: two-digit values were clipped and the tiny
    arrows were fiddly/laggy. Hide the spinners — type the value or use the mouse wheel. */
@@ -2086,7 +2118,6 @@ input[type='number']::-webkit-inner-spin-button {
 .oe-side input[type='range'] {
   min-width: 0;
   flex: 1 1 60px;
-  max-width: 140px;
 }
 /* full-width block label (fill editors and other wide controls sit under it) */
 .oe-block-label {

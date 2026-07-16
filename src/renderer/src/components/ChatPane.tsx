@@ -58,6 +58,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const addBtnRef = useRef<HTMLButtonElement>(null)
   const [addPanePos, setAddPanePos] = useState<{ top: number; right: number } | null>(null)
   const [scrollLocked, setScrollLocked] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   // hold-to-pause: chat is paused only while the hotkey is held down (separate from the toggle)
   const [holdPaused, setHoldPaused] = useState(false)
   const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
@@ -102,6 +103,11 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
       if (matchHotkey(e, hotkeyFor(s, 'scrollLock'))) {
         e.preventDefault()
         setScrollLocked((v) => !v)
+      }
+      // Ctrl+F — search messages & nicks in this pane (e.code works on any layout)
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyF') {
+        e.preventDefault()
+        setSearchOpen(true)
       }
       // hold-to-pause: pause while the key is held (keydown repeats — setState is idempotent)
       if (matchHoldKey(e, hotkeyFor(s, 'pauseHold'))) setHoldPaused(true)
@@ -252,6 +258,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           <span className="si-icon">🎮</span> {streamInfo.game}
         </div>
       )}
+      {searchOpen && <ChatSearch channel={pane.channel} onClose={() => setSearchOpen(false)} />}
       {(isMod || hasToolbarButtons) && account && (
         <ModToolbar pane={pane} account={account} channelId={channelId} isMod={isMod} />
       )}
@@ -274,6 +281,75 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
       />
+    </div>
+  )
+}
+
+/** Ctrl+F message/nick search: navigates matches via the existing jump+flash mechanism */
+function ChatSearch({ channel, onClose }: { channel: string; onClose: () => void }): React.JSX.Element {
+  const t = useT()
+  const messages = useChatStore((s) => s.messages[channel]) ?? []
+  const [query, setQuery] = useState('')
+  const [idx, setIdx] = useState(0)
+  const q = query.trim().toLowerCase()
+  const matches = useMemo(() => {
+    if (!q) return []
+    return messages.filter(
+      (m) =>
+        !m.system &&
+        !m.deleted &&
+        (m.text.toLowerCase().includes(q) ||
+          m.login.includes(q) ||
+          m.displayName.toLowerCase().includes(q))
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, messages.length])
+
+  const go = (next: number): void => {
+    if (matches.length === 0) return
+    const i = ((next % matches.length) + matches.length) % matches.length
+    setIdx(i)
+    // newest matches are the most interesting — index 0 = the LAST (newest) match
+    const msg = matches[matches.length - 1 - i]
+    window.dispatchEvent(new CustomEvent('sticki:jump', { detail: { channel, msgId: msg.id } }))
+  }
+
+  return (
+    <div className="chat-search">
+      <input
+        autoFocus
+        placeholder={t('search.placeholder')}
+        value={query}
+        spellCheck={false}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setIdx(0)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose()
+          if (e.key === 'Enter') go(e.shiftKey ? idx - 1 : idx + (query && idx === 0 && matches.length ? 0 : 1))
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            go(idx + 1)
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            go(idx - 1)
+          }
+        }}
+      />
+      <span className="hint" style={{ whiteSpace: 'nowrap' }}>
+        {q ? `${matches.length ? idx + 1 : 0}/${matches.length}` : ''}
+      </span>
+      <button className="icon-btn" title="↑" onClick={() => go(idx + 1)}>
+        ↑
+      </button>
+      <button className="icon-btn" title="↓" onClick={() => go(idx - 1)}>
+        ↓
+      </button>
+      <button className="icon-btn" onClick={onClose}>
+        ✕
+      </button>
     </div>
   )
 }

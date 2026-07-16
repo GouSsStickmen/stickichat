@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settings'
 import { useLayoutStore } from '../store/layout'
 import { useT } from '../i18n'
@@ -36,7 +36,8 @@ function Num({
   min = 0,
   max = 999,
   w = 64,
-  step = 1
+  step = 1,
+  def
 }: {
   v: number
   on: (n: number) => void
@@ -44,24 +45,73 @@ function Num({
   max?: number
   w?: number
   step?: number
+  /** right-click resets to this value (defaults to the value at mount) */
+  def?: number
 }): React.JSX.Element {
   const clamp = (n: number): number => Math.max(min, Math.min(max, n))
+  // a local text buffer: typing is NEVER clamped mid-way (entering "500" used to snap to the
+  // minimum the moment you typed "5") — the value applies live only when valid, and commits
+  // clamped on blur/Enter
+  const [buf, setBuf] = useState(String(v))
+  const focused = useRef(false)
+  const defRef = useRef(def ?? v)
+  const vRef = useRef(v)
+  vRef.current = v
+  useEffect(() => {
+    if (!focused.current) setBuf(String(v))
+  }, [v])
+  const commit = (): void => {
+    const n = parseFloat(buf)
+    const next = clamp(Number.isFinite(n) ? n : defRef.current)
+    on(next)
+    setBuf(String(next))
+  }
+  const inputRef = useRef<HTMLInputElement>(null)
+  // native non-passive wheel listener: React's onWheel is passive, so preventDefault was
+  // ignored and the PAGE scrolled along with the value
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent): void => {
+      e.preventDefault()
+      const next = clamp(Math.round((vRef.current + (e.deltaY < 0 ? step : -step)) * 100) / 100)
+      on(next)
+      setBuf(String(next))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, min, max])
   return (
     <input
+      ref={inputRef}
       type="number"
       min={min}
       max={max}
       step={step}
       style={{ width: w }}
-      value={v}
-      onChange={(e) => {
-        const n = step === 1 ? parseInt(e.target.value, 10) : parseFloat(e.target.value)
-        on(clamp(Number.isFinite(n) ? n : 0))
+      value={buf}
+      title="Колесо міняє значення · ПКМ скидає"
+      onFocus={() => {
+        focused.current = true
       }}
-      // mouse wheel over the field nudges the value — no fiddly spinner arrows needed
-      onWheel={(e) => {
-        e.currentTarget.blur()
-        on(clamp(Math.round((v + (e.deltaY < 0 ? step : -step)) * 100) / 100))
+      onChange={(e) => {
+        setBuf(e.target.value)
+        const n = parseFloat(e.target.value)
+        // apply live only when the typed value is already valid and in range
+        if (Number.isFinite(n) && n >= min && n <= max) on(n)
+      }}
+      onBlur={() => {
+        focused.current = false
+        commit()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit()
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        on(clamp(defRef.current))
+        setBuf(String(clamp(defRef.current)))
       }}
     />
   )
@@ -392,27 +442,55 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
             <div className="oe-block-label">{t('oe.persp')}</div>
             <Row label={t('oe.persp.tiltX')} hint={t('oe.persp.hint')}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input type="range" min={-60} max={60} value={ov.tiltX} onChange={(e) => update({ tiltX: parseInt(e.target.value, 10) })} />
+                <input
+                  type="range"
+                  min={-60}
+                  max={60}
+                  value={ov.tiltX}
+                  onChange={(e) => update({ tiltX: parseInt(e.target.value, 10) })}
+                  onContextMenu={(e) => { e.preventDefault(); update({ tiltX: 0 }) }}
+                />
                 <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>{ov.tiltX}°</span>
               </div>
             </Row>
             <Row label={t('oe.persp.tiltY')}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input type="range" min={-60} max={60} value={ov.tiltY} onChange={(e) => update({ tiltY: parseInt(e.target.value, 10) })} />
+                <input
+                  type="range"
+                  min={-60}
+                  max={60}
+                  value={ov.tiltY}
+                  onChange={(e) => update({ tiltY: parseInt(e.target.value, 10) })}
+                  onContextMenu={(e) => { e.preventDefault(); update({ tiltY: 0 }) }}
+                />
                 <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>{ov.tiltY}°</span>
               </div>
             </Row>
             <Row label={t('oe.persp.rotate')}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input type="range" min={-45} max={45} value={ov.rotate} onChange={(e) => update({ rotate: parseInt(e.target.value, 10) })} />
+                <input
+                  type="range"
+                  min={-45}
+                  max={45}
+                  value={ov.rotate}
+                  onChange={(e) => update({ rotate: parseInt(e.target.value, 10) })}
+                  onContextMenu={(e) => { e.preventDefault(); update({ rotate: 0 }) }}
+                />
                 <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>{ov.rotate}°</span>
               </div>
             </Row>
             {(ov.tiltX !== 0 || ov.tiltY !== 0) && (
               <Row label={t('oe.persp.depth')} hint={t('oe.persp.depth.hint')}>
-                <Num v={ov.perspDepth} on={(n) => update({ perspDepth: n })} min={200} max={3000} w={72} />
+                <Num v={ov.perspDepth} on={(n) => update({ perspDepth: n })} min={100} max={3000} w={72} def={800} />
               </Row>
             )}
+            <Row label={t('oe.zoneOffset')} hint={t('oe.zoneOffset.hint')}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <Num v={ov.zoneOffsetX} on={(n) => update({ zoneOffsetX: n })} min={-2000} max={2000} w={62} def={0} />
+                <Num v={ov.zoneOffsetY} on={(n) => update({ zoneOffsetY: n })} min={-2000} max={2000} w={62} def={0} />
+                <span className="hint">px</span>
+              </div>
+            </Row>
           </Sec>
 
           <Sec title={`🎬 ${t('oe.sec.anim')}`}>
@@ -526,6 +604,51 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                     <option value="notch">{t('oe.shape.notch')}</option>
                   </select>
                 </Row>
+                {(ov.plateShape === 'slant' || ov.plateShape === 'notch') && (
+                  <Row label={t('oe.shapeSize')} hint={t('oe.shapeSize.hint')}>
+                    <Num v={ov.plateShapeSize} on={(n) => update({ plateShapeSize: n })} min={2} max={60} w={56} def={12} />
+                  </Row>
+                )}
+                <Row label={t('oe.plateDepth')} hint={t('oe.plateDepth.hint')}>
+                  <Num v={ov.plateDepth} on={(n) => update({ plateDepth: n })} min={0} max={20} w={56} def={0} />
+                </Row>
+                <Row label={t('oe.plateAnim')} hint={t('oe.plateAnim.hint')}>
+                  <select value={ov.plateAnim} onChange={(e) => update({ plateAnim: e.target.value as ChatOverlayConfig['plateAnim'] })}>
+                    <option value="none">{t('oe.anim.none')}</option>
+                    <option value="blink">{t('oe.plateAnim.blink')}</option>
+                    <option value="flow">{t('oe.plateAnim.flow')}</option>
+                    <option value="candle">{t('oe.plateAnim.candle')}</option>
+                  </select>
+                </Row>
+                {ov.plateAnim !== 'none' && (
+                  <>
+                    <Row label={t('oe.plateAnim.colors')}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {ov.plateAnimColors.map((c, i) => (
+                          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                            <ColorField
+                              value={c}
+                              defaultValue={c}
+                              onChange={(v) => update({ plateAnimColors: ov.plateAnimColors.map((x, j) => (j === i ? v : x)) })}
+                            />
+                            <button
+                              className="ghost"
+                              disabled={ov.plateAnimColors.length <= 1}
+                              onClick={() => update({ plateAnimColors: ov.plateAnimColors.filter((_, j) => j !== i) })}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                        <button onClick={() => update({ plateAnimColors: [...ov.plateAnimColors, '#ffffff'] })}>+</button>
+                      </div>
+                    </Row>
+                    <Row label={t('oe.plateAnim.speed')}>
+                      <Num v={ov.plateAnimSpeed} on={(n) => update({ plateAnimSpeed: n })} min={0.2} max={20} w={62} step={0.1} def={2} />
+                    </Row>
+                    <Toggle label={t('oe.plateAnim.sync')} hint={t('oe.plateAnim.sync.hint')} value={ov.plateAnimSync} onChange={(v) => update({ plateAnimSync: v })} />
+                  </>
+                )}
                 {ov.plateShape === 'rect' && (
                   <Row label={t('overlay.bgRadius')} hint={t('oe.radius.hint')}>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -672,6 +795,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 <option value="above">{t('oe.nickPos.above')}</option>
               </select>
             </Row>
+            <Toggle label={t('oe.nickFloat')} hint={t('oe.nickFloat.hint')} value={ov.nickFloat} onChange={(v) => update({ nickFloat: v, ...(v ? { nickPos: 'above' as const } : {}) })} />
             <Row label={t('oe.nickAlign')} hint={t('oe.nickAlign.hint')}>
               <select value={ov.nickAlign} onChange={(e) => update({ nickAlign: e.target.value as ChatOverlayConfig['nickAlign'] })}>
                 <option value="left">{t('overlay.align.left')}</option>

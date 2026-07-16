@@ -1028,13 +1028,19 @@ class ChatService {
     const settings = useSettingsStore.getState().settings
     if (!settings.keywordSound || settings.keywordAlerts.length === 0) return
     const lower = msg.text.toLowerCase()
-    const hit = settings.keywordAlerts.some((w) => {
+    const hit = settings.keywordAlerts.find((w) => {
       const needle = w.trim().toLowerCase()
       return needle.length > 0 && lower.includes(needle)
     })
     if (!hit) return
     msg.isMention = true // highlight it like a mention so it's visible in chat/sidebar
     playKeywordSound(settings)
+    // tag the channel's tab with the matched word while the tab is inactive
+    const { tabs, activeTabId } = useLayoutStore.getState()
+    const activeChannels = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
+    if (!activeChannels.includes(msg.channel)) {
+      useChatStore.getState().setUnreadKeyword(msg.channel, hit.trim())
+    }
   }
 
   /** lights up the tab (subtle, distinct from the @ mention dot) for any new message while inactive */

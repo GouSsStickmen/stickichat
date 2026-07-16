@@ -17,6 +17,7 @@ export default function TabBar(): React.JSX.Element {
   const connState = useChatStore((s) => s.connState)
   const liveChannels = useChatStore((s) => s.liveChannels)
   const unreadMentions = useChatStore((s) => s.unreadMentions)
+  const unreadKeywords = useChatStore((s) => s.unreadKeywords)
   const unreadMessages = useChatStore((s) => s.unreadMessages)
   const alwaysOnTop = useSettingsStore((s) => s.settings.alwaysOnTop)
   const muted = useSettingsStore((s) => s.settings.muted)
@@ -72,11 +73,12 @@ export default function TabBar(): React.JSX.Element {
 
   const isLiveTab = (tab: (typeof tabs)[number]): boolean =>
     tab.panes.some((p) => liveChannels[p.channel])
-  // filter by live status; 'all' keeps the full list (and normal drag-reorder)
+  // filter by live status; 'all' keeps the full list (and normal drag-reorder).
+  // PINNED tabs always stay visible regardless of the filter.
   const visibleTabs =
     tabFilter === 'all'
       ? tabs
-      : tabs.filter((tab) => (tabFilter === 'online' ? isLiveTab(tab) : !isLiveTab(tab)))
+      : tabs.filter((tab) => tab.pinned || (tabFilter === 'online' ? isLiveTab(tab) : !isLiveTab(tab)))
   const cycleFilter = (): void =>
     setSettings({ tabFilter: tabFilter === 'all' ? 'online' : tabFilter === 'online' ? 'offline' : 'all' })
   const filterIcon = tabFilter === 'online' ? '🟢' : tabFilter === 'offline' ? '⚫' : '≡'
@@ -168,6 +170,7 @@ export default function TabBar(): React.JSX.Element {
       {visibleTabs.map((tab, index) => {
         const hasLive = tab.panes.some((p) => liveChannels[p.channel])
         const hasMention = tab.panes.some((p) => unreadMentions[p.channel])
+        const keywordTag = tab.panes.map((p) => unreadKeywords[p.channel]).find(Boolean)
         const hasUnread = !hasMention && tab.panes.some((p) => unreadMessages[p.channel])
         const isActive = tab.id === activeTabId
         return (
@@ -199,7 +202,14 @@ export default function TabBar(): React.JSX.Element {
               setRenaming(tab.id)
               setNameInput(tab.name ?? '')
             }}
+            onContextMenu={(e) => {
+              // RMB: pin/unpin — pinned tabs survive the online/offline filter
+              e.preventDefault()
+              useLayoutStore.getState().togglePinTab(tab.id)
+            }}
+            title={t('tab.pinHint')}
           >
+            {tab.pinned && <span className="tab-pin">📌</span>}
             {hasLive && <span className="live-dot" title={t('pane.live')} />}
             {renaming === tab.id ? (
               <input
@@ -224,6 +234,7 @@ export default function TabBar(): React.JSX.Element {
             )}
             {/* fixed-width slot so the tab doesn't change size when an indicator appears */}
             <span className="tab-indicator-slot">
+              {keywordTag && !isActive && <span className="keyword-tag" title={keywordTag}>{keywordTag}</span>}
               {hasMention && <span className="mention-dot">@</span>}
               {!hasMention && hasUnread && <span className="unread-dot" title={t('tab.newMessage')} />}
             </span>

@@ -321,6 +321,9 @@ export interface ChatOverlayConfig {
   rotate: number
   /** px perspective depth (smaller = more dramatic) */
   perspDepth: number
+  /** px shift of the whole chat zone (rescue it when perspective pushes it off-screen) */
+  zoneOffsetX: number
+  zoneOffsetY: number
 
   // ----- text -----
   font: string
@@ -346,6 +349,18 @@ export interface ChatOverlayConfig {
   plateRadius: [number, number, number, number]
   /** rect honors plateRadius; others are clip-path presets */
   plateShape: 'rect' | 'pill' | 'slant' | 'bubble' | 'notch'
+  /** px of the slant / corner cut for the shaped plates */
+  plateShapeSize: number
+  /** px of 3D extrusion under the plate (stacked darker layers), 0 = flat */
+  plateDepth: number
+  /** animated border/glow effect */
+  plateAnim: 'none' | 'blink' | 'flow' | 'candle'
+  /** seconds per animation cycle */
+  plateAnimSpeed: number
+  /** colors the blink/flow animation cycles through */
+  plateAnimColors: string[]
+  /** the glow follows the border animation */
+  plateAnimSync: boolean
   plateBorderWidth: number
   plateBorderColor: string
   plateBorderStyle: 'solid' | 'dashed' | 'dotted' | 'double'
@@ -398,6 +413,9 @@ export interface ChatOverlayConfig {
   /** free nudge of the nick block, px (e.g. a cap overlapping the plate edge) */
   nickOffsetX: number
   nickOffsetY: number
+  /** float the nick OVER the plate (absolute): it stops pushing the message down and moves
+   *  freely via align + offsets while the text centers in its own plate */
+  nickFloat: boolean
   /** where the nick block sits across the message width (nickPos = above) */
   nickAlign: 'left' | 'center' | 'right'
   /** message text alignment inside its own plate */
@@ -472,6 +490,8 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   tiltY: 0,
   rotate: 0,
   perspDepth: 800,
+  zoneOffsetX: 0,
+  zoneOffsetY: 0,
   font: '',
   fontSize: 16,
   bold: false,
@@ -489,6 +509,12 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   plateBg: DEFAULT_FILL,
   plateRadius: [8, 8, 8, 8],
   plateShape: 'rect',
+  plateShapeSize: 12,
+  plateDepth: 0,
+  plateAnim: 'none',
+  plateAnimSpeed: 2,
+  plateAnimColors: ['#9147ff', '#5cffe0', '#ff5c8a'],
+  plateAnimSync: true,
   plateBorderWidth: 0,
   plateBorderColor: '#ffffff',
   plateBorderStyle: 'solid',
@@ -523,6 +549,7 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   nickPadY: 1,
   nickOffsetX: 0,
   nickOffsetY: 0,
+  nickFloat: false,
   nickAlign: 'left',
   msgAlign: 'left',
   nickBorderWidth: 0,
@@ -701,6 +728,8 @@ export interface Tab {
   panes: Pane[]
   /** 0 = auto */
   columns: number
+  /** pinned tabs always show, regardless of the online/offline filter */
+  pinned?: boolean
 }
 
 // ---------- Settings ----------

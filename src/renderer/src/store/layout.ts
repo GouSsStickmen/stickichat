@@ -13,6 +13,7 @@ interface LayoutState {
   addTab: (name?: string) => string
   closeTab: (id: string) => void
   renameTab: (id: string, name: string) => void
+  togglePinTab: (id: string) => void
   setActiveTab: (id: string) => void
   setColumns: (tabId: string, columns: number) => void
   addPane: (tabId: string, channel: string, accountId: string | null) => void
@@ -39,6 +40,8 @@ export const useLayoutStore = create<LayoutState>()((set) => ({
     }),
   renameTab: (id, name) =>
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, name } : t)) })),
+  togglePinTab: (id) =>
+    set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, pinned: !t.pinned } : t)) })),
   setActiveTab: (id) => set({ activeTabId: id }),
   setColumns: (tabId, columns) =>
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, columns } : t)) })),
