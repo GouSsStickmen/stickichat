@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
-import { Account, Pane } from '../types'
+import { Account, ChatMessage, Pane } from '../types'
 import { useChatStore } from '../store/chat'
 import { useUiStore } from '../store/ui'
 import { useSettingsStore } from '../store/settings'
@@ -60,6 +60,38 @@ export default function MessageList({
   const messagesRef = useRef(messages)
   messagesRef.current = messages
 
+  // ---- stable virtual indexing (the scroll-duplication fix) ----
+  // The ring buffer trims old messages from the HEAD and history prepends to it. Without
+  // `firstItemIndex` Virtuoso sees every remaining row move to a new index: its per-index
+  // height cache goes stale, everything re-measures and re-anchors — the visible
+  // "messages duplicate / jump for a split second" while scrolling. Tracking a monotone
+  // virtual index of the first row (via `firstItemIndex`) engages Virtuoso's native
+  // shiftWith/unshiftWith handling: indices stay glued to messages, measurements stay
+  // valid, and head changes no longer disturb the viewport at all.
+  const FIRST_BASE = 1_000_000
+  const firstIndexRef = useRef(FIRST_BASE)
+  const prevMessagesRef = useRef<ChatMessage[]>([])
+  {
+    const prev = prevMessagesRef.current
+    if (prev !== messages) {
+      if (prev.length > 0 && messages.length > 0) {
+        const idxInNew = messages.findIndex((m) => m.id === prev[0].id)
+        if (idxInNew >= 0) {
+          // old head is still present, shifted right by the number of prepended rows
+          firstIndexRef.current -= idxInNew
+        } else {
+          // old head is gone (trimmed) — count how many rows were cut off the front
+          const idxInOld = prev.findIndex((m) => m.id === messages[0].id)
+          if (idxInOld >= 0) firstIndexRef.current += idxInOld
+          else firstIndexRef.current = FIRST_BASE // disjoint lists (clear) — start over
+        }
+      } else if (prev.length === 0) {
+        firstIndexRef.current = FIRST_BASE
+      }
+      prevMessagesRef.current = messages
+    }
+  }
+
   // resizing the list (closing the highlights sidebar, closing a split pane, window resize)
   // can make Virtuoso drift to the top — re-pin to the bottom if we were following it
   useEffect(() => {
@@ -67,7 +99,7 @@ export default function MessageList({
     if (!el) return
     const ro = new ResizeObserver(() => {
       if (atBottomRef.current && !scrollLocked) {
-        virtuosoRef.current?.scrollToIndex({ index: messagesRef.current.length - 1, behavior: 'auto' })
+        virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
       }
     })
     ro.observe(el)
@@ -80,7 +112,7 @@ export default function MessageList({
   useEffect(() => {
     if (!hadMessagesRef.current && messages.length > 0) {
       hadMessagesRef.current = true
-      virtuosoRef.current?.scrollToIndex({ index: messages.length - 1 })
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST' })
     }
   }, [messages.length])
 
@@ -91,7 +123,8 @@ export default function MessageList({
       if (detail.channel !== pane.channel) return
       const idx = messagesRef.current.findIndex((m) => m.id === detail.msgId)
       if (idx < 0) return
-      virtuosoRef.current?.scrollToIndex({ index: idx, align: 'center' })
+      // with firstItemIndex active, item indices are offset by it (same space as itemContent)
+      virtuosoRef.current?.scrollToIndex({ index: firstIndexRef.current + idx, align: 'center' })
       setFlashId(detail.msgId)
       window.setTimeout(() => setFlashId(null), 3200)
     }
@@ -104,7 +137,7 @@ export default function MessageList({
     const onSent = (e: Event): void => {
       const detail = (e as CustomEvent<{ channel: string }>).detail
       if (detail.channel !== pane.channel) return
-      virtuosoRef.current?.scrollToIndex({ index: messagesRef.current.length - 1, behavior: 'auto' })
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
     }
     window.addEventListener('sticki:sent', onSent)
     return () => window.removeEventListener('sticki:sent', onSent)
@@ -124,6 +157,7 @@ export default function MessageList({
         atBottomThreshold={40}
         // a closer height estimate before measurement means less scroll re-anchoring
         defaultItemHeight={34}
+        firstItemIndex={firstIndexRef.current}
         initialTopMostItemIndex={Math.max(messages.length - 1, 0)}
         computeItemKey={(_i, m) => m.id}
         itemContent={(index, msg) => (
@@ -146,7 +180,7 @@ export default function MessageList({
         <div
           className="new-msgs-chip"
           onClick={() =>
-            virtuosoRef.current?.scrollToIndex({ index: messages.length - 1, behavior: 'auto' })
+            virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
           }
         >
           ↓ {t('misc.newMessages')}
