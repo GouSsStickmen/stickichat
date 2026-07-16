@@ -148,13 +148,19 @@ export default function MessageList({
       <Virtuoso
         ref={virtuosoRef}
         data={messages}
-        // a large TOP overscan made Virtuoso measure many rows at once when scrolling up and
-        // re-anchor the scroll position — the visible "jump up then settle back". Keep the top
-        // overscan small (smoother scroll) and the bottom a bit larger for incoming messages.
-        increaseViewportBy={{ top: 120, bottom: 320 }}
+        // Scrolling up into UNMEASURED rows is where the down-then-up flick comes from:
+        // Virtuoso places them at the estimated height, measures the real one, then corrects
+        // the scroll position. A large TOP overscan makes rows render & measure ~a screen
+        // BEFORE they become visible, so the correction lands while they're still off-screen
+        // — invisible. (Safe now: with stable firstItemIndex the measurement cache survives
+        // buffer trims, which is what used to make a big overscan thrash.)
+        increaseViewportBy={{ top: 800, bottom: 320 }}
         followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? 'auto' : false)}
         atBottomStateChange={setAtBottom}
         atBottomThreshold={40}
+        // apply resize corrections synchronously instead of on the next animation frame —
+        // removes the one mis-positioned frame that reads as a micro-jump while scrolling up
+        skipAnimationFrameInResizeObserver
         // a closer height estimate before measurement means less scroll re-anchoring
         defaultItemHeight={34}
         firstItemIndex={firstIndexRef.current}
