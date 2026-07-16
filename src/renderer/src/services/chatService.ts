@@ -1091,19 +1091,25 @@ class ChatService {
     // OBS overlay: stream rendered lines to the local SSE server (main window only —
     // detached/usercard windows join channels too and would duplicate every line)
     if (!window.location.hash && useSettingsStore.getState().settings.overlayEnabled) {
-      import('../lib/overlayRender').then(async ({ renderOverlayHtml }) => {
-        // the overlay line is rendered once; resolve the 7TV cosmetic FIRST (cached after the
-        // first message per user) so the custom color/gradient is baked into the pushed HTML.
-        // Cap the wait so a slow 7TV fetch never stalls the overlay line.
-        if (useSettingsStore.getState().settings.sevenTvNickColors && msg.userId && !msg.system) {
+      import('../lib/overlayRender').then(async ({ buildOverlayLine }) => {
+        // the overlay line is built once; resolve async cosmetics FIRST (cached after the
+        // first message per user) so 7TV colors/avatars are baked into the pushed line.
+        // Cap the waits so a slow fetch never stalls the overlay.
+        const st = useSettingsStore.getState().settings
+        const waits: Promise<unknown>[] = []
+        if (st.sevenTvNickColors && msg.userId && !msg.system) {
           const { awaitSevenTvCosmetic } = await import('../lib/seventvCosmetics')
-          await Promise.race([
-            awaitSevenTvCosmetic(msg.userId),
-            new Promise((r) => setTimeout(r, 1500))
-          ])
+          waits.push(awaitSevenTvCosmetic(msg.userId))
         }
-        const html = renderOverlayHtml(msg)
-        if (html) window.sticki.overlayPush(channel, html, msg.id, msg.userId, msg.login)
+        if (st.chatOverlays.some((o) => o.avatarShow) && msg.login && !msg.system) {
+          const { awaitAvatar } = await import('../lib/twitchAvatars')
+          waits.push(awaitAvatar(msg.login))
+        }
+        if (waits.length) {
+          await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 1500))])
+        }
+        const line = buildOverlayLine(msg)
+        if (line) window.sticki.overlayPush(channel, line)
       })
     }
   }

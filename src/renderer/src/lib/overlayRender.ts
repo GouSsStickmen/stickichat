@@ -1,60 +1,17 @@
-import { ChatMessage } from '../types'
+import { ChatMessage, OverlayLineData } from '../types'
 import { tokenizeMessage, ensureReadable, fallbackColor } from './tokenize'
 import { lookupBadgeUrl, lookupCheermote, lookupEmote } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
 import { ensureSevenTvCosmetic } from './seventvCosmetics'
+import { ensureAvatar } from './twitchAvatars'
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-/**
- * Renders one chat message into the self-contained HTML line the OBS overlay shows.
- * Everything user-controlled is escaped; emote/badge URLs come from our own lookups.
- * Returns null for lines the overlay should skip.
- */
-export function renderOverlayHtml(msg: ChatMessage): string | null {
-  const s = useSettingsStore.getState().settings
-  if (msg.deleted || msg.historical || msg.groupedUnder) return null
-  if (s.mutedUsers.some((u) => u.login === msg.login && u.mode === 'hide')) return null
-  if (s.overlayHiddenUsers.includes(msg.login)) return null
-  if (s.overlayHideCmd && /^!/.test(msg.text)) return null
-  if (!s.overlayShowBits && msg.bits) return null
-  if (!s.overlayShowRedeems && msg.redeemed) return null
-
-  // system lines (raids, subs, clears…) render italic without a nick
-  if (msg.system === 'info') {
-    if (msg.redeemed && !s.overlayShowRedeems) return null
-    if (msg.modAction && !s.overlayShowModActions) return null
-    return msg.systemText ? `<span class="sys">${esc(msg.systemText)}</span>` : null
-  }
-
+/** message body → safe HTML (emotes/cheers as <img class="emote">, everything else escaped) */
+function bodyHtml(msg: ChatMessage): string {
   let out = ''
-  if (msg.system === 'usernotice' && msg.systemText) {
-    // subs / resubs / raids etc. — hideable as a group
-    if (!s.overlayShowSubs) return null
-    out += `<span class="sys">${esc(msg.systemText)}</span>`
-    if (!msg.text) return out
-    out += '<br>'
-  }
-
-  if (s.overlayBadges) {
-    for (const b of msg.badges) {
-      const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
-      if (url) out += `<img class="badge" src="${esc(url)}">`
-    }
-  }
-
-  // optional 7TV cosmetic nick color / gradient paint (same setting as the chat pane)
-  const cosmetic = s.sevenTvNickColors && msg.userId ? ensureSevenTvCosmetic(msg.userId) : undefined
-  if (cosmetic?.paint) {
-    out += `<span class="nick" style="background:${esc(cosmetic.paint)};-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent">${esc(msg.displayName)}</span>`
-  } else {
-    const color = ensureReadable(cosmetic?.color || msg.color || fallbackColor(msg.login), true)
-    out += `<span class="nick" style="color:${esc(color)}">${esc(msg.displayName)}</span>`
-  }
-  out += msg.isAction ? ' ' : ': '
-
   const tokens = tokenizeMessage(
     msg,
     lookupEmote(msg.channel),
@@ -87,4 +44,66 @@ export function renderOverlayHtml(msg: ChatMessage): string | null {
     }
   }
   return out
+}
+
+/**
+ * Builds the structured overlay line for a chat message, or null when no overlay should
+ * ever see it (deleted/historical/globally muted). Per-overlay filtering (commands, redeems,
+ * bits, subs, mod actions, per-overlay hidden users) happens on the overlay page itself via
+ * the flags carried on the line — each OBS source applies its own config.
+ */
+export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
+  const s = useSettingsStore.getState().settings
+  if (msg.deleted || msg.historical || msg.groupedUnder) return null
+  if (s.mutedUsers.some((u) => u.login === msg.login && u.mode === 'hide')) return null
+  if (s.overlayHiddenUsers.includes(msg.login)) return null
+
+  // pure system lines (raids, clears, info…) — no nick/body structure
+  if (msg.system === 'info') {
+    if (!msg.systemText) return null
+    return {
+      id: msg.id,
+      user: msg.userId,
+      login: msg.login,
+      nick: '',
+      color: '',
+      badges: [],
+      body: '',
+      sys: esc(msg.systemText),
+      kind: 'info',
+      ts: msg.timestamp,
+      redeem: !!msg.redeemed,
+      mod: !!msg.modAction
+    }
+  }
+
+  const cosmetic = s.sevenTvNickColors && msg.userId ? ensureSevenTvCosmetic(msg.userId) : undefined
+  const color = ensureReadable(cosmetic?.color || msg.color || fallbackColor(msg.login), true)
+
+  const badges: string[] = []
+  for (const b of msg.badges) {
+    const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
+    if (url) badges.push(url)
+  }
+
+  const line: OverlayLineData = {
+    id: msg.id,
+    user: msg.userId,
+    login: msg.login,
+    nick: msg.displayName,
+    color,
+    paint: cosmetic?.paint,
+    avatar: ensureAvatar(msg.login),
+    badges,
+    body: msg.text ? bodyHtml(msg) : '',
+    kind: 'msg',
+    ts: msg.timestamp,
+    redeem: !!msg.redeemed,
+    bits: !!msg.bits,
+    sub: msg.system === 'usernotice',
+    cmd: /^!/.test(msg.text)
+  }
+  if (msg.system === 'usernotice' && msg.systemText) line.sys = esc(msg.systemText)
+  else if (msg.redeemed && msg.rewardTitle) line.sys = esc(msg.rewardTitle + (msg.rewardCost ? ` · ${msg.rewardCost}` : ''))
+  return line
 }

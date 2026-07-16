@@ -19,6 +19,7 @@ import EmotePickerWindow from './components/EmotePickerWindow'
 import UserCardWindow from './components/UserCardWindow'
 import WhispersWindow from './components/WhispersWindow'
 import HighlightsWindow from './components/HighlightsWindow'
+import OverlayEditorWindow from './components/OverlayEditorWindow'
 import ChannelPrompt from './components/ChannelPrompt'
 import ReauthBanner from './components/ReauthBanner'
 import { buildChannelSeed, injectChannelSeed } from './lib/detachSeed'
@@ -55,6 +56,7 @@ type Special =
   | { kind: 'usercard'; data: UserCardWindowPayload }
   | { kind: 'whispers' }
   | { kind: 'highlights'; channel: string }
+  | { kind: 'overlayeditor'; overlayId: string }
   | null
 
 function parseHash(): Special {
@@ -67,6 +69,7 @@ function parseHash(): Special {
     if (h.startsWith('#usercard=')) return { kind: 'usercard', data: JSON.parse(decodeURIComponent(h.slice(10))) }
     if (h === '#whispers') return { kind: 'whispers' }
     if (h.startsWith('#highlights=')) return { kind: 'highlights', channel: decodeURIComponent(h.slice(12)) }
+    if (h.startsWith('#overlayeditor=')) return { kind: 'overlayeditor', overlayId: decodeURIComponent(h.slice(15)) }
   } catch {
     /* malformed hash */
   }
@@ -118,7 +121,8 @@ export default function App(): React.JSX.Element | null {
           special?.kind === 'settings' ||
           special?.kind === 'usercard' ||
           special?.kind === 'whispers' ||
-          special?.kind === 'highlights'
+          special?.kind === 'highlights' ||
+          special?.kind === 'overlayeditor'
         ) {
           // utility windows: no chat and no layout persistence, but settings changed here
           // (sounds, pins, mod buttons…) must still reach the disk
@@ -182,46 +186,18 @@ export default function App(): React.JSX.Element | null {
     if (!special) window.sticki.setAlwaysOnTop(settings.alwaysOnTop)
   }, [settings.alwaysOnTop, special])
 
-  // OBS overlay server lifecycle + LIVE style config: every profile's style is pushed to the
+  // OBS overlay server lifecycle + LIVE config: every overlay's full config is pushed to the
   // already-connected OBS sources over SSE the moment it changes (main window only)
   useEffect(() => {
     if (special) return
     const styles: Record<string, unknown> = {}
-    for (const p of settings.overlayProfiles) {
+    for (const o of settings.chatOverlays) {
       // uploaded fonts travel to the OBS page as a data URL (@font-face there)
-      const custom = settings.customFonts.find((f) => f.name === p.font)
-      styles[p.id] = {
-        size: p.fontSize,
-        font: p.font,
-        fontData: custom?.data,
-        bold: p.bold,
-        textColor: p.textColor,
-        textAlign: p.textAlign,
-        outlineWidth: p.outlineWidth,
-        outlineColor: p.outlineColor,
-        shadowBlur: p.shadowBlur,
-        shadowColor: p.shadowColor,
-        glowSize: p.glowSize,
-        glowColor: p.glowColor,
-        bgMode: p.bgMode,
-        bg: p.bgMode !== 'none' && p.bgOpacity > 0 ? hexToRgba(p.bgColor, p.bgOpacity) : '',
-        bgRadius: p.bgRadius,
-        bgShadowBlur: p.bgShadowBlur,
-        bgShadowColor: p.bgShadowColor,
-        bgImage: p.bgImage,
-        bgImageOpacity: p.bgImageOpacity ?? 1,
-        bgWidth: p.bgWidth ?? 0,
-        bgHeight: p.bgHeight ?? 0,
-        bgKeepAspect: p.bgKeepAspect ?? false,
-        hiddenUsers: p.hiddenUsers ?? [],
-        messageDir: p.messageDir ?? 'up',
-        gap: p.lineGap,
-        fade: p.fade,
-        max: p.max
-      }
+      const custom = settings.customFonts.find((f) => f.name === o.font)
+      styles[o.id] = { ...o, fontData: custom?.data }
     }
     window.sticki.overlayConfigure(settings.overlayEnabled, settings.overlayPort, styles)
-  }, [settings.overlayEnabled, settings.overlayPort, settings.overlayProfiles, settings.customFonts, special])
+  }, [settings.overlayEnabled, settings.overlayPort, settings.chatOverlays, settings.customFonts, special])
 
   useEffect(() => {
     if (!booted || !onboarded) return
@@ -230,7 +206,8 @@ export default function App(): React.JSX.Element | null {
       special?.kind === 'settings' ||
       special?.kind === 'usercard' ||
       special?.kind === 'whispers' ||
-      special?.kind === 'highlights'
+      special?.kind === 'highlights' ||
+      special?.kind === 'overlayeditor'
     )
       return
     chatService.start()
@@ -385,6 +362,10 @@ export default function App(): React.JSX.Element | null {
 
   if (special?.kind === 'highlights') {
     return <HighlightsWindow channel={special.channel} />
+  }
+
+  if (special?.kind === 'overlayeditor') {
+    return <OverlayEditorWindow overlayId={special.overlayId} />
   }
 
   if (!onboarded) {

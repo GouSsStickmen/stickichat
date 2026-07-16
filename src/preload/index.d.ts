@@ -22,7 +22,8 @@ export interface StickiApi {
   jumpToMessage(payload: string): Promise<void>
   onJumpTo(cb: (payload: string) => void): () => void
   overlayConfigure(enabled: boolean, port: number, style?: unknown): Promise<void>
-  overlayPush(channel: string, html: string, id: string, user: string, login: string): Promise<void>
+  overlayPush(channel: string, line: unknown): Promise<void>
+  openOverlayEditor(overlayId: string): Promise<void>
   overlayRestart(): Promise<void>
   overlayDelete(channel: string, del: { id?: string; user?: string; all?: boolean }): Promise<void>
   closeWindow(): Promise<void>

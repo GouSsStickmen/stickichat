@@ -237,6 +237,357 @@ export interface OverlayProfile {
   max: number
 }
 
+// ---------- OBS Overlays v2 (editor) ----------
+
+/** solid color or multi-stop gradient fill used across the overlay editor */
+export interface OverlayFill {
+  kind: 'solid' | 'gradient'
+  color: string
+  /** 0..1 */
+  opacity: number
+  color2: string
+  /** gradient angle, deg */
+  angle: number
+  /** multi-stop gradient: color + position 0..100. When present (≥2), wins over color/color2 */
+  stops?: { color: string; at: number }[]
+}
+
+/** a decorative PNG pinned to a corner/edge of each message plate or the whole chat zone */
+export interface OverlayDecor {
+  id: string
+  /** data URL */
+  image: string
+  anchor: 'tl' | 'tr' | 'bl' | 'br' | 'top' | 'bottom'
+  dx: number
+  dy: number
+  /** px width */
+  size: number
+  /** 0..1 */
+  opacity: number
+  /** render above the plate content (true) or behind it (false) */
+  above: boolean
+  scope: 'message' | 'zone'
+}
+
+/**
+ * One OBS overlay instance. `type` is future-proofing — today only 'chat' exists, later
+ * alerts/goals/etc. get their own config shapes under the same manager.
+ */
+export interface ChatOverlayConfig {
+  id: string
+  name: string
+  type: 'chat'
+
+  // ----- layout -----
+  /** list = classic rows · bubble = card per message with nick header · horizontal = one
+   *  row along the screen edge · compact = messenger style with avatar column */
+  layout: 'list' | 'bubble' | 'horizontal' | 'compact'
+  /** vertical flow: 'up' = newest at the bottom; 'down' = newest at top.
+   *  horizontal layout: 'up' = newest on the right, 'down' = newest on the left */
+  direction: 'up' | 'down'
+  align: 'left' | 'center' | 'right'
+  /** horizontal layout: stick the bar to the top or bottom of the source */
+  anchor: 'top' | 'bottom'
+  maxMessages: number
+  /** seconds before a message fades out; 0 = keep */
+  fadeAfter: number
+  /** px between messages */
+  lineGap: number
+  /** px padding around the chat zone */
+  zonePad: number
+  /** px of gradient fade-out mask at the trailing edge (old messages melt away); 0 = off */
+  edgeFade: number
+
+  // ----- entrance / exit animation -----
+  animIn: 'none' | 'fade' | 'slide' | 'pop' | 'bounce' | 'zoom' | 'flip' | 'blur' | 'elastic'
+  /** where the entrance comes FROM (slide/bounce/elastic/flip) */
+  animDir: 'left' | 'right' | 'up' | 'down'
+  animOut: 'none' | 'fade' | 'shrink'
+  animMs: number
+
+  // ----- message sound -----
+  msgSoundEnabled: boolean
+  /** uploaded sound as data URL */
+  msgSoundData?: string
+  /** 0..1 */
+  msgSoundVolume: number
+
+  // ----- 3D perspective of the whole chat zone -----
+  /** deg, rotateX (tilt back/forward) */
+  tiltX: number
+  /** deg, rotateY (turn left/right) */
+  tiltY: number
+  /** deg, flat rotation */
+  rotate: number
+  /** px perspective depth (smaller = more dramatic) */
+  perspDepth: number
+
+  // ----- text -----
+  font: string
+  fontSize: number
+  bold: boolean
+  italic: boolean
+  textTransform: 'none' | 'upper' | 'lower'
+  textColor: string
+  outlineWidth: number
+  outlineColor: string
+  shadowBlur: number
+  shadowColor: string
+  glowSize: number
+  glowColor: string
+  /** emote height in em (1 = text height) */
+  emoteScale: number
+
+  // ----- message plate -----
+  /** none · fit = plate hugs content · line = full width · panel = one backdrop under all */
+  plateMode: 'none' | 'fit' | 'line' | 'panel'
+  plateBg: OverlayFill
+  /** [tl, tr, br, bl] px */
+  plateRadius: [number, number, number, number]
+  /** rect honors plateRadius; others are clip-path presets */
+  plateShape: 'rect' | 'pill' | 'slant' | 'bubble' | 'notch'
+  plateBorderWidth: number
+  plateBorderColor: string
+  plateBorderStyle: 'solid' | 'dashed' | 'dotted' | 'double'
+  /** 0..1 border transparency */
+  plateBorderOpacity: number
+  /** px soft halo in the border color (0 = crisp border only) */
+  plateBorderBlur: number
+  /** real drop shadow: offset + blur */
+  plateShadowBlur: number
+  plateShadowColor: string
+  plateShadowX: number
+  plateShadowY: number
+  /** px colored glow around the plate, 0 = off */
+  plateGlowSize: number
+  plateGlowColor: string
+  /** px backdrop blur behind the plate (frosted glass), 0 = off */
+  plateBlur: number
+  /** px feathered (blurred) plate edges via mask, 0 = off */
+  plateEdgeBlur: number
+  plateImage?: string
+  plateImageOpacity: number
+  plateImageFit: 'cover' | 'contain' | 'stretch'
+  /** PNG whose alpha defines the plate's shape (CSS mask-image) */
+  plateMask?: string
+  /** 0 = auto */
+  plateWidth: number
+  plateHeight: number
+  platePadX: number
+  platePadY: number
+
+  // ----- nick -----
+  /** inline = before text · above = own row above text */
+  nickPos: 'inline' | 'above'
+  /** twitch = user's chat color (7TV paints ride along when enabled) */
+  nickColorMode: 'twitch' | 'fixed' | 'palette'
+  nickFixedColor: string
+  /** palette mode: a color is picked per user (stable hash) */
+  nickPalette: string[]
+  nickBold: boolean
+  nickItalic: boolean
+  /** % of fontSize */
+  nickScale: number
+  nickTransform: 'none' | 'upper' | 'lower'
+  /** own chip/plate behind the nick — works in any position */
+  nickBgEnabled: boolean
+  nickBg: OverlayFill
+  nickBgRadius: number
+  nickPadX: number
+  nickPadY: number
+  /** free nudge of the nick block, px (e.g. a cap overlapping the plate edge) */
+  nickOffsetX: number
+  nickOffsetY: number
+  /** where the nick block sits across the message width (nickPos = above) */
+  nickAlign: 'left' | 'center' | 'right'
+  /** message text alignment inside its own plate */
+  msgAlign: 'left' | 'center' | 'right'
+  // nick chip extras (mirror the plate's toolbox)
+  nickBorderWidth: number
+  nickBorderColor: string
+  nickShadowBlur: number
+  nickShadowColor: string
+  nickGlowSize: number
+  nickGlowColor: string
+  /** px backdrop blur behind the chip */
+  nickBlur: number
+  nickImage?: string
+  nickImageOpacity: number
+
+  // ----- avatar -----
+  avatarShow: boolean
+  avatarPos: 'left' | 'right'
+  avatarSize: number
+  /** 0..50 (% border-radius; 50 = circle) */
+  avatarRadius: number
+
+  // ----- badges -----
+  badgesShow: boolean
+  badgesPos: 'before' | 'after'
+  /** px height */
+  badgeSize: number
+
+  // ----- timestamp -----
+  tsShow: boolean
+  tsSeconds: boolean
+  tsColor: string
+  /** before or after the nick block */
+  tsPos: 'before' | 'after'
+
+  // ----- decor -----
+  decors: OverlayDecor[]
+
+  // ----- content -----
+  hiddenUsers: string[]
+  hideCommands: boolean
+  showRedeems: boolean
+  showBits: boolean
+  showSubs: boolean
+  showModActions: boolean
+
+  // ----- escape hatch -----
+  customCss: string
+}
+
+export const DEFAULT_FILL: OverlayFill = { kind: 'solid', color: '#000000', opacity: 0.45, color2: '#3a0ca3', angle: 135 }
+
+export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
+  type: 'chat',
+  layout: 'list',
+  direction: 'up',
+  align: 'left',
+  anchor: 'bottom',
+  maxMessages: 15,
+  fadeAfter: 0,
+  lineGap: 4,
+  zonePad: 8,
+  edgeFade: 0,
+  animIn: 'slide',
+  animDir: 'down',
+  animOut: 'fade',
+  animMs: 200,
+  msgSoundEnabled: false,
+  msgSoundVolume: 0.5,
+  tiltX: 0,
+  tiltY: 0,
+  rotate: 0,
+  perspDepth: 800,
+  font: '',
+  fontSize: 16,
+  bold: false,
+  italic: false,
+  textTransform: 'none',
+  textColor: '#ffffff',
+  outlineWidth: 2,
+  outlineColor: '#000000',
+  shadowBlur: 0,
+  shadowColor: '#000000',
+  glowSize: 0,
+  glowColor: '#a970ff',
+  emoteScale: 1.4,
+  plateMode: 'none',
+  plateBg: DEFAULT_FILL,
+  plateRadius: [8, 8, 8, 8],
+  plateShape: 'rect',
+  plateBorderWidth: 0,
+  plateBorderColor: '#ffffff',
+  plateBorderStyle: 'solid',
+  plateBorderOpacity: 1,
+  plateBorderBlur: 0,
+  plateShadowBlur: 0,
+  plateShadowColor: '#000000',
+  plateShadowX: 0,
+  plateShadowY: 2,
+  plateGlowSize: 0,
+  plateGlowColor: '#a970ff',
+  plateBlur: 0,
+  plateEdgeBlur: 0,
+  plateImageOpacity: 1,
+  plateImageFit: 'cover',
+  plateWidth: 0,
+  plateHeight: 0,
+  platePadX: 10,
+  platePadY: 4,
+  nickPos: 'inline',
+  nickColorMode: 'twitch',
+  nickFixedColor: '#a970ff',
+  nickPalette: ['#ff5c8a', '#5cb2ff', '#7cff5c', '#ffd75c', '#c95cff', '#5cffe0'],
+  nickBold: true,
+  nickItalic: false,
+  nickScale: 100,
+  nickTransform: 'none',
+  nickBgEnabled: false,
+  nickBg: { kind: 'solid', color: '#9147ff', opacity: 1, color2: '#3a0ca3', angle: 135 },
+  nickBgRadius: 8,
+  nickPadX: 8,
+  nickPadY: 1,
+  nickOffsetX: 0,
+  nickOffsetY: 0,
+  nickAlign: 'left',
+  msgAlign: 'left',
+  nickBorderWidth: 0,
+  nickBorderColor: '#ffffff',
+  nickShadowBlur: 0,
+  nickShadowColor: '#000000',
+  nickGlowSize: 0,
+  nickGlowColor: '#a970ff',
+  nickBlur: 0,
+  nickImageOpacity: 1,
+  avatarShow: false,
+  avatarPos: 'left',
+  avatarSize: 28,
+  avatarRadius: 50,
+  badgesShow: true,
+  badgesPos: 'before',
+  badgeSize: 18,
+  tsShow: false,
+  tsSeconds: false,
+  tsColor: '#b8b8c0',
+  tsPos: 'after',
+  decors: [],
+  hiddenUsers: [],
+  hideCommands: false,
+  showRedeems: true,
+  showBits: true,
+  showSubs: true,
+  showModActions: false,
+  customCss: ''
+}
+
+/**
+ * Structured chat line pushed to the overlay page — the page assembles the DOM itself
+ * according to the active ChatOverlayConfig, so layout/position changes restyle already
+ * visible messages live.
+ */
+export interface OverlayLineData {
+  id: string
+  /** twitch user id (delete-by-user on timeouts) */
+  user: string
+  login: string
+  nick: string
+  /** resolved nick color (twitch or 7TV solid) */
+  color: string
+  /** 7TV paint — CSS background value clipped to the nick text */
+  paint?: string
+  avatar?: string
+  /** badge image urls */
+  badges: string[]
+  /** message body as safe HTML (emotes/cheers as <img>) */
+  body: string
+  /** system/usernotice header text (escaped) — sub, redeem name, raid… */
+  sys?: string
+  kind: 'msg' | 'info'
+  /** epoch ms */
+  ts: number
+  // page-side per-overlay filter flags
+  redeem?: boolean
+  bits?: boolean
+  sub?: boolean
+  mod?: boolean
+  cmd?: boolean
+}
+
+/** @deprecated legacy v1 style — replaced by ChatOverlayConfig; kept until settings UI migrates */
 export const DEFAULT_OVERLAY_STYLE: Omit<OverlayProfile, 'id' | 'name'> = {
   font: '',
   fontSize: 16,
@@ -538,6 +889,10 @@ export interface Settings {
   overlayProfiles: OverlayProfile[]
   /** keep the overlay live preview pinned to the bottom of the settings while scrolling options */
   overlayPreviewPinned: boolean
+  /** OBS overlays v2 — full editor; each overlay has its own /overlay URL */
+  chatOverlays: ChatOverlayConfig[]
+  /** user-saved overlay presets (full config snapshots minus id/name/type) */
+  overlayUserPresets: { id: string; name: string; patch: Partial<ChatOverlayConfig> }[]
   /** one-time migration: mention/first-message colors converted into highlight rules */
   hlMigratedV1: boolean
   /** one-time migration: default redeem + bits highlight rules seeded */
@@ -667,6 +1022,8 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayShowModActions: false,
   overlayProfiles: [],
   overlayPreviewPinned: false,
+  chatOverlays: [],
+  overlayUserPresets: [],
   hlMigratedV1: false,
   hlMigratedV2: false
 }

@@ -1,7 +1,7 @@
 import { ipcMain, safeStorage, shell, app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
-import { overlayConfigure, overlayDelete, overlayPush, overlayRestart, OverlayDelete, OverlayStyle } from './overlayServer'
+import { overlayConfigure, overlayDelete, overlayPush, overlayRestart, OverlayDelete, OverlayStyle, OverlayLine } from './overlayServer'
 
 function rememberEnabled(): boolean {
   const cfg = readConfig() as { settings?: { rememberWindowSize?: boolean } } | null
@@ -153,6 +153,17 @@ export function registerIpc(): void {
     })
   })
 
+  // OBS overlay editor — a big window: control panels left, live preview center
+  ipcMain.handle('app:openOverlayEditor', (e, overlayId: string) => {
+    createChildWindow(`overlayeditor=${encodeURIComponent(overlayId)}`, {
+      width: 1360,
+      height: 820,
+      title: 'StickiChat — Overlay Editor',
+      stateKey: 'overlayeditor',
+      parent: BrowserWindow.fromWebContents(e.sender)
+    })
+  })
+
   // an emote picked in the standalone picker window needs to land in the main window's input
   ipcMain.handle('app:sendEmotePick', (e, payload: string) => {
     for (const w of BrowserWindow.getAllWindows()) {
@@ -221,8 +232,8 @@ export function registerIpc(): void {
       overlayConfigure(!!enabled, Math.max(1024, Math.min(65535, port || 4715)), styles)
     }
   )
-  ipcMain.handle('overlay:push', (_e, channel: string, html: string, id: string, user: string, login: string) => {
-    overlayPush(channel, html, id ?? '', user ?? '', login ?? '')
+  ipcMain.handle('overlay:push', (_e, channel: string, line: OverlayLine) => {
+    if (line && typeof line === 'object') overlayPush(channel, line)
   })
   ipcMain.handle('overlay:delete', (_e, channel: string, del: OverlayDelete) => {
     overlayDelete(channel, del ?? {})

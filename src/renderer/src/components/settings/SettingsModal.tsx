@@ -4,6 +4,7 @@ import { useAccountsStore } from '../../store/accounts'
 import { useUiStore } from '../../store/ui'
 import { useT } from '../../i18n'
 import {
+  DEFAULT_CHAT_OVERLAY,
   DEFAULT_HOTKEYS,
   DEFAULT_OVERLAY_STYLE,
   HighlightKind,
@@ -167,7 +168,7 @@ export default function SettingsModal({
 }
 
 /** color input with right-click reset, a system-wide eyedropper and a saved/recent palette */
-function ColorField({
+export function ColorField({
   value,
   defaultValue,
   onChange
@@ -830,7 +831,7 @@ function Framed({ children }: { children: React.ReactNode }): React.JSX.Element 
   )
 }
 
-function Toggle({
+export function Toggle({
   label,
   value,
   onChange,
@@ -1554,7 +1555,7 @@ const DEFAULT_FONTS = ['Inter', 'Verdana', 'Tahoma', 'Arial', 'Calibri', 'Georgi
  * fonts listed (and deletable) above the system fonts. `queryLocalFonts` is deduped by family
  * so a font with several styles shows once. Used for the UI font and each overlay profile.
  */
-function FontPicker({ value, onChange }: { value: string; onChange: (v: string) => void }): React.JSX.Element {
+export function FontPicker({ value, onChange }: { value: string; onChange: (v: string) => void }): React.JSX.Element {
   const t = useT()
   const customFonts = useSettingsStore((s) => s.settings.customFonts)
   const set = useSettingsStore((s) => s.setSettings)
@@ -1691,559 +1692,123 @@ function FontPicker({ value, onChange }: { value: string; onChange: (v: string) 
   )
 }
 
-/** live approximation of how the overlay renders with this profile */
-function OverlayPreview({ p }: { p: OverlayProfile }): React.JSX.Element {
-  const shadowParts: string[] = []
-  const w = p.outlineWidth
-  if (w > 0) {
-    for (let x = -w; x <= w; x++)
-      for (let y = -w; y <= w; y++) if (x || y) shadowParts.push(`${x}px ${y}px 0 ${p.outlineColor}`)
-  }
-  if (p.shadowBlur > 0) shadowParts.push(`0 2px ${p.shadowBlur}px ${p.shadowColor}`)
-  if (p.glowSize > 0) {
-    shadowParts.push(`0 0 ${p.glowSize}px ${p.glowColor}`, `0 0 ${p.glowSize * 2}px ${p.glowColor}`)
-  }
-  const bg = p.bgMode !== 'none' && p.bgOpacity > 0 ? hexToRgba(p.bgColor, p.bgOpacity) : ''
-  const perLine = p.bgMode === 'fit' || p.bgMode === 'line'
-  const imgOp = p.bgImageOpacity ?? 1
-  // custom image as its own layer so its opacity is independent of the plate/text
-  const imgLayer = (radius: number): React.JSX.Element | null =>
-    p.bgImage ? (
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `url('${p.bgImage}')`,
-          backgroundSize: p.bgKeepAspect ? 'contain' : 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          opacity: imgOp,
-          borderRadius: radius,
-          zIndex: 0,
-          pointerEvents: 'none'
-        }}
-      />
-    ) : null
-  const lineStyle: React.CSSProperties = {
-    position: 'relative',
-    textShadow: shadowParts.length ? shadowParts.join(', ') : undefined,
-    background: perLine && bg ? bg : undefined,
-    borderRadius: perLine ? p.bgRadius : undefined,
-    boxShadow: perLine && p.bgShadowBlur > 0 ? `0 2px ${p.bgShadowBlur}px ${p.bgShadowColor}` : undefined,
-    width: perLine && p.bgWidth > 0 ? p.bgWidth : p.bgMode === 'fit' ? 'fit-content' : undefined,
-    height: perLine && p.bgHeight > 0 ? p.bgHeight : undefined,
-    maxWidth: '100%',
-    padding: '2px 8px',
-    boxSizing: 'border-box'
-  }
-  const samples: [string, string, string][] = [
-    ['#ff69b4', 'Bobik069', 'привіт чат! 💜'],
-    ['#1e90ff', 'Bobik069', 'GG кльовий стрім'],
-    // a pangram-ish line so every letter shape is visible for judging the font
-    ['#9acd32', 'Bobik069', 'Їжте щедрі ґрона! Quick brown fox 0123']
-  ]
-  const ordered = p.messageDir === 'down' ? [...samples].reverse() : samples
-  return (
-    <div className="overlay-preview">
-      <div
-        className="overlay-preview-chat"
-        style={{
-          position: 'relative',
-          fontFamily: p.font ? `'${p.font}', 'Segoe UI', sans-serif` : undefined,
-          fontSize: p.fontSize,
-          fontWeight: p.bold ? 600 : 400,
-          color: p.textColor,
-          gap: p.lineGap,
-          textAlign: p.textAlign,
-          alignItems:
-            p.bgMode === 'fit'
-              ? p.textAlign === 'center'
-                ? 'center'
-                : p.textAlign === 'right'
-                  ? 'flex-end'
-                  : 'flex-start'
-              : 'stretch',
-          background: p.bgMode === 'panel' ? bg || undefined : undefined,
-          borderRadius: p.bgMode === 'panel' ? p.bgRadius : undefined,
-          width: p.bgMode === 'panel' && p.bgWidth > 0 ? p.bgWidth : undefined,
-          height: p.bgMode === 'panel' && p.bgHeight > 0 ? p.bgHeight : undefined,
-          boxShadow:
-            p.bgMode === 'panel' && p.bgShadowBlur > 0 ? `0 4px ${p.bgShadowBlur}px ${p.bgShadowColor}` : undefined
-        }}
-      >
-        {p.bgMode === 'panel' && imgLayer(p.bgRadius)}
-        {ordered.map(([color, nick, text], i) => (
-          <div key={i} style={lineStyle}>
-            {perLine && imgLayer(p.bgRadius)}
-            <b style={{ color, position: 'relative', zIndex: 1 }}>{nick}</b>
-            <span style={{ position: 'relative', zIndex: 1 }}>: {text}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
+/** OBS overlays v2 — the settings tab is a thin manager: server controls + overlay cards.
+ *  All styling happens in the dedicated editor window (openOverlayEditor). */
 function OverlaySection(): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
   const tabs = useLayoutStore((s) => s.tabs)
-  const toast = useUiStore.getState().toast
-  const knownChannels = [...new Set(tabs.flatMap((tab) => tab.panes.map((p) => p.channel)))]
-  const [urlChannel, setUrlChannel] = useState(knownChannels[0] ?? '')
-  const profiles = settings.overlayProfiles
-  const [activeId, setActiveId] = useState(profiles[0]?.id ?? '')
-  const active = profiles.find((p) => p.id === activeId) ?? profiles[0]
+  const [copiedId, setCopiedId] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
 
-  const update = (patch: Partial<OverlayProfile>): void => {
-    if (!active) return
-    set({ overlayProfiles: profiles.map((p) => (p.id === active.id ? { ...p, ...patch } : p)) })
-  }
+  const firstChannel = tabs.flatMap((tb) => tb.panes)[0]?.channel ?? ''
+  const urlFor = (id: string): string =>
+    `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(firstChannel || 'КАНАЛ')}&profile=${encodeURIComponent(id)}`
 
-  const addProfile = (): void => {
-    const id = nextId('ovp')
+  const addOverlay = (): void => {
+    const id = nextId('ov')
     set({
-      overlayProfiles: [
-        ...profiles,
-        { ...DEFAULT_OVERLAY_STYLE, ...(active ?? {}), id, name: `${t('overlay.profile')} ${profiles.length + 1}` }
+      chatOverlays: [
+        ...settings.chatOverlays,
+        { ...DEFAULT_CHAT_OVERLAY, id, name: `${t('oe.chatOverlay')} ${settings.chatOverlays.length + 1}` }
       ]
     })
-    setActiveId(id)
+    setPickerOpen(false)
+    window.sticki.openOverlayEditor(id)
   }
-
-  const removeProfile = (): void => {
-    if (!active || profiles.length <= 1) return
-    const rest = profiles.filter((p) => p.id !== active.id)
-    set({ overlayProfiles: rest })
-    setActiveId(rest[0].id)
-  }
-
-  const overlayUrl = (channel: string): string =>
-    `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(channel)}&profile=${encodeURIComponent(active?.id ?? '')}`
 
   return (
     <div>
       <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
         {t('overlay.hint')}
       </p>
-      <Toggle label={t('overlay.enabled')} value={settings.overlayEnabled} onChange={(v) => set({ overlayEnabled: v })} />
-      <div className="set-row">
-        <label>{t('overlay.port')}</label>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input
-            type="number"
-            min={1024}
-            max={65535}
-            style={{ width: 90 }}
-            value={settings.overlayPort}
-            onChange={(e) => set({ overlayPort: parseInt(e.target.value, 10) || 4715 })}
+      <Framed>
+        <Toggle label={t('overlay.enabled')} value={settings.overlayEnabled} onChange={(v) => set({ overlayEnabled: v })} />
+        <div className="set-row">
+          <label>{t('overlay.port')}</label>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              type="number"
+              min={1024}
+              max={65535}
+              style={{ width: 90 }}
+              value={settings.overlayPort}
+              onChange={(e) => set({ overlayPort: parseInt(e.target.value, 10) || 4715 })}
+            />
+            <button title={t('overlay.restart.hint')} onClick={() => window.sticki.overlayRestart()}>
+              ⟳ {t('overlay.restart')}
+            </button>
+          </div>
+        </div>
+        <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('overlay.hiddenUsers.hint')}>
+          <label className="has-hint">{t('overlay.hiddenUsers')}</label>
+          <textarea
+            rows={2}
+            style={{ flex: 1, resize: 'vertical' }}
+            placeholder="nightbot, streamelements…"
+            value={settings.overlayHiddenUsers.join(', ')}
+            spellCheck={false}
+            onChange={(e) =>
+              set({
+                overlayHiddenUsers: e.target.value
+                  .split(',')
+                  .map((x) => x.trim().toLowerCase().replace(/^@/, ''))
+                  .filter(Boolean)
+              })
+            }
           />
-          {/* escape hatch when OBS shows nothing (port was busy at startup etc.) */}
-          <button
-            title={t('overlay.restart.hint')}
-            onClick={() => {
-              window.sticki.overlayRestart()
-              toast(t('overlay.restarted'))
-            }}
-          >
-            ↻ {t('overlay.restart')}
-          </button>
         </div>
-      </div>
+      </Framed>
 
-      {/* URL to copy into OBS — kept at the top since it's the first thing you need */}
-      <div className="set-group-title">{t('overlay.url')}</div>
-      <div className="set-row">
-        <label>{t('pane.channelPlaceholder')}</label>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <select value={urlChannel} onChange={(e) => setUrlChannel(e.target.value)}>
-            {knownChannels.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <button
-            className="primary"
-            disabled={!urlChannel || !active}
-            onClick={() => {
-              navigator.clipboard.writeText(overlayUrl(urlChannel))
-              toast(t('overlay.copied'))
-            }}
-          >
-            📋 {t('overlay.copy')}
-          </button>
-        </div>
-      </div>
-      {urlChannel && active && (
-        <p className="hint" style={{ color: 'var(--text-faint)', userSelect: 'text', overflowWrap: 'anywhere' }}>
-          {overlayUrl(urlChannel)}
-        </p>
+      <div className="set-group-title">{t('oe.myOverlays')}</div>
+      {settings.chatOverlays.length === 0 && (
+        <p className="hint" style={{ color: 'var(--text-faint)' }}>{t('oe.empty')}</p>
       )}
-
-      {/* named profiles: same chat, different looks for different OBS sources */}
-      <div className="set-group-title">{t('overlay.profiles')}</div>
-      <div className="overlay-profile-chips">
-        {profiles.map((p) => (
-          <button
-            key={p.id}
-            className={`chip ${p.id === (active?.id ?? '') ? 'active' : ''}`}
-            onClick={() => setActiveId(p.id)}
-          >
-            {p.name}
-          </button>
-        ))}
-        <button className="ghost" title={t('overlay.addProfile')} onClick={addProfile}>
-          +
-        </button>
-      </div>
-      {active && (
-        <>
-          <div className="set-row">
-            <label>{t('overlay.profileName')}</label>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                style={{ width: 160 }}
-                value={active.name}
-                onChange={(e) => update({ name: e.target.value })}
-              />
-              <button
-                title={t('overlay.reset')}
-                onClick={() => update({ ...DEFAULT_OVERLAY_STYLE })}
-              >
-                ↺ {t('overlay.reset')}
-              </button>
-              <button
-                className="danger"
-                title={t('set.modBtn.delete')}
-                disabled={profiles.length <= 1}
-                onClick={removeProfile}
-              >
-                ✕
-              </button>
-            </div>
+      {settings.chatOverlays.map((o) => (
+        <div key={o.id} className="ov-card">
+          <div className="ov-card-main">
+            <span className="ov-type">💬 {t('oe.chatOverlay')}</span>
+            <b>{o.name}</b>
+            <span className="ov-url" title={urlFor(o.id)}>{urlFor(o.id)}</span>
           </div>
-
-          {/* when pinned, the preview is moved to a sticky footer at the end of the section
-              (a sticky element only stays visible while scrolling if it sits at the bottom of
-              the flow) — see the overlay-preview-pin block near the section's end */}
-          {!settings.overlayPreviewPinned && <OverlayPreview p={active} />}
-          <Toggle
-            label={t('overlay.pinPreview')}
-            hint={t('overlay.pinPreview.hint')}
-            value={settings.overlayPreviewPinned}
-            onChange={(v) => set({ overlayPreviewPinned: v })}
-          />
-
-          <div className="set-group-title">{t('overlay.style')}</div>
-          <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
-            {t('overlay.liveHint')}
-          </p>
-          <div className="set-row">
-            <label>{t('set.fontFamily')}</label>
-            <FontPicker value={active.font} onChange={(v) => update({ font: v })} />
-          </div>
-          <div className="set-row">
-            <label>{t('set.fontSize')}</label>
-            <input
-              type="number"
-              min={10}
-              max={48}
-              style={{ width: 70 }}
-              value={active.fontSize}
-              onChange={(e) => update({ fontSize: parseInt(e.target.value, 10) || 16 })}
-            />
-          </div>
-          <Toggle label={t('overlay.bold')} value={active.bold} onChange={(v) => update({ bold: v })} />
-          <div className="set-row">
-            <label>{t('overlay.textAlign')}</label>
-            <select value={active.textAlign} onChange={(e) => update({ textAlign: e.target.value as OverlayProfile['textAlign'] })}>
-              <option value="left">{t('overlay.align.left')}</option>
-              <option value="center">{t('overlay.align.center')}</option>
-              <option value="right">{t('overlay.align.right')}</option>
-            </select>
-          </div>
-          <div className="set-row">
-            <label>{t('overlay.textColor')}</label>
-            <ColorField value={active.textColor} defaultValue="#ffffff" onChange={(v) => update({ textColor: v })} />
-          </div>
-          <div className="set-row" title={t('overlay.outline.hint')}>
-            <label className="has-hint">{t('overlay.outline')}</label>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="number"
-                min={0}
-                max={6}
-                style={{ width: 60 }}
-                value={active.outlineWidth}
-                onChange={(e) => update({ outlineWidth: parseInt(e.target.value, 10) || 0 })}
-              />
-              <ColorField value={active.outlineColor} defaultValue="#000000" onChange={(v) => update({ outlineColor: v })} />
-            </div>
-          </div>
-          <div className="set-row">
-            <label>{t('overlay.textShadow')}</label>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="number"
-                min={0}
-                max={30}
-                style={{ width: 60 }}
-                value={active.shadowBlur}
-                onChange={(e) => update({ shadowBlur: parseInt(e.target.value, 10) || 0 })}
-              />
-              <ColorField value={active.shadowColor} defaultValue="#000000" onChange={(v) => update({ shadowColor: v })} />
-            </div>
-          </div>
-          <div className="set-row">
-            <label>{t('overlay.glow')}</label>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="number"
-                min={0}
-                max={30}
-                style={{ width: 60 }}
-                value={active.glowSize}
-                onChange={(e) => update({ glowSize: parseInt(e.target.value, 10) || 0 })}
-              />
-              <ColorField value={active.glowColor} defaultValue="#a970ff" onChange={(v) => update({ glowColor: v })} />
-            </div>
-          </div>
-
-          <div className="set-group-title">{t('overlay.bgTitle')}</div>
-          <div className="set-row" title={t('overlay.bgMode.hint')}>
-            <label className="has-hint">{t('overlay.bgMode')}</label>
-            <select value={active.bgMode} onChange={(e) => update({ bgMode: e.target.value as OverlayProfile['bgMode'] })}>
-              <option value="none">{t('overlay.bgMode.none')}</option>
-              <option value="fit">{t('overlay.bgMode.fit')}</option>
-              <option value="line">{t('overlay.bgMode.line')}</option>
-              <option value="panel">{t('overlay.bgMode.panel')}</option>
-            </select>
-          </div>
-          {active.bgMode !== 'none' && (
-            <>
-              <div className="set-row">
-                <label>{t('overlay.bg')}</label>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <ColorField value={active.bgColor} defaultValue="#000000" onChange={(v) => update({ bgColor: v })} />
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    title={`${Math.round(active.bgOpacity * 100)}%`}
-                    value={Math.round(active.bgOpacity * 100)}
-                    onChange={(e) => update({ bgOpacity: parseInt(e.target.value, 10) / 100 })}
-                  />
-                  <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>
-                    {Math.round(active.bgOpacity * 100)}%
-                  </span>
-                </div>
-              </div>
-              <div className="set-row">
-                <label>{t('overlay.bgRadius')}</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={40}
-                  style={{ width: 70 }}
-                  value={active.bgRadius}
-                  onChange={(e) => update({ bgRadius: parseInt(e.target.value, 10) || 0 })}
-                />
-              </div>
-              <div className="set-row" title={t('overlay.plateSize.hint')}>
-                <label className="has-hint">{t('overlay.plateSize')}</label>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input
-                    type="number"
-                    min={0}
-                    max={2000}
-                    style={{ width: 72 }}
-                    placeholder={t('overlay.plateSize.auto')}
-                    title={t('overlay.plateSize.width')}
-                    value={active.bgWidth || ''}
-                    onChange={(e) => update({ bgWidth: parseInt(e.target.value, 10) || 0 })}
-                  />
-                  <span style={{ color: 'var(--text-faint)' }}>×</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={2000}
-                    style={{ width: 72 }}
-                    placeholder={t('overlay.plateSize.auto')}
-                    title={t('overlay.plateSize.height')}
-                    value={active.bgHeight || ''}
-                    onChange={(e) => update({ bgHeight: parseInt(e.target.value, 10) || 0 })}
-                  />
-                  <span style={{ color: 'var(--text-muted)' }}>px</span>
-                </div>
-              </div>
-              <div className="set-row">
-                <label>{t('overlay.bgShadow')}</label>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input
-                    type="number"
-                    min={0}
-                    max={40}
-                    style={{ width: 60 }}
-                    value={active.bgShadowBlur}
-                    onChange={(e) => update({ bgShadowBlur: parseInt(e.target.value, 10) || 0 })}
-                  />
-                  <ColorField value={active.bgShadowColor} defaultValue="#000000" onChange={(v) => update({ bgShadowColor: v })} />
-                </div>
-              </div>
-              <div className="set-row">
-                <label>{t('overlay.bgImage')}</label>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <label className="ghost" style={{ cursor: 'pointer' }}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (!file || file.size > 4 * 1024 * 1024) return
-                        const reader = new FileReader()
-                        reader.onload = () => update({ bgImage: String(reader.result) })
-                        reader.readAsDataURL(file)
-                        e.target.value = ''
-                      }}
-                    />
-                    <span className="hint">📁 {t('overlay.bgImage.upload')}</span>
-                  </label>
-                  {active.bgImage && (
-                    <button className="danger" onClick={() => update({ bgImage: undefined })}>
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-              {active.bgImage && (
-                <div className="set-row" title={t('overlay.bgImageOpacity.hint')}>
-                  <label className="has-hint">{t('overlay.bgImageOpacity')}</label>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={Math.round((active.bgImageOpacity ?? 1) * 100)}
-                      onChange={(e) => update({ bgImageOpacity: parseInt(e.target.value, 10) / 100 })}
-                    />
-                    <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>
-                      {Math.round((active.bgImageOpacity ?? 1) * 100)}%
-                    </span>
-                  </div>
-                </div>
-              )}
-              {active.bgImage && (
-                <Toggle
-                  label={t('overlay.keepAspect')}
-                  hint={t('overlay.keepAspect.hint')}
-                  value={active.bgKeepAspect ?? false}
-                  onChange={(v) => update({ bgKeepAspect: v })}
-                />
-              )}
-            </>
-          )}
-
-          <div className="set-row" title={t('overlay.fade.hint')}>
-            <label className="has-hint">{t('overlay.fade')}</label>
-            <input
-              type="number"
-              min={0}
-              max={600}
-              style={{ width: 70 }}
-              value={active.fade}
-              onChange={(e) => update({ fade: parseInt(e.target.value, 10) || 0 })}
-            />
-          </div>
-          <div className="set-row">
-            <label>{t('overlay.max')}</label>
-            <input
-              type="number"
-              min={3}
-              max={50}
-              style={{ width: 70 }}
-              value={active.max}
-              onChange={(e) => update({ max: parseInt(e.target.value, 10) || 15 })}
-            />
-          </div>
-          <div className="set-row">
-            <label>{t('overlay.lineGap')}</label>
-            <input
-              type="number"
-              min={0}
-              max={30}
-              style={{ width: 70 }}
-              value={active.lineGap}
-              onChange={(e) => update({ lineGap: parseInt(e.target.value, 10) || 0 })}
-            />
-          </div>
-          <div className="set-row">
-            <label>{t('overlay.messageDir')}</label>
-            <select
-              value={active.messageDir ?? 'up'}
-              onChange={(e) => update({ messageDir: e.target.value as OverlayProfile['messageDir'] })}
+          <div className="ov-card-actions">
+            <button
+              title={t('oe.copyUrl')}
+              onClick={() => {
+                navigator.clipboard?.writeText(urlFor(o.id))
+                setCopiedId(o.id)
+                window.setTimeout(() => setCopiedId(''), 1500)
+              }}
             >
-              <option value="up">{t('overlay.messageDir.up')}</option>
-              <option value="down">{t('overlay.messageDir.down')}</option>
-            </select>
+              {copiedId === o.id ? '✔' : '📋'}
+            </button>
+            <button className="primary" onClick={() => window.sticki.openOverlayEditor(o.id)}>
+              ✏️ {t('oe.edit')}
+            </button>
+            <button
+              className="danger"
+              title={t('oe.delete')}
+              onClick={() => set({ chatOverlays: settings.chatOverlays.filter((x) => x.id !== o.id) })}
+            >
+              ✕
+            </button>
           </div>
-          <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('overlay.profileHidden.hint')}>
-            <label className="has-hint">{t('overlay.profileHidden')}</label>
-            <textarea
-              rows={2}
-              style={{ flex: 1, resize: 'vertical' }}
-              placeholder="nightbot, streamelements…"
-              value={(active.hiddenUsers ?? []).join(', ')}
-              spellCheck={false}
-              onChange={(e) =>
-                update({
-                  hiddenUsers: e.target.value
-                    .split(',')
-                    .map((x) => x.trim().toLowerCase().replace(/^@/, ''))
-                    .filter(Boolean)
-                })
-              }
-            />
-          </div>
-        </>
-      )}
+        </div>
+      ))}
 
-      <div className="set-group-title">{t('overlay.content')}</div>
-      <Toggle label={t('overlay.badges')} value={settings.overlayBadges} onChange={(v) => set({ overlayBadges: v })} />
-      <Toggle label={t('overlay.showRedeems')} value={settings.overlayShowRedeems} onChange={(v) => set({ overlayShowRedeems: v })} />
-      <Toggle label={t('overlay.showBits')} value={settings.overlayShowBits} onChange={(v) => set({ overlayShowBits: v })} />
-      <Toggle label={t('overlay.showSubs')} value={settings.overlayShowSubs} onChange={(v) => set({ overlayShowSubs: v })} />
-      <Toggle
-        label={t('overlay.showModActions')}
-        hint={t('overlay.showModActions.hint')}
-        value={settings.overlayShowModActions}
-        onChange={(v) => set({ overlayShowModActions: v })}
-      />
-      <Toggle label={t('overlay.hideCmd')} value={settings.overlayHideCmd} onChange={(v) => set({ overlayHideCmd: v })} />
-      <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('overlay.hiddenUsers.hint')}>
-        <label className="has-hint">{t('overlay.hiddenUsers')}</label>
-        <textarea
-          rows={3}
-          style={{ flex: 1, resize: 'vertical' }}
-          placeholder="nightbot, streamelements…"
-          value={settings.overlayHiddenUsers.join(', ')}
-          spellCheck={false}
-          onChange={(e) =>
-            set({
-              overlayHiddenUsers: e.target.value
-                .split(',')
-                .map((x) => x.trim().toLowerCase().replace(/^@/, ''))
-                .filter(Boolean)
-            })
-          }
-        />
-      </div>
-
-      {settings.overlayPreviewPinned && active && (
-        <div className="overlay-preview-pin">
-          <OverlayPreview p={active} />
+      {!pickerOpen ? (
+        <button className="primary" style={{ marginTop: 10 }} onClick={() => setPickerOpen(true)}>
+          + {t('oe.add')}
+        </button>
+      ) : (
+        <div className="ov-picker">
+          <p className="hint" style={{ marginTop: 0 }}>{t('oe.pickType')}</p>
+          <button className="ov-type-btn" onClick={addOverlay}>
+            💬 {t('oe.chatOverlay')}
+            <span className="hint">{t('oe.chatOverlay.desc')}</span>
+          </button>
+          <button className="ghost" onClick={() => setPickerOpen(false)}>{t('oe.cancel')}</button>
         </div>
       )}
     </div>
