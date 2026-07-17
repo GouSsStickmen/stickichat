@@ -297,8 +297,10 @@ function AccountsSection(): React.JSX.Element {
   const accounts = useAccountsStore((s) => s.accounts)
   return (
     <div>
-      {accounts.map((a) => (
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>{t('set.accounts.orderHint')}</p>
+      {accounts.map((a, i) => (
         <div key={a.id} className="account-row">
+          {i === 0 && <span className="ov-type" title={t('set.accounts.main')}>★</span>}
           {a.avatarUrl && <img src={a.avatarUrl} alt="" />}
           <div className="grow">
             <b>{a.displayName}</b>
@@ -306,6 +308,20 @@ function AccountsSection(): React.JSX.Element {
               {a.login} · mod in {a.moderatedChannelIds.length} channels
             </span>
           </div>
+          <button
+            title={t('set.accounts.up')}
+            disabled={i === 0}
+            onClick={() => useAccountsStore.getState().moveAccount(a.id, -1)}
+          >
+            ↑
+          </button>
+          <button
+            title={t('set.accounts.down')}
+            disabled={i === accounts.length - 1}
+            onClick={() => useAccountsStore.getState().moveAccount(a.id, 1)}
+          >
+            ↓
+          </button>
           <button onClick={() => refreshModeratedChannels(a.id)}>⟳</button>
           <button className="danger" onClick={() => removeAccountEverywhere(a.id)}>
             {t('set.accounts.remove')}

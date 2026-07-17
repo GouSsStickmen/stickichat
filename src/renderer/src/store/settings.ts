@@ -32,7 +32,8 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   highlightRules: [],
   favoriteEmotes: [],
   setClientId: (clientId) => set({ clientId }),
-  setSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+  setSettings: (patch) =>
+    set((s) => ({ settings: { ...s.settings, ...patch, _rev: (s.settings._rev ?? 0) + 1 } })),
   setModButtons: (modButtons) => set({ modButtons }),
   setRaidFavorites: (raidFavorites) => set({ raidFavorites }),
   setHighlightRules: (highlightRules) => set({ highlightRules }),

@@ -55,6 +55,9 @@ function bodyHtml(msg: ChatMessage): string {
 export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
   const s = useSettingsStore.getState().settings
   if (msg.deleted || msg.historical || msg.groupedUnder) return null
+  // local client feedback ("Unrecognized command", mute notices…) — viewers must never
+  // see these on the stream overlay
+  if (msg.system === 'notice') return null
   if (s.mutedUsers.some((u) => u.login === msg.login && u.mode === 'hide')) return null
   if (s.overlayHiddenUsers.includes(msg.login)) return null
 

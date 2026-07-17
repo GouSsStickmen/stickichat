@@ -2000,19 +2000,15 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 /* ---------- number inputs (app-wide) ----------
-   The native spinner arrows ate half the field: two-digit values were clipped and the tiny
-   arrows were fiddly/laggy. Hide the spinners — type the value or use the mouse wheel. */
+   Native up/down arrows kept (always visible), but the field is wide enough that
+   multi-digit values are never clipped by them. */
 input[type='number'] {
-  -moz-appearance: textfield;
-  appearance: textfield;
-  min-width: 44px;
-  text-align: center;
+  min-width: 58px;
   font-variant-numeric: tabular-nums;
 }
-input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+  opacity: 1;
+  margin-left: 2px;
 }
 
 /* ---------- OBS overlay manager (settings tab) ---------- */

@@ -277,13 +277,16 @@ export interface OverlayTrigger {
   word: string
   /** data URL of the image/GIF */
   image: string
+  /** screen = fixed spot on the overlay; message = right next to the triggering message's
+   *  plate (tracks its width, scrolls away with it) */
+  attach?: 'screen' | 'message'
   pos: 'tl' | 'top' | 'tr' | 'left' | 'right' | 'bl' | 'bottom' | 'br'
   dx: number
   dy: number
   /** px width */
   size: number
   anim: 'pop' | 'bounce' | 'fade' | 'slide' | 'wiggle'
-  /** seconds on screen */
+  /** seconds on screen; 0 = never disappears */
   durationS: number
 }
 
@@ -946,6 +949,9 @@ export interface Settings {
   chatOverlays: ChatOverlayConfig[]
   /** user-saved overlay presets (full config snapshots minus id/name/type) */
   overlayUserPresets: { id: string; name: string; patch: Partial<ChatOverlayConfig> }[]
+  /** monotonically increasing revision, bumped on every settings change — save paths use it
+   *  so a window with STALE settings can never clobber a newer save from another window */
+  _rev?: number
   /** one-time migration: mention/first-message colors converted into highlight rules */
   hlMigratedV1: boolean
   /** one-time migration: default redeem + bits highlight rules seeded */

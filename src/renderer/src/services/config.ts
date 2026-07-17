@@ -156,9 +156,24 @@ let saveTimer: number | null = null
 function scheduleSave(): void {
   if (applyingRemote) return
   if (saveTimer !== null) return
-  saveTimer = window.setTimeout(() => {
+  saveTimer = window.setTimeout(async () => {
     saveTimer = null
-    window.sticki.setConfig(snapshot())
+    const blob = snapshot()
+    // stale-settings guard: another window (e.g. the overlay editor) may have just saved a
+    // NEWER settings revision — never clobber it with our older copy; adopt it instead
+    const raw = ((await window.sticki.getConfig()) as Partial<AppConfig> | null) ?? {}
+    const diskRev = raw.settings?._rev ?? 0
+    const memRev = blob.settings._rev ?? 0
+    if (diskRev > memRev && raw.settings) {
+      blob.settings = raw.settings
+      applyingRemote = true
+      try {
+        useSettingsStore.getState().setSettings(raw.settings)
+      } finally {
+        applyingRemote = false
+      }
+    }
+    window.sticki.setConfig(blob)
     window.sticki.notifyConfigChanged()
   }, 400)
 }
@@ -179,10 +194,12 @@ function scheduleSettingsSave(): void {
     // merge into the stored config: utility windows must never write their (empty) layout
     const raw = ((await window.sticki.getConfig()) as Partial<AppConfig> | null) ?? {}
     const s = useSettingsStore.getState()
+    // stale-settings guard (same as the main window's save)
+    const settings = (raw.settings?._rev ?? 0) > (s.settings._rev ?? 0) && raw.settings ? raw.settings : s.settings
     await window.sticki.setConfig({
       ...raw,
       clientId: s.clientId,
-      settings: s.settings,
+      settings,
       modButtons: s.modButtons,
       raidFavorites: s.raidFavorites,
       highlightRules: s.highlightRules,

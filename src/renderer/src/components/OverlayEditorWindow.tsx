@@ -1088,6 +1088,14 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                     style={{ width: 110 }}
                     onChange={(e) => updTrigger(tr.id, { word: e.target.value })}
                   />
+                  <select
+                    title={t('oe.triggers.attach')}
+                    value={tr.attach ?? 'screen'}
+                    onChange={(e) => updTrigger(tr.id, { attach: e.target.value as OverlayTrigger['attach'] })}
+                  >
+                    <option value="screen">{t('oe.triggers.attach.screen')}</option>
+                    <option value="message">{t('oe.triggers.attach.message')}</option>
+                  </select>
                   <select value={tr.pos} onChange={(e) => updTrigger(tr.id, { pos: e.target.value as OverlayTrigger['pos'] })}>
                     <option value="tl">↖</option>
                     <option value="top">↑</option>
@@ -1108,8 +1116,8 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                     <option value="slide">Slide</option>
                     <option value="wiggle">Wiggle</option>
                   </select>
-                  <Num v={tr.durationS} on={(n) => updTrigger(tr.id, { durationS: n })} min={1} max={60} w={50} def={5} />
-                  <span className="hint">{t('oe.triggers.sec')}</span>
+                  <Num v={tr.durationS} on={(n) => updTrigger(tr.id, { durationS: n })} min={0} max={600} w={50} def={5} />
+                  <span className="hint" title={t('oe.triggers.forever')}>{t('oe.triggers.sec')}</span>
                   <button className="danger" onClick={() => update({ triggers: ov.triggers.filter((x) => x.id !== tr.id) })}>✕</button>
                 </div>
               </div>

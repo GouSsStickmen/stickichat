@@ -300,12 +300,15 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const send = async (): Promise<void> => {
     const msg = text.trim()
     if (!msg || !account) return
+    // a SPACE typed before the "/" opts out of command parsing: " /привіт" is sent to chat
+    // as a plain message instead of erroring as an unknown command
+    const literalSlash = text.startsWith(' ') && msg.startsWith('/')
     setText('')
     if (taRef.current) taRef.current.style.height = 'auto'
     pushHistory(msg)
     setHistIdx(-1)
     try {
-      if (msg.startsWith('/')) {
+      if (msg.startsWith('/') && !literalSlash) {
         await runSlashCommand(msg, {
           account,
           channel: pane.channel,

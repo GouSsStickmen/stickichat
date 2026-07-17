@@ -943,22 +943,38 @@ const OVERLAY_HTML = `<!doctype html>
       var tl = String(d.text).toLowerCase()
       for (var ti = 0; ti < cfg.triggers.length; ti++) {
         var tg = cfg.triggers[ti]
-        if (tg.word && tg.image && tl.indexOf(String(tg.word).toLowerCase()) !== -1) spawnTrigger(tg)
+        if (tg.word && tg.image && tl.indexOf(String(tg.word).toLowerCase()) !== -1) {
+          spawnTrigger(tg, el.querySelector(':scope > .cwrap'))
+        }
       }
     }
   }
 
   var fxBox = document.getElementById('fx')
   var activeTriggers = {}
-  function spawnTrigger(tg) {
-    if (activeTriggers[tg.id]) return // one instance of a trigger at a time
-    activeTriggers[tg.id] = true
+  function spawnTrigger(tg, wrap) {
+    var onMessage = tg.attach === 'message' && wrap
+    if (!onMessage) {
+      if (activeTriggers[tg.id]) return // one instance of a screen trigger at a time
+      activeTriggers[tg.id] = true
+    }
     var box = document.createElement('div')
     box.className = 'tgi'
     box.style.width = (tg.size || 96) + 'px'
     var dx = (tg.dx || 0) + 'px', dy = (tg.dy || 0) + 'px'
     var p = tg.pos || 'br'
-    if (p === 'tl') { box.style.left = dx; box.style.top = dy }
+    if (onMessage) {
+      // pinned NEXT TO the triggering message: tracks the plate's actual width and
+      // scrolls/disappears together with it
+      if (p === 'tl' || p === 'left' || p === 'bl') {
+        box.style.right = 'calc(100% + 6px + ' + dx + ')'
+      } else {
+        box.style.left = 'calc(100% + 6px + ' + dx + ')'
+      }
+      box.style.top = 'calc(50% + ' + dy + ')'
+      box.style.transform = 'translateY(-50%)'
+      box.style.zIndex = '5'
+    } else if (p === 'tl') { box.style.left = dx; box.style.top = dy }
     else if (p === 'tr') { box.style.right = dx; box.style.top = dy }
     else if (p === 'bl') { box.style.left = dx; box.style.bottom = dy }
     else if (p === 'br') { box.style.right = dx; box.style.bottom = dy }
@@ -975,15 +991,18 @@ const OVERLAY_HTML = `<!doctype html>
     img.style.animation = 'tg-bob 2.2s ease-in-out 0.6s infinite'
     box.style.animation = 'tg-' + (an === 'wiggle' ? 'wiggle-in' : an) + ' 0.45s ease both'
     box.appendChild(img)
-    fxBox.appendChild(box)
-    var life = Math.max(1, tg.durationS || 5) * 1000
-    setTimeout(function () {
-      box.classList.add('leaving')
+    ;(onMessage ? wrap : fxBox).appendChild(box)
+    // duration 0 = the reaction never disappears (message-attached ones leave with the line)
+    var life = (tg.durationS == null ? 5 : tg.durationS) * 1000
+    if (life > 0) {
       setTimeout(function () {
-        box.remove()
-        delete activeTriggers[tg.id]
-      }, 450)
-    }, life)
+        box.classList.add('leaving')
+        setTimeout(function () {
+          box.remove()
+          if (!onMessage) delete activeTriggers[tg.id]
+        }, 450)
+      }, life)
+    }
   }
 
   // ---------- config application ----------
