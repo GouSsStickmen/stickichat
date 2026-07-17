@@ -196,8 +196,17 @@ function scheduleSettingsSave(): void {
     const s = useSettingsStore.getState()
     // stale-settings guard (same as the main window's save)
     const settings = (raw.settings?._rev ?? 0) > (s.settings._rev ?? 0) && raw.settings ? raw.settings : s.settings
+    // account PRIORITY set in this window must reach the disk: keep the stored account
+    // objects (tokens!) but reorder them to match the store
+    const order = useAccountsStore.getState().accounts.map((a) => a.id)
+    const accPos = (id: string): number => {
+      const i = order.indexOf(id)
+      return i === -1 ? 1e9 : i
+    }
+    const accounts = [...(raw.accounts ?? [])].sort((a, b) => accPos(a.id) - accPos(b.id))
     await window.sticki.setConfig({
       ...raw,
+      accounts,
       clientId: s.clientId,
       settings,
       modButtons: s.modButtons,
@@ -215,6 +224,8 @@ function scheduleSettingsSave(): void {
  */
 export function startSettingsPersistence(): void {
   useSettingsStore.subscribe(scheduleSettingsSave)
+  // account order changes (priority ↑/↓ in the standalone settings window) must persist too
+  useAccountsStore.subscribe(scheduleSettingsSave)
 }
 
 /**
@@ -307,6 +318,8 @@ export function startConfigSync(): () => void {
             accountsAdded = true
           }
         }
+        // apply the saved priority ORDER (first = main account)
+        useAccountsStore.getState().applyOrder((cfg.accounts ?? []).map((a) => a.id))
         // reconcile removals: an account removed in another window must disappear here too
         const cfgIds = new Set((cfg.accounts ?? []).map((a) => a.id))
         const stale = useAccountsStore.getState().accounts.filter((a) => !cfgIds.has(a.id))

@@ -57,7 +57,7 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
   if (msg.deleted || msg.historical || msg.groupedUnder) return null
   // local client feedback ("Unrecognized command", mute notices…) — viewers must never
   // see these on the stream overlay
-  if (msg.system === 'notice') return null
+  if (msg.system === 'notice' || msg.clientNotice) return null
   if (s.mutedUsers.some((u) => u.login === msg.login && u.mode === 'hide')) return null
   if (s.overlayHiddenUsers.includes(msg.login)) return null
 

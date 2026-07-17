@@ -49,6 +49,9 @@ export interface ChatMessage {
   /** system messages: sub notices, raids, timeouts, connection info */
   system?: 'notice' | 'usernotice' | 'info'
   systemText?: string
+  /** local client feedback from Twitch (NOTICE: "Unrecognized command"…) — shown in chat,
+   *  never on the stream overlay */
+  clientNotice?: boolean
   /** twitch announcement color (primary/blue/green/orange/purple), when this is an /announce */
   announceColor?: string
   deleted?: boolean
@@ -298,6 +301,8 @@ export interface ChatOverlayConfig {
   id: string
   name: string
   type: 'chat'
+  /** channel baked into the OBS URL; empty/undefined = first open chat */
+  channel?: string
 
   // ----- layout -----
   /** list = classic rows · bubble = card per message with nick header · horizontal = one
@@ -314,6 +319,10 @@ export interface ChatOverlayConfig {
   fadeAfter: number
   /** px between messages */
   lineGap: number
+  /** credits-style push: new messages smoothly slide the chat instead of jumping */
+  smoothScroll: boolean
+  /** ms of the smooth push */
+  smoothScrollMs: number
   /** px padding around the chat zone */
   zonePad: number
   /** px of gradient fade-out mask at the trailing edge (old messages melt away); 0 = off */
@@ -502,6 +511,8 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   maxMessages: 15,
   fadeAfter: 0,
   lineGap: 4,
+  smoothScroll: false,
+  smoothScrollMs: 300,
   zonePad: 8,
   edgeFade: 0,
   animIn: 'slide',
@@ -858,6 +869,8 @@ export interface Settings {
   /** background highlight toggles (sounds/detection stay independent) */
   showMentionBg: boolean
   showFirstMsgBg: boolean
+  /** inline preview cards for links in chat (Twitch clips get title + thumbnail) */
+  linkPreviews: boolean
   /** which tab the highlight sidebar opens on */
   highlightSidebarDefault: 'highlights' | 'mentions' | 'redeems'
   /** extra px of line-height inside messages (emote rows overlapping) */
@@ -1032,6 +1045,7 @@ export const DEFAULT_SETTINGS: Settings = {
   usercardFontSize: 14,
   showMentionBg: true,
   showFirstMsgBg: true,
+  linkPreviews: true,
   highlightSidebarDefault: 'highlights',
   lineSpacing: 0,
   rememberWindowSize: true,

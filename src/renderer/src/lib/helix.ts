@@ -481,6 +481,23 @@ interface HelixCheermote {
 }
 
 /** channel + global cheermotes (bit icons). broadcasterId gives channel-specific ones too. */
+export interface HelixClip {
+  id: string
+  title: string
+  thumbnail_url: string
+  broadcaster_name: string
+  creator_name: string
+  view_count: number
+}
+
+/** clip metadata for inline link previews */
+export async function getClips(account: Account, ids: string[]): Promise<HelixClip[]> {
+  if (!ids.length) return []
+  const res = await helixRequest(account, 'GET', '/clips', { id: ids })
+  if (!res.ok) return []
+  return (res.json as { data?: HelixClip[] })?.data ?? []
+}
+
 export async function getCheermotes(account: Account, broadcasterId: string): Promise<Cheermote[]> {
   const res = await helixRequest(account, 'GET', '/bits/cheermotes', { broadcaster_id: broadcasterId })
   if (!res.ok) return []

@@ -316,7 +316,10 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
           toast: useUiStore.getState().toast
         })
       } else {
-        await chatService.sendMessage(account, pane.channel, msg, replyTo?.msgId)
+        // literal slash: KEEP the leading space in the outgoing message — Twitch's server
+        // treats any message starting with "/" as a command ("Unrecognized command"), but
+        // with a leading space it posts as plain text
+        await chatService.sendMessage(account, pane.channel, literalSlash ? ` ${msg}` : msg, replyTo?.msgId)
         onCancelReply()
       }
     } catch (e) {

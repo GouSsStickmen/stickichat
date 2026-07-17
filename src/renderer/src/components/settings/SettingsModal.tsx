@@ -4,6 +4,7 @@ import { useAccountsStore } from '../../store/accounts'
 import { useUiStore } from '../../store/ui'
 import { useT } from '../../i18n'
 import {
+  ChatOverlayConfig,
   DEFAULT_CHAT_OVERLAY,
   DEFAULT_HOTKEYS,
   DEFAULT_OVERLAY_STYLE,
@@ -167,7 +168,44 @@ export default function SettingsModal({
   )
 }
 
-/** color input with right-click reset, a system-wide eyedropper and a saved/recent palette */
+/** hex → HSV (h 0–360, s/v 0–1) */
+function hexToHsv(hex: string): { h: number; s: number; v: number } {
+  const m = /^#?([0-9a-f]{6})/i.exec(hex)
+  const n = m ? parseInt(m[1], 16) : 0
+  const r = ((n >> 16) & 255) / 255
+  const g = ((n >> 8) & 255) / 255
+  const b = (n & 255) / 255
+  const max = Math.max(r, g, b)
+  const d = max - Math.min(r, g, b)
+  let h = 0
+  if (d) {
+    if (max === r) h = ((g - b) / d + 6) % 6
+    else if (max === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+    h *= 60
+  }
+  return { h, s: max ? d / max : 0, v: max }
+}
+
+function hsvToHex(h: number, s: number, v: number): string {
+  const f = (nn: number): number => {
+    const k = (nn + h / 60) % 6
+    return v - v * s * Math.max(0, Math.min(k, 4 - k, 1))
+  }
+  const to = (x: number): string =>
+    Math.round(x * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${to(f(5))}${to(f(3))}${to(f(1))}`
+}
+
+const EyedropperIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M20.71 3.29a3.08 3.08 0 0 0-4.35 0l-2.45 2.45-1.06-1.06-1.42 1.41 1.07 1.07-8.61 8.61a2 2 0 0 0-.54 1.02l-.63 3.22a1 1 0 0 0 1.17 1.17l3.22-.63c.39-.08.74-.26 1.02-.54l8.61-8.61 1.07 1.07 1.41-1.42-1.06-1.06 2.45-2.45a3.08 3.08 0 0 0 0-4.35zM6.06 17.94l7.87-7.87 1.06 1.06-7.87 7.87-1.33.26.27-1.32z" />
+  </svg>
+)
+
+/** custom color picker: own palette popup (no built-in page eyedropper), SCREEN-wide eyedropper, saved/recent swatches */
 export function ColorField({
   value,
   defaultValue,
@@ -182,7 +220,18 @@ export function ColorField({
   const savedColors = useSettingsStore((s) => s.settings.savedColors)
   const recentColors = useSettingsStore((s) => s.settings.recentColors)
   const [palOpen, setPalOpen] = useState(false)
+  const [hsv, setHsv] = useState(() => hexToHsv(value))
+  const [hexBuf, setHexBuf] = useState(value)
   const rootRef = useRef<HTMLSpanElement>(null)
+  const svRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false)
+
+  // adopt external changes (reset, palette pick in another field…) unless the user is mid-drag
+  useEffect(() => {
+    if (draggingRef.current) return
+    setHexBuf(value)
+    setHsv((p) => (hsvToHex(p.h, p.s, p.v).toLowerCase() === value.toLowerCase() ? p : hexToHsv(value)))
+  }, [value])
 
   useEffect(() => {
     if (!palOpen) return
@@ -202,14 +251,25 @@ export function ColorField({
     commitRecent(v)
   }
 
+  const pickSv = (e: { clientX: number; clientY: number }): void => {
+    const r = svRef.current?.getBoundingClientRect()
+    if (!r) return
+    const s = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
+    const v = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
+    setHsv((p) => {
+      const n = { ...p, s, v }
+      onChange(hsvToHex(n.h, n.s, n.v))
+      return n
+    })
+  }
+
   return (
     <span ref={rootRef} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', position: 'relative' }}>
-      <input
-        type="color"
-        value={value}
-        title={t('set.colorReset')}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={() => commitRecent(value)}
+      <button
+        className="color-swatch-main"
+        style={{ background: value }}
+        title={`${value} · ${t('set.colorReset')}`}
+        onClick={() => setPalOpen((v) => !v)}
         onContextMenu={(e) => {
           e.preventDefault()
           onChange(defaultValue)
@@ -234,17 +294,65 @@ export function ColorField({
           }
         }}
       >
-        💧
-      </button>
-      <button
-        className={`ghost ${palOpen ? 'active' : ''}`}
-        title={`${t('color.saved')} · ${t('color.recent')}`}
-        onClick={() => setPalOpen((v) => !v)}
-      >
-        🎨
+        {EyedropperIcon}
       </button>
       {palOpen && (
         <div className="color-pal">
+          <div
+            ref={svRef}
+            className="color-sv"
+            style={{
+              background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${hsv.h}, 100%, 50%))`
+            }}
+            onPointerDown={(e) => {
+              draggingRef.current = true
+              ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+              pickSv(e)
+            }}
+            onPointerMove={(e) => {
+              if (draggingRef.current) pickSv(e)
+            }}
+            onPointerUp={() => {
+              draggingRef.current = false
+              commitRecent(hsvToHex(hsv.h, hsv.s, hsv.v))
+            }}
+          >
+            <div
+              className="color-sv-dot"
+              style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: value }}
+            />
+          </div>
+          <input
+            className="color-hue"
+            type="range"
+            min={0}
+            max={360}
+            value={Math.round(hsv.h)}
+            onChange={(e) => {
+              const h = Number(e.target.value)
+              setHsv((p) => {
+                const n = { ...p, h }
+                onChange(hsvToHex(n.h, n.s, n.v))
+                return n
+              })
+            }}
+            onMouseUp={() => commitRecent(hsvToHex(hsv.h, hsv.s, hsv.v))}
+          />
+          <input
+            className="color-hex"
+            type="text"
+            value={hexBuf}
+            spellCheck={false}
+            onChange={(e) => {
+              const v = e.target.value
+              setHexBuf(v)
+              if (/^#[0-9a-f]{6}$/i.test(v)) onChange(v)
+            }}
+            onBlur={() => {
+              setHexBuf(value)
+              commitRecent(value)
+            }}
+          />
           <div className="color-pal-title">{t('color.saved')}</div>
           <div className="color-pal-row">
             {savedColors.map((c) => (
@@ -456,6 +564,7 @@ function ChatSection(): React.JSX.Element {
       <Toggle label={t('set.timestampSeconds')} value={settings.timestampSeconds} onChange={(v) => set({ timestampSeconds: v })} />
       <Toggle label={t('set.altBg')} hint={t('hint.altBg')} value={settings.alternatingBackground} onChange={(v) => set({ alternatingBackground: v })} />
       <Toggle label={t('set.streamInfo')} hint={t('hint.streamInfo')} value={settings.showStreamInfo} onChange={(v) => set({ showStreamInfo: v })} />
+      <Toggle label={t('set.linkPreviews')} hint={t('hint.linkPreviews')} value={settings.linkPreviews} onChange={(v) => set({ linkPreviews: v })} />
       <Toggle label={t('set.showBits')} hint={t('hint.showBits')} value={settings.showBits} onChange={(v) => set({ showBits: v })} />
       <Toggle label={t('set.showRedeems')} hint={t('hint.showRedeems')} value={settings.showRedeems} onChange={(v) => set({ showRedeems: v })} />
       <Toggle label={t('set.history')} hint={t('hint.history')} value={settings.loadHistory} onChange={(v) => set({ loadHistory: v })} />
@@ -1719,8 +1828,11 @@ function OverlaySection(): React.JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const firstChannel = tabs.flatMap((tb) => tb.panes)[0]?.channel ?? ''
-  const urlFor = (id: string): string =>
-    `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(firstChannel || 'КАНАЛ')}&profile=${encodeURIComponent(id)}`
+  const openChannels = [...new Set(tabs.flatMap((tb) => tb.panes).map((pn) => pn.channel).filter(Boolean))]
+  const urlFor = (o: ChatOverlayConfig): string =>
+    `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(o.channel || firstChannel || 'КАНАЛ')}&profile=${encodeURIComponent(o.id)}`
+  const patchOverlay = (id: string, patch: Partial<ChatOverlayConfig>): void =>
+    set({ chatOverlays: useSettingsStore.getState().settings.chatOverlays.map((o) => (o.id === id ? { ...o, ...patch } : o)) })
 
   const addOverlay = (): void => {
     const id = nextId('ov')
@@ -1786,13 +1898,27 @@ function OverlaySection(): React.JSX.Element {
           <div className="ov-card-main">
             <span className="ov-type">💬 {t('oe.chatOverlay')}</span>
             <b>{o.name}</b>
-            <span className="ov-url" title={urlFor(o.id)}>{urlFor(o.id)}</span>
+            <select
+              className="ov-chan"
+              title={t('oe.channel')}
+              value={o.channel ?? ''}
+              onChange={(e) => patchOverlay(o.id, { channel: e.target.value })}
+            >
+              <option value="">{t('pane.auto')}</option>
+              {o.channel && !openChannels.includes(o.channel) && <option value={o.channel}>{o.channel}</option>}
+              {openChannels.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <span className="ov-url" title={urlFor(o)}>{urlFor(o)}</span>
           </div>
           <div className="ov-card-actions">
             <button
               title={t('oe.copyUrl')}
               onClick={() => {
-                navigator.clipboard?.writeText(urlFor(o.id))
+                navigator.clipboard?.writeText(urlFor(o))
                 setCopiedId(o.id)
                 window.setTimeout(() => setCopiedId(''), 1500)
               }}

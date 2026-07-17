@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { getWatchStreak } from '../lib/watchStreaks'
 import { useUiStore, UserCardTarget } from '../store/ui'
 import { useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
@@ -193,6 +194,10 @@ export default function UserCard({
             </div>
           )}
           <div className="uc-sub">
+            {(() => {
+              const streak = getWatchStreak(target.channel, target.login)
+              return streak !== null ? <span>{`🔥 ${t('user.watchStreak', { n: String(streak) })} · `}</span> : null
+            })()}
             {isMod && followedAt !== undefined && (
               <span>
                 {followedAt ? `👣 ${t('user.followedSince')} ${new Date(followedAt).toLocaleDateString()}` : `👣 ${t('user.notFollowing')}`}

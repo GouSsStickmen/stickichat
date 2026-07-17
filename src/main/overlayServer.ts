@@ -930,6 +930,26 @@ const OVERLAY_HTML = `<!doctype html>
     while (zone.children.length > cfg.maxMessages) {
       zone.removeChild(cfg.direction === 'down' ? zone.lastChild : zone.firstChild)
     }
+    // credits-style smooth push: the new line grows from 0 height, so older lines glide
+    // instead of jumping by a full row (vertical layouts only)
+    if (!restyling && cfg.smoothScroll && cfg.layout !== 'horizontal') {
+      var hh = el.offsetHeight
+      if (hh > 0) {
+        var sms = cfg.smoothScrollMs || 300
+        var mProp = cfg.direction === 'down' ? 'marginBottom' : 'marginTop'
+        el.style.height = '0px'
+        el.style[mProp] = -(cfg.lineGap || 0) + 'px'
+        void el.offsetHeight
+        el.style.transition = 'height ' + sms + 'ms ease-out, margin ' + sms + 'ms ease-out'
+        el.style.height = hh + 'px'
+        el.style[mProp] = '0px'
+        setTimeout(function () {
+          el.style.transition = ''
+          el.style.height = ''
+          el.style[mProp] = ''
+        }, sms + 60)
+      }
+    }
     // per-message sound (never during a cfg restyle rebuild)
     if (!restyling && cfg.msgSoundEnabled && cfg.msgSoundData && d.kind === 'msg') {
       try {

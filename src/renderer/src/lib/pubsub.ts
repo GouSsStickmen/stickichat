@@ -35,6 +35,13 @@ export interface RedemptionEvent {
   rewardIcon?: string
 }
 
+export interface PollEvent {
+  channelId: string
+  kind: 'poll' | 'prediction'
+  title: string
+  choices: string[]
+}
+
 export class PubSubClient {
   private ws: WebSocket | null = null
   private closed = false
@@ -46,17 +53,22 @@ export class PubSubClient {
   private getChannelIds: () => string[]
   private onRedeem: (e: RedemptionEvent) => void
   private onRaid?: (e: RaidEvent) => void
+  private onPoll?: (e: PollEvent) => void
+  /** poll/prediction ids already announced (both topics repeat update events) */
+  private announcedPolls = new Set<string>()
 
   constructor(
     getAccount: () => Account | undefined,
     getChannelIds: () => string[],
     onRedeem: (e: RedemptionEvent) => void,
-    onRaid?: (e: RaidEvent) => void
+    onRaid?: (e: RaidEvent) => void,
+    onPoll?: (e: PollEvent) => void
   ) {
     this.getAccount = getAccount
     this.getChannelIds = getChannelIds
     this.onRedeem = onRedeem
     this.onRaid = onRaid
+    this.onPoll = onPoll
     this.connect()
   }
 
@@ -101,6 +113,12 @@ export class PubSubClient {
       }
       if (msg.type === 'MESSAGE' && msg.data?.topic?.startsWith('raid.')) {
         this.handleRaidMessage(msg.data.topic, msg.data.message ?? '')
+      }
+      if (msg.type === 'MESSAGE' && msg.data?.topic?.startsWith('polls.')) {
+        this.handlePollMessage(msg.data.topic, msg.data.message ?? '')
+      }
+      if (msg.type === 'MESSAGE' && msg.data?.topic?.startsWith('predictions-channel-v1.')) {
+        this.handlePredictionMessage(msg.data.topic, msg.data.message ?? '')
       }
       // RECONNECT: Twitch asks us to reconnect soon; closing triggers our backoff reconnect
       if (msg.type === 'RECONNECT') {
@@ -184,6 +202,58 @@ export class PubSubClient {
     })
   }
 
+  /** a poll started in one of the open channels */
+  private handlePollMessage(topic: string, raw: string): void {
+    if (!this.onPoll) return
+    const channelId = topic.slice('polls.'.length)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let payload: { type?: string; data?: { poll?: any } }
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      return
+    }
+    if (payload.type !== 'POLL_CREATE') return
+    const poll = payload.data?.poll
+    if (!poll?.title) return
+    const id = String(poll.poll_id ?? poll.id ?? '')
+    if (id && this.announcedPolls.has(id)) return
+    if (id) this.announcedPolls.add(id)
+    this.onPoll({
+      channelId,
+      kind: 'poll',
+      title: String(poll.title),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      choices: (poll.choices ?? []).map((c: any) => String(c.title ?? '')).filter(Boolean)
+    })
+  }
+
+  /** a prediction started in one of the open channels */
+  private handlePredictionMessage(topic: string, raw: string): void {
+    if (!this.onPoll) return
+    const channelId = topic.slice('predictions-channel-v1.'.length)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let payload: { type?: string; data?: { event?: any } }
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      return
+    }
+    if (payload.type !== 'event-created') return
+    const ev = payload.data?.event
+    if (!ev?.title) return
+    const id = String(ev.id ?? '')
+    if (id && this.announcedPolls.has(id)) return
+    if (id) this.announcedPolls.add(id)
+    this.onPoll({
+      channelId,
+      kind: 'prediction',
+      title: String(ev.title),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      choices: (ev.outcomes ?? []).map((o: any) => String(o.title ?? '')).filter(Boolean)
+    })
+  }
+
   private async listenAll(): Promise<void> {
     const account = this.getAccount()
     if (!account) return
@@ -202,7 +272,15 @@ export class PubSubClient {
       this.send({
         type: 'LISTEN',
         nonce: Math.random().toString(36).slice(2),
-        data: { topics: [`community-points-channel-v1.${id}`, `raid.${id}`], auth_token: token }
+        data: {
+          topics: [
+            `community-points-channel-v1.${id}`,
+            `raid.${id}`,
+            `polls.${id}`,
+            `predictions-channel-v1.${id}`
+          ],
+          auth_token: token
+        }
       })
     }
   }

@@ -21,7 +21,8 @@ import {
 } from '../lib/sound'
 import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
 import { EventSubClient, EventSubDesired } from '../lib/eventsub'
-import { PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
+import { recordWatchStreak } from '../lib/watchStreaks'
+import { PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -178,7 +179,8 @@ class ChatService {
             .filter(Boolean)
         },
         (e) => this.handleRedemption(e),
-        (e) => this.handlePubSubRaid(e)
+        (e) => this.handlePubSubRaid(e),
+        (e) => this.handlePollStart(e)
       )
     }
   }
@@ -210,6 +212,18 @@ class ChatService {
     const lang = useSettingsStore.getState().settings.language
     this.localInfo(channel, translate(lang, 'info.raidStart', { target: e.targetDisplay, count: '…' }))
     this.promptAddChannel(channel, e.targetLogin)
+  }
+
+  /** a poll or prediction just started — announce it with an info line in that chat */
+  private handlePollStart(e: PollEvent): void {
+    // the standalone highlights window shares the PubSub client — only the main window announces
+    if (window.location.hash) return
+    const ids = useChatStore.getState().channelIds
+    const channel = Object.keys(ids).find((login) => ids[login] === e.channelId)
+    if (!channel) return
+    const lang = useSettingsStore.getState().settings.language
+    const key = e.kind === 'prediction' ? 'info.predictionStart' : 'info.pollStart'
+    this.localInfo(channel, translate(lang, key, { title: e.title, choices: e.choices.join(' · ') }))
   }
 
   /** a channel-point redemption from PubSub — announce it with the real reward name/cost */
@@ -826,7 +840,10 @@ class ChatService {
           if (m.tags['msg-id'] === 'announcement') {
             msg.announceColor = (m.tags['msg-param-color'] || 'PRIMARY').toLowerCase()
           }
-          if (m.tags['msg-id'] === 'viewermilestone') msg.watchStreak = true
+          if (m.tags['msg-id'] === 'viewermilestone') {
+            msg.watchStreak = true
+            recordWatchStreak(m.channel, m.tags['login'] || '', parseInt(m.tags['msg-param-value'] || '', 10), msg.timestamp)
+          }
           if (m.tags['msg-id'] === 'raid') this.onIncomingRaid(m, msg)
           // mass gifts: the "X дарує N підписок" header groups the individual subgift lines.
           // Twitch delivers them in ANY order — a late header must also swallow subgifts
@@ -853,7 +870,7 @@ class ChatService {
       }
       case 'NOTICE': {
         if (m.channel && m.trailing) {
-          this.queue(m.channel, this.systemMessage(m.channel, m.trailing))
+          this.queue(m.channel, this.systemMessage(m.channel, m.trailing, true))
         }
         break
       }
@@ -924,7 +941,10 @@ class ChatService {
     msg.systemText = sysText
     msg.historical = true
     if (m.tags['msg-id'] === 'announcement') msg.announceColor = (m.tags['msg-param-color'] || 'PRIMARY').toLowerCase()
-    if (m.tags['msg-id'] === 'viewermilestone') msg.watchStreak = true
+    if (m.tags['msg-id'] === 'viewermilestone') {
+      msg.watchStreak = true
+      recordWatchStreak(m.channel ?? '', m.tags['login'] || '', parseInt(m.tags['msg-param-value'] || '', 10), msg.timestamp)
+    }
     return msg
   }
 
@@ -1071,8 +1091,9 @@ class ChatService {
     playFirstMessageSound(settings)
   }
 
-  private systemMessage(channel: string, text: string): ChatMessage {
+  private systemMessage(channel: string, text: string, clientNotice = false): ChatMessage {
     return {
+      clientNotice,
       id: `sys-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       channel,
       channelId: '',
@@ -1228,7 +1249,7 @@ class ChatService {
       // sender connections only care about being kicked / notices
       onMessage: (m) => {
         if (m.command === 'NOTICE' && m.channel) {
-          this.queue(m.channel, this.systemMessage(m.channel, m.trailing))
+          this.queue(m.channel, this.systemMessage(m.channel, m.trailing, true))
         }
       }
     })
@@ -1249,21 +1270,25 @@ class ChatService {
     replyParentMsgId?: string
   ): Promise<void> {
     const sender = await this.ensureSender(account)
-    // proactively rotate: if the (cached, cheap) fresh token differs from the one this live
-    // connection logged in with, the old token is expiring — reconnect onto the new one BEFORE
-    // Twitch drops us, so this very send doesn't land in the dead-token window
-    try {
-      const clientId = useSettingsStore.getState().clientId
-      const fresh = await ensureFreshToken(clientId, getAccount(account.id) ?? account)
-      if (fresh !== this.senderTokens.get(account.id)) {
-        this.senderTokens.set(account.id, fresh)
-        sender.reconnectWithToken(fresh)
-      }
-    } catch {
-      /* refresh failed — the onAuthFailed path will surface the re-auth banner */
-    }
+    // send FIRST — no awaits in the hot path (the token check used to add visible input lag).
+    // If the socket is stale, say() queues the line and reconnects with a fresh token anyway.
     sender.join(channel)
     sender.say(channel, text, replyParentMsgId)
+    // proactive token rotation in the BACKGROUND: if the (cached, cheap) fresh token differs
+    // from the one this live connection logged in with, reconnect onto the new one before
+    // Twitch drops us — future sends never land in the dead-token window
+    void (async () => {
+      try {
+        const clientId = useSettingsStore.getState().clientId
+        const fresh = await ensureFreshToken(clientId, getAccount(account.id) ?? account)
+        if (fresh !== this.senderTokens.get(account.id)) {
+          this.senderTokens.set(account.id, fresh)
+          sender.reconnectWithToken(fresh)
+        }
+      } catch {
+        /* refresh failed — the onAuthFailed path will surface the re-auth banner */
+      }
+    })()
   }
 
   dropSender(accountId: string): void {

@@ -8,6 +8,8 @@ interface AccountsState {
   updateAccount: (id: string, patch: Partial<Account>) => void
   /** move an account up/down — the FIRST account is the "main" one (used for raids/new chats) */
   moveAccount: (id: string, dir: -1 | 1) => void
+  /** apply a saved priority order (ids first = higher priority; unknown ids keep position) */
+  applyOrder: (ids: string[]) => void
 }
 
 export const useAccountsStore = create<AccountsState>()((set) => ({
@@ -21,6 +23,15 @@ export const useAccountsStore = create<AccountsState>()((set) => ({
   removeAccount: (id) => set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id) })),
   updateAccount: (id, patch) =>
     set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
+  applyOrder: (ids) =>
+    set((s) => {
+      const pos = (a: { id: string }): number => {
+        const i = ids.indexOf(a.id)
+        return i === -1 ? 1e9 : i
+      }
+      const sorted = [...s.accounts].sort((a, b) => pos(a) - pos(b))
+      return sorted.some((a, i) => a !== s.accounts[i]) ? { accounts: sorted } : s
+    }),
   moveAccount: (id, dir) =>
     set((s) => {
       const i = s.accounts.findIndex((a) => a.id === id)

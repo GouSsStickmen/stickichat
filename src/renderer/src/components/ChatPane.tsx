@@ -156,9 +156,15 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             })
           }}
           onContextMenu={(e) => {
-            // RMB: copy the streamer's login to the clipboard
+            // RMB: insert the streamer's nick into the input · Ctrl+RMB: copy it
             e.preventDefault()
-            navigator.clipboard?.writeText(pane.channel).catch(() => {})
+            if (e.ctrlKey) {
+              navigator.clipboard?.writeText(pane.channel).catch(() => {})
+            } else {
+              window.dispatchEvent(
+                new CustomEvent('sticki:insert', { detail: { paneId: pane.id, text: `@${pane.channel} ` } })
+              )
+            }
           }}
         >
           {channelName ?? pane.channel}

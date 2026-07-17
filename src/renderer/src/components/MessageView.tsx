@@ -17,6 +17,7 @@ import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
 import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
+import { extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
 
 interface Props {
   msg: ChatMessage
@@ -145,6 +146,43 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
 // generator (28–40+). Measure one cell's width in OUR font, wrap at an adjustable column
 // count (slider on the art itself), and remember the last pick as the new default.
 let brailleCellWidth: number | null = null
+/** inline card under a message that contains a link (clip title+thumb / OG preview) */
+function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
+  const enabled = useSettingsStore((s) => s.settings.linkPreviews)
+  const url = useMemo(() => (enabled ? extractFirstUrl(text) : null), [enabled, text])
+  const [data, setData] = useState<LinkPreviewData | null>(null)
+  useEffect(() => {
+    let alive = true
+    setData(null)
+    if (url) fetchLinkPreview(url).then((d) => alive && d && setData(d))
+    return () => {
+      alive = false
+    }
+  }, [url])
+  if (!url || !data) return null
+  const open = (): void => {
+    window.sticki.openExternal(url)
+  }
+  if (data.kind === 'image') {
+    return <img className="lp-image" src={data.image} alt="" loading="lazy" onClick={open} title={url} />
+  }
+  return (
+    <div className="lp-card" onClick={open} title={url}>
+      {data.image && <img className="lp-thumb" src={data.image} alt="" loading="lazy" />}
+      <div className="lp-body">
+        {data.siteName && (
+          <div className="lp-site">
+            {data.kind === 'clip' ? '🎬 ' : ''}
+            {data.siteName}
+          </div>
+        )}
+        {data.title && <div className="lp-title">{data.title}</div>}
+        {data.description && <div className="lp-desc">{data.description}</div>}
+      </div>
+    </div>
+  )
+}
+
 function getBrailleCellWidth(): number {
   if (brailleCellWidth !== null) return brailleCellWidth
   try {
@@ -624,6 +662,7 @@ function MessageViewInner({
             ))}
           </span>
         )}
+        {!msg.deleted && <LinkPreviewCard text={msg.text} />}
 
         {canAct && (
           <span className="hover-actions">

@@ -251,7 +251,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
     for (const tb of tabs) for (const p of tb.panes) if (!out.includes(p.channel)) out.push(p.channel)
     return out
   }, [tabs])
-  const [channel, setChannel] = useState(channels[0] ?? '')
+  const [channel, setChannel] = useState(() => ov?.channel || channels[0] || '')
   // preview background: judge readability on checkerboard / a color / your own screenshot
   const [pvMode, setPvMode] = useState<'checker' | 'color' | 'image'>('checker')
   const [pvColor, setPvColor] = useState('#3f4652')
@@ -296,7 +296,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
 
   const applyPreset = (patch: Partial<ChatOverlayConfig>): void => {
     // a preset is a full restart from defaults + its own overrides — predictable results
-    update({ ...DEFAULT_CHAT_OVERLAY, ...patch, id: ov.id, name: ov.name, type: 'chat' })
+    update({ ...DEFAULT_CHAT_OVERLAY, ...patch, id: ov.id, name: ov.name, channel: ov.channel, type: 'chat' })
   }
 
   const previewUrl = `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(channel)}&profile=${encodeURIComponent(ov.id)}${demo ? '&preview=1' : ''}`
@@ -436,6 +436,12 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
             <Row label={t('oe.lineGap')}>
               <Num v={ov.lineGap} on={(n) => update({ lineGap: n })} min={0} max={40} />
             </Row>
+            <Toggle label={t('oe.smoothScroll')} value={ov.smoothScroll} onChange={(v) => update({ smoothScroll: v })} />
+            {ov.smoothScroll && (
+              <Row label={t('oe.smoothScrollMs')} hint={t('oe.smoothScroll.hint')}>
+                <Num v={ov.smoothScrollMs} on={(n) => update({ smoothScrollMs: n })} min={100} max={2000} step={50} />
+              </Row>
+            )}
             <Row label={t('oe.zonePad')}>
               <Num v={ov.zonePad} on={(n) => update({ zonePad: n })} min={0} max={80} />
             </Row>
@@ -1231,7 +1237,13 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
         <div className="oe-main">
           <div className="oe-toolbar">
             <label className="hint">{t('oe.channel')}</label>
-            <select value={channel} onChange={(e) => setChannel(e.target.value)}>
+            <select
+              value={channel}
+              onChange={(e) => {
+                setChannel(e.target.value)
+                update({ channel: e.target.value })
+              }}
+            >
               {!channels.length && <option value="">—</option>}
               {channels.map((c) => (
                 <option key={c} value={c}>

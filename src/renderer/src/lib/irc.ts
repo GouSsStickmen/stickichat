@@ -103,11 +103,32 @@ export class IrcClient {
   // consecutive login rejections; after a couple we stop looping and ask for re-auth
   private authFailures = 0
   private authStopped = false
+  // keepalive watchdog: long-idle sockets die silently behind NAT — readyState still says
+  // OPEN, so the first message after idle went into the void. We ping after idle and
+  // force-reconnect when the pong never comes back.
+  private lastActivity = Date.now()
+  private pingSentAt: number | null = null
+  private watchdog: number
   ready = false
 
   constructor(opts: IrcClientOptions) {
     this.opts = opts
     this.connect()
+    this.watchdog = window.setInterval(() => {
+      if (this.closed || this.authStopped) return
+      const now = Date.now()
+      if (this.pingSentAt !== null && now - this.pingSentAt > 15000) {
+        // pinged and heard nothing — the socket is dead, rebuild it now
+        this.pingSentAt = null
+        this.ready = false
+        this.connect()
+        return
+      }
+      if (this.ready && this.pingSentAt === null && now - this.lastActivity > 240000) {
+        this.pingSentAt = now
+        this.rawSend('PING :keepalive')
+      }
+    }, 30000)
   }
 
   private connect(): void {
@@ -169,6 +190,9 @@ export class IrcClient {
     }
     ws.onmessage = (ev) => {
       if (this.ws !== ws) return
+      // ANY traffic proves the connection is alive — clear the keepalive probe
+      this.lastActivity = Date.now()
+      this.pingSentAt = null
       const data = String(ev.data)
       for (const line of data.split('\r\n')) {
         if (!line) continue
@@ -239,10 +263,18 @@ export class IrcClient {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(line)
   }
 
-  /** send now if ready, otherwise queue until registered */
+  /** send now if the socket is really open, otherwise queue AND kick a reconnect —
+   *  previously a half-dead socket silently swallowed the first message after idle */
   private sendOrQueue(line: string): void {
-    if (this.ready) this.rawSend(line)
-    else this.sendQueue.push(line)
+    if (this.ready && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(line)
+      return
+    }
+    this.sendQueue.push(line)
+    if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
+      this.ready = false
+      if (this.reconnectTimer === null) this.connect()
+    }
   }
 
   join(channel: string): void {
@@ -300,6 +332,7 @@ export class IrcClient {
 
   close(): void {
     this.closed = true
+    window.clearInterval(this.watchdog)
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
