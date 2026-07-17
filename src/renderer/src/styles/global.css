@@ -2000,10 +2000,11 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 /* ---------- number inputs (app-wide) ----------
-   Native up/down arrows kept (always visible), but the field is wide enough that
-   multi-digit values are never clipped by them. */
+   Native up/down arrows kept (always visible). The spinner eats ~16px INSIDE the field,
+   so the minimum width leaves room for a minus sign + 3 digits beside it — min-width
+   beats the narrower inline widths scattered across the editor. */
 input[type='number'] {
-  min-width: 58px;
+  min-width: 78px;
   font-variant-numeric: tabular-nums;
 }
 input[type='number']::-webkit-inner-spin-button {
