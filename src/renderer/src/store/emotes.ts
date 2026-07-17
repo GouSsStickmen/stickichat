@@ -102,3 +102,17 @@ export function lookupBadgeUrl(channel: string, setId: string, version: string):
   const key = `${setId}/${version}`
   return st.channelBadges[channel]?.[key] ?? st.globalBadges[key]
 }
+
+/** human-readable badge name (Helix `title`), e.g. "2-Year Subscriber" */
+export function lookupBadgeTitle(channel: string, setId: string, version: string): string | undefined {
+  const st = useEmotesStore.getState()
+  const key = `${setId}/${version}:title`
+  return st.channelBadges[channel]?.[key] ?? st.globalBadges[key]
+}
+
+/** the 4x badge art for the enlarged hover preview */
+export function lookupBadge4x(channel: string, setId: string, version: string): string | undefined {
+  const st = useEmotesStore.getState()
+  const key = `${setId}/${version}:4x`
+  return st.channelBadges[channel]?.[key] ?? st.globalBadges[key]
+}

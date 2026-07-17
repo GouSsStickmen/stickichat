@@ -96,6 +96,7 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
     avatar: ensureAvatar(msg.login),
     badges,
     body: msg.text ? bodyHtml(msg) : '',
+    text: msg.text,
     kind: 'msg',
     ts: msg.timestamp,
     redeem: !!msg.redeemed,

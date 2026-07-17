@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settings'
 import { useLayoutStore } from '../store/layout'
 import { useT } from '../i18n'
-import { ChatOverlayConfig, DEFAULT_CHAT_OVERLAY, OverlayDecor, OverlayFill } from '../types'
+import { ChatOverlayConfig, DEFAULT_CHAT_OVERLAY, OverlayDecor, OverlayFill, OverlayTrigger } from '../types'
 import { OVERLAY_PRESETS, randomizeOverlay } from '../lib/overlayPresets'
 import { ColorField, FontPicker, Toggle } from './settings/SettingsModal'
 import { nextId } from '../store/layout'
@@ -311,6 +311,9 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
 
   const updDecor = (id: string, patch: Partial<OverlayDecor>): void =>
     update({ decors: ov.decors.map((d) => (d.id === id ? { ...d, ...patch } : d)) })
+
+  const updTrigger = (id: string, patch: Partial<OverlayTrigger>): void =>
+    update({ triggers: ov.triggers.map((x) => (x.id === id ? { ...x, ...patch } : x)) })
 
   return (
     <div className="app oe-root">
@@ -1069,6 +1072,66 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 }}
               />
               <span className="hint">📁 {t('oe.decor.add')}</span>
+            </label>
+          </Sec>
+
+          <Sec title={`🎉 ${t('oe.sec.triggers')}`}>
+            <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>{t('oe.triggers.hint')}</p>
+            {ov.triggers.map((tr) => (
+              <div key={tr.id} className="oe-decor">
+                <img src={tr.image} alt="" />
+                <div className="oe-decor-ctl">
+                  <input
+                    placeholder={t('oe.triggers.word')}
+                    value={tr.word}
+                    spellCheck={false}
+                    style={{ width: 110 }}
+                    onChange={(e) => updTrigger(tr.id, { word: e.target.value })}
+                  />
+                  <select value={tr.pos} onChange={(e) => updTrigger(tr.id, { pos: e.target.value as OverlayTrigger['pos'] })}>
+                    <option value="tl">↖</option>
+                    <option value="top">↑</option>
+                    <option value="tr">↗</option>
+                    <option value="left">←</option>
+                    <option value="right">→</option>
+                    <option value="bl">↙</option>
+                    <option value="bottom">↓</option>
+                    <option value="br">↘</option>
+                  </select>
+                  <Num v={tr.dx} on={(n) => updTrigger(tr.id, { dx: n })} min={-500} max={500} w={54} def={0} />
+                  <Num v={tr.dy} on={(n) => updTrigger(tr.id, { dy: n })} min={-500} max={500} w={54} def={0} />
+                  <Num v={tr.size} on={(n) => updTrigger(tr.id, { size: n })} min={16} max={600} w={54} def={96} />
+                  <select value={tr.anim} onChange={(e) => updTrigger(tr.id, { anim: e.target.value as OverlayTrigger['anim'] })}>
+                    <option value="pop">Pop</option>
+                    <option value="bounce">Bounce</option>
+                    <option value="fade">Fade</option>
+                    <option value="slide">Slide</option>
+                    <option value="wiggle">Wiggle</option>
+                  </select>
+                  <Num v={tr.durationS} on={(n) => updTrigger(tr.id, { durationS: n })} min={1} max={60} w={50} def={5} />
+                  <span className="hint">{t('oe.triggers.sec')}</span>
+                  <button className="danger" onClick={() => update({ triggers: ov.triggers.filter((x) => x.id !== tr.id) })}>✕</button>
+                </div>
+              </div>
+            ))}
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 3, (url) =>
+                    update({
+                      triggers: [
+                        ...ov.triggers,
+                        { id: nextId('trg'), word: '', image: url, pos: 'br', dx: 16, dy: 16, size: 120, anim: 'pop', durationS: 5 }
+                      ]
+                    })
+                  )
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 {t('oe.triggers.add')}</span>
             </label>
           </Sec>
 

@@ -436,7 +436,7 @@ export async function getLiveChannels(account: Account, logins: string[]): Promi
 
 interface HelixBadgeSet {
   set_id: string
-  versions: { id: string; image_url_2x: string }[]
+  versions: { id: string; image_url_2x: string; image_url_4x?: string; title?: string }[]
 }
 
 export async function getGlobalBadges(account: Account): Promise<Record<string, string>> {
@@ -505,7 +505,13 @@ function badgesToMap(res: HttpResponse): Record<string, string> {
   }
   const out: Record<string, string> = {}
   for (const set of ((res.json as { data: HelixBadgeSet[] })?.data ?? []) as HelixBadgeSet[]) {
-    for (const v of set.versions) out[`${set.set_id}/${v.id}`] = v.image_url_2x
+    for (const v of set.versions) {
+      out[`${set.set_id}/${v.id}`] = v.image_url_2x
+      // human-readable badge names for the hover preview, stored under a parallel key
+      if (v.title) out[`${set.set_id}/${v.id}:title`] = v.title
+      // the 4x art for the enlarged hover preview
+      if (v.image_url_4x) out[`${set.set_id}/${v.id}:4x`] = v.image_url_4x
+    }
   }
   return out
 }

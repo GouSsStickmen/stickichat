@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Account, ChatMessage, MOD_ONLY_TYPES, Settings } from '../types'
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration } from '../lib/tokenize'
-import { lookupBadgeUrl, lookupEmote, lookupCheermote } from '../store/emotes'
+import { lookupBadgeUrl, lookupBadgeTitle, lookupBadge4x, lookupEmote, lookupCheermote } from '../store/emotes'
 import { lookupUserColor, useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { highlightRuleMatches } from '../lib/highlight'
@@ -553,7 +553,26 @@ function MessageViewInner({
         )}
         {msg.badges.map((b) => {
           const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
-          return url ? <img key={`${b.setId}/${b.version}`} className="badge" src={url} alt={b.setId} draggable={false} /> : null
+          if (!url) return null
+          const title = lookupBadgeTitle(msg.channel, b.setId, b.version) ?? b.setId
+          return (
+            <img
+              key={`${b.setId}/${b.version}`}
+              className="badge"
+              src={url}
+              alt={b.setId}
+              draggable={false}
+              onMouseEnter={(e) =>
+                useUiStore.getState().setEmotePreview({
+                  url: lookupBadge4x(msg.channel, b.setId, b.version) ?? url,
+                  code: title,
+                  x: e.clientX,
+                  y: e.clientY
+                })
+              }
+              onMouseLeave={() => useUiStore.getState().setEmotePreview(null)}
+            />
+          )
         })}
         <span
           className="nick"

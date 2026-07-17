@@ -177,7 +177,7 @@ export default function TabBar(): React.JSX.Element {
           <div
             key={tab.id}
             data-flipid={tab.id}
-            className={`tab ${isActive ? 'active' : ''} ${draggingTab === tab.id ? 'dragging' : ''}`}
+            className={`tab ${isActive ? 'active' : ''} ${tab.pinned ? 'pinned' : ''} ${draggingTab === tab.id ? 'dragging' : ''}`}
             onPointerDown={(e) => {
               if (renaming === tab.id) return
               if ((e.target as HTMLElement).closest('.close, input')) return
@@ -209,7 +209,6 @@ export default function TabBar(): React.JSX.Element {
             }}
             title={t('tab.pinHint')}
           >
-            {tab.pinned && <span className="tab-pin">📌</span>}
             {hasLive && <span className="live-dot" title={t('pane.live')} />}
             {renaming === tab.id ? (
               <input

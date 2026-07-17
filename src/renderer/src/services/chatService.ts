@@ -992,15 +992,18 @@ class ChatService {
     if (accounts.length === 0 || !msg.text) return
     const caseSensitive = useSettingsStore.getState().settings.caseSensitiveNicks
     const lower = msg.text.toLowerCase()
-    const mentioned = accounts.some((a) => {
-      if (msg.userId === a.id) return false // own messages don't count
-      if (caseSensitive) {
-        const name = escapeRegExp(a.displayName)
-        return msg.text.includes(`@${a.displayName}`) || new RegExp(`(^|[^\\w])${name}([^\\w]|$)`).test(msg.text)
-      }
-      const l = a.login.toLowerCase()
-      return lower.includes(`@${l}`) || new RegExp(`(^|[^\\w])${l}([^\\w]|$)`).test(lower)
-    })
+    // a reply to me and a plain nick tag notify identically (same tab @ dot, same sound)
+    const mentioned =
+      !!msg.replyToMe ||
+      accounts.some((a) => {
+        if (msg.userId === a.id) return false // own messages don't count
+        if (caseSensitive) {
+          const name = escapeRegExp(a.displayName)
+          return msg.text.includes(`@${a.displayName}`) || new RegExp(`(^|[^\\w])${name}([^\\w]|$)`).test(msg.text)
+        }
+        const l = a.login.toLowerCase()
+        return lower.includes(`@${l}`) || new RegExp(`(^|[^\\w])${l}([^\\w]|$)`).test(lower)
+      })
     if (!mentioned) {
       this.detectKeywords(msg)
       return

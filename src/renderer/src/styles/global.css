@@ -1957,10 +1957,10 @@ select:focus {
   min-width: 0;
 }
 
-/* pinned tab marker + keyword tag chip on tabs */
-.tab-pin {
-  font-size: 10px;
-  margin-right: 2px;
+/* pinned tab: outlined instead of an icon */
+.tab.pinned {
+  box-shadow: inset 0 0 0 1px var(--accent-strong);
+  border-radius: 6px;
 }
 .keyword-tag {
   font-size: 10px;
@@ -1972,6 +1972,31 @@ select:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- range sliders (app-wide) ----------
+   Custom track+thumb: the native control kept the thumb a few px short of the ends. */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  margin-top: -5px;
+  border: none;
 }
 
 /* ---------- number inputs (app-wide) ----------

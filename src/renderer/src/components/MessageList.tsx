@@ -123,8 +123,9 @@ export default function MessageList({
       if (detail.channel !== pane.channel) return
       const idx = messagesRef.current.findIndex((m) => m.id === detail.msgId)
       if (idx < 0) return
-      // with firstItemIndex active, item indices are offset by it (same space as itemContent)
-      virtuosoRef.current?.scrollToIndex({ index: firstIndexRef.current + idx, align: 'center' })
+      // scrollToIndex uses LOCAL indices (0..length-1) even with firstItemIndex active —
+      // the offset variant clamped to the end and the jump appeared to do nothing
+      virtuosoRef.current?.scrollToIndex({ index: idx, align: 'center' })
       setFlashId(detail.msgId)
       window.setTimeout(() => setFlashId(null), 3200)
     }

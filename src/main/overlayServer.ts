@@ -215,6 +215,12 @@ const OVERLAY_HTML = `<!doctype html>
   .line .avatar { flex: 0 0 auto; object-fit: cover; margin: 2px 6px 0 0; }
   .line.av-right .avatar { margin: 2px 0 0 6px; }
   .content { min-width: 0; box-sizing: border-box; position: relative; line-height: 1.45; overflow-wrap: anywhere; }
+  .cwrap { position: relative; min-width: 0; box-sizing: border-box; }
+  .cwrap > .content { width: 100% !important; }
+  /* shaped plates: the visual (bg/border/glow) lives on a separate layer so the TEXT is
+     never clipped; slant = skewed layer, notch = clipped layer with drop-shadow outline */
+  .content.shaped { isolation: isolate; background: transparent !important; border: none !important; clip-path: none !important; box-shadow: none !important; }
+  .plate-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
   /* horizontal bar: messages stretch in WIDTH, never grow in height */
   #zone.layout-horizontal .line { flex: 0 0 auto; max-width: none; }
   #zone.layout-horizontal .content { white-space: nowrap; }
@@ -265,6 +271,22 @@ const OVERLAY_HTML = `<!doctype html>
   .line.out { transition-property: opacity, transform; transition-timing-function: ease; }
   .line.out.o-fade { opacity: 0; }
   .line.out.o-shrink { opacity: 0; transform: scale(0.6); }
+  /* word/symbol trigger reactions: images/GIFs popping up around the chat */
+  #fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+  .tgi { position: absolute; }
+  .tgi img { width: 100%; display: block; }
+  @keyframes tg-pop { 0% { opacity: 0; transform: scale(0.2); } 70% { transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes tg-bounce {
+    0% { opacity: 0; transform: translateY(40px) scale(0.6); }
+    55% { opacity: 1; transform: translateY(-12px) scale(1.05); }
+    80% { transform: translateY(4px) scale(0.98); }
+    100% { transform: none; }
+  }
+  @keyframes tg-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes tg-slide { from { opacity: 0; transform: translateX(var(--tx, 60px)); } to { opacity: 1; } }
+  @keyframes tg-wiggle-in { 0% { opacity: 0; transform: rotate(-14deg) scale(0.4); } 100% { opacity: 1; } }
+  @keyframes tg-bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-7px) rotate(3deg); } }
+  .tgi.leaving { transition: opacity 0.4s ease, transform 0.4s ease; opacity: 0 !important; transform: scale(0.7); }
 </style>
 <style id="customCss"></style>
 <style id="fontFace"></style>
@@ -272,6 +294,7 @@ const OVERLAY_HTML = `<!doctype html>
 </head>
 <body>
 <div id="zone"></div>
+<div id="fx"></div>
 <script>
 (function () {
   'use strict'
@@ -319,7 +342,7 @@ const OVERLAY_HTML = `<!doctype html>
     avatarShow: false, avatarPos: 'left', avatarSize: 28, avatarRadius: 50,
     badgesShow: true, badgesPos: 'before', badgeSize: 18,
     tsShow: false, tsSeconds: false, tsColor: '#b8b8c0', tsPos: 'after',
-    decors: [], hiddenUsers: [],
+    decors: [], triggers: [], hiddenUsers: [],
     hideCommands: false, showRedeems: true, showBits: true, showSubs: true, showModActions: false,
     customCss: ''
   }
@@ -465,10 +488,85 @@ const OVERLAY_HTML = `<!doctype html>
     return kf + '}'
   }
 
+  // ---------- shaped plate layer ----------
+  // slant/notch move ALL plate visuals onto a separate layer: the text is never clipped,
+  // the border/glow follow the shape (slant = real skewed border; notch = drop-shadow
+  // outline that hugs the clip path)
+  function applyShapedLayer(el) {
+    var layer = el.querySelector(':scope > .plate-bg')
+    if (!layer) {
+      layer = document.createElement('div')
+      layer.className = 'plate-bg'
+      el.insertBefore(layer, el.firstChild)
+    }
+    el.classList.add('shaped')
+    var s = cfg.plateShapeSize == null ? 12 : cfg.plateShapeSize
+    var bcol = hexToRgba(cfg.plateBorderColor, cfg.plateBorderOpacity == null ? 1 : cfg.plateBorderOpacity)
+    // fill + optional custom image stacked as multiple backgrounds
+    var bg = fill(cfg.plateBg)
+    var imgs = []
+    if (cfg.plateImage) imgs.push("url('" + cfg.plateImage + "')")
+    if (bg.indexOf('gradient') !== -1) imgs.push(bg)
+    layer.style.backgroundColor = bg.indexOf('gradient') === -1 ? bg : 'transparent'
+    layer.style.backgroundImage = imgs.join(', ')
+    layer.style.backgroundSize = cfg.plateImageFit === 'contain' ? 'contain' : cfg.plateImageFit === 'stretch' ? '100% 100%' : 'cover'
+    layer.style.backgroundPosition = 'center'
+    layer.style.backgroundRepeat = 'no-repeat'
+    layer.style.opacity = ''
+    var r = cfg.plateRadius || [8, 8, 8, 8]
+    if (cfg.plateShape === 'slant') {
+      // shape size = skew strength (px of horizontal drift, converted to an angle-ish skew)
+      var deg = Math.max(-45, Math.min(45, s))
+      layer.style.transform = 'skewX(' + -deg + 'deg)'
+      layer.style.clipPath = ''
+      layer.style.borderRadius = r[0] + 'px ' + r[1] + 'px ' + r[2] + 'px ' + r[3] + 'px'
+      layer.style.border = cfg.plateBorderWidth > 0 ? cfg.plateBorderWidth + 'px ' + cfg.plateBorderStyle + ' ' + bcol : ''
+      var sh = []
+      if (cfg.plateShadowBlur > 0) sh.push((cfg.plateShadowX || 0) + 'px ' + (cfg.plateShadowY == null ? 2 : cfg.plateShadowY) + 'px ' + cfg.plateShadowBlur + 'px ' + cfg.plateShadowColor)
+      if (cfg.plateGlowSize > 0) { sh.push('0 0 ' + cfg.plateGlowSize + 'px ' + cfg.plateGlowColor); sh.push('0 0 ' + cfg.plateGlowSize * 2 + 'px ' + cfg.plateGlowColor) }
+      layer.style.boxShadow = sh.length ? sh.join(', ') : ''
+      layer.style.filter = ''
+      // the animated border effect runs on the layer (its border/glow are the visible ones)
+      layer.style.animation = cfg.plateAnim && cfg.plateAnim !== 'none'
+        ? 'pa-fx ' + (cfg.plateAnimSpeed || 2) + 's infinite ' + (cfg.plateAnim === 'blink' ? 'step-end' : 'linear')
+        : ''
+    } else {
+      // notch: octagon clip; outline + glow via drop-shadow (they follow the clip shape)
+      layer.style.transform = ''
+      layer.style.borderRadius = ''
+      layer.style.border = ''
+      layer.style.boxShadow = ''
+      layer.style.clipPath = shapeClip('notch')
+      var f = []
+      var bw = cfg.plateBorderWidth
+      if (bw > 0) {
+        f.push('drop-shadow(' + bw + 'px 0 0 ' + bcol + ')')
+        f.push('drop-shadow(-' + bw + 'px 0 0 ' + bcol + ')')
+        f.push('drop-shadow(0 ' + bw + 'px 0 ' + bcol + ')')
+        f.push('drop-shadow(0 -' + bw + 'px 0 ' + bcol + ')')
+      }
+      if (cfg.plateGlowSize > 0) f.push('drop-shadow(0 0 ' + cfg.plateGlowSize + 'px ' + cfg.plateGlowColor + ')')
+      if (cfg.plateShadowBlur > 0) f.push('drop-shadow(' + (cfg.plateShadowX || 0) + 'px ' + (cfg.plateShadowY == null ? 2 : cfg.plateShadowY) + 'px ' + cfg.plateShadowBlur + 'px ' + cfg.plateShadowColor + ')')
+      // drop-shadow clips inside the layer box — give the effects room around the clip
+      layer.style.filter = f.length ? f.join(' ') : ''
+      layer.style.animation = ''
+    }
+  }
+  function removeShapedLayer(el) {
+    el.classList.remove('shaped')
+    var layer = el.querySelector(':scope > .plate-bg')
+    if (layer) layer.remove()
+  }
+
   // ---------- plate ----------
   function applyPlate(el, isZone) {
     var perLine = cfg.plateMode === 'fit' || cfg.plateMode === 'line'
     var active = isZone ? cfg.plateMode === 'panel' : perLine
+    // shaped plates render their visuals on a dedicated layer (text stays unclipped);
+    // the .shaped class neutralizes the normal bg/border/clip set below
+    var shaped = !isZone && active && (cfg.plateShape === 'slant' || cfg.plateShape === 'notch')
+    if (shaped) applyShapedLayer(el)
+    else if (!isZone) removeShapedLayer(el)
     el.style.background = active ? fill(cfg.plateBg) : ''
     var r = cfg.plateRadius || [8, 8, 8, 8]
     el.style.borderRadius = active
@@ -555,8 +653,8 @@ const OVERLAY_HTML = `<!doctype html>
         el.style.maskComposite = ''
       }
     }
-    // custom image layer
-    if (active && cfg.plateImage) {
+    // custom image layer (shaped plates draw the image on their own layer instead)
+    if (active && cfg.plateImage && !shaped) {
       el.classList.add('has-img')
       el.style.setProperty('--bg-img', "url('" + cfg.plateImage + "')")
       el.style.setProperty('--bg-img-op', String(cfg.plateImageOpacity == null ? 1 : cfg.plateImageOpacity))
@@ -759,9 +857,19 @@ const OVERLAY_HTML = `<!doctype html>
     }
 
     applyPlate(content, false)
-    el.appendChild(content)
-    // decors live on the LINE, not the content — clip-path shapes must not cut them off
-    addDecors(el, 'message')
+    // wrapper hugging the plate: decor images anchor to the PLATE edges (not the full line),
+    // and stay outside any shape clipping
+    var wrap = document.createElement('div')
+    wrap.className = 'cwrap'
+    var fullWidth = cfg.plateMode === 'line' && cfg.layout !== 'horizontal' &&
+      cfg.layout !== 'bubble' && cfg.layout !== 'compact'
+    var perLinePlate = cfg.plateMode === 'fit' || cfg.plateMode === 'line'
+    wrap.style.width = perLinePlate && cfg.plateWidth > 0 ? cfg.plateWidth + 'px'
+      : fullWidth ? '100%' : 'fit-content'
+    wrap.style.maxWidth = '100%'
+    wrap.appendChild(content)
+    el.appendChild(wrap)
+    addDecors(wrap, 'message')
 
     // zone-level alignment of fit plates
     if (cfg.layout !== 'horizontal') {
@@ -830,6 +938,52 @@ const OVERLAY_HTML = `<!doctype html>
         au.play().catch(function () {})
       } catch (err) { /* noop */ }
     }
+    // word/symbol trigger reactions
+    if (!restyling && d.kind === 'msg' && d.text && cfg.triggers && cfg.triggers.length) {
+      var tl = String(d.text).toLowerCase()
+      for (var ti = 0; ti < cfg.triggers.length; ti++) {
+        var tg = cfg.triggers[ti]
+        if (tg.word && tg.image && tl.indexOf(String(tg.word).toLowerCase()) !== -1) spawnTrigger(tg)
+      }
+    }
+  }
+
+  var fxBox = document.getElementById('fx')
+  var activeTriggers = {}
+  function spawnTrigger(tg) {
+    if (activeTriggers[tg.id]) return // one instance of a trigger at a time
+    activeTriggers[tg.id] = true
+    var box = document.createElement('div')
+    box.className = 'tgi'
+    box.style.width = (tg.size || 96) + 'px'
+    var dx = (tg.dx || 0) + 'px', dy = (tg.dy || 0) + 'px'
+    var p = tg.pos || 'br'
+    if (p === 'tl') { box.style.left = dx; box.style.top = dy }
+    else if (p === 'tr') { box.style.right = dx; box.style.top = dy }
+    else if (p === 'bl') { box.style.left = dx; box.style.bottom = dy }
+    else if (p === 'br') { box.style.right = dx; box.style.bottom = dy }
+    else if (p === 'top') { box.style.left = 'calc(50% + ' + dx + ')'; box.style.top = dy; box.style.transform = 'translateX(-50%)' }
+    else if (p === 'bottom') { box.style.left = 'calc(50% + ' + dx + ')'; box.style.bottom = dy; box.style.transform = 'translateX(-50%)' }
+    else if (p === 'left') { box.style.left = dx; box.style.top = 'calc(50% + ' + dy + ')' }
+    else { box.style.right = dx; box.style.top = 'calc(50% + ' + dy + ')' }
+    // slide direction: from the nearest horizontal edge
+    box.style.setProperty('--tx', p === 'tl' || p === 'left' || p === 'bl' ? '-60px' : '60px')
+    // entrance animation on the box, gentle bob loop on the image inside
+    var an = tg.anim || 'pop'
+    var img = document.createElement('img')
+    img.src = tg.image
+    img.style.animation = 'tg-bob 2.2s ease-in-out 0.6s infinite'
+    box.style.animation = 'tg-' + (an === 'wiggle' ? 'wiggle-in' : an) + ' 0.45s ease both'
+    box.appendChild(img)
+    fxBox.appendChild(box)
+    var life = Math.max(1, tg.durationS || 5) * 1000
+    setTimeout(function () {
+      box.classList.add('leaving')
+      setTimeout(function () {
+        box.remove()
+        delete activeTriggers[tg.id]
+      }, 450)
+    }, life)
   }
 
   // ---------- config application ----------

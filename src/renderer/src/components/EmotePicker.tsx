@@ -318,14 +318,8 @@ export default function EmotePicker({
             <div className="picker-empty">{t('picker.empty')}</div>
           )
         ) : tab === 'favorites' ? (
-          favorites.length > 0 || (channelId && twitchGroups.some((g) => g.key === channelId)) ? (
+          favorites.length > 0 ? (
             <>
-              {/* the current channel's streamer sits above even the favorites */}
-              {channelId &&
-                (() => {
-                  const cur = twitchGroups.find((g) => g.key === channelId)
-                  return cur ? section(cur.label, cur.emotes, `fav-cur-${cur.key}`) : null
-                })()}
               <button
                 className={`ghost fav-edit-btn ${editFavs ? 'active' : ''}`}
                 onClick={() => setEditFavs((v) => !v)}

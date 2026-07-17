@@ -269,6 +269,24 @@ export interface OverlayDecor {
   scope: 'message' | 'zone'
 }
 
+/** a word/symbol trigger: when a chat message contains `word`, an image/GIF pops up near
+ *  the chat with a cute animation, at a configurable position */
+export interface OverlayTrigger {
+  id: string
+  /** the word/emoji/symbols to react to (case-insensitive substring) */
+  word: string
+  /** data URL of the image/GIF */
+  image: string
+  pos: 'tl' | 'top' | 'tr' | 'left' | 'right' | 'bl' | 'bottom' | 'br'
+  dx: number
+  dy: number
+  /** px width */
+  size: number
+  anim: 'pop' | 'bounce' | 'fade' | 'slide' | 'wiggle'
+  /** seconds on screen */
+  durationS: number
+}
+
 /**
  * One OBS overlay instance. `type` is future-proofing — today only 'chat' exists, later
  * alerts/goals/etc. get their own config shapes under the same manager.
@@ -455,6 +473,9 @@ export interface ChatOverlayConfig {
   // ----- decor -----
   decors: OverlayDecor[]
 
+  // ----- word/symbol triggers -----
+  triggers: OverlayTrigger[]
+
   // ----- content -----
   hiddenUsers: string[]
   hideCommands: boolean
@@ -572,6 +593,7 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   tsColor: '#b8b8c0',
   tsPos: 'after',
   decors: [],
+  triggers: [],
   hiddenUsers: [],
   hideCommands: false,
   showRedeems: true,
@@ -601,6 +623,8 @@ export interface OverlayLineData {
   badges: string[]
   /** message body as safe HTML (emotes/cheers as <img>) */
   body: string
+  /** plain message text (for word/symbol triggers on the page) */
+  text?: string
   /** system/usernotice header text (escaped) — sub, redeem name, raid… */
   sys?: string
   kind: 'msg' | 'info'
