@@ -62,7 +62,7 @@ export async function loadConfig(): Promise<boolean> {
 
   const settings = useSettingsStore.getState()
   settings.setClientId(raw.clientId ?? '')
-  settings.setSettings({ ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) })
+  settings.applySettings({ ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) })
   settings.setModButtons(raw.modButtons?.length ? raw.modButtons : DEFAULT_MOD_BUTTONS)
   settings.setRaidFavorites(raw.raidFavorites ?? [])
   settings.setHighlightRules(raw.highlightRules ?? [])
@@ -168,7 +168,7 @@ function scheduleSave(): void {
       blob.settings = raw.settings
       applyingRemote = true
       try {
-        useSettingsStore.getState().setSettings(raw.settings)
+        useSettingsStore.getState().applySettings({ ...DEFAULT_SETTINGS, ...raw.settings })
       } finally {
         applyingRemote = false
       }
@@ -262,7 +262,13 @@ export function startConfigSync(): () => void {
       try {
         const settings = useSettingsStore.getState()
         settings.setClientId(cfg.clientId ?? '')
-        settings.setSettings({ ...DEFAULT_SETTINGS, ...(cfg.settings ?? {}) })
+        // never let an OLDER remote settings copy overwrite newer local edits (this was the
+        // "values bounce back while editing" bug), and never bump the revision when applying
+        const incomingRev = cfg.settings?._rev ?? 0
+        const localRev = settings.settings._rev ?? 0
+        if (incomingRev >= localRev) {
+          settings.applySettings({ ...DEFAULT_SETTINGS, ...(cfg.settings ?? {}) })
+        }
         settings.setModButtons(cfg.modButtons?.length ? cfg.modButtons : DEFAULT_MOD_BUTTONS)
         settings.setRaidFavorites(cfg.raidFavorites ?? [])
         settings.setHighlightRules(cfg.highlightRules ?? [])

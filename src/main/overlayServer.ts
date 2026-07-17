@@ -964,15 +964,17 @@ const OVERLAY_HTML = `<!doctype html>
     var dx = (tg.dx || 0) + 'px', dy = (tg.dy || 0) + 'px'
     var p = tg.pos || 'br'
     if (onMessage) {
-      // pinned NEXT TO the triggering message: tracks the plate's actual width and
-      // scrolls/disappears together with it
+      // pinned NEXT TO the triggering message — decor-image positioning logic: anchored to
+      // the plate wrapper's edge via left/right + margins (no transforms, so the entrance
+      // animation can't knock it off place), tracking the plate's real width
       if (p === 'tl' || p === 'left' || p === 'bl') {
-        box.style.right = 'calc(100% + 6px + ' + dx + ')'
+        box.style.right = '100%'
+        box.style.marginRight = 6 + (tg.dx || 0) + 'px'
       } else {
-        box.style.left = 'calc(100% + 6px + ' + dx + ')'
+        box.style.left = '100%'
+        box.style.marginLeft = 6 + (tg.dx || 0) + 'px'
       }
-      box.style.top = 'calc(50% + ' + dy + ')'
-      box.style.transform = 'translateY(-50%)'
+      box.style.top = (tg.dy || 0) + 'px'
       box.style.zIndex = '5'
     } else if (p === 'tl') { box.style.left = dx; box.style.top = dy }
     else if (p === 'tr') { box.style.right = dx; box.style.top = dy }
