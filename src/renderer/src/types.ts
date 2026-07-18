@@ -332,10 +332,20 @@ export interface ChatOverlayConfig {
   animIn:
     | 'none' | 'fade' | 'slide' | 'pop' | 'bounce' | 'zoom' | 'flip' | 'blur' | 'elastic'
     | 'swing' | 'drop' | 'roll' | 'spin' | 'stretch' | 'glitch' | 'flash'
-  /** where the entrance comes FROM (slide/bounce/elastic/flip) */
+    | 'rise' | 'slam' | 'rubber' | 'wobble' | 'fold' | 'skew' | 'neon' | 'tilt' | 'typewriter' | 'hinge'
+  /** where the entrance comes FROM (directional animations only) */
   animDir: 'left' | 'right' | 'up' | 'down'
-  animOut: 'none' | 'fade' | 'shrink' | 'slide' | 'zoom' | 'blur' | 'flip' | 'spin' | 'drop' | 'roll'
+  animOut:
+    | 'none' | 'fade' | 'shrink' | 'slide' | 'zoom' | 'blur' | 'flip' | 'spin' | 'drop' | 'roll'
+    | 'rise' | 'slam' | 'wobble' | 'fold' | 'skew' | 'tilt' | 'hinge' | 'glitch'
+  /** where the exit flies TO (directional animations only) */
+  animOutDir: 'left' | 'right' | 'up' | 'down'
+  /** legacy shared duration (ms) — kept as a fallback for animInMs/animOutMs */
   animMs: number
+  /** entrance duration (ms); falls back to animMs when absent */
+  animInMs?: number
+  /** exit duration (ms); falls back to animMs when absent */
+  animOutMs?: number
 
   // ----- message sound -----
   msgSoundEnabled: boolean
@@ -520,7 +530,10 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   animIn: 'slide',
   animDir: 'down',
   animOut: 'fade',
+  animOutDir: 'left',
   animMs: 200,
+  animInMs: 300,
+  animOutMs: 300,
   msgSoundEnabled: false,
   msgSoundVolume: 0.5,
   tiltX: 0,

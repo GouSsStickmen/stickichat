@@ -304,16 +304,93 @@ const OVERLAY_HTML = `<!doctype html>
     35% { opacity: 1; filter: brightness(2.2) blur(2px); }
     100% { filter: none; }
   }
-  .line.out { transition-property: opacity, transform, filter; transition-timing-function: ease; }
-  .line.out.o-fade { opacity: 0; }
-  .line.out.o-shrink { opacity: 0; transform: scale(0.6); }
-  .line.out.o-slide { opacity: 0; transform: translateX(-56px); }
-  .line.out.o-zoom { opacity: 0; transform: scale(1.5); }
-  .line.out.o-blur { opacity: 0; filter: blur(12px); }
-  .line.out.o-flip { opacity: 0; transform: perspective(500px) rotateX(80deg); }
-  .line.out.o-spin { opacity: 0; transform: rotate(320deg) scale(0.15); }
-  .line.out.o-drop { opacity: 0; transform: translateY(80px) rotate(10deg); }
-  .line.out.o-roll { opacity: 0; transform: translateX(-90px) rotate(-180deg) scale(0.4); }
+  @keyframes a-rise { 0% { opacity: 0; transform: translate(var(--ax, 0px), var(--ay, 20px)) scale(0.96); } 100% { opacity: 1; transform: none; } }
+  @keyframes a-slam {
+    0% { opacity: 0; transform: scale(2.3); }
+    60% { opacity: 1; transform: scale(0.9); }
+    80% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+  @keyframes a-rubber {
+    0% { opacity: 0; transform: scale(0.5); }
+    40% { opacity: 1; transform: scale3d(1.28, 0.72, 1); }
+    55% { transform: scale3d(0.82, 1.18, 1); }
+    70% { transform: scale3d(1.1, 0.9, 1); }
+    85% { transform: scale3d(0.97, 1.03, 1); }
+    100% { transform: scale3d(1, 1, 1); }
+  }
+  @keyframes a-wobble {
+    0% { opacity: 0; transform: translate(var(--ax, -30px), var(--ay, 0px)); }
+    30% { opacity: 1; transform: translateX(12px) rotate(4deg); }
+    50% { transform: translateX(-9px) rotate(-3deg); }
+    70% { transform: translateX(5px) rotate(2deg); }
+    100% { transform: none; }
+  }
+  @keyframes a-fold { 0% { opacity: 0; transform: perspective(600px) rotateX(-92deg); } 100% { opacity: 1; transform: perspective(600px) rotateX(0deg); } }
+  @keyframes a-skew {
+    0% { opacity: 0; transform: skewX(-28deg) translate(var(--ax, -40px), var(--ay, 0px)); }
+    60% { opacity: 1; transform: skewX(9deg); }
+    100% { transform: none; }
+  }
+  @keyframes a-neon {
+    0% { opacity: 0; filter: brightness(0.35); }
+    20% { opacity: 1; filter: brightness(2.6) drop-shadow(0 0 9px rgba(255,255,255,0.95)); }
+    35% { filter: brightness(0.85); }
+    55% { filter: brightness(2.1) drop-shadow(0 0 6px rgba(255,255,255,0.85)); }
+    75% { filter: brightness(1); }
+    100% { filter: none; }
+  }
+  @keyframes a-tilt { 0% { opacity: 0; transform: perspective(600px) rotateY(48deg) rotateX(-26deg); } 100% { opacity: 1; transform: perspective(600px) rotateY(0deg) rotateX(0deg); } }
+  @keyframes a-typewriter {
+    0% { opacity: 0; clip-path: inset(0 100% 0 0); }
+    2% { opacity: 1; }
+    100% { opacity: 1; clip-path: inset(0 0 0 0); }
+  }
+  @keyframes a-hinge {
+    0% { opacity: 0; transform: rotate(-82deg) translateY(-28px); }
+    55% { opacity: 1; transform: rotate(12deg); }
+    75% { transform: rotate(-5deg); }
+    100% { transform: rotate(0deg); }
+  }
+  /* exit animations (keyframe-based so direction vars apply) */
+  .line.out { pointer-events: none; }
+  @keyframes o-fade { to { opacity: 0; } }
+  @keyframes o-shrink { to { opacity: 0; transform: scale(0.55); } }
+  @keyframes o-slide { to { opacity: 0; transform: translate(calc(var(--ax, -40px) * 3), calc(var(--ay, 0px) * 3)); } }
+  @keyframes o-zoom { to { opacity: 0; transform: scale(1.6); } }
+  @keyframes o-blur { to { opacity: 0; filter: blur(14px); } }
+  @keyframes o-flip { to { opacity: 0; transform: perspective(500px) rotate3d(var(--fy, 0), var(--fx, 1), 0, 85deg); } }
+  @keyframes o-spin { to { opacity: 0; transform: rotate(320deg) scale(0.1); } }
+  @keyframes o-drop { to { opacity: 0; transform: translateY(90px) rotate(12deg); } }
+  @keyframes o-roll { to { opacity: 0; transform: translate(calc(var(--ax, -40px) * 2.5), calc(var(--ay, 0px) * 2.5)) rotate(200deg) scale(0.4); } }
+  @keyframes o-rise { to { opacity: 0; transform: translate(calc(var(--ax, 0px) * 1.5), calc(var(--ay, -30px) * 1.5)) scale(0.9); } }
+  @keyframes o-slam {
+    0% { transform: scale(1); }
+    25% { opacity: 1; transform: scale(1.2); }
+    100% { opacity: 0; transform: scale(0.12); }
+  }
+  @keyframes o-wobble {
+    0% { transform: none; }
+    20% { transform: translateX(10px) rotate(3deg); }
+    40% { transform: translateX(-13px) rotate(-4deg); }
+    60% { opacity: 1; transform: translateX(15px) rotate(4deg); }
+    100% { opacity: 0; transform: translate(calc(var(--ax, -40px) * 2), calc(var(--ay, 0px) * 2)); }
+  }
+  @keyframes o-fold { to { opacity: 0; transform: perspective(600px) rotateX(92deg); } }
+  @keyframes o-skew { to { opacity: 0; transform: skewX(30deg) translate(calc(var(--ax, -40px) * 1.6), calc(var(--ay, 0px) * 1.6)); } }
+  @keyframes o-tilt { to { opacity: 0; transform: perspective(600px) rotateY(55deg) rotateX(18deg); } }
+  @keyframes o-hinge {
+    0% { transform: rotate(0deg); }
+    40% { opacity: 1; transform: rotate(14deg); }
+    100% { opacity: 0; transform: rotate(72deg) translateY(70px); }
+  }
+  @keyframes o-glitch {
+    0% { transform: none; }
+    25% { transform: translate(6px, -3px) skewX(-8deg); filter: hue-rotate(90deg); }
+    50% { transform: translate(-6px, 2px) skewX(6deg); }
+    75% { opacity: 1; transform: translate(4px, -2px); filter: hue-rotate(-120deg); }
+    100% { opacity: 0; transform: translate(-11px, 4px) skewX(11deg); filter: none; }
+  }
   /* word/symbol trigger reactions: images/GIFs popping up around the chat */
   #fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
   .tgi { position: absolute; }
@@ -354,7 +431,7 @@ const OVERLAY_HTML = `<!doctype html>
   var cfg = {
     layout: 'list', direction: 'up', align: 'left', anchor: 'bottom',
     maxMessages: 15, fadeAfter: 0, lineGap: 4, zonePad: 8, edgeFade: 0,
-    animIn: 'slide', animDir: 'down', animOut: 'fade', animMs: 200,
+    animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
     msgSoundEnabled: false, msgSoundData: '', msgSoundVolume: 0.5,
     tiltX: 0, tiltY: 0, rotate: 0, perspDepth: 800,
     font: '', fontData: '', fontSize: 16, bold: false, italic: false, textTransform: 'none',
@@ -417,9 +494,9 @@ const OVERLAY_HTML = `<!doctype html>
     }
     return hexToRgba(f.color, f.opacity)
   }
-  // entrance direction → offset vector for slide/bounce/elastic and flip axis
-  function animVars(el) {
-    var d = cfg.animDir || 'down'
+  // direction → offset vector (used by both entrance and exit animations)
+  function animVars(el, dir) {
+    var d = dir || cfg.animDir || 'down'
     var ax = d === 'left' ? '-40px' : d === 'right' ? '40px' : '0px'
     var ay = d === 'up' ? '-24px' : d === 'down' ? '24px' : '0px'
     el.style.setProperty('--ax', ax)
@@ -926,10 +1003,11 @@ const OVERLAY_HTML = `<!doctype html>
     // silently disabled backdrop-filter (the "glass" effect) on the plates inside it.
     var an = animName()
     if (an && an !== 'none') {
-      animVars(el)
-      if (an === 'swing') el.style.transformOrigin = 'top left'
+      animVars(el, cfg.animDir)
+      if (an === 'swing' || an === 'hinge') el.style.transformOrigin = 'top left'
       else if (an === 'stretch') el.style.transformOrigin = 'left center'
-      el.style.animation = 'a-' + an + ' ' + (cfg.animMs || 200) + 'ms ease both'
+      else if (an === 'fold') el.style.transformOrigin = 'top center'
+      el.style.animation = 'a-' + an + ' ' + (cfg.animInMs || cfg.animMs || 200) + 'ms ease both'
       el.addEventListener('animationend', function (ev) {
         if (ev.target === el) el.style.animation = ''
       }, { once: true })
@@ -944,15 +1022,21 @@ const OVERLAY_HTML = `<!doctype html>
 
   function removeLine(el, animate) {
     if (!el || !el.parentNode) return
+    var outMs = cfg.animOutMs || cfg.animMs || 200
     if (animate && cfg.animOut && cfg.animOut !== 'none') {
-      el.classList.add('out', 'o-' + cfg.animOut)
-      el.style.transitionDuration = (cfg.animMs || 200) + 'ms'
+      animVars(el, cfg.animOutDir || 'left')
+      var ao = cfg.animOut
+      if (ao === 'hinge') el.style.transformOrigin = 'top left'
+      else if (ao === 'fold') el.style.transformOrigin = 'top center'
+      else if (ao === 'tilt' || ao === 'skew') el.style.transformOrigin = 'left center'
+      el.classList.add('out')
+      el.style.animation = 'o-' + ao + ' ' + outMs + 'ms ease both'
       setTimeout(function () {
         var i = indexOfEl(el)
         if (i !== -1) lines.splice(i, 1)
         el.remove()
         scheduleFit()
-      }, (cfg.animMs || 200) + 60)
+      }, outMs + 60)
     } else {
       var i = indexOfEl(el)
       if (i !== -1) lines.splice(i, 1)

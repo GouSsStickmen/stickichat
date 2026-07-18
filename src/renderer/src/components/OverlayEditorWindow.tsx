@@ -30,6 +30,29 @@ function Row({ label, children, hint }: { label: string; children: React.ReactNo
   )
 }
 
+type AnimInKind = ChatOverlayConfig['animIn']
+type AnimOutKind = ChatOverlayConfig['animOut']
+
+const ANIM_IN: AnimInKind[] = [
+  'fade', 'slide', 'pop', 'bounce', 'zoom', 'flip', 'blur', 'elastic', 'swing', 'drop', 'roll',
+  'spin', 'stretch', 'glitch', 'flash', 'rise', 'slam', 'rubber', 'wobble', 'fold', 'skew', 'neon',
+  'tilt', 'typewriter', 'hinge'
+]
+const ANIM_OUT: AnimOutKind[] = [
+  'fade', 'shrink', 'slide', 'zoom', 'blur', 'flip', 'spin', 'drop', 'roll', 'rise', 'slam',
+  'wobble', 'fold', 'skew', 'tilt', 'hinge', 'glitch'
+]
+const ANIM_LABEL: Record<string, string> = {
+  fade: 'Fade', slide: 'Slide', pop: 'Pop', bounce: 'Bounce', zoom: 'Zoom', flip: 'Flip', blur: 'Blur',
+  elastic: 'Elastic', swing: 'Swing', drop: 'Drop', roll: 'Roll', spin: 'Spin', stretch: 'Stretch',
+  glitch: 'Glitch', flash: 'Flash', rise: 'Rise', slam: 'Slam', rubber: 'Rubber', wobble: 'Wobble',
+  fold: 'Fold', skew: 'Skew', neon: 'Neon', tilt: 'Tilt', typewriter: 'Typewriter', hinge: 'Hinge',
+  shrink: 'Shrink'
+}
+// animations whose look depends on the from/to direction (they consume the --ax/--ay vars)
+const DIRECTIONAL_IN = new Set<string>(['slide', 'bounce', 'elastic', 'flip', 'roll', 'rise', 'wobble', 'skew'])
+const DIRECTIONAL_OUT = new Set<string>(['slide', 'roll', 'rise', 'wobble', 'skew', 'flip'])
+
 function Num({
   v,
   on,
@@ -503,27 +526,18 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
           </Sec>
 
           <Sec title={`🎬 ${t('oe.sec.anim')}`}>
-            <Row label={t('oe.animIn')}>
-              <select value={ov.animIn} onChange={(e) => update({ animIn: e.target.value as ChatOverlayConfig['animIn'] })}>
+            <div className="oe-block-label">{t('oe.animIn')}</div>
+            <Row label={t('oe.animType')}>
+              <select value={ov.animIn} onChange={(e) => update({ animIn: e.target.value as AnimInKind })}>
                 <option value="none">{t('oe.anim.none')}</option>
-                <option value="fade">Fade</option>
-                <option value="slide">Slide</option>
-                <option value="pop">Pop</option>
-                <option value="bounce">Bounce</option>
-                <option value="zoom">Zoom</option>
-                <option value="flip">Flip</option>
-                <option value="blur">Blur</option>
-                <option value="elastic">Elastic</option>
-                <option value="swing">Swing</option>
-                <option value="drop">Drop</option>
-                <option value="roll">Roll</option>
-                <option value="spin">Spin</option>
-                <option value="stretch">Stretch</option>
-                <option value="glitch">Glitch</option>
-                <option value="flash">Flash</option>
+                {ANIM_IN.map((a) => (
+                  <option key={a} value={a}>
+                    {ANIM_LABEL[a] ?? a}
+                  </option>
+                ))}
               </select>
             </Row>
-            {['slide', 'bounce', 'elastic', 'flip', 'roll'].includes(ov.animIn) && (
+            {DIRECTIONAL_IN.has(ov.animIn) && (
               <Row label={t('oe.animDir')} hint={t('oe.animDir.hint')}>
                 <select value={ov.animDir} onChange={(e) => update({ animDir: e.target.value as ChatOverlayConfig['animDir'] })}>
                   <option value="down">↑ {t('oe.animDir.down')}</option>
@@ -533,23 +547,56 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 </select>
               </Row>
             )}
-            <Row label={t('oe.animOut')}>
-              <select value={ov.animOut} onChange={(e) => update({ animOut: e.target.value as ChatOverlayConfig['animOut'] })}>
+            {ov.animIn !== 'none' && (
+              <Row label={t('oe.animInMs')}>
+                <Num
+                  v={Math.round((ov.animInMs ?? ov.animMs) / 100) / 10}
+                  on={(n) => update({ animInMs: Math.round(n * 1000) })}
+                  min={0.05}
+                  max={4}
+                  w={72}
+                  step={0.05}
+                  def={0.3}
+                />
+              </Row>
+            )}
+            <div className="oe-block-label">{t('oe.animOut')}</div>
+            <Row label={t('oe.animType')}>
+              <select value={ov.animOut} onChange={(e) => update({ animOut: e.target.value as AnimOutKind })}>
                 <option value="none">{t('oe.anim.none')}</option>
-                <option value="fade">Fade</option>
-                <option value="shrink">Shrink</option>
-                <option value="slide">Slide</option>
-                <option value="zoom">Zoom</option>
-                <option value="blur">Blur</option>
-                <option value="flip">Flip</option>
-                <option value="spin">Spin</option>
-                <option value="drop">Drop</option>
-                <option value="roll">Roll</option>
+                {ANIM_OUT.map((a) => (
+                  <option key={a} value={a}>
+                    {ANIM_LABEL[a] ?? a}
+                  </option>
+                ))}
               </select>
             </Row>
-            <Row label={t('oe.animSec')}>
-              <Num v={Math.round(ov.animMs / 100) / 10} on={(n) => update({ animMs: Math.round(n * 1000) })} min={0.05} max={3} w={72} step={0.05} />
-            </Row>
+            {DIRECTIONAL_OUT.has(ov.animOut) && (
+              <Row label={t('oe.animOutDir')} hint={t('oe.animOutDir.hint')}>
+                <select
+                  value={ov.animOutDir ?? 'left'}
+                  onChange={(e) => update({ animOutDir: e.target.value as ChatOverlayConfig['animOutDir'] })}
+                >
+                  <option value="left">← {t('oe.animDir.left')}</option>
+                  <option value="right">→ {t('oe.animDir.right')}</option>
+                  <option value="up">↑ {t('oe.animDir.up')}</option>
+                  <option value="down">↓ {t('oe.animDir.down')}</option>
+                </select>
+              </Row>
+            )}
+            {ov.animOut !== 'none' && (
+              <Row label={t('oe.animOutMs')}>
+                <Num
+                  v={Math.round((ov.animOutMs ?? ov.animMs) / 100) / 10}
+                  on={(n) => update({ animOutMs: Math.round(n * 1000) })}
+                  min={0.05}
+                  max={4}
+                  w={72}
+                  step={0.05}
+                  def={0.3}
+                />
+              </Row>
+            )}
           </Sec>
 
           <Sec title={`🔤 ${t('oe.sec.text')}`}>
