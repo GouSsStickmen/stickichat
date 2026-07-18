@@ -3183,3 +3183,14 @@ input[type='number']::-webkit-inner-spin-button {
   color: #4ade80;
   border-color: rgba(74, 222, 128, 0.45);
 }
+
+/* overlay import/export row */
+.ov-io {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}

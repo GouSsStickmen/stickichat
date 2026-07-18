@@ -19,6 +19,7 @@ import {
   VALUELESS_HL_KINDS
 } from '../../types'
 import { nextId, useLayoutStore } from '../../store/layout'
+import { exportOverlayJson, parseOverlayImport } from '../../lib/overlayShare'
 import { startPointerReorder } from '../../lib/pointerReorder'
 import { useFlip } from '../../lib/useFlip'
 import { eventToAccel, hotkeyFor } from '../../lib/hotkeys'
@@ -1905,6 +1906,39 @@ function OverlaySection(): React.JSX.Element {
   const tabs = useLayoutStore((s) => s.tabs)
   const [copiedId, setCopiedId] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [ioMsg, setIoMsg] = useState('')
+  const importRef = useRef<HTMLInputElement>(null)
+
+  const downloadJson = (json: string, name: string): void => {
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+  const safeName = (s2: string): string => s2.replace(/[^\w\-. ]+/g, '_').trim() || 'overlay'
+  const exportOne = (o: ChatOverlayConfig): void =>
+    downloadJson(exportOverlayJson(o), `${safeName(o.name)}.stickichat-overlay.json`)
+  const exportAll = (): void => {
+    if (!settings.chatOverlays.length) return
+    downloadJson(exportOverlayJson(settings.chatOverlays), `stickichat-overlays-${new Date().toISOString().slice(0, 10)}.json`)
+  }
+  const importFile = (file: File | undefined): void => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const imported = parseOverlayImport(String(reader.result))
+      if (!imported) {
+        setIoMsg(t('oe.io.importErr'))
+        return
+      }
+      set({ chatOverlays: [...useSettingsStore.getState().settings.chatOverlays, ...imported] })
+      setIoMsg(t('oe.io.imported', { n: String(imported.length) }))
+    }
+    reader.readAsText(file)
+  }
 
   const firstChannel = tabs.flatMap((tb) => tb.panes)[0]?.channel ?? ''
   const openChannels = [...new Set(tabs.flatMap((tb) => tb.panes).map((pn) => pn.channel).filter(Boolean))]
@@ -1990,6 +2024,9 @@ function OverlaySection(): React.JSX.Element {
             >
               {copiedId === o.id ? '✔' : '📋'}
             </button>
+            <button title={t('oe.io.exportOne')} onClick={() => exportOne(o)}>
+              ⤓
+            </button>
             <button className="primary" onClick={() => window.sticki.openOverlayEditor(o.id)}>
               ✏️ {t('oe.edit')}
             </button>
@@ -2018,6 +2055,24 @@ function OverlaySection(): React.JSX.Element {
           <button className="ghost" onClick={() => setPickerOpen(false)}>{t('oe.cancel')}</button>
         </div>
       )}
+
+      <div className="ov-io" title={t('oe.io.hint')}>
+        <button onClick={() => importRef.current?.click()}>⭱ {t('oe.io.import')}</button>
+        <button disabled={!settings.chatOverlays.length} onClick={exportAll}>
+          ⭳ {t('oe.io.exportAll')}
+        </button>
+        <input
+          ref={importRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            importFile(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+        {ioMsg && <span className="hint" style={{ color: 'var(--text-faint)' }}>{ioMsg}</span>}
+      </div>
     </div>
   )
 }
