@@ -14,6 +14,7 @@ import { swapLayout } from '../lib/translit'
 import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
 import EmotePicker from './EmotePicker'
 import { useT } from '../i18n'
+import { getWatchStreakInfo } from '../lib/watchStreaks'
 
 export const TWITCH_MESSAGE_LIMIT = 500
 
@@ -57,6 +58,21 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const emoteSuggestions = useSettingsStore((s) => s.settings.emoteSuggestions)
   const botCommands = useSettingsStore((s) => s.settings.botCommands)
   const [text, setText] = useState(() => inputDrafts.get(pane.id) ?? '')
+  // own watch streak for this channel (from viewermilestone notices we've seen)
+  const streamInfo = useChatStore((s) => s.streamInfo[pane.channel])
+  const [streakVer, setStreakVer] = useState(0)
+  useEffect(() => {
+    const bump = (): void => setStreakVer((v) => v + 1)
+    window.addEventListener('sticki:streak', bump)
+    return () => window.removeEventListener('sticki:streak', bump)
+  }, [])
+  const myStreak = useMemo(
+    () => (account ? getWatchStreakInfo(pane.channel, account.login) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [account, pane.channel, streakVer]
+  )
+  const streamStartTs = streamInfo?.startedAt ? Date.parse(streamInfo.startedAt) : null
+  const streakClaimed = !!(myStreak && streamStartTs && myStreak.ts >= streamStartTs)
   // keep the draft in sync so switching tabs (which unmounts this pane) doesn't lose it
   useEffect(() => {
     inputDrafts.set(pane.id, text)
@@ -598,6 +614,19 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             </span>
           )}
         </div>
+        {myStreak && (
+          <span
+            className={`streak-chip ${streakClaimed ? 'claimed' : ''}`}
+            title={
+              streakClaimed
+                ? t('input.streak.claimed', { n: myStreak.n })
+                : t('input.streak.unclaimed', { n: myStreak.n })
+            }
+          >
+            🔥{myStreak.n}
+            {streakClaimed ? ' ✓' : ''}
+          </span>
+        )}
         {translitEnabled && (
           <button
             className="ghost translit-btn"

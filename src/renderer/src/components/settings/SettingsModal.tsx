@@ -1529,7 +1529,7 @@ function HighlightsSection(): React.JSX.Element {
               placeholder={t('hl.nickPlaceholder')}
               value={r.value}
               spellCheck={false}
-              onChange={(e) => update(r.id, { value: e.target.value.toLowerCase().trim() })}
+              onChange={(e) => update(r.id, { value: e.target.value.trim() })}
             />
           )}
           {r.adaptColor ? (

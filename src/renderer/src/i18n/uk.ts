@@ -171,6 +171,8 @@ export const uk: Record<TranslationKey, string> = {
   'auth.copyLink': 'Скопіювати посилання',
   'auth.copyCode': 'Скопіювати код',
   'auth.linkCopied': 'Скопійовано',
+  'input.streak.claimed': 'Стрик перегляду: {n} — вже залутаний цього етеру ✅',
+  'input.streak.unclaimed': 'Стрик перегляду: {n} — ще не залутаний цього етеру',
   'input.translit': 'Не та розкладка? Конвертувати текст (укр ⇄ eng)',
   'set.group.general': 'Загальне',
   'set.group.chat': 'Чат',

@@ -1009,7 +1009,9 @@ const OVERLAY_HTML = `<!doctype html>
         var tg = cfg.triggers[ti]
         if (!tg.word || !tg.image) continue
         // one trigger can hold MANY words/phrases/nicks — one per line
-        var words = String(tg.word).split(/\r?\n/)
+        // NB: this whole page lives in a TS template literal — regex escapes like \\n get
+        // mangled there, so split on the raw newline char code instead
+        var words = String(tg.word).split(String.fromCharCode(10))
         for (var wi = 0; wi < words.length; wi++) {
           var w = words[wi].trim().toLowerCase()
           if (!w) continue

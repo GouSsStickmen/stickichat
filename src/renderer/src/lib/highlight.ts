@@ -12,9 +12,12 @@ export function highlightRuleMatches(msg: ChatMessage, rule: HighlightRule, ctx:
   // plain info/system lines never get highlighted
   if (msg.system && msg.system !== 'usernotice') return false
   switch (rule.kind) {
-    case 'nick':
+    case 'nick': {
+      // the rule value may be typed in any case — always compare case-insensitively
       if (!rule.value) return false
-      return ctx.caseSensitiveNicks ? rule.value === msg.displayName : rule.value.toLowerCase() === msg.login
+      const v = rule.value.trim().toLowerCase()
+      return v === msg.login || v === msg.displayName.toLowerCase()
+    }
     case 'badge':
       return !!rule.value && !msg.system && msg.badges.some((b) => b.setId === rule.value)
     case 'own':

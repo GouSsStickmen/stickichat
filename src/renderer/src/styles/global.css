@@ -3165,3 +3165,21 @@ input[type='number']::-webkit-inner-spin-button {
   margin: 4px 0 2px;
   cursor: pointer;
 }
+
+/* own watch-streak chip in the input bar */
+.streak-chip {
+  align-self: center;
+  flex: 0 0 auto;
+  font-size: 12px;
+  padding: 3px 7px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  cursor: default;
+  white-space: nowrap;
+}
+.streak-chip.claimed {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.45);
+}

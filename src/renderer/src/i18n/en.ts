@@ -169,6 +169,8 @@ export const en = {
   'auth.copyLink': 'Copy link',
   'auth.copyCode': 'Copy code',
   'auth.linkCopied': 'Copied',
+  'input.streak.claimed': 'Watch streak: {n} — already counted this stream ✅',
+  'input.streak.unclaimed': 'Watch streak: {n} — not counted this stream yet (send a message when Twitch prompts you)',
   'input.translit': 'Wrong layout? Convert the text (укр ⇄ eng)',
   'set.group.general': 'General',
   'set.group.chat': 'Chat',

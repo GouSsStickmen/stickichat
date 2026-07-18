@@ -48,6 +48,15 @@ export function recordWatchStreak(channel: string, login: string, n: number, ts 
     for (const k of keys.slice(0, keys.length - 400)) delete ch[k]
   }
   scheduleSave()
+  // let live UI (the input-bar streak chip) refresh without polling
+  window.dispatchEvent(new CustomEvent('sticki:streak'))
+}
+
+/** streak WITH the time it was last seen — the input chip needs the timestamp to tell
+ *  whether the streak was already claimed during the current broadcast */
+export function getWatchStreakInfo(channel: string, login: string): { n: number; ts: number } | null {
+  const e = load()[channel]?.[login.toLowerCase()]
+  return e && Date.now() - e.ts < 45 * 86_400_000 ? { n: e.n, ts: e.ts } : null
 }
 
 /** last KNOWN streak for a user in a channel; null when never seen or long stale */
