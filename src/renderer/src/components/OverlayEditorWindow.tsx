@@ -514,9 +514,16 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 <option value="flip">Flip</option>
                 <option value="blur">Blur</option>
                 <option value="elastic">Elastic</option>
+                <option value="swing">Swing</option>
+                <option value="drop">Drop</option>
+                <option value="roll">Roll</option>
+                <option value="spin">Spin</option>
+                <option value="stretch">Stretch</option>
+                <option value="glitch">Glitch</option>
+                <option value="flash">Flash</option>
               </select>
             </Row>
-            {['slide', 'bounce', 'elastic', 'flip'].includes(ov.animIn) && (
+            {['slide', 'bounce', 'elastic', 'flip', 'roll'].includes(ov.animIn) && (
               <Row label={t('oe.animDir')} hint={t('oe.animDir.hint')}>
                 <select value={ov.animDir} onChange={(e) => update({ animDir: e.target.value as ChatOverlayConfig['animDir'] })}>
                   <option value="down">↑ {t('oe.animDir.down')}</option>
@@ -531,6 +538,13 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 <option value="none">{t('oe.anim.none')}</option>
                 <option value="fade">Fade</option>
                 <option value="shrink">Shrink</option>
+                <option value="slide">Slide</option>
+                <option value="zoom">Zoom</option>
+                <option value="blur">Blur</option>
+                <option value="flip">Flip</option>
+                <option value="spin">Spin</option>
+                <option value="drop">Drop</option>
+                <option value="roll">Roll</option>
               </select>
             </Row>
             <Row label={t('oe.animSec')}>

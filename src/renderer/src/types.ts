@@ -329,10 +329,12 @@ export interface ChatOverlayConfig {
   edgeFade: number
 
   // ----- entrance / exit animation -----
-  animIn: 'none' | 'fade' | 'slide' | 'pop' | 'bounce' | 'zoom' | 'flip' | 'blur' | 'elastic'
+  animIn:
+    | 'none' | 'fade' | 'slide' | 'pop' | 'bounce' | 'zoom' | 'flip' | 'blur' | 'elastic'
+    | 'swing' | 'drop' | 'roll' | 'spin' | 'stretch' | 'glitch' | 'flash'
   /** where the entrance comes FROM (slide/bounce/elastic/flip) */
   animDir: 'left' | 'right' | 'up' | 'down'
-  animOut: 'none' | 'fade' | 'shrink'
+  animOut: 'none' | 'fade' | 'shrink' | 'slide' | 'zoom' | 'blur' | 'flip' | 'spin' | 'drop' | 'roll'
   animMs: number
 
   // ----- message sound -----

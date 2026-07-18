@@ -268,9 +268,52 @@ const OVERLAY_HTML = `<!doctype html>
     75% { transform: translate(calc(var(--ax, 0px) * 0.07), calc(var(--ay, 24px) * 0.07)); }
     100% { transform: translate(0, 0); }
   }
-  .line.out { transition-property: opacity, transform; transition-timing-function: ease; }
+  @keyframes a-swing {
+    0% { opacity: 0; transform: rotate(-28deg); }
+    60% { opacity: 1; transform: rotate(8deg); }
+    80% { transform: rotate(-4deg); }
+    100% { transform: rotate(0deg); }
+  }
+  @keyframes a-drop {
+    0% { opacity: 0; transform: translateY(-90px); }
+    55% { opacity: 1; transform: translateY(0) scale(1, 1); }
+    72% { transform: translateY(0) scale(1.06, 0.8); }
+    100% { transform: translateY(0) scale(1, 1); }
+  }
+  @keyframes a-roll {
+    from { opacity: 0; transform: translate(calc(var(--ax, 0px) * 2.2), calc(var(--ay, 24px) * 2.2)) rotate(-200deg) scale(0.55); }
+  }
+  @keyframes a-spin {
+    from { opacity: 0; transform: rotate(540deg) scale(0.05); }
+  }
+  @keyframes a-stretch {
+    0% { opacity: 0; transform: scaleX(0.08); }
+    70% { opacity: 1; transform: scaleX(1.06); }
+    100% { transform: scaleX(1); }
+  }
+  @keyframes a-glitch {
+    0% { opacity: 0; transform: translate(-8px, 4px) skewX(12deg); filter: hue-rotate(120deg); }
+    20% { opacity: 1; transform: translate(5px, -3px) skewX(-8deg); }
+    40% { transform: translate(-4px, 2px) skewX(5deg); filter: hue-rotate(-90deg); }
+    60% { transform: translate(3px, -1px) skewX(-3deg); filter: none; }
+    80% { transform: translate(-1px, 1px); }
+    100% { transform: none; }
+  }
+  @keyframes a-flash {
+    0% { opacity: 0; filter: brightness(5) blur(7px); }
+    35% { opacity: 1; filter: brightness(2.2) blur(2px); }
+    100% { filter: none; }
+  }
+  .line.out { transition-property: opacity, transform, filter; transition-timing-function: ease; }
   .line.out.o-fade { opacity: 0; }
   .line.out.o-shrink { opacity: 0; transform: scale(0.6); }
+  .line.out.o-slide { opacity: 0; transform: translateX(-56px); }
+  .line.out.o-zoom { opacity: 0; transform: scale(1.5); }
+  .line.out.o-blur { opacity: 0; filter: blur(12px); }
+  .line.out.o-flip { opacity: 0; transform: perspective(500px) rotateX(80deg); }
+  .line.out.o-spin { opacity: 0; transform: rotate(320deg) scale(0.15); }
+  .line.out.o-drop { opacity: 0; transform: translateY(80px) rotate(10deg); }
+  .line.out.o-roll { opacity: 0; transform: translateX(-90px) rotate(-180deg) scale(0.4); }
   /* word/symbol trigger reactions: images/GIFs popping up around the chat */
   #fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
   .tgi { position: absolute; }
@@ -884,6 +927,8 @@ const OVERLAY_HTML = `<!doctype html>
     var an = animName()
     if (an && an !== 'none') {
       animVars(el)
+      if (an === 'swing') el.style.transformOrigin = 'top left'
+      else if (an === 'stretch') el.style.transformOrigin = 'left center'
       el.style.animation = 'a-' + an + ' ' + (cfg.animMs || 200) + 'ms ease both'
       el.addEventListener('animationend', function (ev) {
         if (ev.target === el) el.style.animation = ''
@@ -960,8 +1005,16 @@ const OVERLAY_HTML = `<!doctype html>
     var el = assemble(d)
     if (cfg.direction === 'down') zone.insertBefore(el, zone.firstChild)
     else zone.appendChild(el)
-    while (zone.children.length > cfg.maxMessages) {
-      zone.removeChild(cfg.direction === 'down' ? zone.lastChild : zone.firstChild)
+    // trim overflow: the pushed-out message leaves with the exit animation instead of
+    // vanishing instantly (count only real lines that aren't already animating away)
+    var vis = []
+    for (var ci = 0; ci < zone.children.length; ci++) {
+      var ck = zone.children[ci]
+      if (ck.classList && ck.classList.contains('line') && !ck.classList.contains('out')) vis.push(ck)
+    }
+    var excess = vis.length - cfg.maxMessages
+    for (var ei = 0; ei < excess; ei++) {
+      removeLine(cfg.direction === 'down' ? vis[vis.length - 1 - ei] : vis[ei], !restyling)
     }
     // free-floating nick: the plate must be at least as wide as the nick chip,
     // otherwise short messages leave the nick hanging past the plate edge

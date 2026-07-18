@@ -477,7 +477,10 @@ function MessageViewInner({
   }
 
   // RMB inserts the nick; Ctrl+RMB sends "@nick" to chat immediately
-  const insertNick = tokenContextHandler(paneId, `@${msg.login} `)
+  // insert the nick AS DISPLAYED (case preserved); localized display names fall back to
+  // the login so the mention still pings
+  const mentionName = msg.displayName && msg.displayName.toLowerCase() === msg.login ? msg.displayName : msg.login
+  const insertNick = tokenContextHandler(paneId, `@${mentionName} `)
 
   const swipeAction = dragX > 0 ? swipeActionFor(dragX, swipeLabels, swipeTiers, targetIsProtected) : null
 
@@ -579,9 +582,11 @@ function MessageViewInner({
             onContextMenu={(e) => {
               e.preventDefault()
               e.stopPropagation()
+              const rp = msg.replyParent!
+              const rpName = rp.displayName && rp.displayName.toLowerCase() === rp.login ? rp.displayName : rp.login
               window.dispatchEvent(
                 new CustomEvent<InsertEventDetail>('sticki:insert', {
-                  detail: { paneId, text: `@${msg.replyParent!.login} ` }
+                  detail: { paneId, text: `@${rpName} ` }
                 })
               )
             }}
