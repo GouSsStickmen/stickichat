@@ -4,7 +4,7 @@ import { useLayoutStore } from '../store/layout'
 import { useT } from '../i18n'
 import { ChatOverlayConfig, DEFAULT_CHAT_OVERLAY, OverlayDecor, OverlayFill, OverlayTrigger } from '../types'
 import { OVERLAY_PRESETS, randomizeOverlay } from '../lib/overlayPresets'
-import { ColorField, FontPicker, Toggle } from './settings/SettingsModal'
+import { ColorField, FontPicker, NickListArea, Toggle } from './settings/SettingsModal'
 import { nextId } from '../store/layout'
 
 /**
@@ -1087,11 +1087,13 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               <div key={tr.id} className="oe-decor">
                 <img src={tr.image} alt="" />
                 <div className="oe-decor-ctl">
-                  <input
+                  <textarea
                     placeholder={t('oe.triggers.word')}
+                    title={t('oe.triggers.word.hint')}
                     value={tr.word}
                     spellCheck={false}
-                    style={{ width: 110 }}
+                    rows={2}
+                    style={{ width: 130, resize: 'vertical', minHeight: 34 }}
                     onChange={(e) => updTrigger(tr.id, { word: e.target.value })}
                   />
                   <select
@@ -1198,21 +1200,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               </Row>
             )}
             <Row label={t('overlay.profileHidden')}>
-              <textarea
-                rows={2}
-                style={{ flex: 1, resize: 'vertical' }}
-                placeholder="nightbot, streamelements…"
-                value={ov.hiddenUsers.join(', ')}
-                spellCheck={false}
-                onChange={(e) =>
-                  update({
-                    hiddenUsers: e.target.value
-                      .split(',')
-                      .map((x) => x.trim().toLowerCase().replace(/^@/, ''))
-                      .filter(Boolean)
-                  })
-                }
-              />
+              <NickListArea value={ov.hiddenUsers} onCommit={(v) => update({ hiddenUsers: v })} />
             </Row>
           </Sec>
 

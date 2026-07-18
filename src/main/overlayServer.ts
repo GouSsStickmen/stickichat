@@ -906,11 +906,13 @@ const OVERLAY_HTML = `<!doctype html>
         var i = indexOfEl(el)
         if (i !== -1) lines.splice(i, 1)
         el.remove()
+        scheduleFit()
       }, (cfg.animMs || 200) + 60)
     } else {
       var i = indexOfEl(el)
       if (i !== -1) lines.splice(i, 1)
       el.remove()
+      scheduleFit()
     }
   }
   function indexOfEl(el) {
@@ -918,6 +920,37 @@ const OVERLAY_HTML = `<!doctype html>
     for (var i = 0; i < kids.length; i++) if (kids[i] === el) return i
     return -1
   }
+
+  // ---- keep the rotated/tilted zone inside the viewport ----
+  // A 3D-tilted or rotated zone easily pokes past the browser-source edge and gets cut off.
+  // After applying the base transform we measure the REAL on-screen bbox and prepend a
+  // screen-space scale + translate that pulls everything back into view.
+  var zoneBaseTf = ''
+  var fitPending = false
+  function fitZone() {
+    if (!(cfg.tiltX || cfg.tiltY || cfg.rotate)) return
+    var vw = window.innerWidth, vh = window.innerHeight
+    zone.style.transform = zoneBaseTf
+    var r = zone.getBoundingClientRect()
+    if (!r.width || !r.height) return
+    var t = zoneBaseTf
+    var sc = Math.min(1, (vw - 8) / r.width, (vh - 8) / r.height)
+    if (sc < 1) {
+      t = 'scale(' + sc + ') ' + t
+      zone.style.transform = t
+      r = zone.getBoundingClientRect()
+    }
+    var dx = r.left < 0 ? -r.left + 4 : r.right > vw ? vw - r.right - 4 : 0
+    var dy = r.top < 0 ? -r.top + 4 : r.bottom > vh ? vh - r.bottom - 4 : 0
+    if (dx || dy) t = 'translate(' + dx + 'px, ' + dy + 'px) ' + t
+    zone.style.transform = t
+  }
+  function scheduleFit() {
+    if (fitPending) return
+    fitPending = true
+    requestAnimationFrame(function () { fitPending = false; fitZone() })
+  }
+  window.addEventListener('resize', scheduleFit)
 
   var restyling = false
   function append(d) {
@@ -929,6 +962,16 @@ const OVERLAY_HTML = `<!doctype html>
     else zone.appendChild(el)
     while (zone.children.length > cfg.maxMessages) {
       zone.removeChild(cfg.direction === 'down' ? zone.lastChild : zone.firstChild)
+    }
+    // free-floating nick: the plate must be at least as wide as the nick chip,
+    // otherwise short messages leave the nick hanging past the plate edge
+    if (cfg.nickFloat && !(cfg.plateWidth > 0) && d.kind === 'msg') {
+      var fmeta = el.querySelector('.meta')
+      var fwrap = el.querySelector(':scope > .cwrap')
+      if (fmeta && fwrap && fmeta.style.position === 'absolute') {
+        var need = fmeta.offsetWidth + Math.abs(cfg.nickOffsetX || 0) + 12
+        if (fwrap.offsetWidth < need) fwrap.style.minWidth = need + 'px'
+      }
     }
     // credits-style smooth push: the new line grows from 0 height, so older lines glide
     // instead of jumping by a full row (vertical layouts only)
@@ -961,13 +1004,24 @@ const OVERLAY_HTML = `<!doctype html>
     // word/symbol trigger reactions
     if (!restyling && d.kind === 'msg' && d.text && cfg.triggers && cfg.triggers.length) {
       var tl = String(d.text).toLowerCase()
+      var nickl = String(d.login || d.nick || '').toLowerCase()
       for (var ti = 0; ti < cfg.triggers.length; ti++) {
         var tg = cfg.triggers[ti]
-        if (tg.word && tg.image && tl.indexOf(String(tg.word).toLowerCase()) !== -1) {
-          spawnTrigger(tg, el.querySelector(':scope > .cwrap'))
+        if (!tg.word || !tg.image) continue
+        // one trigger can hold MANY words/phrases/nicks — one per line
+        var words = String(tg.word).split(/\r?\n/)
+        for (var wi = 0; wi < words.length; wi++) {
+          var w = words[wi].trim().toLowerCase()
+          if (!w) continue
+          var asNick = w.replace(/^@/, '')
+          if (tl.indexOf(w) !== -1 || (asNick && nickl === asNick)) {
+            spawnTrigger(tg, el.querySelector(':scope > .cwrap'))
+            break
+          }
         }
       }
     }
+    scheduleFit()
   }
 
   var fxBox = document.getElementById('fx')
@@ -1103,7 +1157,8 @@ const OVERLAY_HTML = `<!doctype html>
       if (cfg.tiltY) tf += ' rotateY(' + cfg.tiltY + 'deg)'
       if (cfg.rotate) tf += ' rotate(' + cfg.rotate + 'deg)'
     }
-    zone.style.transform = tf.trim()
+    zoneBaseTf = tf.trim()
+    zone.style.transform = zoneBaseTf
     zone.style.transformOrigin = cfg.anchor === 'top' || cfg.direction === 'down' ? '50% 0%' : '50% 100%'
 
     // rebuild all visible lines with the new structure/styles

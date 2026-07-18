@@ -1,4 +1,4 @@
-import { Children, isValidElement, useEffect, useRef, useState } from 'react'
+import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../../store/settings'
 import { useAccountsStore } from '../../store/accounts'
 import { useUiStore } from '../../store/ui'
@@ -168,6 +168,45 @@ export default function SettingsModal({
   )
 }
 
+/** nick list editor: free typing (commas, spaces, newlines) — parsed only on blur */
+export function NickListArea({
+  value,
+  onCommit,
+  placeholder
+}: {
+  value: string[]
+  onCommit: (v: string[]) => void
+  placeholder?: string
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(value.join(', '))
+  const focusedRef = useRef(false)
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(value.join(', '))
+  }, [value])
+  return (
+    <textarea
+      rows={2}
+      style={{ flex: 1, resize: 'vertical' }}
+      placeholder={placeholder ?? 'nightbot, streamelements…'}
+      value={draft}
+      spellCheck={false}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={() => {
+        focusedRef.current = true
+      }}
+      onBlur={() => {
+        focusedRef.current = false
+        onCommit(
+          draft
+            .split(/[\s,;]+/)
+            .map((x) => x.trim().toLowerCase().replace(/^@/, ''))
+            .filter(Boolean)
+        )
+      }}
+    />
+  )
+}
+
 /** hex → HSV (h 0–360, s/v 0–1) */
 function hexToHsv(hex: string): { h: number; s: number; v: number } {
   const m = /^#?([0-9a-f]{6})/i.exec(hex)
@@ -224,7 +263,40 @@ export function ColorField({
   const [hexBuf, setHexBuf] = useState(value)
   const rootRef = useRef<HTMLSpanElement>(null)
   const svRef = useRef<HTMLDivElement>(null)
+  const palRef = useRef<HTMLDivElement>(null)
+  const [palStyle, setPalStyle] = useState<React.CSSProperties>()
   const draggingRef = useRef(false)
+  const rafRef = useRef<number | null>(null)
+  const pendingRef = useRef(value)
+
+  // dragging the SV area fires per-mousemove; pushing every tick through the settings
+  // store (save + cross-window sync + overlay push) visibly lagged — emit once per frame
+  const emit = (hex: string): void => {
+    pendingRef.current = hex
+    if (rafRef.current !== null) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      onChange(pendingRef.current)
+    })
+  }
+
+  // the popup uses FIXED positioning: it escapes scroll-container clipping, and when
+  // there is no room below the field it flips above it (and clamps into the window)
+  useLayoutEffect(() => {
+    if (!palOpen) {
+      setPalStyle(undefined)
+      return
+    }
+    const anchor = rootRef.current?.getBoundingClientRect()
+    const pop = palRef.current?.getBoundingClientRect()
+    if (!anchor || !pop) return
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const left = Math.max(8, Math.min(anchor.left, vw - pop.width - 8))
+    let top = anchor.bottom + 4
+    if (top + pop.height > vh - 8) top = Math.max(8, anchor.top - pop.height - 4)
+    setPalStyle({ position: 'fixed', left, top, right: 'auto' })
+  }, [palOpen])
 
   // adopt external changes (reset, palette pick in another field…) unless the user is mid-drag
   useEffect(() => {
@@ -258,7 +330,7 @@ export function ColorField({
     const v = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
     setHsv((p) => {
       const n = { ...p, s, v }
-      onChange(hsvToHex(n.h, n.s, n.v))
+      emit(hsvToHex(n.h, n.s, n.v))
       return n
     })
   }
@@ -297,7 +369,7 @@ export function ColorField({
         {EyedropperIcon}
       </button>
       {palOpen && (
-        <div className="color-pal">
+        <div className="color-pal" ref={palRef} style={palStyle ?? { visibility: 'hidden' }}>
           <div
             ref={svRef}
             className="color-sv"
@@ -332,7 +404,7 @@ export function ColorField({
               const h = Number(e.target.value)
               setHsv((p) => {
                 const n = { ...p, h }
-                onChange(hsvToHex(n.h, n.s, n.v))
+                emit(hsvToHex(n.h, n.s, n.v))
                 return n
               })
             }}
@@ -565,6 +637,13 @@ function ChatSection(): React.JSX.Element {
       <Toggle label={t('set.altBg')} hint={t('hint.altBg')} value={settings.alternatingBackground} onChange={(v) => set({ alternatingBackground: v })} />
       <Toggle label={t('set.streamInfo')} hint={t('hint.streamInfo')} value={settings.showStreamInfo} onChange={(v) => set({ showStreamInfo: v })} />
       <Toggle label={t('set.linkPreviews')} hint={t('hint.linkPreviews')} value={settings.linkPreviews} onChange={(v) => set({ linkPreviews: v })} />
+      <div className="set-row" title={t('hint.linkDisplay')}>
+        <label className="has-hint">{t('set.linkDisplay')}</label>
+        <select value={settings.linkDisplay} onChange={(e) => set({ linkDisplay: e.target.value as Settings['linkDisplay'] })}>
+          <option value="full">{t('set.linkDisplay.full')}</option>
+          <option value="short">{t('set.linkDisplay.short')}</option>
+        </select>
+      </div>
       <Toggle label={t('set.showBits')} hint={t('hint.showBits')} value={settings.showBits} onChange={(v) => set({ showBits: v })} />
       <Toggle label={t('set.showRedeems')} hint={t('hint.showRedeems')} value={settings.showRedeems} onChange={(v) => set({ showRedeems: v })} />
       <Toggle label={t('set.history')} hint={t('hint.history')} value={settings.loadHistory} onChange={(v) => set({ loadHistory: v })} />
@@ -1871,21 +1950,7 @@ function OverlaySection(): React.JSX.Element {
         </div>
         <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('overlay.hiddenUsers.hint')}>
           <label className="has-hint">{t('overlay.hiddenUsers')}</label>
-          <textarea
-            rows={2}
-            style={{ flex: 1, resize: 'vertical' }}
-            placeholder="nightbot, streamelements…"
-            value={settings.overlayHiddenUsers.join(', ')}
-            spellCheck={false}
-            onChange={(e) =>
-              set({
-                overlayHiddenUsers: e.target.value
-                  .split(',')
-                  .map((x) => x.trim().toLowerCase().replace(/^@/, ''))
-                  .filter(Boolean)
-              })
-            }
-          />
+          <NickListArea value={settings.overlayHiddenUsers} onCommit={(v) => set({ overlayHiddenUsers: v })} />
         </div>
       </Framed>
 

@@ -54,6 +54,8 @@ function tokenContextHandler(paneId: string, text: string) {
 }
 
 function TokenView({ token, paneId }: { token: Token; paneId: string }): React.JSX.Element {
+  const linkDisplay = useSettingsStore((s) => s.settings.linkDisplay)
+  const t = useT()
   switch (token.kind) {
     case 'text':
       return <>{token.text}</>
@@ -69,12 +71,13 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
       return (
         <a
           href={token.url}
+          title={token.url}
           onClick={(e) => {
             e.preventDefault()
             window.sticki.openExternal(token.url)
           }}
         >
-          {token.label}
+          {linkDisplay === 'short' ? `\u{1F517}\u00A0${t('misc.linkShort')}` : token.label}
         </a>
       )
     case 'mention': {

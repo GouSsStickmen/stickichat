@@ -1901,7 +1901,7 @@ select:focus {
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
-.color-hue {
+input[type='range'].color-hue {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -1911,10 +1911,16 @@ select:focus {
   background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
   outline: none;
 }
-.color-hue::-webkit-slider-thumb {
+input[type='range'].color-hue::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 6px;
+  background: transparent;
+}
+input[type='range'].color-hue::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px;
   height: 14px;
+  margin-top: -1px;
   border-radius: 50%;
   background: #fff;
   border: 2px solid rgba(0, 0, 0, 0.5);

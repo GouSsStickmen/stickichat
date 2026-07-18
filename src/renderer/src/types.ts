@@ -871,6 +871,8 @@ export interface Settings {
   showFirstMsgBg: boolean
   /** inline preview cards for links in chat (Twitch clips get title + thumbnail) */
   linkPreviews: boolean
+  /** how link URLs render in chat AND the overlay: full URL or a short clickable "link" chip */
+  linkDisplay: 'full' | 'short'
   /** which tab the highlight sidebar opens on */
   highlightSidebarDefault: 'highlights' | 'mentions' | 'redeems'
   /** extra px of line-height inside messages (emote rows overlapping) */
@@ -1046,6 +1048,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showMentionBg: true,
   showFirstMsgBg: true,
   linkPreviews: true,
+  linkDisplay: 'full',
   highlightSidebarDefault: 'highlights',
   lineSpacing: 0,
   rememberWindowSize: true,

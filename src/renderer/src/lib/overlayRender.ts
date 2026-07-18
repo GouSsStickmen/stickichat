@@ -2,6 +2,7 @@ import { ChatMessage, OverlayLineData } from '../types'
 import { tokenizeMessage, ensureReadable, fallbackColor } from './tokenize'
 import { lookupBadgeUrl, lookupCheermote, lookupEmote } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
+import { translate } from '../i18n'
 import { ensureSevenTvCosmetic } from './seventvCosmetics'
 import { ensureAvatar } from './twitchAvatars'
 
@@ -32,7 +33,10 @@ function bodyHtml(msg: ChatMessage): string {
         out += esc(tk.char)
         break
       case 'link':
-        out += esc(tk.label)
+        out +=
+          useSettingsStore.getState().settings.linkDisplay === 'short'
+            ? '\uD83D\uDD17\u00A0' + esc(translate(useSettingsStore.getState().settings.language, 'misc.linkShort'))
+            : esc(tk.label)
         break
       case 'mention':
         out += `<b>${esc(tk.name)}</b>`
