@@ -10,6 +10,21 @@ import EmojiGlyph from './EmojiGlyph'
 import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
 
+/** picker grids show hundreds of emotes at once - request the 1x size (4x lighter than 2x),
+ *  and retry once with a cache-buster when the CDN hiccups (images silently stop loading) */
+function pickerUrl(u: string): string {
+  return u.replace(/\/2x(\.\w+)?$/, '/1x$1').replace('/2.0', '/1.0').replace(/\/2$/, '/1')
+}
+function retryImg(e: React.SyntheticEvent<HTMLImageElement>): void {
+  const img = e.currentTarget
+  if (img.dataset.retried) return
+  img.dataset.retried = '1'
+  const src = img.src
+  window.setTimeout(() => {
+    img.src = src.includes('?') ? `${src}&r=1` : `${src}?r=1`
+  }, 1200)
+}
+
 const EMOJI_AS_EMOTES: Emote[] = EMOJI_LIST.map((e) => ({ code: e.char, url: '', provider: 'emoji', size: 0 }))
 
 interface Props {
@@ -254,7 +269,7 @@ export default function EmotePicker({
         ) : e.provider === 'emoji' ? (
           <EmojiGlyph char={e.code} className="emoji-cell-char" />
         ) : (
-          <img src={e.url} alt={e.code} loading="lazy" />
+          <img src={pickerUrl(e.url)} alt={e.code} loading="lazy" onError={retryImg} />
         )}
       </button>
     )
@@ -356,7 +371,7 @@ export default function EmotePicker({
                         {f.provider === 'emoji' ? (
                           <EmojiGlyph char={f.code} className="emoji-cell-char" />
                         ) : (
-                          <img src={f.url} alt={f.code} loading="lazy" draggable={false} />
+                          <img src={pickerUrl(f.url)} alt={f.code} loading="lazy" draggable={false} onError={retryImg} />
                         )}
                       </button>
                     ))

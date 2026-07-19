@@ -399,6 +399,12 @@ const OVERLAY_HTML = `<!doctype html>
   #fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
   .tgi { position: absolute; }
   .tgi img { width: 100%; display: block; }
+  /* single-message visual editor */
+  body.edit .meta, body.edit .avatar, body.edit .badges, body.edit .ts, body.edit .body, body.edit .cwrap { cursor: move; }
+  body.edit .meta:hover, body.edit .avatar:hover, body.edit .badges:hover, body.edit .ts:hover, body.edit .body:hover {
+    outline: 1px dashed rgba(255, 255, 255, 0.65);
+    outline-offset: 2px;
+  }
   @keyframes tg-pop { 0% { opacity: 0; transform: scale(0.2); } 70% { transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
   @keyframes tg-bounce {
     0% { opacity: 0; transform: translateY(40px) scale(0.6); }
@@ -426,6 +432,7 @@ const OVERLAY_HTML = `<!doctype html>
   var channel = (p.get('channel') || '').toLowerCase()
   var profile = p.get('profile') || ''
   var preview = p.get('preview') === '1'
+  var editMode = p.get('edit') === '1'
   var zone = document.getElementById('zone')
   var customCss = document.getElementById('customCss')
   var fontFace = document.getElementById('fontFace')
@@ -437,6 +444,8 @@ const OVERLAY_HTML = `<!doctype html>
     maxMessages: 15, fadeAfter: 0, lineGap: 4, zonePad: 8, edgeFade: 0,
     animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
     meStyle: 'colored',
+    nickRotate: 0, avatarOffsetX: 0, avatarOffsetY: 0, badgeOffsetX: 0, badgeOffsetY: 0,
+    tsOffsetX: 0, tsOffsetY: 0, textOffsetX: 0, textOffsetY: 0,
     msgSoundEnabled: false, msgSoundData: '', msgSoundVolume: 0.5,
     tiltX: 0, tiltY: 0, rotate: 0, perspDepth: 800,
     font: '', fontData: '', fontSize: 16, bold: false, italic: false, textTransform: 'none',
@@ -816,10 +825,12 @@ const OVERLAY_HTML = `<!doctype html>
   // ---------- line assembly ----------
   function buildMeta(d) {
     var meta = document.createElement(cfg.nickPos === 'inline' ? 'span' : 'div')
+    if (cfg.nickRotate) meta.style.rotate = cfg.nickRotate + 'deg'
     meta.className = 'meta'
     var badges = null
     if (cfg.badgesShow && d.badges && d.badges.length) {
       badges = document.createElement('span')
+      if (cfg.badgeOffsetX || cfg.badgeOffsetY) badges.style.translate = (cfg.badgeOffsetX || 0) + 'px ' + (cfg.badgeOffsetY || 0) + 'px'
       badges.className = 'badges'
       for (var i = 0; i < d.badges.length; i++) {
         var b = document.createElement('img')
@@ -846,6 +857,7 @@ const OVERLAY_HTML = `<!doctype html>
     var ts = null
     if (cfg.tsShow) {
       ts = document.createElement('span')
+      if (cfg.tsOffsetX || cfg.tsOffsetY) ts.style.translate = (cfg.tsOffsetX || 0) + 'px ' + (cfg.tsOffsetY || 0) + 'px'
       ts.className = 'ts'
       ts.textContent = fmtTs(d.ts)
       ts.style.color = cfg.tsColor
@@ -937,6 +949,7 @@ const OVERLAY_HTML = `<!doctype html>
     if ((cfg.avatarShow || cfg.layout === 'compact') && d.kind === 'msg') {
       var av = document.createElement('img')
       av.className = 'avatar'
+      if (cfg.avatarOffsetX || cfg.avatarOffsetY) av.style.translate = (cfg.avatarOffsetX || 0) + 'px ' + (cfg.avatarOffsetY || 0) + 'px'
       av.style.width = cfg.avatarSize + 'px'
       av.style.height = cfg.avatarSize + 'px'
       av.style.borderRadius = cfg.avatarRadius + '%'
@@ -975,9 +988,13 @@ const OVERLAY_HTML = `<!doctype html>
       }
       var text = document.createElement('span')
       text.innerHTML = d.body || ''
+      if (cfg.textOffsetX || cfg.textOffsetY) {
+        text.style.display = 'inline-block'
+        text.style.translate = (cfg.textOffsetX || 0) + 'px ' + (cfg.textOffsetY || 0) + 'px'
+      }
       // /me action: tint the text with the user's color (like chat) unless set to plain
       if (d.act && cfg.meStyle !== 'plain') text.style.color = nickColorFor(d)
-      text.style.fontStyle = (d.act && cfg.meStyle !== 'plain') || cfg.italic ? 'italic' : 'normal'
+      text.style.fontStyle = cfg.italic ? 'italic' : 'normal'
       text.style.textTransform = cfg.textTransform === 'upper' ? 'uppercase' : cfg.textTransform === 'lower' ? 'lowercase' : 'none'
       body.appendChild(text)
       content.appendChild(body)
@@ -1028,6 +1045,7 @@ const OVERLAY_HTML = `<!doctype html>
   }
 
   function removeLine(el, animate) {
+    if (editMode) return
     if (!el || !el.parentNode) return
     var outMs = cfg.animOutMs || cfg.animMs || 200
     if (animate && cfg.animOut && cfg.animOut !== 'none') {
@@ -1090,6 +1108,7 @@ const OVERLAY_HTML = `<!doctype html>
 
   var restyling = false
   function append(d) {
+    if (editMode && d.id !== 'edit-1') return
     if (!passesFilters(d)) return
     lines.push(d)
     if (lines.length > cfg.maxMessages + 10) lines.splice(0, lines.length - cfg.maxMessages - 10)
@@ -1357,7 +1376,9 @@ const OVERLAY_HTML = `<!doctype html>
       { nick: 'Bobik069', color: '#ff69b4', badges: [BADGE_MOD], body: 'привіт чат! 💜', av: 'B' },
       { nick: 'Pinuses', color: '#5cb2ff', badges: [], body: 'that timing was clean <img class="emote" src="' + EMOTE + '">', av: 'P' },
       { nick: 'Meme_gavgav', color: '#7cff5c', badges: [BADGE_VIP], body: 'гав гав гав 🐶', av: 'M' },
-      { nick: 'I_Love_Vladislav', color: '#ffd75c', badges: [], body: 'Їжте щедрі ґрона! Quick brown fox 0123', av: 'I' },
+      { nick: 'I_Love_Vladyslav', color: '#ffd75c', badges: [], body: 'Їжте щедрі ґрона! Quick brown fox 0123', av: 'I' },
+      { nick: 'Ivan_In_My_Ass', color: '#ff8a5c', badges: [], body: 'хто тут головний по мемах?', av: 'I' },
+      { nick: 'n1cole_cat', color: '#5cffd7', badges: [BADGE_VIP], body: 'мур-мур 😺 клас стрім', av: 'N' },
       { nick: 'Mira_Cat', color: '#c95cff', badges: [BADGE_MOD, BADGE_VIP], body: 'дуже класний оверлей вийшов 🐱', av: 'M' }
     ]
   }
@@ -1384,9 +1405,100 @@ const OVERLAY_HTML = `<!doctype html>
     setInterval(push, 2500)
   }
 
+  // ---------- single-message visual editor (?edit=1, used by the in-app editor) ----------
+  function clampN(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
+  function postEdit(patch) {
+    try { window.parent.postMessage({ __oeEdit: true, patch: patch }, '*') } catch (err) { /* noop */ }
+  }
+  var editApplyPending = false
+  function localApply(patch) {
+    for (var k in patch) cfg[k] = patch[k]
+    if (editApplyPending) return
+    editApplyPending = true
+    requestAnimationFrame(function () { editApplyPending = false; applyCfg() })
+  }
+  function editTargetOf(t) {
+    if (!t || !t.closest) return null
+    var el = t.closest('.avatar, .badges, .ts, .meta, .body, .cwrap')
+    if (!el) return null
+    if (el.classList.contains('avatar')) return 'avatar'
+    if (el.classList.contains('badges')) return 'badges'
+    if (el.classList.contains('ts')) return 'ts'
+    if (el.classList.contains('meta')) return 'nick'
+    if (el.classList.contains('body')) return 'text'
+    return 'plate'
+  }
+  function editBase(kind) {
+    if (kind === 'nick') return [cfg.nickOffsetX || 0, cfg.nickOffsetY || 0]
+    if (kind === 'avatar') return [cfg.avatarOffsetX || 0, cfg.avatarOffsetY || 0]
+    if (kind === 'badges') return [cfg.badgeOffsetX || 0, cfg.badgeOffsetY || 0]
+    if (kind === 'ts') return [cfg.tsOffsetX || 0, cfg.tsOffsetY || 0]
+    if (kind === 'text') return [cfg.textOffsetX || 0, cfg.textOffsetY || 0]
+    return [cfg.zoneOffsetX || 0, cfg.zoneOffsetY || 0]
+  }
+  function editDragPatch(kind, x, y) {
+    if (kind === 'nick') return { nickOffsetX: x, nickOffsetY: y }
+    if (kind === 'avatar') return { avatarOffsetX: x, avatarOffsetY: y }
+    if (kind === 'badges') return { badgeOffsetX: x, badgeOffsetY: y }
+    if (kind === 'ts') return { tsOffsetX: x, tsOffsetY: y }
+    if (kind === 'text') return { textOffsetX: x, textOffsetY: y }
+    return { zoneOffsetX: x, zoneOffsetY: y }
+  }
+  function startEditMode() {
+    document.body.classList.add('edit')
+    append({
+      id: 'edit-1',
+      user: 'demo',
+      login: 'bobik069',
+      nick: 'Bobik069',
+      color: '#9147ff',
+      avatar: svgAvatar('B', '#9147ff'),
+      badges: [BADGE_MOD],
+      body: 'Щурячий бугай із їжаком-харцизом в\u2019ючись підписали ґешефт у єнах',
+      text: 'Щурячий бугай із їжаком-харцизом в\u2019ючись підписали ґешефт у єнах',
+      kind: 'msg',
+      ts: Date.now()
+    })
+    var drag = null
+    document.addEventListener('pointerdown', function (e) {
+      var kind = editTargetOf(e.target)
+      if (!kind) return
+      drag = { kind: kind, x: e.clientX, y: e.clientY, base: editBase(kind) }
+      e.preventDefault()
+    })
+    document.addEventListener('pointermove', function (e) {
+      if (!drag) return
+      var patch = editDragPatch(
+        drag.kind,
+        drag.base[0] + Math.round(e.clientX - drag.x),
+        drag.base[1] + Math.round(e.clientY - drag.y)
+      )
+      localApply(patch)
+      postEdit(patch)
+    })
+    document.addEventListener('pointerup', function () { drag = null })
+    // wheel = scale, Alt+wheel on the nick = rotate
+    document.addEventListener('wheel', function (e) {
+      var kind = editTargetOf(e.target)
+      if (!kind) return
+      e.preventDefault()
+      var dir = e.deltaY < 0 ? 1 : -1
+      var patch = null
+      if (kind === 'avatar') patch = { avatarSize: clampN((cfg.avatarSize || 28) + dir * 2, 12, 128) }
+      else if (kind === 'badges') patch = { badgeSize: clampN((cfg.badgeSize || 18) + dir, 8, 64) }
+      else if (kind === 'nick') {
+        patch = e.altKey
+          ? { nickRotate: clampN((cfg.nickRotate || 0) + dir * 2, -180, 180) }
+          : { nickScale: clampN((cfg.nickScale || 100) + dir * 5, 40, 300) }
+      } else if (kind === 'text' || kind === 'plate') patch = { fontSize: clampN((cfg.fontSize || 16) + dir, 8, 72) }
+      if (patch) { localApply(patch); postEdit(patch) }
+    }, { passive: false })
+  }
+
   applyCfg()
   connect()
-  if (preview) startDemo()
+  if (editMode) startEditMode()
+  else if (preview) startDemo()
 })()
 </script>
 </body>

@@ -325,6 +325,16 @@ export interface ChatOverlayConfig {
   lineGap: number
   /** how /me action messages render: user-colored text (like chat) or plain */
   meStyle: 'colored' | 'plain'
+  /** visual-editor offsets (px) and nick rotation (deg) — all default 0 */
+  nickRotate: number
+  avatarOffsetX: number
+  avatarOffsetY: number
+  badgeOffsetX: number
+  badgeOffsetY: number
+  tsOffsetX: number
+  tsOffsetY: number
+  textOffsetX: number
+  textOffsetY: number
   /** credits-style push: new messages smoothly slide the chat instead of jumping */
   smoothScroll: boolean
   /** ms of the smooth push */
@@ -530,6 +540,15 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   fadeAfter: 0,
   lineGap: 4,
   meStyle: 'colored',
+  nickRotate: 0,
+  avatarOffsetX: 0,
+  avatarOffsetY: 0,
+  badgeOffsetX: 0,
+  badgeOffsetY: 0,
+  tsOffsetX: 0,
+  tsOffsetY: 0,
+  textOffsetX: 0,
+  textOffsetY: 0,
   smoothScroll: false,
   smoothScrollMs: 300,
   zonePad: 8,

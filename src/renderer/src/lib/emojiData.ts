@@ -88,8 +88,36 @@ export function displayEmoji(char: string): string {
   return EMOJI_SUBST[char] ?? char
 }
 
+// canvas width probe: a ZWJ sequence the font supports renders as ONE glyph (~1 advance);
+// an unsupported one falls apart into several glyphs and gets much wider
+const zwjSupport = new Map<string, boolean>()
+function zwjSupported(char: string): boolean {
+  const hit = zwjSupport.get(char)
+  if (hit !== undefined) return hit
+  let ok = true
+  try {
+    const ctx = document.createElement('canvas').getContext('2d')
+    if (ctx) {
+      ctx.font = '32px sans-serif'
+      const seq = ctx.measureText(char).width
+      const first = ctx.measureText(String.fromCodePoint(char.codePointAt(0)!)).width
+      ok = seq < first * 1.6
+    }
+  } catch {
+    ok = true
+  }
+  zwjSupport.set(char, ok)
+  return ok
+}
+
 export function emojiImageUrl(char: string): string | null {
-  if (HAS_NATIVE_FLAGS || !REGIONAL_PAIR_RE.test(char)) return null
+  const isFlag = REGIONAL_PAIR_RE.test(char)
+  if (isFlag) {
+    if (HAS_NATIVE_FLAGS) return null
+  } else if (!char.includes('\u200d') || zwjSupported(char)) {
+    // plain emoji, or a ZWJ sequence the system font draws correctly - keep native text
+    return null
+  }
   const code = [...char].map((c) => c.codePointAt(0)!.toString(16)).join('-')
   return `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${code}.png`
 }

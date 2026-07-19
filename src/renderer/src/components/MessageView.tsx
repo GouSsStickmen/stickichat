@@ -18,7 +18,7 @@ import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
 import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
 import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
-import { getSourceChannelName } from '../lib/sourceChannels'
+import { getSourceChannelInfo } from '../lib/sourceChannels'
 
 interface Props {
   msg: ChatMessage
@@ -212,10 +212,10 @@ function SharedSourceTag({ roomId }: { roomId: string }): React.JSX.Element {
     window.addEventListener('sticki:srcchan', bump)
     return () => window.removeEventListener('sticki:srcchan', bump)
   }, [])
-  const name = getSourceChannelName(roomId)
+  const info = getSourceChannelInfo(roomId)
   return (
-    <span className="shared-src-tag" title={t('msg.sharedFrom', { channel: name ?? '…' })}>
-      🔀 {name ?? '…'}
+    <span className="shared-src-tag" title={t('msg.sharedFrom', { channel: info?.name ?? '…' })}>
+      {info?.avatar ? <img className="shared-src-av" src={info.avatar} alt="" /> : '🔀'} {info?.name ?? '…'}
     </span>
   )
 }

@@ -35,7 +35,8 @@ function bodyHtml(msg: ChatMessage): string {
       case 'link':
         out +=
           useSettingsStore.getState().settings.linkDisplay !== 'full'
-            ? '\uD83D\uDD17\u00A0' + esc(translate(useSettingsStore.getState().settings.language, 'misc.linkShort'))
+            ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:3px"><path d="M3.9 12a3.6 3.6 0 0 1 3.6-3.6h3.2V6.5H7.5a5.5 5.5 0 0 0 0 11h3.2v-1.9H7.5A3.6 3.6 0 0 1 3.9 12zm5.3 1h5.6v-2H9.2v2zm4.3-6.5h3.2a5.5 5.5 0 0 1 0 11h-3.2v-1.9h3.2a3.6 3.6 0 0 0 0-7.2h-3.2V6.5z"/></svg>' +
+              esc(translate(useSettingsStore.getState().settings.language, 'misc.linkShort'))
             : esc(tk.label)
         break
       case 'mention':

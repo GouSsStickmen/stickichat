@@ -1103,7 +1103,12 @@ select:focus {
 /* narrow-pane replacement for the account select: just the avatar */
 .account-compact {
   width: 34px;
+  height: 34px;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
 }
 .account-compact img {
   width: 24px;
@@ -3233,4 +3238,58 @@ input[type='number']::-webkit-inner-spin-button {
   font-size: 0.78em;
   vertical-align: middle;
   white-space: nowrap;
+}
+
+/* the add-channel form on an EMPTY tab: don't stretch the input across the whole tab */
+.empty-tab > div {
+  width: 100%;
+  max-width: 400px;
+}
+.shared-src-tag .shared-src-av {
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 50%;
+  vertical-align: -0.2em;
+  margin-right: 2px;
+}
+.oe-selectable {
+  user-select: text;
+  cursor: text;
+}
+
+/* overlay editor preview: zoom/pan layers */
+.oe-pv-inner {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+.oe-pv-inner iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.oe-pv-capture {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+}
+.oe-pv-capture:active {
+  cursor: grabbing;
+}
+.oe-pv-zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 3;
+}
+.oe-pv-zoom button {
+  min-width: 30px;
+  padding: 2px 8px;
+  font-size: 12px;
+  background: rgba(20, 20, 26, 0.85);
+  border: 1px solid var(--border);
 }

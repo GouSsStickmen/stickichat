@@ -281,6 +281,16 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   const [pvImage, setPvImage] = useState<string | undefined>(() => localStorage.getItem('sticki:oePvImage') ?? undefined)
   const [presetName, setPresetName] = useState('')
   const [demo, setDemo] = useState(true)
+  // preview zoom/pan + the single-message visual edit mode
+  const [editMode, setEditMode] = useState(false)
+  const [pvZoom, setPvZoom] = useState(1)
+  const [pvPan, setPvPan] = useState({ x: 0, y: 0 })
+  const capRef = useRef<HTMLDivElement>(null)
+  const panDrag = useRef<{ sx: number; sy: number; bx: number; by: number } | null>(null)
+  const zoomRef = useRef(1)
+  zoomRef.current = pvZoom
+  const panPosRef = useRef({ x: 0, y: 0 })
+  panPosRef.current = pvPan
   const pushTimer = useRef<number | null>(null)
   const cssRef = useRef<HTMLTextAreaElement>(null)
   // Ctrl+Z: undo stack of config snapshots (grouped — at most one snapshot per 500ms burst)
@@ -307,6 +317,35 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // edit-mode patches arrive from the preview iframe (dragging/scaling elements)
+  useEffect(() => {
+    const onMsg = (e: MessageEvent): void => {
+      const d = e.data as { __oeEdit?: boolean; patch?: Partial<ChatOverlayConfig> } | null
+      if (d && d.__oeEdit && d.patch) updateRef.current(d.patch)
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [])
+
+  // wheel-zoom around the cursor on the preview capture layer (regular mode only)
+  useEffect(() => {
+    const el = capRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent): void => {
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const cx = e.clientX - rect.left
+      const cy = e.clientY - rect.top
+      const oldZ = zoomRef.current
+      const z = Math.min(4, Math.max(0.4, oldZ * Math.pow(1.15, -e.deltaY / 100)))
+      const pp = panPosRef.current
+      setPvPan({ x: cx - ((cx - pp.x) * z) / oldZ, y: cy - ((cy - pp.y) * z) / oldZ })
+      setPvZoom(z)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [editMode])
 
   if (!ov) {
     return (
@@ -354,7 +393,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
     update({ ...DEFAULT_CHAT_OVERLAY, ...patch, id: ov.id, name: ov.name, channel: ov.channel, type: 'chat' })
   }
 
-  const previewUrl = `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(channel)}&profile=${encodeURIComponent(ov.id)}${demo ? '&preview=1' : ''}`
+  const previewUrl = `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(channel)}&profile=${encodeURIComponent(ov.id)}${editMode ? '&edit=1' : demo ? '&preview=1' : ''}`
   const obsUrl = `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(channel)}&profile=${encodeURIComponent(ov.id)}`
 
   const pvStyle: React.CSSProperties =
@@ -1311,7 +1350,17 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
           </Sec>
 
           <Sec title={`🧪 ${t('oe.sec.css')}`}>
-            <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>{t('oe.css.hint')}</p>
+            <p className="hint oe-selectable" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+              {t('oe.css.hint')}{' '}
+              <button
+                className="ghost"
+                style={{ padding: '0 6px' }}
+                title={t('oe.copyHint')}
+                onClick={() => navigator.clipboard?.writeText(t('oe.css.hint'))}
+              >
+                📋
+              </button>
+            </p>
             <textarea
               ref={cssRef}
               className="oe-css"
@@ -1345,6 +1394,10 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 </option>
               ))}
             </select>
+            <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8 }} title={t('oe.editMode.hint')}>
+              <input type="checkbox" checked={editMode} onChange={(e) => setEditMode(e.target.checked)} />
+              🖱 {t('oe.editMode')}
+            </label>
             <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
               <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} />
               {t('oe.demo')}
@@ -1382,7 +1435,51 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
             </label>
           </div>
           <div className={`oe-preview ${pvMode === 'checker' ? 'checker' : ''}`} style={pvStyle}>
-            <iframe key={`${channel}:${settings.overlayPort}:${demo ? 1 : 0}`} src={previewUrl} title="overlay preview" />
+            <div
+              className="oe-pv-inner"
+              style={{ transform: `translate(${pvPan.x}px, ${pvPan.y}px) scale(${pvZoom})` }}
+            >
+              <iframe
+                key={`${channel}:${settings.overlayPort}:${editMode ? 'e' : demo ? 1 : 0}`}
+                src={previewUrl}
+                title="overlay preview"
+              />
+            </div>
+            {!editMode && (
+              <div
+                ref={capRef}
+                className="oe-pv-capture"
+                title={t('oe.pv.panHint')}
+                onPointerDown={(e) => {
+                  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+                  panDrag.current = { sx: e.clientX, sy: e.clientY, bx: pvPan.x, by: pvPan.y }
+                }}
+                onPointerMove={(e) => {
+                  const d = panDrag.current
+                  if (d) setPvPan({ x: d.bx + e.clientX - d.sx, y: d.by + e.clientY - d.sy })
+                }}
+                onPointerUp={() => {
+                  panDrag.current = null
+                }}
+                onDoubleClick={() => {
+                  setPvZoom(1)
+                  setPvPan({ x: 0, y: 0 })
+                }}
+              />
+            )}
+            <div className="oe-pv-zoom">
+              <button onClick={() => setPvZoom((z) => Math.max(0.4, z / 1.25))}>−</button>
+              <button
+                title={t('oe.pv.zoomReset')}
+                onClick={() => {
+                  setPvZoom(1)
+                  setPvPan({ x: 0, y: 0 })
+                }}
+              >
+                {Math.round(pvZoom * 100)}%
+              </button>
+              <button onClick={() => setPvZoom((z) => Math.min(4, z * 1.25))}>+</button>
+            </div>
           </div>
           <p className="hint oe-note">{t('oe.note')}</p>
         </div>

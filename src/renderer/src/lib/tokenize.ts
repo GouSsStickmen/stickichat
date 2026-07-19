@@ -13,7 +13,8 @@ export type Token =
 
 // an emoji plus any variation selectors / ZWJ continuation (👨‍👩‍👧 etc.), or a country
 // flag (two regional indicators — those are NOT Extended_Pictographic!)
-const EMOJI_RE = /(?:[🇦-🇿]{2}|\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}️?)*)/gu
+const EMOJI_RE =
+  /(?:[\u{1F1E6}-\u{1F1FF}]{2}|\p{Extended_Pictographic}\uFE0F?[\u{1F3FB}-\u{1F3FF}]?(?:\u200D\p{Extended_Pictographic}\uFE0F?[\u{1F3FB}-\u{1F3FF}]?)*)/gu
 
 const URL_RE = /^https?:\/\/[^\s]+$/i
 // bare links without a protocol: www.foo.bar, twitch.tv/xqc, sub.domain.co.ua/path?x=1 …
