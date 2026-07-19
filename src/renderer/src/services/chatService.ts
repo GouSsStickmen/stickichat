@@ -22,6 +22,13 @@ import {
 import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
 import { EventSubClient, EventSubDesired } from '../lib/eventsub'
 import { recordWatchStreak } from '../lib/watchStreaks'
+import { hlIngest } from './hlAccumulator'
+
+/** usernotice msg-ids that count as "sub events" for the highlights subs tab */
+const SUB_EVENT_IDS = new Set([
+  'sub', 'resub', 'subgift', 'submysterygift',
+  'giftpaidupgrade', 'anongiftpaidupgrade', 'primepaidupgrade'
+])
 import { PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
 
 function escapeRegExp(s: string): string {
@@ -844,6 +851,7 @@ class ChatService {
             msg.watchStreak = true
             recordWatchStreak(m.channel, m.tags['login'] || '', parseInt(m.tags['msg-param-value'] || '', 10), msg.timestamp)
           }
+          if (SUB_EVENT_IDS.has(m.tags['msg-id'] ?? '')) msg.subEvent = true
           if (m.tags['msg-id'] === 'raid') this.onIncomingRaid(m, msg)
           // mass gifts: the "X дарує N підписок" header groups the individual subgift lines.
           // Twitch delivers them in ANY order — a late header must also swallow subgifts
@@ -945,6 +953,7 @@ class ChatService {
       msg.watchStreak = true
       recordWatchStreak(m.channel ?? '', m.tags['login'] || '', parseInt(m.tags['msg-param-value'] || '', 10), msg.timestamp)
     }
+    if (SUB_EVENT_IDS.has(m.tags['msg-id'] ?? '')) msg.subEvent = true
     return msg
   }
 
@@ -977,7 +986,11 @@ class ChatService {
     // bits power-ups: "Gigantify an Emote" and "Message Effect" (animated background)
     const gigantified = m.tags['msg-id'] === 'gigantified-emote-message' || undefined
     const messageEffect = m.tags['animation-id'] || undefined
+    // Twitch SHARED CHAT: relayed messages carry the origin broadcaster in source-room-id
+    const srcRoom = m.tags['source-room-id']
+    const sourceRoomId = srcRoom && srcRoom !== (m.tags['room-id'] ?? '') ? srcRoom : undefined
     return {
+      sourceRoomId,
       redeemed: redeemed || undefined,
       bits,
       gigantified,
@@ -1114,6 +1127,9 @@ class ChatService {
   private queue(channel: string, msg: ChatMessage): void {
     const arr = this.pendingByChannel.get(channel) ?? []
     arr.push(msg)
+    // highlights accumulator: mentions/keywords/subs/redeems are recorded even while the
+    // highlights panel and window are CLOSED (main window only — it ingests everything)
+    hlIngest(channel, msg)
     this.pendingByChannel.set(channel, arr)
     if (this.flushTimer === null) {
       this.flushTimer = window.setTimeout(() => this.flush(), 60)

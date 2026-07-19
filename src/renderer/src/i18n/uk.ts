@@ -177,6 +177,8 @@ export const uk: Record<TranslationKey, string> = {
   'picker.copied': 'скопійовано',
   'picker.previewHint': 'наведи на емоут для превʼю',
   'highlights.mentions': 'Звернення',
+  'highlights.subs': 'Сабки',
+  'msg.sharedFrom': 'Зі спільного чату — пише з каналу {channel}',
   'highlights.sortOrder': 'Порядок сортування',
   'auth.copyLink': 'Скопіювати посилання',
   'auth.copyCode': 'Скопіювати код',

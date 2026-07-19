@@ -3,13 +3,14 @@ import { useChatStore, lookupUserColor } from '../store/chat'
 import { useSettingsStore } from '../store/settings'
 import { lookupBadgeUrl } from '../store/emotes'
 import { isHighlightedMessage } from '../lib/highlight'
+import { HlSavedItem, hlSavedKey, loadSavedMap, persistSaved, reloadSavedMap } from '../services/hlAccumulator'
 import { ensureReadable, fallbackColor } from '../lib/tokenize'
 import { ChatMessage } from '../types'
 import RichText from './RichText'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 
-type Mode = 'highlights' | 'mentions' | 'redeems'
+type Mode = 'highlights' | 'mentions' | 'redeems' | 'subs'
 type Order = 'newest-top' | 'newest-bottom'
 
 /**
@@ -18,25 +19,6 @@ type Order = 'newest-top' | 'newest-bottom'
  * precomputed tab flags) and persists it per channel, so history survives floods, window
  * reopens and restarts.
  */
-interface SavedItem extends ChatMessage {
-  /** which tabs this item belongs to (computed once, at ingest time) */
-  _men?: boolean
-  _hl?: boolean
-}
-
-const savedKey = (channel: string): string => `sticki:hlSaved:${channel}`
-const SAVED_LIMIT = 300
-
-function loadSaved(channel: string): Map<string, SavedItem> {
-  try {
-    const raw = localStorage.getItem(savedKey(channel))
-    const list = raw ? (JSON.parse(raw) as SavedItem[]) : []
-    return new Map(list.map((i) => [i.id, i]))
-  } catch {
-    return new Map()
-  }
-}
-
 /** compact message body: system lines are plain text, chat lines get the rich renderer */
 function ItemText({ msg }: { msg: ChatMessage }): React.JSX.Element {
   if (msg.system) return <>{msg.systemText}</>
@@ -67,54 +49,63 @@ export default function HighlightSidebar({
   // don't yank the list to the end while the user is reading older entries
   const atBottomRef = useRef(true)
 
-  // own accumulated store: chat-buffer eviction can't touch it; persisted per channel
-  const savedRef = useRef<Map<string, SavedItem>>(loadSaved(channel))
+  // the SHARED accumulator (fed by chatService in the main window even while this panel
+  // is closed); live updates via an event, cross-window updates via the storage event
   const [savedVersion, setSavedVersion] = useState(0)
-  const persistTimer = useRef<number | null>(null)
-  const schedulePersist = (): void => {
-    if (persistTimer.current !== null) return
-    persistTimer.current = window.setTimeout(() => {
-      persistTimer.current = null
-      try {
-        const list = [...savedRef.current.values()].sort((a, b) => a.timestamp - b.timestamp).slice(-SAVED_LIMIT)
-        savedRef.current = new Map(list.map((i) => [i.id, i]))
-        localStorage.setItem(savedKey(channel), JSON.stringify(list))
-      } catch {
-        /* best-effort */
-      }
-    }, 500)
-  }
-
   useEffect(() => {
+    const onSaved = (e: Event): void => {
+      if ((e as CustomEvent<{ channel: string }>).detail.channel === channel) setSavedVersion((v) => v + 1)
+    }
+    const onStorage = (e: StorageEvent): void => {
+      if (e.key === hlSavedKey(channel)) {
+        reloadSavedMap(channel)
+        setSavedVersion((v) => v + 1)
+      }
+    }
+    window.addEventListener('sticki:hlsaved', onSaved)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('sticki:hlsaved', onSaved)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [channel])
+
+  // fallback ingest for standalone windows (where the central accumulator is inactive)
+  useEffect(() => {
+    if (!window.location.hash) return
     let added = false
+    const map = loadSavedMap(channel)
     for (const m of messages) {
-      if (savedRef.current.has(m.id)) continue
+      if (map.has(m.id)) continue
       const men = !!(m.isMention || m.replyToMe)
       const red = !!m.redeemed
+      const sub = !!m.subEvent
       const hl = isHighlightedMessage(m, highlightRules, { caseSensitiveNicks })
-      if (!men && !red && !hl) continue
-      savedRef.current.set(m.id, { ...m, _men: men, _hl: hl })
+      if (!men && !red && !hl && !sub) continue
+      map.set(m.id, { ...m, _men: men, _hl: hl, _sub: sub } as HlSavedItem)
       added = true
     }
     if (added) {
+      persistSaved(channel)
       setSavedVersion((v) => v + 1)
-      schedulePersist()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, highlightRules, caseSensitiveNicks])
+  }, [messages, highlightRules, caseSensitiveNicks, channel])
 
   const items = useMemo(() => {
-    const all = [...savedRef.current.values()].sort((a, b) => a.timestamp - b.timestamp)
+    const all = [...loadSavedMap(channel).values()].sort((a, b) => a.timestamp - b.timestamp)
     const filtered =
       mode === 'mentions'
         ? all.filter((m) => m._men)
         : mode === 'redeems'
           ? all.filter((m) => m.redeemed)
-          : all.filter((m) => m._hl)
+          : mode === 'subs'
+            ? all.filter((m) => m._sub || m.subEvent)
+            : all.filter((m) => m._hl)
     const latest = filtered.slice(-150)
     return order === 'newest-top' ? [...latest].reverse() : latest
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedVersion, mode, order])
+  }, [savedVersion, mode, order, channel])
 
   // keep the newest entry in view only when the user is already at the bottom
   useEffect(() => {
@@ -169,6 +160,12 @@ export default function HighlightSidebar({
           onClick={() => setMode('redeems')}
         >
           {t('highlights.redeems')}
+        </button>
+        <button
+          className={`picker-tab-btn ${mode === 'subs' ? 'active' : ''}`}
+          onClick={() => setMode('subs')}
+        >
+          {t('highlights.subs')}
         </button>
         <button
           className="ghost"

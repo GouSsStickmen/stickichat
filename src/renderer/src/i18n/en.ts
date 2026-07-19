@@ -175,6 +175,8 @@ export const en = {
   'picker.copied': 'copied',
   'picker.previewHint': 'hover an emote to preview',
   'highlights.mentions': 'Mentions',
+  'highlights.subs': 'Subs',
+  'msg.sharedFrom': 'Shared chat — writing from {channel}',
   'highlights.sortOrder': 'Sort order',
   'auth.copyLink': 'Copy link',
   'auth.copyCode': 'Copy code',

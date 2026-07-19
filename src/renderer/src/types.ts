@@ -78,6 +78,10 @@ export interface ChatMessage {
   rewardIcon?: string
   /** watch-streak milestone usernotice */
   watchStreak?: boolean
+  /** sub / resub / gifted-sub usernotice (the highlights "subs" tab) */
+  subEvent?: boolean
+  /** Twitch shared chat: origin broadcaster id when the message came from the partner channel */
+  sourceRoomId?: string
   /** bits cheered in this message (from the IRC `bits` tag) */
   bits?: number
   /** "Gigantify an Emote" bits power-up — the message's emote is shown huge */

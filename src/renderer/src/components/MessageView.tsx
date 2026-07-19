@@ -18,6 +18,7 @@ import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
 import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
 import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
+import { getSourceChannelName } from '../lib/sourceChannels'
 
 interface Props {
   msg: ChatMessage
@@ -199,6 +200,23 @@ function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
         {data.description && <div className="lp-desc">{data.description}</div>}
       </div>
     </div>
+  )
+}
+
+/** shared-chat origin tag: which channel's chat this user wrote in */
+function SharedSourceTag({ roomId }: { roomId: string }): React.JSX.Element {
+  const t = useT()
+  const [, force] = useState(0)
+  useEffect(() => {
+    const bump = (): void => force((v) => v + 1)
+    window.addEventListener('sticki:srcchan', bump)
+    return () => window.removeEventListener('sticki:srcchan', bump)
+  }, [])
+  const name = getSourceChannelName(roomId)
+  return (
+    <span className="shared-src-tag" title={t('msg.sharedFrom', { channel: name ?? '…' })}>
+      🔀 {name ?? '…'}
+    </span>
   )
 }
 
@@ -401,6 +419,8 @@ function MessageViewInner({
       }
     : undefined
   const classes = ['msg']
+  // shared chat: visitors from the partner channel get a subtle tint + origin tag
+  if (msg.sourceRoomId) classes.push('shared-msg')
   if (settings.alternatingBackground && index % 2 === 1) classes.push('alt')
   if (isMention && settings.showMentionBg) classes.push('mention')
   if (msg.deleted) classes.push('deleted')
@@ -652,6 +672,7 @@ function MessageViewInner({
             🚨 {msg.raiderFrom}
           </span>
         )}
+        {msg.sourceRoomId && <SharedSourceTag roomId={msg.sourceRoomId} />}
         {msg.isAction ? ' ' : ': '}
         {brailleArt && !artLines && (
           <span className="art-width-ctl" title={`${artCols}`}>
