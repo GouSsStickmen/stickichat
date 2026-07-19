@@ -17,7 +17,7 @@ import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
 import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
-import { extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
+import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
 
 interface Props {
   msg: ChatMessage
@@ -152,25 +152,41 @@ let brailleCellWidth: number | null = null
 /** inline card under a message that contains a link (clip title+thumb / OG preview) */
 function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
   const enabled = useSettingsStore((s) => s.settings.linkPreviews)
-  const url = useMemo(() => (enabled ? extractFirstUrl(text) : null), [enabled, text])
+  const clipsOnly = useSettingsStore((s) => s.settings.linkPreviewsClipsOnly)
+  const scale = useSettingsStore((s) => s.settings.linkPreviewScale)
+  const url = useMemo(() => {
+    if (!enabled) return null
+    const u = extractFirstUrl(text)
+    if (!u) return null
+    if (clipsOnly && !clipSlugFromUrl(u)) return null
+    return u
+  }, [enabled, clipsOnly, text])
   const [data, setData] = useState<LinkPreviewData | null>(null)
   useEffect(() => {
     let alive = true
     setData(null)
-    if (url) fetchLinkPreview(url).then((d) => alive && d && setData(d))
+    if (url)
+      fetchLinkPreview(url).then((d) => {
+        if (!alive || !d) return
+        setData(d)
+        // the card makes the message taller AFTER render — a pinned-to-bottom list must
+        // re-pin, otherwise autoscroll appears "stuck" (especially in background windows)
+        window.dispatchEvent(new CustomEvent('sticki:grew'))
+      })
     return () => {
       alive = false
     }
   }, [url])
   if (!url || !data) return null
+  const zoomStyle = scale !== 100 ? ({ zoom: scale / 100 } as React.CSSProperties) : undefined
   const open = (): void => {
     window.sticki.openExternal(url)
   }
   if (data.kind === 'image') {
-    return <img className="lp-image" src={data.image} alt="" loading="lazy" onClick={open} title={url} />
+    return <img className="lp-image" style={zoomStyle} src={data.image} alt="" loading="lazy" onClick={open} title={url} />
   }
   return (
-    <div className="lp-card" onClick={open} title={url}>
+    <div className="lp-card" style={zoomStyle} onClick={open} title={url}>
       {data.image && <img className="lp-thumb" src={data.image} alt="" loading="lazy" />}
       <div className="lp-body">
         {data.siteName && (

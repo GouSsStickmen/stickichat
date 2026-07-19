@@ -283,6 +283,30 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   const [demo, setDemo] = useState(true)
   const pushTimer = useRef<number | null>(null)
   const cssRef = useRef<HTMLTextAreaElement>(null)
+  // Ctrl+Z: undo stack of config snapshots (grouped — at most one snapshot per 500ms burst)
+  const undoStack = useRef<ChatOverlayConfig[]>([])
+  const undoing = useRef(false)
+  const lastSnap = useRef(0)
+  const updateRef = useRef<(patch: Partial<ChatOverlayConfig>) => void>(() => {})
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.code !== 'KeyZ') return
+      const el = e.target as HTMLElement | null
+      // let text fields keep their native text undo
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return
+      const prev = undoStack.current.pop()
+      if (!prev) return
+      e.preventDefault()
+      undoing.current = true
+      try {
+        updateRef.current(prev)
+      } finally {
+        undoing.current = false
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   if (!ov) {
     return (
@@ -299,6 +323,12 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
 
   const update = (patch: Partial<ChatOverlayConfig>): void => {
     const fresh = useSettingsStore.getState().settings
+    const cur = fresh.chatOverlays.find((o) => o.id === overlayId)
+    if (cur && !undoing.current && Date.now() - lastSnap.current > 500) {
+      undoStack.current.push(JSON.parse(JSON.stringify(cur)) as ChatOverlayConfig)
+      if (undoStack.current.length > 60) undoStack.current.shift()
+      lastSnap.current = Date.now()
+    }
     const next = fresh.chatOverlays.map((o) => (o.id === overlayId ? { ...o, ...patch } : o))
     set({ chatOverlays: next })
     // push to the overlay server slightly debounced: every cfg event makes the page rebuild
@@ -316,6 +346,8 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
       window.sticki.overlayConfigure(true, s2.overlayPort, styles)
     }, 200)
   }
+
+  updateRef.current = update
 
   const applyPreset = (patch: Partial<ChatOverlayConfig>): void => {
     // a preset is a full restart from defaults + its own overrides — predictable results
@@ -479,10 +511,12 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                   min={-60}
                   max={60}
                   value={ov.tiltX}
+                  title={t('oe.rmbReset')}
                   onChange={(e) => update({ tiltX: parseInt(e.target.value, 10) })}
                   onContextMenu={(e) => { e.preventDefault(); update({ tiltX: 0 }) }}
                 />
-                <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>{ov.tiltX}°</span>
+                <Num v={ov.tiltX} on={(n) => update({ tiltX: n })} min={-60} max={60} w={56} def={0} />
+                <span className="hint">°</span>
               </div>
             </Row>
             <Row label={t('oe.persp.tiltY')}>
@@ -492,10 +526,12 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                   min={-60}
                   max={60}
                   value={ov.tiltY}
+                  title={t('oe.rmbReset')}
                   onChange={(e) => update({ tiltY: parseInt(e.target.value, 10) })}
                   onContextMenu={(e) => { e.preventDefault(); update({ tiltY: 0 }) }}
                 />
-                <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>{ov.tiltY}°</span>
+                <Num v={ov.tiltY} on={(n) => update({ tiltY: n })} min={-60} max={60} w={56} def={0} />
+                <span className="hint">°</span>
               </div>
             </Row>
             <Row label={t('oe.persp.rotate')}>
@@ -505,10 +541,12 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                   min={-45}
                   max={45}
                   value={ov.rotate}
+                  title={t('oe.rmbReset')}
                   onChange={(e) => update({ rotate: parseInt(e.target.value, 10) })}
                   onContextMenu={(e) => { e.preventDefault(); update({ rotate: 0 }) }}
                 />
-                <span style={{ width: 36, textAlign: 'right', color: 'var(--text-muted)' }}>{ov.rotate}°</span>
+                <Num v={ov.rotate} on={(n) => update({ rotate: n })} min={-45} max={45} w={56} def={0} />
+                <span className="hint">°</span>
               </div>
             </Row>
             {(ov.tiltX !== 0 || ov.tiltY !== 0) && (
@@ -608,6 +646,12 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
             </Row>
             <Toggle label={t('overlay.bold')} value={ov.bold} onChange={(v) => update({ bold: v })} />
             <Toggle label={t('oe.italic')} value={ov.italic} onChange={(v) => update({ italic: v })} />
+            <Row label={t('oe.meStyle')} hint={t('oe.meStyle.hint')}>
+              <select value={ov.meStyle} onChange={(e) => update({ meStyle: e.target.value as ChatOverlayConfig['meStyle'] })}>
+                <option value="colored">{t('oe.meStyle.colored')}</option>
+                <option value="plain">{t('oe.meStyle.plain')}</option>
+              </select>
+            </Row>
             <Row label={t('oe.textTransform')}>
               <select
                 value={ov.textTransform}
@@ -721,21 +765,22 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 )}
                 {ov.plateShape === 'rect' && (
                   <Row label={t('overlay.bgRadius')} hint={t('oe.radius.hint')}>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {ov.plateRadius.map((r, i) => (
-                        <Num
-                          key={i}
-                          v={r}
-                          w={46}
-                          max={80}
-                          on={(n) => {
-                            const next = [...ov.plateRadius] as ChatOverlayConfig['plateRadius']
-                            next[i] = n
-                            update({ plateRadius: next })
-                          }}
-                        />
-                      ))}
-                    </div>
+                    {(() => {
+                      const setRad = (i: number) => (n: number) => {
+                        const next = [...ov.plateRadius] as ChatOverlayConfig['plateRadius']
+                        next[i] = n
+                        update({ plateRadius: next })
+                      }
+                      // layout mirrors the plate: top row = top corners, bottom row = bottom
+                      return (
+                        <div className="oe-radius-grid">
+                          <label title={t('oe.radius.tl')}>⌜<Num v={ov.plateRadius[0]} w={46} max={80} on={setRad(0)} /></label>
+                          <label title={t('oe.radius.tr')}><Num v={ov.plateRadius[1]} w={46} max={80} on={setRad(1)} />⌝</label>
+                          <label title={t('oe.radius.bl')}>⌞<Num v={ov.plateRadius[3]} w={46} max={80} on={setRad(3)} /></label>
+                          <label title={t('oe.radius.br')}><Num v={ov.plateRadius[2]} w={46} max={80} on={setRad(2)} />⌟</label>
+                        </div>
+                      )
+                    })()}
                   </Row>
                 )}
                 <Row label={t('oe.border')}>

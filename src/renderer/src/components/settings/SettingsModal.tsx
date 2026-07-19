@@ -643,6 +643,39 @@ function ChatSection(): React.JSX.Element {
         <select value={settings.linkDisplay} onChange={(e) => set({ linkDisplay: e.target.value as Settings['linkDisplay'] })}>
           <option value="full">{t('set.linkDisplay.full')}</option>
           <option value="short">{t('set.linkDisplay.short')}</option>
+          <option value="overlayShort">{t('set.linkDisplay.overlayShort')}</option>
+        </select>
+      </div>
+      {settings.linkPreviews && (
+        <>
+          <Toggle
+            label={t('set.linkPreviewsClipsOnly')}
+            hint={t('hint.linkPreviewsClipsOnly')}
+            value={settings.linkPreviewsClipsOnly}
+            onChange={(v) => set({ linkPreviewsClipsOnly: v })}
+          />
+          <div className="set-row" title={t('hint.linkPreviewScale')}>
+            <label className="has-hint">{t('set.linkPreviewScale')}</label>
+            <input
+              type="number"
+              min={50}
+              max={150}
+              step={5}
+              style={{ width: 80 }}
+              value={settings.linkPreviewScale}
+              onChange={(e) => set({ linkPreviewScale: Math.max(50, Math.min(150, parseInt(e.target.value, 10) || 100)) })}
+            />
+          </div>
+        </>
+      )}
+      <div className="set-row" title={t('hint.inputAccountDisplay')}>
+        <label className="has-hint">{t('set.inputAccountDisplay')}</label>
+        <select
+          value={settings.inputAccountDisplay}
+          onChange={(e) => set({ inputAccountDisplay: e.target.value as Settings['inputAccountDisplay'] })}
+        >
+          <option value="name">{t('set.inputAccountDisplay.name')}</option>
+          <option value="avatar">{t('set.inputAccountDisplay.avatar')}</option>
         </select>
       </div>
       <Toggle label={t('set.showBits')} hint={t('hint.showBits')} value={settings.showBits} onChange={(v) => set({ showBits: v })} />
@@ -723,6 +756,7 @@ function NotificationsSection(): React.JSX.Element {
   const set = useSettingsStore((s) => s.setSettings)
   return (
     <Framed>
+      <div className="set-group-title">{t('set.group.chatAlerts')}</div>
       <Toggle label={t('set.mentionSound')} hint={t('hint.mentionSound')} value={settings.mentionSound} onChange={(v) => set({ mentionSound: v })} />
       {settings.mentionSound && <SoundSettings kind="mention" />}
       <Toggle
@@ -2079,8 +2113,6 @@ function OverlaySection(): React.JSX.Element {
 
 function AdvancedSection(): React.JSX.Element {
   const t = useT()
-  const clientId = useSettingsStore((s) => s.clientId)
-  const setClientId = useSettingsStore((s) => s.setClientId)
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
   const importRef = useRef<HTMLInputElement>(null)
@@ -2110,10 +2142,6 @@ function AdvancedSection(): React.JSX.Element {
 
   return (
     <Framed>
-      <div className="set-row" title={t('hint.clientId')}>
-        <label>{t('set.clientId')}</label>
-        <input style={{ width: 260 }} value={clientId} spellCheck={false} onChange={(e) => setClientId(e.target.value.trim())} />
-      </div>
       <div className="set-row" title={t('hint.msgLimit')}>
         <label>{t('set.msgLimit')}</label>
         <input

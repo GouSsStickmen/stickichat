@@ -106,6 +106,22 @@ export default function MessageList({
     return () => ro.disconnect()
   }, [scrollLocked])
 
+  // late content growth (link previews finishing their fetch) + background windows where
+  // rAF-driven followOutput gets throttled: an explicit re-pin keeps autoscroll alive
+  useEffect(() => {
+    const rePin = (): void => {
+      if (atBottomRef.current && !scrollLocked) {
+        virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
+      }
+    }
+    window.addEventListener('sticki:grew', rePin)
+    const keepalive = window.setInterval(rePin, 1500)
+    return () => {
+      window.removeEventListener('sticki:grew', rePin)
+      window.clearInterval(keepalive)
+    }
+  }, [scrollLocked])
+
   // history often arrives AFTER the empty list mounted — snap to the bottom on first fill,
   // otherwise the view stays parked at the top of the freshly-prepended scrollback
   const hadMessagesRef = useRef(false)

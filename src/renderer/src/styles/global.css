@@ -2043,6 +2043,8 @@ input[type='range'] {
   appearance: none;
   height: 18px;
   background: transparent;
+  border: none; /* the generic input frame looks wrong around a slider */
+  border-radius: 0;
   cursor: pointer;
   padding: 0;
 }
@@ -3179,6 +3181,13 @@ input[type='number']::-webkit-inner-spin-button {
   cursor: default;
   white-space: nowrap;
 }
+.streak-chip {
+  cursor: pointer;
+}
+.streak-chip.unclaimed {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
 .streak-chip.claimed {
   color: #4ade80;
   border-color: rgba(74, 222, 128, 0.45);
@@ -3193,4 +3202,18 @@ input[type='number']::-webkit-inner-spin-button {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+
+/* overlay editor: 2x2 corner-radius grid mirroring the plate's corners */
+.oe-radius-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 12px;
+}
+.oe-radius-grid label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  color: var(--text-faint);
 }

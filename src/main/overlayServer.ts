@@ -226,6 +226,10 @@ const OVERLAY_HTML = `<!doctype html>
   #zone.layout-horizontal .content { white-space: nowrap; }
   #zone.layout-horizontal .body { white-space: nowrap; }
   .meta { display: flex; align-items: center; gap: 4px; }
+  /* INLINE nick: align by TEXT baseline; badges/time center themselves so a tall badge
+     doesn't push the nick above the message text */
+  .body .meta { align-items: baseline; }
+  .body .meta .badges, .body .meta .ts { align-self: center; }
   .meta.chip { display: inline-flex; }
   .badges { display: inline-flex; align-items: center; gap: 2px; vertical-align: -0.15em; }
   .badges img { display: inline-block; border-radius: 2px; }
@@ -432,6 +436,7 @@ const OVERLAY_HTML = `<!doctype html>
     layout: 'list', direction: 'up', align: 'left', anchor: 'bottom',
     maxMessages: 15, fadeAfter: 0, lineGap: 4, zonePad: 8, edgeFade: 0,
     animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
+    meStyle: 'colored',
     msgSoundEnabled: false, msgSoundData: '', msgSoundVolume: 0.5,
     tiltX: 0, tiltY: 0, rotate: 0, perspDepth: 800,
     font: '', fontData: '', fontSize: 16, bold: false, italic: false, textTransform: 'none',
@@ -970,7 +975,9 @@ const OVERLAY_HTML = `<!doctype html>
       }
       var text = document.createElement('span')
       text.innerHTML = d.body || ''
-      text.style.fontStyle = cfg.italic ? 'italic' : 'normal'
+      // /me action: tint the text with the user's color (like chat) unless set to plain
+      if (d.act && cfg.meStyle !== 'plain') text.style.color = nickColorFor(d)
+      text.style.fontStyle = (d.act && cfg.meStyle !== 'plain') || cfg.italic ? 'italic' : 'normal'
       text.style.textTransform = cfg.textTransform === 'upper' ? 'uppercase' : cfg.textTransform === 'lower' ? 'lowercase' : 'none'
       body.appendChild(text)
       content.appendChild(body)

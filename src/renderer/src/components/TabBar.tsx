@@ -81,7 +81,17 @@ export default function TabBar(): React.JSX.Element {
       : tabs.filter((tab) => tab.pinned || (tabFilter === 'online' ? isLiveTab(tab) : !isLiveTab(tab)))
   const cycleFilter = (): void =>
     setSettings({ tabFilter: tabFilter === 'all' ? 'online' : tabFilter === 'online' ? 'offline' : 'all' })
-  const filterIcon = tabFilter === 'online' ? '🟢' : tabFilter === 'offline' ? '⚫' : '≡'
+  const filterIcon =
+    tabFilter === 'online' ? (
+      '🟢'
+    ) : tabFilter === 'offline' ? (
+      '⚫'
+    ) : (
+      // funnel — the conventional "filter" glyph
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M3 5h18l-7 8.5V19l-4 2v-7.5L3 5z" />
+      </svg>
+    )
 
   return (
     <div className="tabbar">

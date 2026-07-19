@@ -319,6 +319,8 @@ export interface ChatOverlayConfig {
   fadeAfter: number
   /** px between messages */
   lineGap: number
+  /** how /me action messages render: user-colored text (like chat) or plain */
+  meStyle: 'colored' | 'plain'
   /** credits-style push: new messages smoothly slide the chat instead of jumping */
   smoothScroll: boolean
   /** ms of the smooth push */
@@ -523,6 +525,7 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   maxMessages: 15,
   fadeAfter: 0,
   lineGap: 4,
+  meStyle: 'colored',
   smoothScroll: false,
   smoothScrollMs: 300,
   zonePad: 8,
@@ -645,6 +648,8 @@ export interface OverlayLineData {
   nick: string
   /** resolved nick color (twitch or 7TV solid) */
   color: string
+  /** /me action message */
+  act?: boolean
   /** 7TV paint — CSS background value clipped to the nick text */
   paint?: string
   avatar?: string
@@ -886,8 +891,14 @@ export interface Settings {
   showFirstMsgBg: boolean
   /** inline preview cards for links in chat (Twitch clips get title + thumbnail) */
   linkPreviews: boolean
-  /** how link URLs render in chat AND the overlay: full URL or a short clickable "link" chip */
-  linkDisplay: 'full' | 'short'
+  /** link URLs: full everywhere · short chip everywhere · short chip only in the overlay */
+  linkDisplay: 'full' | 'short' | 'overlayShort'
+  /** link preview cards only for Twitch clip links */
+  linkPreviewsClipsOnly: boolean
+  /** preview card scale, % (100 = normal) */
+  linkPreviewScale: number
+  /** account picker next to the input: full name select or a compact avatar button */
+  inputAccountDisplay: 'name' | 'avatar'
   /** which tab the highlight sidebar opens on */
   highlightSidebarDefault: 'highlights' | 'mentions' | 'redeems'
   /** extra px of line-height inside messages (emote rows overlapping) */
@@ -1064,6 +1075,9 @@ export const DEFAULT_SETTINGS: Settings = {
   showFirstMsgBg: true,
   linkPreviews: true,
   linkDisplay: 'full',
+  linkPreviewsClipsOnly: false,
+  linkPreviewScale: 100,
+  inputAccountDisplay: 'name',
   highlightSidebarDefault: 'highlights',
   lineSpacing: 0,
   rememberWindowSize: true,

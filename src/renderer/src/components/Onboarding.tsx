@@ -84,7 +84,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }): React.JS
             <div className="row">
               <button onClick={() => setAuthOpen(true)}>{t('auth.addAccount')}</button>
               <div style={{ flex: 1 }} />
-              <button className="primary" disabled={accounts.length === 0} onClick={onDone}>
+              <button className="primary" onClick={onDone}>
                 {t('onb.done')}
               </button>
             </div>

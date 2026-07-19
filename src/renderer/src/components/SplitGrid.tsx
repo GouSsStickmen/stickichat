@@ -33,15 +33,15 @@ export default function SplitGrid(): React.JSX.Element | null {
       ))}
       {n === 0 && (
         <div className="empty-tab">
-          {/* a fresh tab asks for the channel right away, no extra click */}
-          <AddPaneForm tabId={tab.id} onDone={() => undefined} />
+          {/* a fresh tab asks for the channel right away, no extra click — nothing to cancel */}
+          <AddPaneForm tabId={tab.id} onDone={() => undefined} cancelable={false} />
         </div>
       )}
     </div>
   )
 }
 
-export function AddPaneForm({ tabId, onDone }: { tabId: string; onDone: () => void }): React.JSX.Element {
+export function AddPaneForm({ tabId, onDone, cancelable = true }: { tabId: string; onDone: () => void; cancelable?: boolean }): React.JSX.Element {
   const t = useT()
   const accounts = useAccountsStore((s) => s.accounts)
   const tabs = useLayoutStore((s) => s.tabs)
@@ -60,6 +60,7 @@ export function AddPaneForm({ tabId, onDone }: { tabId: string; onDone: () => vo
 
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="hint" style={{ width: '100%', color: 'var(--text-faint)' }}>{t('pane.addHint')}</div>
       <input
         autoFocus
         list="known-channels"
@@ -99,9 +100,11 @@ export function AddPaneForm({ tabId, onDone }: { tabId: string; onDone: () => vo
       <button className="primary" onClick={submit}>
         {t('misc.add')}
       </button>
-      <button className="ghost" onClick={onDone}>
-        ✕
-      </button>
+      {cancelable && (
+        <button className="ghost" title={t('oe.cancel')} onClick={onDone}>
+          ✕
+        </button>
+      )}
     </div>
   )
 }

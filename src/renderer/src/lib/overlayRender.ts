@@ -34,7 +34,7 @@ function bodyHtml(msg: ChatMessage): string {
         break
       case 'link':
         out +=
-          useSettingsStore.getState().settings.linkDisplay === 'short'
+          useSettingsStore.getState().settings.linkDisplay !== 'full'
             ? '\uD83D\uDD17\u00A0' + esc(translate(useSettingsStore.getState().settings.language, 'misc.linkShort'))
             : esc(tk.label)
         break
@@ -104,6 +104,7 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
     badges,
     body: msg.text ? bodyHtml(msg) : '',
     text: msg.text,
+    act: msg.isAction || undefined,
     kind: 'msg',
     ts: msg.timestamp,
     redeem: !!msg.redeemed,

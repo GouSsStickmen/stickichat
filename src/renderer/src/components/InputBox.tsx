@@ -61,6 +61,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   // own watch streak for this channel (from viewermilestone notices we've seen)
   const streamInfo = useChatStore((s) => s.streamInfo[pane.channel])
   const [streakVer, setStreakVer] = useState(0)
+  const [streakOpen, setStreakOpen] = useState(false)
   useEffect(() => {
     const bump = (): void => setStreakVer((v) => v + 1)
     window.addEventListener('sticki:streak', bump)
@@ -106,6 +107,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const draftRef = useRef('')
   const rowRef = useRef<HTMLDivElement>(null)
   const [narrow, setNarrow] = useState(false)
+  const accountAsAvatar = useSettingsStore((s) => s.settings.inputAccountDisplay) === 'avatar'
   const [acctOpen, setAcctOpen] = useState(false)
 
   // narrow panes swap the account <select> for a compact avatar button
@@ -522,7 +524,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             onClose={() => setPickerOpen(false)}
           />
         )}
-        {narrow ? (
+        {narrow || accountAsAvatar ? (
           <span style={{ position: 'relative' }}>
             <button
               className="ghost account-compact"
@@ -615,17 +617,19 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
           )}
         </div>
         {myStreak && (
-          <span
-            className={`streak-chip ${streakClaimed ? 'claimed' : ''}`}
+          <button
+            type="button"
+            className={`streak-chip ${streakClaimed ? 'claimed' : 'unclaimed'}`}
             title={
               streakClaimed
                 ? t('input.streak.claimed', { n: myStreak.n })
                 : t('input.streak.unclaimed', { n: myStreak.n })
             }
+            onClick={() => setStreakOpen((v) => !v)}
           >
-            🔥{myStreak.n}
-            {streakClaimed ? ' ✓' : ''}
-          </span>
+            🔥
+            {streakOpen ? ` ${myStreak.n}` : ''}
+          </button>
         )}
         {translitEnabled && (
           <button
