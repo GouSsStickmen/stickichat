@@ -1162,8 +1162,13 @@ const OVERLAY_HTML = `<!doctype html>
     var h = el.offsetHeight || 24
     var speed = Math.max(5, cfg.creditsSpeed || 40)
     var now = Date.now()
+    // stale queue (quiet chat) → next line starts right away
+    if (creditsLast.t < now - 2000) creditsLast = { t: 0, h: 0 }
     var minDelay = ((creditsLast.h + (cfg.lineGap || 4)) / speed) * 1000
     var startAt = Math.max(now, creditsLast.t + minDelay)
+    // the queue must NEVER drift far into the future (config-change rebuilds used to pile
+    // lines endlessly forward — the overlay looked completely empty)
+    if (startAt > now + 6000) startAt = now + 6000
     creditsLast = { t: startAt, h: h }
     setTimeout(function () {
       if (!el.parentNode) return
@@ -1404,6 +1409,7 @@ const OVERLAY_HTML = `<!doctype html>
     zone.style.transformOrigin = cfg.anchor === 'top' || cfg.direction === 'down' ? '50% 0%' : '50% 100%'
 
     // rebuild all visible lines with the new structure/styles
+    creditsLast = { t: 0, h: 0 } // credits queue restarts with the rebuild
     var kids = zone.querySelectorAll(':scope > .line')
     for (var k = 0; k < kids.length; k++) kids[k].remove()
     var data = lines.slice(-cfg.maxMessages)
@@ -1628,6 +1634,8 @@ const OVERLAY_HTML = `<!doctype html>
   connect()
   if (editMode) startEditMode()
   else if (preview) startDemo()
+  // debug hook (harmless in OBS): lets diagnostics poke the page state from devtools
+  window.__oe = { cfg: cfg, applyCfg: applyCfg, append: append, zone: zone }
 })()
 </script>
 </body>
