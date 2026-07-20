@@ -623,10 +623,16 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               </Row>
             )}
             {ov.creditsMode && (
-              <Row label={t('oe.creditsSpeed')} hint={t('oe.credits.hint')}>
-                <Num v={ov.creditsSpeed} on={(n) => update({ creditsSpeed: n })} min={10} max={300} w={64} def={40} />
-                <span className="hint">px/с</span>
-              </Row>
+              <>
+                <Row label={t('oe.creditsSpeed')} hint={t('oe.credits.hint')}>
+                  <Num v={ov.creditsSpeed} on={(n) => update({ creditsSpeed: n })} min={10} max={300} w={64} def={40} />
+                  <span className="hint">px/с</span>
+                </Row>
+                <Row label={t('oe.creditsHeight')} hint={t('oe.creditsHeight.hint')}>
+                  <Num v={ov.creditsHeight} on={(n) => update({ creditsHeight: n })} min={0} max={2160} w={72} def={0} />
+                  <span className="hint">px</span>
+                </Row>
+              </>
             )}
             <Row label={t('oe.zonePad')}>
               <Num v={ov.zonePad} on={(n) => update({ zonePad: n })} min={0} max={80} />

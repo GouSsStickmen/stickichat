@@ -452,7 +452,7 @@ const OVERLAY_HTML = `<!doctype html>
     maxMessages: 15, fadeAfter: 0, lineGap: 4, zonePad: 8, edgeFade: 0,
     animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
     meStyle: 'colored',
-    creditsMode: false, creditsSpeed: 40,
+    creditsMode: false, creditsSpeed: 40, creditsHeight: 0,
     badgeKinds: [], userBadges: [], badgeReplace: {},
     nickRotate: 0, avatarOffsetX: 0, avatarOffsetY: 0, badgeOffsetX: 0, badgeOffsetY: 0,
     tsOffsetX: 0, tsOffsetY: 0, textOffsetX: 0, textOffsetY: 0,
@@ -1092,6 +1092,8 @@ const OVERLAY_HTML = `<!doctype html>
     if (editMode) return
     if (!el || !el.parentNode) return
     var outMs = cfg.animOutMs || cfg.animMs || 200
+    // a flying credits line: exit animations would clobber the flight transform — instant
+    if (el.classList.contains('credits')) animate = false
     if (animate && cfg.animOut && cfg.animOut !== 'none') {
       animVars(el, cfg.animOutDir || 'left')
       var ao = cfg.animOut
@@ -1172,11 +1174,13 @@ const OVERLAY_HTML = `<!doctype html>
     creditsLast = { t: startAt, h: h }
     setTimeout(function () {
       if (!el.parentNode) return
-      var zh = zone.clientHeight || 600
+      // messages live until they reach the TOP of the credits band: a configured height,
+      // or the whole screen (the old zone.clientHeight was tiny → lines died in seconds)
+      var band = cfg.creditsHeight > 0 ? cfg.creditsHeight : (window.innerHeight || 600)
       el.style.setProperty('--cstart', h + 'px')
-      el.style.setProperty('--cend', -(zh + 40) + 'px')
+      el.style.setProperty('--cend', -(band + 40) + 'px')
       el.style.visibility = ''
-      el.style.animation = 'credits-fly ' + ((zh + h + 40) / speed) + 's linear forwards'
+      el.style.animation = 'credits-fly ' + ((band + h + 40) / speed) + 's linear forwards'
       el.addEventListener('animationend', function (ev) {
         if (ev.target !== el) return
         var i = indexOfEl(el)
@@ -1195,10 +1199,18 @@ const OVERLAY_HTML = `<!doctype html>
     var el = assemble(d)
     if (cfg.direction === 'down') zone.insertBefore(el, zone.firstChild)
     else zone.appendChild(el)
-    if (creditsActive()) startCredits(el)
-    // trim overflow: the pushed-out message leaves with the exit animation instead of
-    // vanishing instantly (count only real lines that aren't already animating away)
-    if (creditsActive()) return
+    if (creditsActive()) {
+      startCredits(el)
+      // the message COUNT is still capped by "max messages" — drop the oldest instantly
+      var flying = zone.querySelectorAll(':scope > .line')
+      for (var fi = 0; fi < flying.length - cfg.maxMessages; fi++) {
+        var old = flying[fi]
+        var oi = indexOfEl(old)
+        if (oi !== -1) lines.splice(oi, 1)
+        old.remove()
+      }
+      return
+    }
     var vis = []
     for (var ci = 0; ci < zone.children.length; ci++) {
       var ck = zone.children[ci]
