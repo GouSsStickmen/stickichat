@@ -94,7 +94,9 @@ export function emojiImageUrl(char: string): string | null {
   // one consistent look and exactly one cell everywhere. EmojiGlyph falls back to the
   // native glyph if the CDN can't serve a sequence.
   const code = [...char].map((c) => c.codePointAt(0)!.toString(16)).join('-')
-  return `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${code}.png`
+  // Apple artwork (the set Telegram uses) — emoji-datasource files are named with the FULL
+  // codepoint sequence incl. FE0F, which matches our join exactly (Twemoji 404'd on those)
+  return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${code}.png`
 }
 
 // The glyph-support scan (~2000 canvas renders) is expensive and identical in every

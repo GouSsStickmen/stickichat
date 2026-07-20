@@ -19,7 +19,7 @@ export default function EmojiGlyph({ char, className }: { char: string; classNam
           if (!img.dataset.alt) {
             img.dataset.alt = '1'
             const codes = [...shown].map((c) => c.codePointAt(0)!.toString(16)).filter((c) => c !== 'fe0f')
-            img.src = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${codes.join('-')}.png`
+            img.src = `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${codes.join('-')}.png`
           } else {
             img.style.display = 'none'
             img.insertAdjacentText('afterend', shown)

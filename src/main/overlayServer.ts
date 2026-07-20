@@ -453,6 +453,7 @@ const OVERLAY_HTML = `<!doctype html>
     animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
     meStyle: 'colored',
     creditsMode: false, creditsSpeed: 40,
+    badgeKinds: [], userBadges: [],
     nickRotate: 0, avatarOffsetX: 0, avatarOffsetY: 0, badgeOffsetX: 0, badgeOffsetY: 0,
     tsOffsetX: 0, tsOffsetY: 0, textOffsetX: 0, textOffsetY: 0,
     msgSoundEnabled: false, msgSoundData: '', msgSoundVolume: 0.5,
@@ -837,16 +838,36 @@ const OVERLAY_HTML = `<!doctype html>
     if (cfg.nickRotate) meta.style.rotate = cfg.nickRotate + 'deg'
     meta.className = 'meta'
     var badges = null
-    if (cfg.badgesShow && d.badges && d.badges.length) {
+    // custom badge pinned to this user (shown first, before Twitch badges)
+    var customBadge = null
+    if (cfg.userBadges && cfg.userBadges.length && d.login) {
+      for (var ci = 0; ci < cfg.userBadges.length; ci++) {
+        if (cfg.userBadges[ci].login === String(d.login).toLowerCase() && cfg.userBadges[ci].image) {
+          customBadge = cfg.userBadges[ci].image
+          break
+        }
+      }
+    }
+    if (cfg.badgesShow && ((d.badges && d.badges.length) || customBadge)) {
       badges = document.createElement('span')
       if (cfg.badgeOffsetX || cfg.badgeOffsetY) badges.style.translate = (cfg.badgeOffsetX || 0) + 'px ' + (cfg.badgeOffsetY || 0) + 'px'
       badges.className = 'badges'
-      for (var i = 0; i < d.badges.length; i++) {
+      if (customBadge) {
+        var cb = document.createElement('img')
+        cb.src = customBadge
+        cb.style.height = cfg.badgeSize + 'px'
+        badges.appendChild(cb)
+      }
+      var kindFilter = cfg.badgeKinds && cfg.badgeKinds.length ? cfg.badgeKinds : null
+      for (var i = 0; i < (d.badges || []).length; i++) {
+        // kind filter: only listed badge types pass (unknown kinds pass when no sets info)
+        if (kindFilter && d.badgeSets && d.badgeSets[i] && kindFilter.indexOf(d.badgeSets[i]) === -1) continue
         var b = document.createElement('img')
         b.src = d.badges[i]
         b.style.height = cfg.badgeSize + 'px'
         badges.appendChild(b)
       }
+      if (!badges.childNodes.length) badges = null
     }
     var nick = document.createElement('span')
     nick.className = 'nick'
@@ -1415,13 +1436,13 @@ const OVERLAY_HTML = `<!doctype html>
   var EMOTE = 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0'
   function demoLines() {
     return [
-      { nick: 'Bobik069', color: '#ff69b4', badges: [BADGE_MOD], body: 'привіт чат! 💜', av: 'B' },
+      { nick: 'Bobik069', color: '#ff69b4', badges: [BADGE_MOD], body: 'привіт чат! <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f49c.png">', av: 'B' },
       { nick: 'Pinuses', color: '#5cb2ff', badges: [], body: 'that timing was clean <img class="emote" src="' + EMOTE + '">', av: 'P' },
-      { nick: 'Meme_gavgav', color: '#7cff5c', badges: [BADGE_VIP], body: 'гав гав гав 🐶', av: 'M' },
+      { nick: 'Meme_gavgav', color: '#7cff5c', badges: [BADGE_VIP], body: 'гав гав гав <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f436.png">', av: 'M' },
       { nick: 'I_Love_Vladyslav', color: '#ffd75c', badges: [], body: 'Їжте щедрі ґрона! Quick brown fox 0123', av: 'I' },
       { nick: 'Ivan_In_My_Ass', color: '#ff8a5c', badges: [], body: 'хто тут головний по мемах?', av: 'I' },
-      { nick: 'n1cole_cat', color: '#5cffd7', badges: [BADGE_VIP], body: 'мур-мур 😺 клас стрім', av: 'N' },
-      { nick: 'Mira_Cat', color: '#c95cff', badges: [BADGE_MOD, BADGE_VIP], body: 'дуже класний оверлей вийшов 🐱', av: 'M' }
+      { nick: 'n1cole_cat', color: '#5cffd7', badges: [BADGE_VIP], body: 'мур-мур <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f63a.png"> клас стрім', av: 'N' },
+      { nick: 'Mira_Cat', color: '#c95cff', badges: [BADGE_MOD, BADGE_VIP], body: 'дуже класний оверлей вийшов <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f431.png">', av: 'M' }
     ]
   }
   function startDemo() {
@@ -1502,14 +1523,20 @@ const OVERLAY_HTML = `<!doctype html>
       ts: Date.now()
     })
     var drag = null
+    document.addEventListener('contextmenu', function (e) { e.preventDefault() })
     document.addEventListener('pointerdown', function (e) {
-      var kind = editTargetOf(e.target)
-      if (!kind) {
-        // empty space: pan the parent's preview viewport
-        drag = { kind: 'pan', x: e.clientX, y: e.clientY }
-        e.preventDefault()
+      // Ctrl + RIGHT mouse anywhere = pan the parent's preview viewport. SCREEN coords:
+      // client coords shift together with the transformed iframe and fed back into a
+      // jitter loop — screen coords are stable
+      if (e.button === 2) {
+        if (e.ctrlKey) {
+          drag = { kind: 'pan', x: e.screenX, y: e.screenY }
+          e.preventDefault()
+        }
         return
       }
+      var kind = editTargetOf(e.target)
+      if (!kind) return
       drag = { kind: kind, x: e.clientX, y: e.clientY, base: editBase(kind) }
       e.preventDefault()
     })
@@ -1534,10 +1561,10 @@ const OVERLAY_HTML = `<!doctype html>
       if (!drag) return
       if (drag.kind === 'pan') {
         try {
-          window.parent.postMessage({ __oeEdit: true, panBy: { x: e.clientX - drag.x, y: e.clientY - drag.y } }, '*')
+          window.parent.postMessage({ __oeEdit: true, panBy: { x: e.screenX - drag.x, y: e.screenY - drag.y } }, '*')
         } catch (err) { /* noop */ }
-        drag.x = e.clientX
-        drag.y = e.clientY
+        drag.x = e.screenX
+        drag.y = e.screenY
         return
       }
       var x = drag.base[0] + Math.round(e.clientX - drag.x)

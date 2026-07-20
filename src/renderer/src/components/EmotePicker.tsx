@@ -269,7 +269,8 @@ export default function EmotePicker({
     const favKey = `${e.provider}:${e.code}`
     const isFav = favSet.has(favKey)
     // kaomoji live under the 'emoji' provider but are long text — they need a wide cell
-    const isKaomoji = e.provider === 'emoji' && Array.from(e.code).length > 3
+    // kaomoji are TEXT art; emoji ZWJ sequences also exceed 3 units but must stay square
+    const isKaomoji = e.provider === 'emoji' && Array.from(e.code).length > 3 && !/\p{Extended_Pictographic}/u.test(e.code)
     return (
       <button
         key={favKey}

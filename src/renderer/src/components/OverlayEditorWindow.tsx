@@ -53,6 +53,18 @@ const ANIM_LABEL: Record<string, string> = {
 const DIRECTIONAL_IN = new Set<string>(['slide', 'bounce', 'elastic', 'flip', 'roll', 'rise', 'wobble', 'skew'])
 const DIRECTIONAL_OUT = new Set<string>(['slide', 'roll', 'rise', 'wobble', 'skew', 'flip'])
 
+/** common Twitch badge kinds for the overlay filter (setId → label) */
+const BADGE_KIND_OPTS: { id: string; label: string }[] = [
+  { id: 'broadcaster', label: 'Стример' },
+  { id: 'moderator', label: 'Модератор' },
+  { id: 'vip', label: 'VIP' },
+  { id: 'subscriber', label: 'Саби' },
+  { id: 'founder', label: 'Засновники' },
+  { id: 'sub-gifter', label: 'Дарувальники' },
+  { id: 'bits', label: 'Біти' },
+  { id: 'partner', label: 'Партнер' }
+]
+
 function Num({
   v,
   on,
@@ -331,9 +343,8 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
       else if (d.undo) undoFnRef.current()
       else if (d.redo) redoFnRef.current()
       else if (d.panBy) {
-        const z = zoomRef.current
         const pb = d.panBy
-        setPvPan((p) => ({ x: p.x + pb.x * z, y: p.y + pb.y * z }))
+        setPvPan((p) => ({ x: p.x + pb.x, y: p.y + pb.y }))
       } else if (d.zoomStep) {
         const zs = d.zoomStep
         const oldZ = zoomRef.current
@@ -1195,6 +1206,62 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 <Row label={t('oe.badgeSize')}>
                   <Num v={ov.badgeSize} on={(n) => update({ badgeSize: n })} min={10} max={40} />
                 </Row>
+                <Row label={t('oe.badgeKinds')} hint={t('oe.badgeKinds.hint')}>
+                  <div className="oe-badge-kinds">
+                    {BADGE_KIND_OPTS.map((k) => (
+                      <label key={k.id}>
+                        <input
+                          type="checkbox"
+                          checked={ov.badgeKinds.length === 0 || ov.badgeKinds.includes(k.id)}
+                          onChange={(e) => {
+                            const all = BADGE_KIND_OPTS.map((x) => x.id)
+                            let cur = ov.badgeKinds.length === 0 ? all : [...ov.badgeKinds]
+                            cur = e.target.checked ? [...cur, k.id] : cur.filter((x) => x !== k.id)
+                            // every kind on → empty list = "show all" (incl. rare kinds)
+                            update({ badgeKinds: cur.length >= all.length ? [] : cur })
+                          }}
+                        />
+                        {k.label}
+                      </label>
+                    ))}
+                  </div>
+                </Row>
+                <div className="oe-block-label">{t('oe.userBadges')}</div>
+                <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>{t('oe.userBadges.hint')}</p>
+                {ov.userBadges.map((ub, i) => (
+                  <div key={i} className="oe-user-badge">
+                    <img src={ub.image} alt="" />
+                    <input
+                      value={ub.login}
+                      placeholder={t('oe.userBadges.login')}
+                      spellCheck={false}
+                      onChange={(e) => {
+                        const next = [...ov.userBadges]
+                        next[i] = { ...ub, login: e.target.value.trim().toLowerCase().replace(/^@/, '') }
+                        update({ userBadges: next })
+                      }}
+                    />
+                    <button className="danger" onClick={() => update({ userBadges: ov.userBadges.filter((_, j) => j !== i) })}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <label className="oe-upload-btn">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      const r = new FileReader()
+                      r.onload = () => update({ userBadges: [...ov.userBadges, { login: '', image: String(r.result) }] })
+                      r.readAsDataURL(f)
+                      e.target.value = ''
+                    }}
+                  />
+                  📁 {t('oe.userBadges.add')}
+                </label>
               </>
             )}
             <Toggle label={t('oe.tsShow')} value={ov.tsShow} onChange={(v) => update({ tsShow: v })} />

@@ -32,7 +32,7 @@ function bodyHtml(msg: ChatMessage): string {
       case 'emoji': {
         // same reasoning as chat: Twemoji image = consistent one-cell rendering in OBS
         const code = [...tk.char].map((c) => c.codePointAt(0)!.toString(16)).join('-')
-        out += `<img class="emoji-img" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${code}.png" alt="${esc(tk.char)}">`
+        out += `<img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${code}.png" alt="${esc(tk.char)}">`
         break
       }
       case 'link':
@@ -92,9 +92,13 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
   const color = ensureReadable(cosmetic?.color || msg.color || fallbackColor(msg.login), true)
 
   const badges: string[] = []
+  const badgeSets: string[] = []
   for (const b of msg.badges) {
     const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
-    if (url) badges.push(url)
+    if (url) {
+      badges.push(url)
+      badgeSets.push(b.setId)
+    }
   }
 
   const line: OverlayLineData = {
@@ -106,6 +110,7 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
     paint: cosmetic?.paint,
     avatar: ensureAvatar(msg.login),
     badges,
+    badgeSets,
     body: msg.text ? bodyHtml(msg) : '',
     text: msg.text,
     act: msg.isAction || undefined,

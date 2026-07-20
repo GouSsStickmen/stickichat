@@ -325,6 +325,10 @@ export interface ChatOverlayConfig {
   lineGap: number
   /** how /me action messages render: user-colored text (like chat) or plain */
   meStyle: 'colored' | 'plain'
+  /** which badge KINDS to show (setIds); empty = all badges */
+  badgeKinds: string[]
+  /** custom badges pinned to specific users (login → uploaded image) */
+  userBadges: { login: string; image: string }[]
   /** visual-editor offsets (px) and nick rotation (deg) — all default 0 */
   nickRotate: number
   avatarOffsetX: number
@@ -544,6 +548,8 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   fadeAfter: 0,
   lineGap: 4,
   meStyle: 'colored',
+  badgeKinds: [],
+  userBadges: [],
   nickRotate: 0,
   avatarOffsetX: 0,
   avatarOffsetY: 0,
@@ -684,6 +690,8 @@ export interface OverlayLineData {
   avatar?: string
   /** badge image urls */
   badges: string[]
+  /** badge setIds parallel to `badges` (for kind filtering on the page) */
+  badgeSets?: string[]
   /** message body as safe HTML (emotes/cheers as <img>) */
   body: string
   /** plain message text (for word/symbol triggers on the page) */
