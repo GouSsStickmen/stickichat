@@ -869,7 +869,14 @@ const OVERLAY_HTML = `<!doctype html>
           if (kindFilter.indexOf(kind) === -1) continue
         }
         var b = document.createElement('img')
-        var rep = setId && cfg.badgeReplace ? cfg.badgeReplace[setId] : null
+        // replacement: the exact "set/version" key (specific predictions variant) beats
+        // the kind-wide key ("predictions" = every variant)
+        var ver = d.badgeVers ? d.badgeVers[i] : null
+        var rep = null
+        if (setId && cfg.badgeReplace) {
+          if (ver && cfg.badgeReplace[setId + '/' + ver]) rep = cfg.badgeReplace[setId + '/' + ver]
+          else if (cfg.badgeReplace[setId]) rep = cfg.badgeReplace[setId]
+        }
         b.src = rep || d.badges[i]
         b.style.height = cfg.badgeSize + 'px'
         badges.appendChild(b)

@@ -64,17 +64,24 @@ const BADGE_KIND_OPTS: { id: string; label: string }[] = [
   { id: 'global', label: 'Глобальні' }
 ]
 
-/** kinds whose image can be replaced with a custom upload */
-const BADGE_REPLACE_OPTS: { id: string; label: string }[] = [
+/** replaceable badges: kind-wide keys + per-variant keys (predictions has ~22 variants) */
+const BADGE_REPLACE_CHOICES: { id: string; label: string }[] = [
   { id: 'broadcaster', label: 'Стример' },
   { id: 'moderator', label: 'Модератор' },
   { id: 'vip', label: 'VIP' },
-  { id: 'subscriber', label: 'Саби' },
+  { id: 'subscriber', label: 'Саби (всі)' },
   { id: 'founder', label: 'Засновники' },
   { id: 'sub-gifter', label: 'Подаровані саби' },
   { id: 'bits', label: 'Біти' },
-  { id: 'predictions', label: 'Предікшини' }
+  { id: 'predictions', label: 'Предікшн (усі варіанти)' },
+  ...Array.from({ length: 10 }, (_, i) => ({ id: `predictions/blue-${i + 1}`, label: `Предікшн · синій ${i + 1}` })),
+  ...Array.from({ length: 10 }, (_, i) => ({ id: `predictions/pink-${i + 1}`, label: `Предікшн · рожевий ${i + 1}` })),
+  { id: 'predictions/gray-1', label: 'Предікшн · сірий 1' },
+  { id: 'predictions/gray-2', label: 'Предікшн · сірий 2' }
 ]
+const BADGE_REPLACE_LABEL: Record<string, string> = Object.fromEntries(
+  BADGE_REPLACE_CHOICES.map((c) => [c.id, c.label])
+)
 
 function Num({
   v,
@@ -303,6 +310,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   const [pvColor, setPvColor] = useState('#3f4652')
   const [pvImage, setPvImage] = useState<string | undefined>(() => localStorage.getItem('sticki:oePvImage') ?? undefined)
   const [presetName, setPresetName] = useState('')
+  const [repSel, setRepSel] = useState('moderator')
   const [demo, setDemo] = useState(true)
   // preview zoom/pan + the single-message visual edit mode
   const [editMode, setEditMode] = useState(false)
@@ -1239,38 +1247,45 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 </Row>
                 <div className="oe-block-label">{t('oe.badgeReplace')}</div>
                 <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>{t('oe.badgeReplace.hint')}</p>
-                {BADGE_REPLACE_OPTS.map((k) => (
-                  <div key={k.id} className="oe-user-badge">
-                    <span style={{ width: 118, fontSize: 12, color: 'var(--text-muted)' }}>{k.label}</span>
-                    {ov.badgeReplace[k.id] ? <img src={ov.badgeReplace[k.id]} alt="" /> : <span className="hint">—</span>}
-                    <label className="oe-upload-btn" style={{ margin: 0 }}>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0]
-                          if (!f) return
-                          const r = new FileReader()
-                          r.onload = () => update({ badgeReplace: { ...ov.badgeReplace, [k.id]: String(r.result) } })
-                          r.readAsDataURL(f)
-                          e.target.value = ''
-                        }}
-                      />
-                      📁
-                    </label>
-                    {ov.badgeReplace[k.id] && (
-                      <button
-                        className="danger"
-                        onClick={() => {
-                          const next = { ...ov.badgeReplace }
-                          delete next[k.id]
-                          update({ badgeReplace: next })
-                        }}
-                      >
-                        ✕
-                      </button>
-                    )}
+                <div className="oe-user-badge">
+                  <select value={repSel} onChange={(e) => setRepSel(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
+                    {BADGE_REPLACE_CHOICES.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.label}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="oe-upload-btn" style={{ margin: 0 }} title={t('oe.badgeReplace.add')}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (!f) return
+                        const r = new FileReader()
+                        r.onload = () => update({ badgeReplace: { ...ov.badgeReplace, [repSel]: String(r.result) } })
+                        r.readAsDataURL(f)
+                        e.target.value = ''
+                      }}
+                    />
+                    📁
+                  </label>
+                </div>
+                {Object.entries(ov.badgeReplace).map(([id, img]) => (
+                  <div key={id} className="oe-user-badge">
+                    <img src={img} alt="" />
+                    <span style={{ flex: 1, fontSize: 12, color: 'var(--text-muted)' }}>{BADGE_REPLACE_LABEL[id] ?? id}</span>
+                    <button
+                      className="danger"
+                      onClick={() => {
+                        const next = { ...ov.badgeReplace }
+                        delete next[id]
+                        update({ badgeReplace: next })
+                      }}
+                    >
+                      ✕
+                    </button>
                   </div>
                 ))}
                 <div className="oe-block-label">{t('oe.userBadges')}</div>

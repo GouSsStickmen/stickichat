@@ -695,6 +695,8 @@ export interface OverlayLineData {
   badges: string[]
   /** badge setIds parallel to `badges` (for kind filtering on the page) */
   badgeSets?: string[]
+  /** badge versions parallel to `badges` (per-variant replacement, e.g. predictions) */
+  badgeVers?: string[]
   /** message body as safe HTML (emotes/cheers as <img>) */
   body: string
   /** plain message text (for word/symbol triggers on the page) */

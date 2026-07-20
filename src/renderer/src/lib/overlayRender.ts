@@ -95,11 +95,13 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
 
   const badges: string[] = []
   const badgeSets: string[] = []
+  const badgeVers: string[] = []
   for (const b of msg.badges) {
     const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
     if (url) {
       badges.push(url)
       badgeSets.push(b.setId)
+      badgeVers.push(b.version)
     }
   }
 
@@ -113,6 +115,7 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
     avatar: ensureAvatar(msg.login),
     badges,
     badgeSets,
+    badgeVers,
     body: msg.text ? bodyHtml(msg) : '',
     text: msg.text,
     act: msg.isAction || undefined,
