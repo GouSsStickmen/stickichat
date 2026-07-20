@@ -10,6 +10,44 @@ import EmojiGlyph from './EmojiGlyph'
 import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
 
+// One shared observer: an <img> gets its real src only when it approaches the viewport.
+// Native loading="lazy" still fired THOUSANDS of parallel requests for big 7TV channels
+// (every hidden section counted as "near"), which crawled for minutes against the CDN.
+const imgObserver =
+  typeof IntersectionObserver !== 'undefined'
+    ? new IntersectionObserver(
+        (entries) => {
+          for (const en of entries) {
+            if (!en.isIntersecting) continue
+            const img = en.target as HTMLImageElement
+            const src = img.dataset.src
+            if (src) {
+              img.src = src
+              delete img.dataset.src
+            }
+            imgObserver?.unobserve(img)
+          }
+        },
+        { rootMargin: '500px' }
+      )
+    : null
+
+function LazyImg({ src, alt }: { src: string; alt: string }): React.JSX.Element {
+  const ref = useRef<HTMLImageElement>(null)
+  useEffect(() => {
+    const img = ref.current
+    if (!img) return
+    if (!imgObserver) {
+      img.src = src
+      return
+    }
+    img.dataset.src = src
+    imgObserver.observe(img)
+    return () => imgObserver.unobserve(img)
+  }, [src])
+  return <img ref={ref} alt={alt} decoding="async" draggable={false} onError={retryImg} />
+}
+
 /** retry once with a cache-buster when the CDN hiccups (images silently stop loading) */
 function retryImg(e: React.SyntheticEvent<HTMLImageElement>): void {
   const img = e.currentTarget
@@ -265,7 +303,7 @@ export default function EmotePicker({
         ) : e.provider === 'emoji' ? (
           <EmojiGlyph char={e.code} className="emoji-cell-char" />
         ) : (
-          <img src={e.url} alt={e.code} loading="lazy" onError={retryImg} />
+          <LazyImg src={e.url} alt={e.code} />
         )}
       </button>
     )
@@ -367,7 +405,7 @@ export default function EmotePicker({
                         {f.provider === 'emoji' ? (
                           <EmojiGlyph char={f.code} className="emoji-cell-char" />
                         ) : (
-                          <img src={f.url} alt={f.code} loading="lazy" draggable={false} onError={retryImg} />
+                          <LazyImg src={f.url} alt={f.code} />
                         )}
                       </button>
                     ))

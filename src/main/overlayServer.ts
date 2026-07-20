@@ -237,6 +237,7 @@ const OVERLAY_HTML = `<!doctype html>
   .ts { opacity: 0.85; font-size: 0.8em; }
   .sysline { font-style: italic; opacity: 0.9; }
   .body img.emote { height: var(--emote-h, 1.4em); vertical-align: -0.3em; margin: 0 1px; }
+  .body img.emoji-img { height: 1.25em; width: 1.25em; object-fit: contain; vertical-align: -0.25em; margin: 0 1px; }
   .decor { position: absolute; pointer-events: none; }
   /* custom plate image as its own layer (opacity independent of text) */
   .content.has-img, #zone.has-img, .meta.has-img { isolation: isolate; }
@@ -399,7 +400,14 @@ const OVERLAY_HTML = `<!doctype html>
   #fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
   .tgi { position: absolute; }
   .tgi img { width: 100%; display: block; }
+  /* TRUE credits mode: absolutely-positioned lines flying upward at constant speed */
+  @keyframes credits-fly {
+    from { transform: translateY(var(--cstart, 0px)); }
+    to { transform: translateY(var(--cend, -1200px)); }
+  }
+  .line.credits { position: absolute; left: 0; right: 0; bottom: 0; }
   /* single-message visual editor */
+  body.edit { cursor: grab; }
   body.edit .meta, body.edit .avatar, body.edit .badges, body.edit .ts, body.edit .body, body.edit .cwrap { cursor: move; }
   body.edit .meta:hover, body.edit .avatar:hover, body.edit .badges:hover, body.edit .ts:hover, body.edit .body:hover {
     outline: 1px dashed rgba(255, 255, 255, 0.65);
@@ -444,6 +452,7 @@ const OVERLAY_HTML = `<!doctype html>
     maxMessages: 15, fadeAfter: 0, lineGap: 4, zonePad: 8, edgeFade: 0,
     animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
     meStyle: 'colored',
+    creditsMode: false, creditsSpeed: 40,
     nickRotate: 0, avatarOffsetX: 0, avatarOffsetY: 0, badgeOffsetX: 0, badgeOffsetY: 0,
     tsOffsetX: 0, tsOffsetY: 0, textOffsetX: 0, textOffsetY: 0,
     msgSoundEnabled: false, msgSoundData: '', msgSoundVolume: 0.5,
@@ -1026,7 +1035,7 @@ const OVERLAY_HTML = `<!doctype html>
     // a lingering filled animation keeps a stacking/containing context on the line, which
     // silently disabled backdrop-filter (the "glass" effect) on the plates inside it.
     var an = animName()
-    if (an && an !== 'none') {
+    if (an && an !== 'none' && !creditsActive()) {
       animVars(el, cfg.animDir)
       if (an === 'swing' || an === 'hinge') el.style.transformOrigin = 'top left'
       else if (an === 'stretch') el.style.transformOrigin = 'left center'
@@ -1106,6 +1115,37 @@ const OVERLAY_HTML = `<!doctype html>
   }
   window.addEventListener('resize', scheduleFit)
 
+  function creditsActive() {
+    return cfg.creditsMode && cfg.layout !== 'horizontal' && !editMode
+  }
+  // schedule lines so a burst of messages keeps at least (prev height + gap) of spacing —
+  // otherwise simultaneous messages would fly stacked on top of each other
+  var creditsLast = { t: 0, h: 0 }
+  function startCredits(el) {
+    el.classList.add('credits')
+    el.style.visibility = 'hidden'
+    var h = el.offsetHeight || 24
+    var speed = Math.max(5, cfg.creditsSpeed || 40)
+    var now = Date.now()
+    var minDelay = ((creditsLast.h + (cfg.lineGap || 4)) / speed) * 1000
+    var startAt = Math.max(now, creditsLast.t + minDelay)
+    creditsLast = { t: startAt, h: h }
+    setTimeout(function () {
+      if (!el.parentNode) return
+      var zh = zone.clientHeight || 600
+      el.style.setProperty('--cstart', h + 'px')
+      el.style.setProperty('--cend', -(zh + 40) + 'px')
+      el.style.visibility = ''
+      el.style.animation = 'credits-fly ' + ((zh + h + 40) / speed) + 's linear forwards'
+      el.addEventListener('animationend', function (ev) {
+        if (ev.target !== el) return
+        var i = indexOfEl(el)
+        if (i !== -1) lines.splice(i, 1)
+        el.remove()
+      }, { once: true })
+    }, startAt - now)
+  }
+
   var restyling = false
   function append(d) {
     if (editMode && d.id !== 'edit-1') return
@@ -1115,8 +1155,10 @@ const OVERLAY_HTML = `<!doctype html>
     var el = assemble(d)
     if (cfg.direction === 'down') zone.insertBefore(el, zone.firstChild)
     else zone.appendChild(el)
+    if (creditsActive()) startCredits(el)
     // trim overflow: the pushed-out message leaves with the exit animation instead of
     // vanishing instantly (count only real lines that aren't already animating away)
+    if (creditsActive()) return
     var vis = []
     for (var ci = 0; ci < zone.children.length; ci++) {
       var ck = zone.children[ci]
@@ -1462,7 +1504,12 @@ const OVERLAY_HTML = `<!doctype html>
     var drag = null
     document.addEventListener('pointerdown', function (e) {
       var kind = editTargetOf(e.target)
-      if (!kind) return
+      if (!kind) {
+        // empty space: pan the parent's preview viewport
+        drag = { kind: 'pan', x: e.clientX, y: e.clientY }
+        e.preventDefault()
+        return
+      }
       drag = { kind: kind, x: e.clientX, y: e.clientY, base: editBase(kind) }
       e.preventDefault()
     })
@@ -1485,6 +1532,14 @@ const OVERLAY_HTML = `<!doctype html>
     }
     document.addEventListener('pointermove', function (e) {
       if (!drag) return
+      if (drag.kind === 'pan') {
+        try {
+          window.parent.postMessage({ __oeEdit: true, panBy: { x: e.clientX - drag.x, y: e.clientY - drag.y } }, '*')
+        } catch (err) { /* noop */ }
+        drag.x = e.clientX
+        drag.y = e.clientY
+        return
+      }
       var x = drag.base[0] + Math.round(e.clientX - drag.x)
       var y = drag.base[1] + Math.round(e.clientY - drag.y)
       var patch = editDragPatch(drag.kind, x, y)
@@ -1504,10 +1559,16 @@ const OVERLAY_HTML = `<!doctype html>
         window.parent.postMessage({ __oeEdit: true, undo: !e.shiftKey, redo: e.shiftKey }, '*')
       } catch (err) { /* noop */ }
     })
-    // wheel = scale, Alt+wheel on the nick = rotate
+    // wheel = scale element; wheel on EMPTY space = zoom the parent's preview viewport
     document.addEventListener('wheel', function (e) {
       var kind = editTargetOf(e.target)
-      if (!kind) return
+      if (!kind) {
+        e.preventDefault()
+        try {
+          window.parent.postMessage({ __oeEdit: true, zoomStep: { dir: e.deltaY < 0 ? 1 : -1, x: e.clientX, y: e.clientY } }, '*')
+        } catch (err) { /* noop */ }
+        return
+      }
       e.preventDefault()
       var dir = e.deltaY < 0 ? 1 : -1
       var patch = null

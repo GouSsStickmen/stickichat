@@ -29,9 +29,12 @@ function bodyHtml(msg: ChatMessage): string {
       case 'emote':
         out += `<img class="emote" src="${esc(tk.emote.url)}" alt="${esc(tk.emote.code)}">`
         break
-      case 'emoji':
-        out += esc(tk.char)
+      case 'emoji': {
+        // same reasoning as chat: Twemoji image = consistent one-cell rendering in OBS
+        const code = [...tk.char].map((c) => c.codePointAt(0)!.toString(16)).join('-')
+        out += `<img class="emoji-img" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${code}.png" alt="${esc(tk.char)}">`
         break
+      }
       case 'link':
         out +=
           useSettingsStore.getState().settings.linkDisplay !== 'full'

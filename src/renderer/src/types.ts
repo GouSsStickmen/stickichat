@@ -335,7 +335,11 @@ export interface ChatOverlayConfig {
   tsOffsetY: number
   textOffsetX: number
   textOffsetY: number
-  /** credits-style push: new messages smoothly slide the chat instead of jumping */
+  /** TRUE credits: every message floats upward continuously at a constant speed */
+  creditsMode: boolean
+  /** credits float speed, px/second */
+  creditsSpeed: number
+  /** smooth push: new messages slide the chat instead of jumping */
   smoothScroll: boolean
   /** ms of the smooth push */
   smoothScrollMs: number
@@ -549,6 +553,8 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   tsOffsetY: 0,
   textOffsetX: 0,
   textOffsetY: 0,
+  creditsMode: false,
+  creditsSpeed: 40,
   smoothScroll: false,
   smoothScrollMs: 300,
   zonePad: 8,

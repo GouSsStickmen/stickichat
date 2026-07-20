@@ -2663,10 +2663,11 @@ input[type='number']::-webkit-inner-spin-button {
 .emoji-token {
   cursor: default;
 }
-/* image fallback for emoji the system font can't draw (flags on Windows) */
+/* every emoji renders as a Twemoji image — fixed square so all take ONE cell */
 .emoji-img {
   height: 1.25em;
-  width: auto;
+  width: 1.25em;
+  object-fit: contain;
   vertical-align: -0.25em;
 }
 .emoji-preview-glyph.emoji-img {

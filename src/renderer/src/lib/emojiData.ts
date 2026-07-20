@@ -89,16 +89,10 @@ export function displayEmoji(char: string): string {
 }
 
 export function emojiImageUrl(char: string): string | null {
-  const isFlag = REGIONAL_PAIR_RE.test(char)
-  if (isFlag) {
-    if (HAS_NATIVE_FLAGS) return null
-  } else if (!char.includes('\u200d')) {
-    // plain single emoji — every platform draws those fine as text
-    return null
-  }
-  // ZWJ sequences (people/activity/direction combos) are a lottery in the Windows emoji
-  // font — canvas width probes can't detect broken fallback rendering reliably, so ALWAYS
-  // use the Twemoji image for them: consistent, one cell wide, never falls apart
+  // EVERY emoji renders as a Twemoji image: the system font draws them at wildly different
+  // widths/sizes (and breaks ZWJ people/activity sequences apart on Windows) — images give
+  // one consistent look and exactly one cell everywhere. EmojiGlyph falls back to the
+  // native glyph if the CDN can't serve a sequence.
   const code = [...char].map((c) => c.codePointAt(0)!.toString(16)).join('-')
   return `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${code}.png`
 }

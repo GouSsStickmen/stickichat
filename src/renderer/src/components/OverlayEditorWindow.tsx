@@ -318,11 +318,30 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   // edit-mode patches arrive from the preview iframe (dragging/scaling elements)
   useEffect(() => {
     const onMsg = (e: MessageEvent): void => {
-      const d = e.data as { __oeEdit?: boolean; patch?: Partial<ChatOverlayConfig>; undo?: boolean; redo?: boolean } | null
+      const d = e.data as {
+        __oeEdit?: boolean
+        patch?: Partial<ChatOverlayConfig>
+        undo?: boolean
+        redo?: boolean
+        panBy?: { x: number; y: number }
+        zoomStep?: { dir: number; x: number; y: number }
+      } | null
       if (!d || !d.__oeEdit) return
       if (d.patch) updateRef.current(d.patch)
       else if (d.undo) undoFnRef.current()
       else if (d.redo) redoFnRef.current()
+      else if (d.panBy) {
+        const z = zoomRef.current
+        const pb = d.panBy
+        setPvPan((p) => ({ x: p.x + pb.x * z, y: p.y + pb.y * z }))
+      } else if (d.zoomStep) {
+        const zs = d.zoomStep
+        const oldZ = zoomRef.current
+        const z = Math.min(4, Math.max(0.4, oldZ * (zs.dir > 0 ? 1.15 : 1 / 1.15)))
+        // iframe coords → keep the point under the cursor stationary while zooming
+        setPvPan((p) => ({ x: p.x + zs.x * (oldZ - z), y: p.y + zs.y * (oldZ - z) }))
+        setPvZoom(z)
+      }
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
@@ -555,10 +574,28 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
             <Row label={t('oe.lineGap')}>
               <Num v={ov.lineGap} on={(n) => update({ lineGap: n })} min={0} max={40} />
             </Row>
-            <Toggle label={t('oe.smoothScroll')} value={ov.smoothScroll} onChange={(v) => update({ smoothScroll: v })} />
+            <Row label={t('oe.scrollMode')}>
+              <select
+                value={ov.creditsMode ? 'credits' : ov.smoothScroll ? 'smooth' : 'none'}
+                onChange={(e) => {
+                  const v = e.target.value
+                  update({ creditsMode: v === 'credits', smoothScroll: v === 'smooth' })
+                }}
+              >
+                <option value="none">{t('oe.scroll.none')}</option>
+                <option value="smooth">{t('oe.scroll.smooth')}</option>
+                <option value="credits">{t('oe.scroll.credits')}</option>
+              </select>
+            </Row>
             {ov.smoothScroll && (
               <Row label={t('oe.smoothScrollMs')} hint={t('oe.smoothScroll.hint')}>
                 <Num v={ov.smoothScrollMs} on={(n) => update({ smoothScrollMs: n })} min={100} max={2000} step={50} />
+              </Row>
+            )}
+            {ov.creditsMode && (
+              <Row label={t('oe.creditsSpeed')} hint={t('oe.credits.hint')}>
+                <Num v={ov.creditsSpeed} on={(n) => update({ creditsSpeed: n })} min={10} max={300} w={64} def={40} />
+                <span className="hint">px/с</span>
               </Row>
             )}
             <Row label={t('oe.zonePad')}>
@@ -1464,7 +1501,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               className="oe-pv-inner"
               style={{
                 transform: `translate(${pvPan.x}px, ${pvPan.y}px) scale(${pvZoom})`,
-                transformOrigin: editMode ? '50% 50%' : '0 0'
+                transformOrigin: '0 0'
               }}
             >
               <iframe

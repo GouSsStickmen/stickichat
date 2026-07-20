@@ -94,9 +94,10 @@ export const useUiStore = create<UiState>()((set) => ({
     if (kind === 'error') {
       import('../lib/sound').then((m) => m.playErrorSound()).catch(() => {})
     }
+    // errors carry explanations now — give people time to actually read them
     setTimeout(() => {
       useUiStore.getState().dismissToast(id)
-    }, 3500)
+    }, kind === 'error' ? 10000 : 3500)
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setEmotePreview: (emotePreview) => set({ emotePreview }),
