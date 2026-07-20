@@ -1164,13 +1164,18 @@ const OVERLAY_HTML = `<!doctype html>
     var h = el.offsetHeight || 24
     var speed = Math.max(5, cfg.creditsSpeed || 40)
     var now = Date.now()
-    // stale queue (quiet chat) → next line starts right away
-    if (creditsLast.t < now - 2000) creditsLast = { t: 0, h: 0 }
+    // a line may launch only after the PREVIOUS one has cleared its own height + gap —
+    // max(now, …) also covers a quiet chat: an old queue time simply means "start now"
     var minDelay = ((creditsLast.h + (cfg.lineGap || 4)) / speed) * 1000
     var startAt = Math.max(now, creditsLast.t + minDelay)
-    // the queue must NEVER drift far into the future (config-change rebuilds used to pile
-    // lines endlessly forward — the overlay looked completely empty)
-    if (startAt > now + 6000) startAt = now + 6000
+    // flood guard: NEVER squeeze the spacing (that overlapped lines) — once the launch
+    // queue is ~6s deep, further messages are dropped instead
+    if (startAt > now + 6000) {
+      var di = indexOfEl(el)
+      if (di !== -1) lines.splice(di, 1)
+      el.remove()
+      return
+    }
     creditsLast = { t: startAt, h: h }
     setTimeout(function () {
       if (!el.parentNode) return
