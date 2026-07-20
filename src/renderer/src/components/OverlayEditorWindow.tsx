@@ -295,24 +295,21 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   const cssRef = useRef<HTMLTextAreaElement>(null)
   // Ctrl+Z: undo stack of config snapshots (grouped — at most one snapshot per 500ms burst)
   const undoStack = useRef<ChatOverlayConfig[]>([])
+  const redoStack = useRef<ChatOverlayConfig[]>([])
   const undoing = useRef(false)
   const lastSnap = useRef(0)
   const updateRef = useRef<(patch: Partial<ChatOverlayConfig>) => void>(() => {})
+  const undoFnRef = useRef<() => void>(() => {})
+  const redoFnRef = useRef<() => void>(() => {})
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!e.ctrlKey || e.shiftKey || e.altKey || e.code !== 'KeyZ') return
+      if (!e.ctrlKey || e.altKey || e.code !== 'KeyZ') return
       const el = e.target as HTMLElement | null
       // let text fields keep their native text undo
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return
-      const prev = undoStack.current.pop()
-      if (!prev) return
       e.preventDefault()
-      undoing.current = true
-      try {
-        updateRef.current(prev)
-      } finally {
-        undoing.current = false
-      }
+      if (e.shiftKey) redoFnRef.current()
+      else undoFnRef.current()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -321,8 +318,11 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   // edit-mode patches arrive from the preview iframe (dragging/scaling elements)
   useEffect(() => {
     const onMsg = (e: MessageEvent): void => {
-      const d = e.data as { __oeEdit?: boolean; patch?: Partial<ChatOverlayConfig> } | null
-      if (d && d.__oeEdit && d.patch) updateRef.current(d.patch)
+      const d = e.data as { __oeEdit?: boolean; patch?: Partial<ChatOverlayConfig>; undo?: boolean; redo?: boolean } | null
+      if (!d || !d.__oeEdit) return
+      if (d.patch) updateRef.current(d.patch)
+      else if (d.undo) undoFnRef.current()
+      else if (d.redo) redoFnRef.current()
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
@@ -366,6 +366,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
     if (cur && !undoing.current && Date.now() - lastSnap.current > 500) {
       undoStack.current.push(JSON.parse(JSON.stringify(cur)) as ChatOverlayConfig)
       if (undoStack.current.length > 60) undoStack.current.shift()
+      redoStack.current = []
       lastSnap.current = Date.now()
     }
     const next = fresh.chatOverlays.map((o) => (o.id === overlayId ? { ...o, ...patch } : o))
@@ -387,6 +388,30 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   }
 
   updateRef.current = update
+  undoFnRef.current = () => {
+    const prev = undoStack.current.pop()
+    if (!prev) return
+    const cur = useSettingsStore.getState().settings.chatOverlays.find((o) => o.id === overlayId)
+    if (cur) redoStack.current.push(JSON.parse(JSON.stringify(cur)) as ChatOverlayConfig)
+    undoing.current = true
+    try {
+      update(prev)
+    } finally {
+      undoing.current = false
+    }
+  }
+  redoFnRef.current = () => {
+    const next = redoStack.current.pop()
+    if (!next) return
+    const cur = useSettingsStore.getState().settings.chatOverlays.find((o) => o.id === overlayId)
+    if (cur) undoStack.current.push(JSON.parse(JSON.stringify(cur)) as ChatOverlayConfig)
+    undoing.current = true
+    try {
+      update(next)
+    } finally {
+      undoing.current = false
+    }
+  }
 
   const applyPreset = (patch: Partial<ChatOverlayConfig>): void => {
     // a preset is a full restart from defaults + its own overrides — predictable results
@@ -1437,7 +1462,10 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
           <div className={`oe-preview ${pvMode === 'checker' ? 'checker' : ''}`} style={pvStyle}>
             <div
               className="oe-pv-inner"
-              style={{ transform: `translate(${pvPan.x}px, ${pvPan.y}px) scale(${pvZoom})` }}
+              style={{
+                transform: `translate(${pvPan.x}px, ${pvPan.y}px) scale(${pvZoom})`,
+                transformOrigin: editMode ? '50% 50%' : '0 0'
+              }}
             >
               <iframe
                 key={`${channel}:${settings.overlayPort}:${editMode ? 'e' : demo ? 1 : 0}`}

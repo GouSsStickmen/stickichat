@@ -1466,17 +1466,44 @@ const OVERLAY_HTML = `<!doctype html>
       drag = { kind: kind, x: e.clientX, y: e.clientY, base: editBase(kind) }
       e.preventDefault()
     })
+    // avatar/badges/time/text move by DIRECT style during the drag — zero rebuilds, zero
+    // flicker; nick/plate need the full layout pass (their offsets apply structurally).
+    // The patch is posted to the editor ONCE on pointerup, so no mid-drag sync storms.
+    function applyDirect(kind, x, y) {
+      var line = zone.querySelector('.line')
+      if (!line) return false
+      var el =
+        kind === 'avatar' ? line.querySelector('.avatar')
+        : kind === 'badges' ? line.querySelector('.badges')
+        : kind === 'ts' ? line.querySelector('.ts')
+        : kind === 'text' ? line.querySelector('.body > span:last-child')
+        : null
+      if (!el) return false
+      if (kind === 'text') el.style.display = 'inline-block'
+      el.style.translate = x + 'px ' + y + 'px'
+      return true
+    }
     document.addEventListener('pointermove', function (e) {
       if (!drag) return
-      var patch = editDragPatch(
-        drag.kind,
-        drag.base[0] + Math.round(e.clientX - drag.x),
-        drag.base[1] + Math.round(e.clientY - drag.y)
-      )
-      localApply(patch)
-      postEdit(patch)
+      var x = drag.base[0] + Math.round(e.clientX - drag.x)
+      var y = drag.base[1] + Math.round(e.clientY - drag.y)
+      var patch = editDragPatch(drag.kind, x, y)
+      for (var k in patch) cfg[k] = patch[k]
+      drag.last = patch
+      if (!applyDirect(drag.kind, x, y)) localApply(patch)
     })
-    document.addEventListener('pointerup', function () { drag = null })
+    document.addEventListener('pointerup', function () {
+      if (drag && drag.last) postEdit(drag.last)
+      drag = null
+    })
+    // Ctrl+Z / Ctrl+Shift+Z inside the preview forward to the editor's undo/redo
+    document.addEventListener('keydown', function (e) {
+      if (!e.ctrlKey || e.altKey || e.code !== 'KeyZ') return
+      e.preventDefault()
+      try {
+        window.parent.postMessage({ __oeEdit: true, undo: !e.shiftKey, redo: e.shiftKey }, '*')
+      } catch (err) { /* noop */ }
+    })
     // wheel = scale, Alt+wheel on the nick = rotate
     document.addEventListener('wheel', function (e) {
       var kind = editTargetOf(e.target)

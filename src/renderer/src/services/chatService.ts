@@ -333,7 +333,7 @@ class ChatService {
       if (status === 401 || status === 403) {
         useUiStore.getState().toast(translate(lang, 'whisper.needReauth', { login: desired.account.login }), 'error')
       } else {
-        useUiStore.getState().toast(`Whisper EventSub: HTTP ${status}`, 'error')
+        useUiStore.getState().toast(translate(lang, 'whisper.subFail', { status: String(status) }), 'error')
       }
     } else if (desired.type === 'channel.moderate' && (status === 401 || status === 403)) {
       if (this.modSubErrorShown) return

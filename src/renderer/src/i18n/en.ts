@@ -591,8 +591,8 @@ export const en = {
   'oe.sec.content': 'What to show',
   'oe.sec.css': 'Custom CSS',
   'oe.css.hint': 'Override any style of the overlay page. Classes: .line, .content, .nick, .body, .meta, .avatar, .badges, .ts, .sysline, #zone.',
-  'oe.editMode': 'Single message (edit with mouse)',
-  'oe.editMode.hint': 'Shows one template message. Drag the nick, badges, avatar, time or text; wheel scales the element; Alt+wheel on the nick rotates it. Changes apply to every message.',
+  'oe.editMode': 'Single message (beta)',
+  'oe.editMode.hint': 'WORK IN PROGRESS (beta). Shows one template message: drag the nick, badges, avatar, time or text; wheel scales the element; Alt+wheel on the nick rotates it; Ctrl+Z / Ctrl+Shift+Z undo/redo. Changes become the template for every message.',
   'oe.pv.panHint': 'Wheel — zoom · drag — pan · double-click — reset',
   'oe.pv.zoomReset': 'Reset zoom & position',
   'oe.copyHint': 'Copy this hint',
@@ -721,6 +721,7 @@ export const en = {
   'overlay.url': 'URL for OBS',
   'overlay.copy': 'Copy URL',
   'overlay.copied': 'Overlay URL copied — add it as a Browser Source in OBS',
+  'whisper.subFail': 'Could not connect private messages (whispers): Twitch rejected the request (code {status}). Re-authorizing the account in Settings → Accounts usually fixes this.',
   'whisper.needReauth': 'To receive whispers, re-authorize {login} in Settings → Accounts (a new permission is required).',
 
   // Raid prompt
