@@ -34,14 +34,17 @@ export interface ActionContext {
   targetText?: string
 }
 
-function report(res: HttpResponse, okText: string): boolean {
+function report(res: HttpResponse, okText: string, login?: string): boolean {
   const toast = useUiStore.getState().toast
   if (res.ok) {
     toast(okText, 'ok')
     return true
   }
+  const lang = useSettingsStore.getState().settings.language
   const detail = friendlyMessage((res.json as { message?: string })?.message ?? `HTTP ${res.status}`)
-  toast(detail, 'error')
+  // ALWAYS say which account the action ran under — with several accounts that's the
+  // difference between "broken" and "oh, wrong account selected"
+  toast(login ? detail + translate(lang, 'err.account', { login }) : detail, 'error')
   return false
 }
 
@@ -61,30 +64,32 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
         if (!ctx.targetUserId) return
         report(
           await banUser(ctx.account, ctx.channelId, ctx.targetUserId, btn.seconds ?? 600, btn.text || undefined),
-          `⏱ ${ctx.targetLogin}`
+          `⏱ ${ctx.targetLogin}`,
+          ctx.account.login
         )
         break
       }
       case 'ban': {
         if (!ctx.targetUserId) return
-        report(await banUser(ctx.account, ctx.channelId, ctx.targetUserId, undefined, btn.text || undefined), `🔨 ${ctx.targetLogin}`)
+        report(await banUser(ctx.account, ctx.channelId, ctx.targetUserId, undefined, btn.text || undefined), `🔨 ${ctx.targetLogin}`, ctx.account.login)
         break
       }
       case 'unban': {
         if (!ctx.targetUserId) return
-        report(await unbanUser(ctx.account, ctx.channelId, ctx.targetUserId), `✅ ${ctx.targetLogin}`)
+        report(await unbanUser(ctx.account, ctx.channelId, ctx.targetUserId), `✅ ${ctx.targetLogin}`, ctx.account.login)
         break
       }
       case 'delete': {
         if (!ctx.targetMsgId) return
-        report(await deleteChatMessage(ctx.account, ctx.channelId, ctx.targetMsgId), '🗑️')
+        report(await deleteChatMessage(ctx.account, ctx.channelId, ctx.targetMsgId), '🗑️', ctx.account.login)
         break
       }
       case 'warn': {
         if (!ctx.targetUserId) return
         report(
           await warnUser(ctx.account, ctx.channelId, ctx.targetUserId, btn.text || 'Rule violation'),
-          `⚠️ ${ctx.targetLogin}`
+          `⚠️ ${ctx.targetLogin}`,
+          ctx.account.login
         )
         break
       }
@@ -92,7 +97,7 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
         const target = ctx.targetUserId
         if (!target) return
         const lang = useSettingsStore.getState().settings.language
-        if (report(await sendShoutout(ctx.account, ctx.channelId, target), `📣 ${ctx.targetLogin}`)) {
+        if (report(await sendShoutout(ctx.account, ctx.channelId, target), `📣 ${ctx.targetLogin}`, ctx.account.login)) {
           // shoutouts don't come back through IRC — show the event in chat ourselves
           chatService.localInfo(ctx.channel, translate(lang, 'mod.shoutoutGiven', { user: ctx.targetLogin ?? '' }))
         }
@@ -101,12 +106,12 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
       case 'raid': {
         // message-scope raid: raid the clicked user's channel
         if (!ctx.targetUserId) return
-        report(await startRaid(ctx.account, ctx.channelId, ctx.targetUserId), `🚀 ${ctx.targetLogin}`)
+        report(await startRaid(ctx.account, ctx.channelId, ctx.targetUserId), `🚀 ${ctx.targetLogin}`, ctx.account.login)
         break
       }
       case 'announce': {
         if (!btn.text) return
-        report(await sendAnnouncement(ctx.account, ctx.channelId, fill(btn.text, ctx), btn.color), '📢')
+        report(await sendAnnouncement(ctx.account, ctx.channelId, fill(btn.text, ctx), btn.color), '📢', ctx.account.login)
         break
       }
       case 'snippet': {

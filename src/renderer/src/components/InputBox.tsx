@@ -13,6 +13,7 @@ import { EMOJI_LIST, emojiLabel } from '../lib/emojiData'
 import { swapLayout } from '../lib/translit'
 import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
 import EmotePicker from './EmotePicker'
+import EmojiGlyph from './EmojiGlyph'
 import { useT } from '../i18n'
 import { getWatchStreakInfo } from '../lib/watchStreaks'
 
@@ -476,7 +477,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
                   {s.kind === 'emote' && (
                     <>
                       {s.emote.provider === 'emoji' ? (
-                        <span className="emoji-cell-char">{s.emote.code}</span>
+                        <EmojiGlyph char={s.emote.code} className="emoji-cell-char" />
                       ) : (
                         <img src={s.emote.url} alt="" loading="lazy" />
                       )}

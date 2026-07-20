@@ -5,6 +5,7 @@ import { useSettingsStore } from '../store/settings'
 import { translate } from '../i18n'
 import { ensureSevenTvCosmetic } from './seventvCosmetics'
 import { ensureAvatar } from './twitchAvatars'
+import { displayEmoji } from './emojiData'
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -31,8 +32,9 @@ function bodyHtml(msg: ChatMessage): string {
         break
       case 'emoji': {
         // same reasoning as chat: Twemoji image = consistent one-cell rendering in OBS
-        const code = [...tk.char].map((c) => c.codePointAt(0)!.toString(16)).join('-')
-        out += `<img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${code}.png" alt="${esc(tk.char)}">`
+        const shown = displayEmoji(tk.char)
+        const code = [...shown].map((c) => c.codePointAt(0)!.toString(16)).join('-')
+        out += `<img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${code}.png" alt="${esc(shown)}">`
         break
       }
       case 'link':

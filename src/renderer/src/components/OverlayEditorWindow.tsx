@@ -53,16 +53,27 @@ const ANIM_LABEL: Record<string, string> = {
 const DIRECTIONAL_IN = new Set<string>(['slide', 'bounce', 'elastic', 'flip', 'roll', 'rise', 'wobble', 'skew'])
 const DIRECTIONAL_OUT = new Set<string>(['slide', 'roll', 'rise', 'wobble', 'skew', 'flip'])
 
-/** common Twitch badge kinds for the overlay filter (setId → label) */
+/** badge kinds for the overlay filter: 5 core kinds + one bucket for everything else
+ *  (partner, bits, sub-gifter and every thematic/event badge Twitch hands out) */
 const BADGE_KIND_OPTS: { id: string; label: string }[] = [
   { id: 'broadcaster', label: 'Стример' },
   { id: 'moderator', label: 'Модератор' },
   { id: 'vip', label: 'VIP' },
   { id: 'subscriber', label: 'Саби' },
   { id: 'founder', label: 'Засновники' },
-  { id: 'sub-gifter', label: 'Дарувальники' },
+  { id: 'global', label: 'Глобальні' }
+]
+
+/** kinds whose image can be replaced with a custom upload */
+const BADGE_REPLACE_OPTS: { id: string; label: string }[] = [
+  { id: 'broadcaster', label: 'Стример' },
+  { id: 'moderator', label: 'Модератор' },
+  { id: 'vip', label: 'VIP' },
+  { id: 'subscriber', label: 'Саби' },
+  { id: 'founder', label: 'Засновники' },
+  { id: 'sub-gifter', label: 'Подаровані саби' },
   { id: 'bits', label: 'Біти' },
-  { id: 'partner', label: 'Партнер' }
+  { id: 'predictions', label: 'Предікшини' }
 ]
 
 function Num({
@@ -1226,6 +1237,42 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                     ))}
                   </div>
                 </Row>
+                <div className="oe-block-label">{t('oe.badgeReplace')}</div>
+                <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>{t('oe.badgeReplace.hint')}</p>
+                {BADGE_REPLACE_OPTS.map((k) => (
+                  <div key={k.id} className="oe-user-badge">
+                    <span style={{ width: 118, fontSize: 12, color: 'var(--text-muted)' }}>{k.label}</span>
+                    {ov.badgeReplace[k.id] ? <img src={ov.badgeReplace[k.id]} alt="" /> : <span className="hint">—</span>}
+                    <label className="oe-upload-btn" style={{ margin: 0 }}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (!f) return
+                          const r = new FileReader()
+                          r.onload = () => update({ badgeReplace: { ...ov.badgeReplace, [k.id]: String(r.result) } })
+                          r.readAsDataURL(f)
+                          e.target.value = ''
+                        }}
+                      />
+                      📁
+                    </label>
+                    {ov.badgeReplace[k.id] && (
+                      <button
+                        className="danger"
+                        onClick={() => {
+                          const next = { ...ov.badgeReplace }
+                          delete next[k.id]
+                          update({ badgeReplace: next })
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
                 <div className="oe-block-label">{t('oe.userBadges')}</div>
                 <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>{t('oe.userBadges.hint')}</p>
                 {ov.userBadges.map((ub, i) => (

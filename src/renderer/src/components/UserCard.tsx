@@ -139,7 +139,7 @@ export default function UserCard({
   const act = async (fn: () => Promise<{ ok: boolean; json: unknown }>, label: string): Promise<void> => {
     const res = await fn()
     toast(
-      res.ok ? label : (localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')),
+      res.ok ? label : (localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }),
       res.ok ? 'ok' : 'error'
     )
   }

@@ -39,7 +39,7 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
     setModes((m) => ({ ...m, ...patch }))
     const res = await updateChatSettings(account, channelId, patch)
     if (!res.ok) {
-      useUiStore.getState().toast(localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail'), 'error')
+      useUiStore.getState().toast((localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }), 'error')
       const s = await getChatSettings(account, channelId)
       setModes(s ?? {})
     }
@@ -97,7 +97,7 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
     setAnnounceText('')
     const res = await sendAnnouncement(account, channelId, text, announceColor)
     toast(
-      res.ok ? '📢' : (localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')),
+      res.ok ? '📢' : (localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }),
       res.ok ? 'ok' : 'error'
     )
   }

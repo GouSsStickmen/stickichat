@@ -453,7 +453,7 @@ const OVERLAY_HTML = `<!doctype html>
     animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
     meStyle: 'colored',
     creditsMode: false, creditsSpeed: 40,
-    badgeKinds: [], userBadges: [],
+    badgeKinds: [], userBadges: [], badgeReplace: {},
     nickRotate: 0, avatarOffsetX: 0, avatarOffsetY: 0, badgeOffsetX: 0, badgeOffsetY: 0,
     tsOffsetX: 0, tsOffsetY: 0, textOffsetX: 0, textOffsetY: 0,
     msgSoundEnabled: false, msgSoundData: '', msgSoundVolume: 0.5,
@@ -859,11 +859,18 @@ const OVERLAY_HTML = `<!doctype html>
         badges.appendChild(cb)
       }
       var kindFilter = cfg.badgeKinds && cfg.badgeKinds.length ? cfg.badgeKinds : null
+      var CORE_KINDS = ['broadcaster', 'moderator', 'vip', 'subscriber', 'founder']
       for (var i = 0; i < (d.badges || []).length; i++) {
-        // kind filter: only listed badge types pass (unknown kinds pass when no sets info)
-        if (kindFilter && d.badgeSets && d.badgeSets[i] && kindFilter.indexOf(d.badgeSets[i]) === -1) continue
+        var setId = d.badgeSets ? d.badgeSets[i] : null
+        // the 5 core kinds filter individually; EVERYTHING else (partner, bits, sub-gifter,
+        // thematic/event badges) belongs to the single "global" category
+        if (kindFilter) {
+          var kind = setId && CORE_KINDS.indexOf(setId) !== -1 ? setId : 'global'
+          if (kindFilter.indexOf(kind) === -1) continue
+        }
         var b = document.createElement('img')
-        b.src = d.badges[i]
+        var rep = setId && cfg.badgeReplace ? cfg.badgeReplace[setId] : null
+        b.src = rep || d.badges[i]
         b.style.height = cfg.badgeSize + 'px'
         badges.appendChild(b)
       }

@@ -482,7 +482,7 @@ function MessageViewInner({
         ? await deleteChatMessage(account, channelId, msg.id)
         : await banUser(account, channelId, msg.userId, action.seconds)
     if (res.ok) toast(`${action.label} — ${msg.login}`, 'ok')
-    else toast(localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail'), 'error')
+    else toast((localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }), 'error')
   }
 
   // swipe-to-moderate starts ONLY from the ⠿ grip — dragging from the message body used to
@@ -601,7 +601,7 @@ function MessageViewInner({
                     const { chatService } = await import('../services/chatService')
                     chatService.localInfo(msg.channel, t('mod.shoutoutGiven', { user: msg.raidFrom! }))
                   } else {
-                    toast(localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail'), 'error')
+                    toast((localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }), 'error')
                   }
                 }}
               >

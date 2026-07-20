@@ -99,6 +99,7 @@ export const en = {
   'mod.reason': 'Reason (optional)',
   'mod.actionOk': 'Done',
   'mod.actionFail': 'Action failed',
+  'err.account': ' · account: {login}',
   'mod.notMod': 'This account is not a moderator here',
 
   // User card
@@ -582,7 +583,9 @@ export const en = {
   'oe.avatarRadius': 'Roundness',
   'oe.avatarRadius.hint': '0% = square, 50% = circle.',
   'oe.badgeKinds': 'Which badges to show',
-  'oe.badgeKinds.hint': 'Untick the kinds you do not want. All ticked = show every badge, including rare ones.',
+  'oe.badgeKinds.hint': 'Untick the kinds you do not want. "Global" bundles everything else: partner, bits, gifters and Twitch thematic badges.',
+  'oe.badgeReplace': 'Replace badges with your own',
+  'oe.badgeReplace.hint': 'Upload your own image instead of the standard badge of this kind — every user wearing it gets yours.',
   'oe.userBadges': 'Custom user badges',
   'oe.userBadges.hint': 'Your own badge image for a specific viewer — type the login and upload an image.',
   'oe.userBadges.login': 'user login',
@@ -733,7 +736,7 @@ export const en = {
   'overlay.url': 'URL for OBS',
   'overlay.copy': 'Copy URL',
   'overlay.copied': 'Overlay URL copied — add it as a Browser Source in OBS',
-  'whisper.subFail': 'Could not connect private messages (whispers): Twitch rejected the request (code {status}). Re-authorizing the account in Settings → Accounts usually fixes this.',
+  'whisper.subFail': 'Could not connect private messages (whispers) for account {login}: Twitch rejected the request (code {status}). Re-authorizing the account in Settings → Accounts usually fixes this.',
   'whisper.needReauth': 'To receive whispers, re-authorize {login} in Settings → Accounts (a new permission is required).',
 
   // Raid prompt

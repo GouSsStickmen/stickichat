@@ -329,6 +329,8 @@ export interface ChatOverlayConfig {
   badgeKinds: string[]
   /** custom badges pinned to specific users (login → uploaded image) */
   userBadges: { login: string; image: string }[]
+  /** replace a badge KIND's image with your own (setId → uploaded image) */
+  badgeReplace: { [setId: string]: string }
   /** visual-editor offsets (px) and nick rotation (deg) — all default 0 */
   nickRotate: number
   avatarOffsetX: number
@@ -550,6 +552,7 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   meStyle: 'colored',
   badgeKinds: [],
   userBadges: [],
+  badgeReplace: {},
   nickRotate: 0,
   avatarOffsetX: 0,
   avatarOffsetY: 0,
