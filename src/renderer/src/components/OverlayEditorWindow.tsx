@@ -632,6 +632,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                   <Num v={ov.creditsHeight} on={(n) => update({ creditsHeight: n })} min={0} max={2160} w={72} def={0} />
                   <span className="hint">px</span>
                 </Row>
+                <Toggle label={t('oe.creditsRush')} hint={t('oe.creditsRush.hint')} value={ov.creditsRush} onChange={(v) => update({ creditsRush: v })} />
               </>
             )}
             <Row label={t('oe.zonePad')}>

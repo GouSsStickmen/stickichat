@@ -347,6 +347,8 @@ export interface ChatOverlayConfig {
   creditsSpeed: number
   /** credits band height, px — messages vanish at its top; 0 = full screen */
   creditsHeight: number
+  /** flood behavior: accelerate the whole tape (up to 4x) instead of dropping messages */
+  creditsRush: boolean
   /** smooth push: new messages slide the chat instead of jumping */
   smoothScroll: boolean
   /** ms of the smooth push */
@@ -567,6 +569,7 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   creditsMode: false,
   creditsSpeed: 40,
   creditsHeight: 0,
+  creditsRush: false,
   smoothScroll: false,
   smoothScrollMs: 300,
   zonePad: 8,

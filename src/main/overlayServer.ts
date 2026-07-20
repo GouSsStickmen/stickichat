@@ -452,7 +452,7 @@ const OVERLAY_HTML = `<!doctype html>
     maxMessages: 15, fadeAfter: 0, lineGap: 4, zonePad: 8, edgeFade: 0,
     animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
     meStyle: 'colored',
-    creditsMode: false, creditsSpeed: 40, creditsHeight: 0,
+    creditsMode: false, creditsSpeed: 40, creditsHeight: 0, creditsRush: false,
     badgeKinds: [], userBadges: [], badgeReplace: {},
     nickRotate: 0, avatarOffsetX: 0, avatarOffsetY: 0, badgeOffsetX: 0, badgeOffsetY: 0,
     tsOffsetX: 0, tsOffsetY: 0, textOffsetX: 0, textOffsetY: 0,
@@ -1155,44 +1155,80 @@ const OVERLAY_HTML = `<!doctype html>
   function creditsActive() {
     return cfg.creditsMode && cfg.layout !== 'horizontal' && !editMode
   }
-  // schedule lines so a burst of messages keeps at least (prev height + gap) of spacing —
-  // otherwise simultaneous messages would fly stacked on top of each other
-  var creditsLast = { t: 0, h: 0 }
+  // CONVEYOR engine: one rAF loop moves every flying line by the same delta, so the whole
+  // tape can ACCELERATE together during floods (creditsRush) and lines can never overlap.
+  // A queued line launches only after the previous one cleared its height + gap.
+  var creditsQueue = [] // waiting to launch: { el, h }
+  var creditsFly = [] // in flight: { el, y }
+  var creditsRaf = null
+  var creditsLastTs = 0
+  function creditsReset() {
+    creditsQueue = []
+    creditsFly = []
+    creditsLastTs = 0
+  }
   function startCredits(el) {
     el.classList.add('credits')
     el.style.visibility = 'hidden'
     var h = el.offsetHeight || 24
-    var speed = Math.max(5, cfg.creditsSpeed || 40)
-    var now = Date.now()
-    // a line may launch only after the PREVIOUS one has cleared its own height + gap —
-    // max(now, …) also covers a quiet chat: an old queue time simply means "start now"
-    var minDelay = ((creditsLast.h + (cfg.lineGap || 4)) / speed) * 1000
-    var startAt = Math.max(now, creditsLast.t + minDelay)
-    // flood guard: NEVER squeeze the spacing (that overlapped lines) — once the launch
-    // queue is ~6s deep, further messages are dropped instead
-    if (startAt > now + 6000) {
-      var di = indexOfEl(el)
-      if (di !== -1) lines.splice(di, 1)
-      el.remove()
+    if (!cfg.creditsRush) {
+      // rush OFF: the launch queue caps at ~6s — extra burst messages are dropped
+      var speed = Math.max(5, cfg.creditsSpeed || 40)
+      var queued = 0
+      for (var qi = 0; qi < creditsQueue.length; qi++) queued += (creditsQueue[qi].h + (cfg.lineGap || 4)) / speed
+      if (queued > 6) {
+        var di = indexOfEl(el)
+        if (di !== -1) lines.splice(di, 1)
+        el.remove()
+        return
+      }
+    }
+    creditsQueue.push({ el: el, h: h })
+    if (creditsRaf === null) creditsRaf = requestAnimationFrame(creditsTick)
+  }
+  function creditsTick(ts) {
+    creditsRaf = null
+    if (!creditsActive()) {
+      creditsReset()
       return
     }
-    creditsLast = { t: startAt, h: h }
-    setTimeout(function () {
-      if (!el.parentNode) return
-      // messages live until they reach the TOP of the credits band: a configured height,
-      // or the whole screen (the old zone.clientHeight was tiny → lines died in seconds)
-      var band = cfg.creditsHeight > 0 ? cfg.creditsHeight : (window.innerHeight || 600)
-      el.style.setProperty('--cstart', h + 'px')
-      el.style.setProperty('--cend', -(band + 40) + 'px')
-      el.style.visibility = ''
-      el.style.animation = 'credits-fly ' + ((band + h + 40) / speed) + 's linear forwards'
-      el.addEventListener('animationend', function (ev) {
-        if (ev.target !== el) return
-        var i = indexOfEl(el)
-        if (i !== -1) lines.splice(i, 1)
-        el.remove()
-      }, { once: true })
-    }, startAt - now)
+    var dt = creditsLastTs ? Math.min(0.1, (ts - creditsLastTs) / 1000) : 0
+    creditsLastTs = ts
+    var speed = Math.max(5, cfg.creditsSpeed || 40)
+    var v = speed
+    // rush ON: a waiting queue speeds the WHOLE tape up (to 4x) until it drains
+    if (cfg.creditsRush && creditsQueue.length) v = speed * Math.min(4, 1 + creditsQueue.length * 0.4)
+    var band = cfg.creditsHeight > 0 ? cfg.creditsHeight : (window.innerHeight || 600)
+    var gap = cfg.lineGap || 4
+    for (var i = creditsFly.length - 1; i >= 0; i--) {
+      var f = creditsFly[i]
+      if (!f.el.parentNode) {
+        creditsFly.splice(i, 1)
+        continue
+      }
+      f.y -= v * dt
+      if (f.y <= -(band + 40)) {
+        var ri = indexOfEl(f.el)
+        if (ri !== -1) lines.splice(ri, 1)
+        f.el.remove()
+        creditsFly.splice(i, 1)
+      } else {
+        f.el.style.transform = 'translateY(' + f.y + 'px)'
+      }
+    }
+    if (creditsQueue.length) {
+      var lastF = creditsFly.length ? creditsFly[creditsFly.length - 1] : null
+      if (!lastF || lastF.y <= -gap) {
+        var q = creditsQueue.shift()
+        if (q.el.parentNode) {
+          q.el.style.visibility = ''
+          q.el.style.transform = 'translateY(' + q.h + 'px)'
+          creditsFly.push({ el: q.el, y: q.h })
+        }
+      }
+    }
+    if (creditsFly.length || creditsQueue.length) creditsRaf = requestAnimationFrame(creditsTick)
+    else creditsLastTs = 0
   }
 
   var restyling = false
@@ -1426,7 +1462,7 @@ const OVERLAY_HTML = `<!doctype html>
     zone.style.transformOrigin = cfg.anchor === 'top' || cfg.direction === 'down' ? '50% 0%' : '50% 100%'
 
     // rebuild all visible lines with the new structure/styles
-    creditsLast = { t: 0, h: 0 } // credits queue restarts with the rebuild
+    creditsReset() // credits engine restarts with the rebuild
     var kids = zone.querySelectorAll(':scope > .line')
     for (var k = 0; k < kids.length; k++) kids[k].remove()
     var data = lines.slice(-cfg.maxMessages)

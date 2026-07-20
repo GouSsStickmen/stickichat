@@ -537,6 +537,8 @@ export const en = {
   'oe.credits.hint': 'Every message floats upward continuously like movie credits. Spacing mirrors when they were written. The visible count is capped by the "Max messages" field above.',
   'oe.creditsHeight': 'Credits height, px',
   'oe.creditsHeight.hint': 'A message disappears when it reaches the top of this band (measured from the bottom). 0 = the whole screen.',
+  'oe.creditsRush': 'Speed up during floods',
+  'oe.creditsRush.hint': 'When messages pile up, the whole tape temporarily accelerates (up to 4x) until the queue drains — nothing gets lost. Off = excess burst messages are simply not shown.',
   'oe.smoothScrollMs': 'Push duration, ms',
   'oe.smoothScroll.hint': 'New messages smoothly push the chat up instead of an instant jump.',
   'oe.zonePad': 'Chat zone padding',
