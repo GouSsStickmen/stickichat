@@ -2429,6 +2429,8 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .picker-body {
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   max-height: 300px;
 }
 .picker-section {
@@ -2536,6 +2538,12 @@ input[type='number']::-webkit-inner-spin-button {
   justify-content: center;
   /* wide ZWJ emoji (families, couples) must not spill into neighbouring grid cells */
   overflow: hidden;
+  /* fixed cell box: lazy images can't reflow the row (that reflow made the scroll jolt) */
+  min-height: 34px;
+  /* off-screen cells aren't laid out/painted — smooth scroll even with ~1900 emoji nodes.
+     the reserved size matches min-height so the scrollbar stays steady */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 34px;
 }
 .emoji-cell-char {
   /* inline-block so max-width/overflow actually apply — an inline span ignores them, which is
@@ -2549,8 +2557,10 @@ input[type='number']::-webkit-inner-spin-button {
   background: var(--surface-3);
 }
 .emote-cell img {
-  max-height: 28px;
+  height: 28px;
+  width: auto;
   max-width: 100%;
+  object-fit: contain; /* wide/non-square emotes fit without distortion or reflow */
 }
 .emoji-cell-char {
   font-size: 22px;
