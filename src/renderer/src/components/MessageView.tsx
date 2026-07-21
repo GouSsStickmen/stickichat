@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Account, ChatMessage, MOD_ONLY_TYPES, Settings } from '../types'
-import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration } from '../lib/tokenize'
+import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration, hiResEmoteUrl } from '../lib/tokenize'
 import { lookupBadgeUrl, lookupBadgeTitle, lookupBadge4x, lookupEmote, lookupCheermote } from '../store/emotes'
 import { lookupUserColor, useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
@@ -54,7 +54,7 @@ function tokenContextHandler(paneId: string, text: string) {
   }
 }
 
-function TokenView({ token, paneId }: { token: Token; paneId: string }): React.JSX.Element {
+function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiRes?: boolean }): React.JSX.Element {
   const linkDisplay = useSettingsStore((s) => s.settings.linkDisplay)
   const t = useT()
   switch (token.kind) {
@@ -110,7 +110,7 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
           onMouseEnter={(e) =>
             useUiStore
               .getState()
-              .setEmotePreview({ url: token.emote.url, code: token.emote.code, x: e.clientX, y: e.clientY })
+              .setEmotePreview({ url: hiResEmoteUrl(token.emote.url), code: token.emote.code, x: e.clientX, y: e.clientY })
           }
           onMouseMove={(e) => {
             const cur = useUiStore.getState().emotePreview
@@ -120,7 +120,7 @@ function TokenView({ token, paneId }: { token: Token; paneId: string }): React.J
         >
           {/* NOT lazy: lazy images loaded mid-scroll, reflowing text and jolting the virtualized
               list. Eager load happens while the row is still in the overscan zone. */}
-          <img src={token.emote.url} alt={token.emote.code} />
+          <img src={hiRes ? hiResEmoteUrl(token.emote.url) : token.emote.url} alt={token.emote.code} />
           {token.overlays.map((o, i) => (
             <img key={i} src={o.url} alt={o.code} />
           ))}
@@ -703,7 +703,7 @@ function MessageViewInner({
             }}
           >
             {tokens.map((tk, i) => (
-              <TokenView key={i} token={tk} paneId={paneId} />
+              <TokenView key={i} token={tk} paneId={paneId} hiRes={!!(settings.showBits && msg.gigantified)} />
             ))}
           </span>
         )}

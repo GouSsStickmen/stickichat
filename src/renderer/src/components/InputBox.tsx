@@ -586,6 +586,21 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             <option value="__add__">+ {t('auth.addAccount')}</option>
           </select>
         )}
+        {myStreak && (
+          <button
+            type="button"
+            className={`streak-chip ${streakClaimed ? 'claimed' : 'unclaimed'}`}
+            title={
+              streakClaimed
+                ? t('input.streak.claimed', { n: myStreak.n })
+                : t('input.streak.unclaimed', { n: myStreak.n })
+            }
+            onClick={() => setStreakOpen((v) => !v)}
+          >
+            🔥
+            {streakOpen ? ` ${myStreak.n}` : ''}
+          </button>
+        )}
         <div className="ta-wrap">
           {showCharCounter && overLimit && (
             <div className="ta-highlight" ref={highlightRef} aria-hidden>
@@ -595,7 +610,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
           )}
           <textarea
             ref={taRef}
-            className={showCharCounter && overLimit ? 'ta-overlaid' : ''}
+            className={`${showCharCounter && overLimit ? 'ta-overlaid' : ''} ${showCharCounter ? 'with-counter' : ''}`}
             value={text}
             rows={1}
             placeholder={timeoutPlaceholder ?? (account ? t('input.placeholder') : t('input.placeholderReadOnly'))}
@@ -612,26 +627,9 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             onKeyDown={onKeyDown}
           />
           {showCharCounter && (
-            <span className={`char-counter ${overLimit ? 'over' : ''}`}>
-              {text.length}/{TWITCH_MESSAGE_LIMIT}
-            </span>
+            <span className={`char-counter ${overLimit ? 'over' : ''}`}>{text.length}</span>
           )}
         </div>
-        {myStreak && (
-          <button
-            type="button"
-            className={`streak-chip ${streakClaimed ? 'claimed' : 'unclaimed'}`}
-            title={
-              streakClaimed
-                ? t('input.streak.claimed', { n: myStreak.n })
-                : t('input.streak.unclaimed', { n: myStreak.n })
-            }
-            onClick={() => setStreakOpen((v) => !v)}
-          >
-            🔥
-            {streakOpen ? ` ${myStreak.n}` : ''}
-          </button>
-        )}
         {translitEnabled && (
           <button
             className="ghost translit-btn"

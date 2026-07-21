@@ -216,11 +216,18 @@ export function registerIpc(): void {
   // a separate window while the main chat is pinned), so drop every pinned window for the pick
   // and restore them afterwards
   let suspendedOnTop: BrowserWindow[] = []
-  ipcMain.handle('window:suspendAlwaysOnTop', () => {
+  let eyedropperWin: BrowserWindow | null = null
+  ipcMain.handle('window:suspendAlwaysOnTop', (e) => {
     suspendedOnTop = BrowserWindow.getAllWindows().filter((w) => w.isAlwaysOnTop())
     for (const w of suspendedOnTop) w.setAlwaysOnTop(false)
+    // the WINDOW THAT PICKS goes topmost: Chromium's eyedropper loupe is owned by it, so
+    // this keeps the loupe above every other chat window (it used to vanish behind them)
+    eyedropperWin = BrowserWindow.fromWebContents(e.sender)
+    eyedropperWin?.setAlwaysOnTop(true, 'screen-saver')
   })
   ipcMain.handle('window:resumeAlwaysOnTop', () => {
+    if (eyedropperWin && !eyedropperWin.isDestroyed()) eyedropperWin.setAlwaysOnTop(false)
+    eyedropperWin = null
     for (const w of suspendedOnTop) if (!w.isDestroyed()) w.setAlwaysOnTop(true, 'screen-saver')
     suspendedOnTop = []
   })

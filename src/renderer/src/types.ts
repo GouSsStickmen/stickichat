@@ -1072,7 +1072,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showCharCounter: true,
   messageSpacing: 3,
   caseSensitiveNicks: false,
-  sevenTvNickColors: false,
+  sevenTvNickColors: true,
   tabScale: 1,
   tabFilter: 'all',
   alwaysOnTop: false,

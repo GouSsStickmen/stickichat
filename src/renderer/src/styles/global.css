@@ -1432,6 +1432,12 @@ select:focus {
   gap: 4px;
   z-index: 5;
 }
+.usercard-standalone .uc-zoom button {
+  width: 36px;
+  flex: 0 0 auto;
+  padding: 4px 0;
+  font-size: 12px; /* fixed — must not scale with the card's text zoom */
+}
 .usercard .uc-emote {
   /* em-based: grows together with the A+/A− text size */
   height: 1.5em;
@@ -3323,4 +3329,14 @@ input[type='number']::-webkit-inner-spin-button {
 .oe-user-badge input {
   flex: 1;
   min-width: 0;
+}
+
+/* char counter safe zone: text never slides underneath the counter */
+.ta-wrap textarea.with-counter {
+  padding-right: 44px;
+}
+.char-counter {
+  background: var(--surface-1, rgba(14, 14, 16, 0.8));
+  border-radius: 4px;
+  padding: 0 3px;
 }

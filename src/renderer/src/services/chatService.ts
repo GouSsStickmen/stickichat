@@ -192,6 +192,33 @@ class ChatService {
     }
   }
 
+  /** message-carrying redemptions: raw PRIVMSG held/dropped so only ONE styled line shows */
+  private redeemSuppress = new Map<string, number>()
+  private pendingRedeemMsgs = new Map<string, ChatMessage>()
+  private maybeHoldRedeemPrivmsg(msg: ChatMessage): boolean {
+    // PubSub (which delivers the reward name) runs in the main window only
+    if (window.location.hash) return false
+    if (!msg.redeemed || !msg.text || msg.historical) return false
+    if (!useSettingsStore.getState().settings.showRedeems) return false
+    const key = `${msg.channel}:${msg.login}:${msg.text}`
+    const sup = this.redeemSuppress.get(key)
+    if (sup && Date.now() - sup < 8000) {
+      this.redeemSuppress.delete(key)
+      return true // the styled PubSub line is already in chat — drop the raw duplicate
+    }
+    // hold briefly: when PubSub delivers the styled line within the window, the raw
+    // message is dropped; otherwise it shows after all (PubSub missed/offline)
+    this.pendingRedeemMsgs.set(key, msg)
+    window.setTimeout(() => {
+      const held = this.pendingRedeemMsgs.get(key)
+      if (!held) return
+      this.pendingRedeemMsgs.delete(key)
+      this.markUnreadIfInactive(held.channel)
+      this.queue(held.channel, held)
+    }, 1500)
+    return true
+  }
+
   /** "channel:target" raids we've already announced/prompted (PubSub + EventSub overlap) */
   private raidAnnounced = new Map<string, number>()
   private shoutoutAnnounced = new Map<string, number>()
@@ -260,6 +287,12 @@ class ChatService {
     msg.login = e.userLogin
     msg.displayName = e.userDisplay
     msg.color = lookupUserColor(channel, e.userLogin)
+    if (e.userInput) {
+      // pair up with the raw PRIVMSG copy of this redemption (either direction of the race)
+      const key = `${channel}:${e.userLogin}:${e.userInput}`
+      if (this.pendingRedeemMsgs.has(key)) this.pendingRedeemMsgs.delete(key)
+      else this.redeemSuppress.set(key, Date.now())
+    }
     this.queue(channel, msg)
     this.persistRedeem(channel, msg)
   }
@@ -769,6 +802,7 @@ class ChatService {
           }
           this.detectMention(msg)
           this.maybePlayFirstSeenSound(msg)
+          if (this.maybeHoldRedeemPrivmsg(msg)) break
           this.markUnreadIfInactive(msg.channel)
           this.queue(msg.channel, msg)
         }

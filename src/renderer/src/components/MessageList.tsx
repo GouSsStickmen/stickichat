@@ -56,6 +56,11 @@ export default function MessageList({
   const [atBottom, setAtBottom] = useState(true)
   const atBottomRef = useRef(true)
   atBottomRef.current = atBottom
+  // follow-intent: true while the user WANTS to sit at the bottom. Cleared the moment they
+  // wheel UP (before any state lags), restored when they reach the bottom again. All
+  // re-pin machinery keys off this — so background windows keep following through preview
+  // loads, and a fast upward fling is never yanked back down.
+  const followingRef = useRef(true)
   const [flashId, setFlashId] = useState<string | null>(null)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
@@ -98,7 +103,7 @@ export default function MessageList({
     const el = wrapRef.current
     if (!el) return
     const ro = new ResizeObserver(() => {
-      if (atBottomRef.current && !scrollLocked) {
+      if (followingRef.current && !scrollLocked) {
         virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
       }
     })
@@ -110,15 +115,22 @@ export default function MessageList({
   // rAF-driven followOutput gets throttled: an explicit re-pin keeps autoscroll alive
   useEffect(() => {
     const rePin = (): void => {
-      if (atBottomRef.current && !scrollLocked) {
+      if (followingRef.current && !scrollLocked) {
         virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
       }
     }
     window.addEventListener('sticki:grew', rePin)
     const keepalive = window.setInterval(rePin, 1500)
+    // scrolling UP breaks the follow immediately (state updates lag behind fast flings)
+    const el = wrapRef.current
+    const onWheel = (e: WheelEvent): void => {
+      if (e.deltaY < 0) followingRef.current = false
+    }
+    el?.addEventListener('wheel', onWheel, { passive: true })
     return () => {
       window.removeEventListener('sticki:grew', rePin)
       window.clearInterval(keepalive)
+      el?.removeEventListener('wheel', onWheel)
     }
   }, [scrollLocked])
 
@@ -173,7 +185,10 @@ export default function MessageList({
         // buffer trims, which is what used to make a big overscan thrash.)
         increaseViewportBy={{ top: 800, bottom: 320 }}
         followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? 'auto' : false)}
-        atBottomStateChange={setAtBottom}
+        atBottomStateChange={(b) => {
+          setAtBottom(b)
+          if (b) followingRef.current = true
+        }}
         atBottomThreshold={40}
         // apply resize corrections synchronously instead of on the next animation frame —
         // removes the one mis-positioned frame that reads as a micro-jump while scrolling up

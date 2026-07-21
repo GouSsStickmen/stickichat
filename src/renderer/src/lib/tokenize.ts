@@ -20,6 +20,15 @@ const URL_RE = /^https?:\/\/[^\s]+$/i
 // bare links without a protocol: www.foo.bar, twitch.tv/xqc, sub.domain.co.ua/path?x=1 …
 const BARE_URL_RE = /^(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/?#][^\s]*)?$/i
 
+/** biggest available size of an emote image (hover previews, gigantified emotes) */
+export function hiResEmoteUrl(u: string): string {
+  if (u.includes('betterttv')) return u.replace(/\/2x$/, '/3x')
+  return u
+    .replace('/2.0', '/3.0') // twitch
+    .replace(/\/2x(\.\w+)?$/, '/4x$1') // 7tv
+    .replace(/\/2$/, '/4') // ffz
+}
+
 function twitchEmoteUrl(id: string): string {
   return `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/2.0`
 }
