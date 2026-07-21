@@ -30,31 +30,6 @@ for (const e of ukCompact as UkEntry[]) {
 const ukNameOf = (char: string): string => ukNames.get(char) ?? ukNames.get(stripVS(char)) ?? ''
 
 /**
- * Not every emoji the Unicode standard defines exists in this Windows build's emoji font —
- * unsupported ones render as empty rectangles. Detect support by comparing the canvas
- * rendering against a known-missing glyph.
- */
-function makeGlyphSupportTester(): (char: string) => boolean {
-  try {
-    const canvas = document.createElement('canvas')
-    canvas.width = 24
-    canvas.height = 24
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    if (!ctx) return () => true
-    const render = (ch: string): string => {
-      ctx.clearRect(0, 0, 24, 24)
-      ctx.font = '18px "Segoe UI Emoji", "Segoe UI Symbol", sans-serif'
-      ctx.fillText(ch, 0, 18)
-      return canvas.toDataURL()
-    }
-    const missing = render('\u{10FFFE}') // guaranteed-unassigned code point → .notdef box
-    return (char) => render(char) !== missing
-  } catch {
-    return () => true
-  }
-}
-
-/**
  * Country flags are regional-indicator PAIRS: on systems without flag glyphs (Windows!)
  * they render as two letters instead of hitting .notdef, so the generic tester passes them.
  * Detect real support by width: a rendered flag is one glyph, letters are two.
@@ -74,7 +49,6 @@ function flagsSupported(): boolean {
 }
 
 const REGIONAL_PAIR_RE = /^[🇦-🇿]{2}$/u
-const TAG_SEQ_RE = /[\u{E0020}-\u{E007F}]/u
 
 const HAS_NATIVE_FLAGS = typeof document !== 'undefined' ? flagsSupported() : true
 
@@ -99,49 +73,18 @@ export function emojiImageUrl(char: string): string | null {
   return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${code}.png`
 }
 
-// The glyph-support scan (~2000 canvas renders) is expensive and identical in every
-// window — cache the resulting list of supported chars so only the FIRST window pays.
-const SUPPORT_CACHE_KEY = 'sticki:emojiSupported:v3'
-
 function buildList(): EmojiEntry[] {
-  let supported: Set<string> | null = null
-  try {
-    const raw = localStorage.getItem(SUPPORT_CACHE_KEY)
-    if (raw) supported = new Set(JSON.parse(raw) as string[])
-  } catch {
-    /* rebuild below */
-  }
-
+  // Rendering is IMAGE-based (Apple set + Noto fallback), so every emoji in the data is
+  // displayable — the old canvas "does the system font support it?" filter only hid
+  // things (including every Unicode 16 emoji) and is gone.
   const out: EmojiEntry[] = []
-  if (supported) {
-    for (const g of emojiGroups as EmojiGroup[]) {
-      for (const e of g.emojis) {
-        if (!supported.has(e.emoji)) continue
-        out.push({ char: e.emoji, name: e.name, nameUk: ukNameOf(e.emoji) })
-      }
-    }
-    return out
-  }
-
-  const supports = makeGlyphSupportTester()
   for (const g of emojiGroups as EmojiGroup[]) {
-    // "component" = bare skin-tone / hair modifiers; they render as dotted-box placeholders
-    // and aren't standalone emoji — never list them
+    // "component" = bare skin-tone / hair modifiers; they aren't standalone emoji
     if (g.slug === 'component') continue
     for (const e of g.emojis) {
       if (e.emoji === '🇷🇺') continue // substituted with 💩 (already in the list)
-      const isFlagPair = REGIONAL_PAIR_RE.test(e.emoji)
-      // subdivision/tag-sequence flags render broken without native support — drop those;
-      // country flags are kept and rendered as Twemoji images instead
-      if (!HAS_NATIVE_FLAGS && TAG_SEQ_RE.test(e.emoji)) continue
-      if (!isFlagPair && !supports(e.emoji)) continue
       out.push({ char: e.emoji, name: e.name, nameUk: ukNameOf(e.emoji) })
     }
-  }
-  try {
-    localStorage.setItem(SUPPORT_CACHE_KEY, JSON.stringify(out.map((e) => e.char)))
-  } catch {
-    /* best-effort */
   }
   return out
 }

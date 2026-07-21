@@ -1,3 +1,13 @@
+/* Unicode 16 emoji: the Windows emoji font shows tofu boxes in raw-text surfaces
+   (the input!). This COLR font covers ONLY that block and downloads lazily the first
+   time such a char is actually rendered. */
+@font-face {
+  font-family: 'StickiEmoji';
+  src: url('https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/Noto-COLRv1.ttf') format('truetype');
+  unicode-range: U+1FA80-1FAFF;
+  font-display: swap;
+}
+
 :root {
   --font: var(--app-font, 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif);
   --font-size: 13px;
@@ -62,7 +72,7 @@ body,
 }
 
 body {
-  font-family: var(--font);
+  font-family: var(--font), 'StickiEmoji';
   font-size: var(--font-size);
   background: var(--bg);
   color: var(--text);
@@ -83,7 +93,7 @@ body {
 }
 
 button {
-  font-family: var(--font);
+  font-family: var(--font), 'StickiEmoji';
   font-size: inherit;
   border: none;
   border-radius: 6px;
@@ -126,7 +136,7 @@ button:disabled {
 input,
 textarea,
 select {
-  font-family: var(--font);
+  font-family: var(--font), 'StickiEmoji';
   font-size: inherit;
   background: var(--surface-2);
   color: var(--text);

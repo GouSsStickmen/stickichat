@@ -179,6 +179,9 @@ export default function MessageList({
       if (idx < 0) return
       // scrollToIndex uses LOCAL indices (0..length-1) even with firstItemIndex active —
       // the offset variant clamped to the end and the jump appeared to do nothing
+      // jumping to an old message PARKS the view — new arrivals must not yank it back down
+      followingRef.current = false
+      setFollowing(false)
       virtuosoRef.current?.scrollToIndex({ index: idx, align: 'center' })
       setFlashId(detail.msgId)
       window.setTimeout(() => setFlashId(null), 3200)
