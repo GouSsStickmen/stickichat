@@ -228,17 +228,28 @@ export function registerIpc(): void {
     const displays = screen.getAllDisplays()
     const maxW = Math.max(...displays.map((d) => Math.round(d.size.width * (d.scaleFactor || 1))))
     const maxH = Math.max(...displays.map((d) => Math.round(d.size.height * (d.scaleFactor || 1))))
-    const sources = await desktopCapturer.getSources({
+    let sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: { width: maxW, height: maxH }
     })
+    // first call occasionally under-reports displays or returns not-yet-painted (black)
+    // thumbnails on secondary monitors — retry briefly until every display has a source
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const enough = sources.length >= displays.length && sources.every((s2) => !s2.thumbnail.isEmpty())
+      if (enough) break
+      await new Promise((r) => setTimeout(r, 180))
+      sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: maxW, height: maxH }
+      })
+    }
     if (!sources.length) return null
     const wins: BrowserWindow[] = []
     const closeAll = (): void => {
       for (const w of wins) if (!w.isDestroyed()) w.close()
     }
     const pageFor = (dataUrl: string): string => `<!doctype html><html><head><meta charset="utf-8"><style>
-      html,body{margin:0;height:100%;overflow:hidden;cursor:crosshair;background:#000}
+      html,body{margin:0;height:100%;overflow:hidden;cursor:crosshair;background:transparent}
       img{position:absolute;inset:0;width:100%;height:100%}
       #loupe{position:fixed;width:120px;height:120px;border-radius:50%;border:2px solid #fff;
         box-shadow:0 0 0 1px #000,0 4px 14px rgba(0,0,0,.6);pointer-events:none;display:none;
@@ -300,27 +311,20 @@ export function registerIpc(): void {
     // UNUSED sources (the enumeration order of getSources does not always match
     // getAllDisplays — that's how the third monitor ended up without a picker)
     const usedSources = new Set<string>()
-    const pickSource = (disp: Electron.Display): Electron.DesktopCapturerSource | undefined => {
+    const pickSource = (disp: Electron.Display, idx: number): Electron.DesktopCapturerSource | undefined => {
       let hit = sources.find((s2) => !usedSources.has(s2.id) && String(s2.display_id) === String(disp.id))
-      if (!hit) {
-        const ar = disp.bounds.width / disp.bounds.height
-        let bestD = Infinity
-        for (const s2 of sources) {
-          if (usedSources.has(s2.id)) continue
-          const sz = s2.thumbnail.getSize()
-          const d = Math.abs(sz.width / Math.max(1, sz.height) - ar)
-          if (d < bestD) {
-            bestD = d
-            hit = s2
-          }
-        }
-      }
+      // fallback: same position in the list (screens enumerate in display order)
+      if (!hit && sources[idx] && !usedSources.has(sources[idx].id)) hit = sources[idx]
+      // last resort: the first still-unused source
+      if (!hit) hit = sources.find((s2) => !usedSources.has(s2.id))
       if (hit) usedSources.add(hit.id)
       return hit
     }
-    displays.forEach((disp) => {
-      const src = pickSource(disp)
-      if (!src) return
+    displays.forEach((disp, idx) => {
+      const src = pickSource(disp, idx)
+      // no valid, non-black capture for this monitor → skip it (shows the real desktop
+      // instead of a black cover)
+      if (!src || src.thumbnail.isEmpty()) return
       const win = new BrowserWindow({
         x: disp.bounds.x,
         y: disp.bounds.y,
@@ -332,7 +336,8 @@ export function registerIpc(): void {
         skipTaskbar: true,
         alwaysOnTop: true,
         show: false,
-        backgroundColor: '#000000', // no white flash before the screenshot paints
+        transparent: true,
+        backgroundColor: '#00000000', // no white flash; desktop shows through if img fails
         webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: false }
       })
       win.setAlwaysOnTop(true, 'screen-saver')

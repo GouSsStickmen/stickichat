@@ -11,6 +11,7 @@ export default function EmojiGlyph({ char, className }: { char: string; classNam
         src={url}
         alt={shown}
         loading="lazy"
+        decoding="async"
         draggable={false}
         onError={(e) => {
           // fallback chain: Apple without FE0F → Google Noto (has Unicode 16 emoji the
