@@ -296,8 +296,31 @@ export function registerIpc(): void {
         if (e.key === 'Escape') window.sticki.eyedropperResult(null)
       })
     <\/script></body></html>`
-    displays.forEach((disp, i) => {
-      const src = sources.find((s2) => String(s2.display_id) === String(disp.id)) ?? sources[i] ?? sources[0]
+    // display↔source matching: display_id first; otherwise closest aspect ratio among the
+    // UNUSED sources (the enumeration order of getSources does not always match
+    // getAllDisplays — that's how the third monitor ended up without a picker)
+    const usedSources = new Set<string>()
+    const pickSource = (disp: Electron.Display): Electron.DesktopCapturerSource | undefined => {
+      let hit = sources.find((s2) => !usedSources.has(s2.id) && String(s2.display_id) === String(disp.id))
+      if (!hit) {
+        const ar = disp.bounds.width / disp.bounds.height
+        let bestD = Infinity
+        for (const s2 of sources) {
+          if (usedSources.has(s2.id)) continue
+          const sz = s2.thumbnail.getSize()
+          const d = Math.abs(sz.width / Math.max(1, sz.height) - ar)
+          if (d < bestD) {
+            bestD = d
+            hit = s2
+          }
+        }
+      }
+      if (hit) usedSources.add(hit.id)
+      return hit
+    }
+    displays.forEach((disp) => {
+      const src = pickSource(disp)
+      if (!src) return
       const win = new BrowserWindow({
         x: disp.bounds.x,
         y: disp.bounds.y,
@@ -319,6 +342,13 @@ export function registerIpc(): void {
         win.show()
         win.setBounds(disp.bounds)
       })
+      // safety net: data-URL pages occasionally skip ready-to-show — show anyway
+      setTimeout(() => {
+        if (!win.isDestroyed() && !win.isVisible()) {
+          win.show()
+          win.setBounds(disp.bounds)
+        }
+      }, 600)
       wins.push(win)
     })
     return await new Promise<string | null>((resolve) => {

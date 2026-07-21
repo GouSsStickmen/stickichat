@@ -13,13 +13,16 @@ export default function EmojiGlyph({ char, className }: { char: string; classNam
         loading="lazy"
         draggable={false}
         onError={(e) => {
-          // Twemoji names some sequences without FE0F selectors — retry a normalized name,
-          // then give up and show the native glyph (the alt text)
+          // fallback chain: Apple without FE0F → Google Noto (has Unicode 16 emoji the
+          // Apple set lacks: 🫩 🫆 🫜 🪉 🪏 …) → the native glyph
           const img = e.currentTarget
-          if (!img.dataset.alt) {
-            img.dataset.alt = '1'
-            const codes = [...shown].map((c) => c.codePointAt(0)!.toString(16)).filter((c) => c !== 'fe0f')
+          const codes = [...shown].map((c) => c.codePointAt(0)!.toString(16)).filter((c) => c !== 'fe0f')
+          if (!img.dataset.stage) {
+            img.dataset.stage = '1'
             img.src = `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${codes.join('-')}.png`
+          } else if (img.dataset.stage === '1') {
+            img.dataset.stage = '2'
+            img.src = `https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/png/72/emoji_u${codes.join('_')}.png`
           } else {
             img.style.display = 'none'
             img.insertAdjacentText('afterend', shown)

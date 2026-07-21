@@ -33,8 +33,11 @@ function bodyHtml(msg: ChatMessage): string {
       case 'emoji': {
         // same reasoning as chat: Twemoji image = consistent one-cell rendering in OBS
         const shown = displayEmoji(tk.char)
-        const code = [...shown].map((c) => c.codePointAt(0)!.toString(16)).join('-')
-        out += `<img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${code}.png" alt="${esc(shown)}">`
+        const codes = [...shown].map((c) => c.codePointAt(0)!.toString(16))
+        const code = codes.join('-')
+        const noto = codes.filter((c) => c !== 'fe0f').join('_')
+        // onerror hop: Apple set → Noto (Unicode 16 coverage) → plain text glyph
+        out += `<img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${code}.png" alt="${esc(shown)}" onerror="if(!this.dataset.s){this.dataset.s='1';this.src='https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/png/72/emoji_u${noto}.png'}else{this.outerHTML=this.alt}">`
         break
       }
       case 'link':
