@@ -406,6 +406,16 @@ const OVERLAY_HTML = `<!doctype html>
     to { transform: translateY(var(--cend, -1200px)); }
   }
   .line.credits { position: absolute; left: 0; right: 0; bottom: 0; }
+  /* page-flip: the filled page folds away upward, then a blank sheet is written fresh */
+  .page-flip { display: flex; flex-direction: column; width: 100%; transform-origin: top center; }
+  @keyframes page-fold-away {
+    0%   { transform: perspective(1600px) rotateX(0deg);   opacity: 1; }
+    100% { transform: perspective(1600px) rotateX(-96deg);  opacity: 0; }
+  }
+  @keyframes page-fold-in {
+    0%   { transform: perspective(1600px) rotateX(90deg);  opacity: 0; }
+    100% { transform: perspective(1600px) rotateX(0deg);   opacity: 1; }
+  }
   /* single-message visual editor */
   body.edit { cursor: grab; }
   body.edit .meta, body.edit .avatar, body.edit .badges, body.edit .ts, body.edit .body, body.edit .cwrap { cursor: move; }
@@ -452,7 +462,7 @@ const OVERLAY_HTML = `<!doctype html>
     maxMessages: 15, fadeAfter: 0, lineGap: 4, zonePad: 8, edgeFade: 0,
     animIn: 'slide', animDir: 'down', animOut: 'fade', animOutDir: 'left', animMs: 200, animInMs: 300, animOutMs: 300,
     meStyle: 'colored',
-    creditsMode: false, creditsSpeed: 40, creditsHeight: 0, creditsRush: false,
+    creditsMode: false, creditsSpeed: 40, creditsHeight: 0, creditsRush: false, pageFlip: false, pageFlipMs: 650,
     badgeKinds: [], userBadges: [], badgeReplace: {},
     nickRotate: 0, avatarOffsetX: 0, avatarOffsetY: 0, badgeOffsetX: 0, badgeOffsetY: 0,
     tsOffsetX: 0, tsOffsetY: 0, textOffsetX: 0, textOffsetY: 0,
@@ -1275,10 +1285,54 @@ const OVERLAY_HTML = `<!doctype html>
     else creditsLastTs = 0
   }
 
+  // ---- page-flip: when the page is full, fold it away and write a fresh blank sheet ----
+  var flipping = false
+  var flipQueue = []
+  function realLineEls() {
+    var out = []
+    var kids = zone.querySelectorAll(':scope > .line')
+    for (var i = 0; i < kids.length; i++) if (!kids[i].classList.contains('out')) out.push(kids[i])
+    return out
+  }
+  function doPageFlip(triggerData) {
+    flipping = true
+    var dur = Math.max(150, cfg.pageFlipMs || 650)
+    // move the current lines into a wrapper and fold it away (keeps #zone's own transform)
+    var page = document.createElement('div')
+    page.className = 'page-flip'
+    var kids = realLineEls()
+    for (var i = 0; i < kids.length; i++) page.appendChild(kids[i])
+    zone.appendChild(page)
+    lines = []
+    page.style.animation = 'page-fold-away ' + Math.round(dur * 0.55) + 'ms ease-in forwards'
+    page.addEventListener('animationend', function () {
+      page.remove()
+      // clear the flip state FIRST so the trigger lands on the blank page (not back into
+      // the queue), then write it, then drain messages that arrived mid-flip — in order
+      flipping = false
+      var q = flipQueue
+      flipQueue = []
+      if (triggerData) append(triggerData)
+      var firstNew = realLineEls()[0]
+      if (firstNew) {
+        firstNew.style.animation = 'page-fold-in ' + Math.round(dur * 0.45) + 'ms ease-out both'
+        firstNew.addEventListener('animationend', function (ev) {
+          if (ev.target === firstNew) firstNew.style.animation = ''
+        }, { once: true })
+      }
+      for (var j = 0; j < q.length; j++) append(q[j])
+    }, { once: true })
+  }
+
   var restyling = false
   function append(d) {
     if (editMode && d.id !== 'edit-1') return
     if (!passesFilters(d)) return
+    // page-flip mode: queue during a flip; flip when the page is already full
+    if (cfg.pageFlip && !creditsActive() && !restyling && d.kind !== undefined) {
+      if (flipping) { flipQueue.push(d); return }
+      if (realLineEls().length >= cfg.maxMessages) { doPageFlip(d); return }
+    }
     lines.push(d)
     if (lines.length > cfg.maxMessages + 10) lines.splice(0, lines.length - cfg.maxMessages - 10)
     var el = assemble(d)
@@ -1507,6 +1561,7 @@ const OVERLAY_HTML = `<!doctype html>
 
     // rebuild all visible lines with the new structure/styles
     creditsReset() // credits engine restarts with the rebuild
+    flipping = false; flipQueue = [] // page-flip state resets too
     var kids = zone.querySelectorAll(':scope > .line')
     for (var k = 0; k < kids.length; k++) kids[k].remove()
     var data = lines.slice(-cfg.maxMessages)

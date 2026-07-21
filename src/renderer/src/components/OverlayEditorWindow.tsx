@@ -316,6 +316,10 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   const [editMode, setEditMode] = useState(false)
   const [pvZoom, setPvZoom] = useState(1)
   const [pvPan, setPvPan] = useState({ x: 0, y: 0 })
+  // fixed canvas size for the preview (test narrow/wide chat without resizing the window);
+  // null = fill the preview area
+  const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null)
+  const canvasResize = useRef<{ sx: number; sy: number; bw: number; bh: number } | null>(null)
   const capRef = useRef<HTMLDivElement>(null)
   const panDrag = useRef<{ sx: number; sy: number; bx: number; by: number } | null>(null)
   const zoomRef = useRef(1)
@@ -606,20 +610,27 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
             </Row>
             <Row label={t('oe.scrollMode')}>
               <select
-                value={ov.creditsMode ? 'credits' : ov.smoothScroll ? 'smooth' : 'none'}
+                value={ov.pageFlip ? 'pageflip' : ov.creditsMode ? 'credits' : ov.smoothScroll ? 'smooth' : 'none'}
                 onChange={(e) => {
                   const v = e.target.value
-                  update({ creditsMode: v === 'credits', smoothScroll: v === 'smooth' })
+                  update({ creditsMode: v === 'credits', smoothScroll: v === 'smooth', pageFlip: v === 'pageflip' })
                 }}
               >
                 <option value="none">{t('oe.scroll.none')}</option>
                 <option value="smooth">{t('oe.scroll.smooth')}</option>
                 <option value="credits">{t('oe.scroll.credits')}</option>
+                <option value="pageflip">{t('oe.scroll.pageflip')}</option>
               </select>
             </Row>
             {ov.smoothScroll && (
               <Row label={t('oe.smoothScrollMs')} hint={t('oe.smoothScroll.hint')}>
                 <Num v={ov.smoothScrollMs} on={(n) => update({ smoothScrollMs: n })} min={100} max={2000} step={50} />
+              </Row>
+            )}
+            {ov.pageFlip && (
+              <Row label={t('oe.pageFlipMs')} hint={t('oe.pageflip.hint')}>
+                <Num v={ov.pageFlipMs} on={(n) => update({ pageFlipMs: n })} min={150} max={2500} step={50} w={72} def={650} />
+                <span className="hint">мс</span>
               </Row>
             )}
             {ov.creditsMode && (
@@ -1596,6 +1607,35 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               <input type="checkbox" checked={editMode} onChange={(e) => setEditMode(e.target.checked)} />
               🖱 {t('oe.editMode')}
             </label>
+            <span className="hint oe-canvas-ctl" title={t('oe.pv.canvas.hint')}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={!!canvas}
+                  onChange={(e) => setCanvas(e.target.checked ? { w: 400, h: 500 } : null)}
+                />
+                {t('oe.pv.canvas')}
+              </label>
+              {canvas && (
+                <>
+                  <input
+                    type="number"
+                    min={120}
+                    style={{ width: 62 }}
+                    value={canvas.w}
+                    onChange={(e) => setCanvas({ w: Math.max(120, parseInt(e.target.value, 10) || 400), h: canvas.h })}
+                  />
+                  ×
+                  <input
+                    type="number"
+                    min={80}
+                    style={{ width: 62 }}
+                    value={canvas.h}
+                    onChange={(e) => setCanvas({ w: canvas.w, h: Math.max(80, parseInt(e.target.value, 10) || 500) })}
+                  />
+                </>
+              )}
+            </span>
             <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
               <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} />
               {t('oe.demo')}
@@ -1640,11 +1680,38 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 transformOrigin: '0 0'
               }}
             >
-              <iframe
-                key={`${channel}:${settings.overlayPort}:${editMode ? 'e' : demo ? 1 : 0}`}
-                src={previewUrl}
-                title="overlay preview"
-              />
+              <div
+                className={`oe-pv-canvas ${canvas ? 'framed' : ''}`}
+                style={canvas ? { width: canvas.w, height: canvas.h } : undefined}
+              >
+                <iframe
+                  key={`${channel}:${settings.overlayPort}:${editMode ? 'e' : demo ? 1 : 0}`}
+                  src={previewUrl}
+                  title="overlay preview"
+                />
+                {canvas && (
+                  <div
+                    className="oe-pv-handle"
+                    title={t('oe.pv.canvasResize')}
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+                      canvasResize.current = { sx: e.clientX, sy: e.clientY, bw: canvas.w, bh: canvas.h }
+                    }}
+                    onPointerMove={(e) => {
+                      const d = canvasResize.current
+                      if (!d) return
+                      setCanvas({
+                        w: Math.max(120, Math.round(d.bw + (e.clientX - d.sx) / pvZoom)),
+                        h: Math.max(80, Math.round(d.bh + (e.clientY - d.sy) / pvZoom))
+                      })
+                    }}
+                    onPointerUp={() => {
+                      canvasResize.current = null
+                    }}
+                  />
+                )}
+              </div>
             </div>
             {!editMode && (
               <div

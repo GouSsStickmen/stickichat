@@ -349,6 +349,10 @@ export interface ChatOverlayConfig {
   creditsHeight: number
   /** flood behavior: accelerate the whole tape (up to 4x) instead of dropping messages */
   creditsRush: boolean
+  /** page-flip: fill the page, then flip to a blank sheet and start writing fresh */
+  pageFlip: boolean
+  /** page-flip animation duration (ms) */
+  pageFlipMs: number
   /** smooth push: new messages slide the chat instead of jumping */
   smoothScroll: boolean
   /** ms of the smooth push */
@@ -570,6 +574,8 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   creditsSpeed: 40,
   creditsHeight: 0,
   creditsRush: false,
+  pageFlip: false,
+  pageFlipMs: 650,
   smoothScroll: false,
   smoothScrollMs: 300,
   zonePad: 8,

@@ -375,7 +375,7 @@ function MessageViewInner({
         rdark
       )
       return (
-        <div className="msg redeem-info">
+        <div className="msg redeem-info" style={customBg ? { background: customBg } : undefined}>
           {settings.showTimestamps && (
             <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>
           )}
@@ -396,7 +396,7 @@ function MessageViewInner({
       )
     }
     return (
-      <div className={`msg ${msg.redeemed ? 'redeem-info' : ''}`}>
+      <div className={`msg ${msg.redeemed ? 'redeem-info' : ''}`} style={customBg ? { background: customBg } : undefined}>
         {settings.showTimestamps && <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>}
         <span className="sysmsg">{msg.systemText}</span>
       </div>
