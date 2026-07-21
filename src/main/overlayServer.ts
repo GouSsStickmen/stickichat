@@ -981,9 +981,49 @@ const OVERLAY_HTML = `<!doctype html>
     return cfg.nickPos
   }
 
+  // TRUE typewriter: split the message body into per-character units (images stay atomic),
+  // lay them out hidden so line wrapping is already final, then reveal one unit at a time.
+  // Multi-line text types LINE BY LINE because units reveal in reading (DOM) order.
+  function typewriterReveal(el, durMs) {
+    var units = []
+    function walk(node) {
+      var kids = Array.prototype.slice.call(node.childNodes)
+      for (var i = 0; i < kids.length; i++) {
+        var n = kids[i]
+        if (n.nodeType === 3) {
+          var chars = Array.from(n.nodeValue)
+          if (!chars.length) continue
+          var frag = document.createDocumentFragment()
+          for (var c = 0; c < chars.length; c++) {
+            var sp = document.createElement('span')
+            sp.textContent = chars[c]
+            sp.style.visibility = 'hidden'
+            frag.appendChild(sp)
+            units.push(sp)
+          }
+          node.replaceChild(frag, n)
+        } else if (n.nodeType === 1) {
+          if (n.tagName === 'IMG') { n.style.visibility = 'hidden'; units.push(n) }
+          else walk(n)
+        }
+      }
+    }
+    walk(el)
+    if (!units.length) return
+    var per = Math.max(14, durMs / units.length)
+    var i = 0
+    var timer = setInterval(function () {
+      if (!el.isConnected) { clearInterval(timer); return }
+      if (i >= units.length) { clearInterval(timer); return }
+      units[i].style.visibility = ''
+      i++
+    }, per)
+  }
+
   function assemble(d) {
     var el = document.createElement('div')
     el.className = 'line'
+    var typeTarget = null // the message text span, for the typewriter animation
     if (d.id) el.dataset.id = d.id
     if (d.user) el.dataset.user = d.user
     if (d.login) el.dataset.login = d.login
@@ -1032,6 +1072,7 @@ const OVERLAY_HTML = `<!doctype html>
       }
       var text = document.createElement('span')
       text.innerHTML = d.body || ''
+      typeTarget = text
       if (cfg.textOffsetX || cfg.textOffsetY) {
         text.style.display = 'inline-block'
         text.style.translate = (cfg.textOffsetX || 0) + 'px ' + (cfg.textOffsetY || 0) + 'px'
@@ -1070,7 +1111,10 @@ const OVERLAY_HTML = `<!doctype html>
     // a lingering filled animation keeps a stacking/containing context on the line, which
     // silently disabled backdrop-filter (the "glass" effect) on the plates inside it.
     var an = animName()
-    if (an && an !== 'none' && !creditsActive()) {
+    if (an === 'typewriter' && typeTarget && d.kind === 'msg' && !restyling && !creditsActive()) {
+      // real typewriter: reveal the body character by character (line by line)
+      typewriterReveal(typeTarget, cfg.animInMs || cfg.animMs || 300)
+    } else if (an && an !== 'none' && !creditsActive()) {
       animVars(el, cfg.animDir)
       if (an === 'swing' || an === 'hinge') el.style.transformOrigin = 'top left'
       else if (an === 'stretch') el.style.transformOrigin = 'left center'
