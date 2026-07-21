@@ -1,4 +1,4 @@
-import { ipcMain, safeStorage, shell, app, BrowserWindow } from 'electron'
+import { ipcMain, safeStorage, shell, app, BrowserWindow, desktopCapturer, screen } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
 import { overlayConfigure, overlayDelete, overlayPush, overlayRestart, OverlayDelete, OverlayStyle, OverlayLine } from './overlayServer'
@@ -217,6 +217,112 @@ export function registerIpc(): void {
   // and restore them afterwards
   let suspendedOnTop: BrowserWindow[] = []
   let eyedropperWin: BrowserWindow | null = null
+  // ---- own screen eyedropper: screenshot + fullscreen topmost magnifier window ----
+  // (Chromium's built-in EyeDropper loupe kept sinking behind our other windows)
+  let eyedropperResolve: ((hex: string | null) => void) | null = null
+  ipcMain.on('eyedropper:result', (_e, hex: string | null) => {
+    eyedropperResolve?.(hex)
+    eyedropperResolve = null
+  })
+  ipcMain.handle('eyedropper:pick', async () => {
+    const pt = screen.getCursorScreenPoint()
+    const disp = screen.getDisplayNearestPoint(pt)
+    const sf = disp.scaleFactor || 1
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: Math.round(disp.size.width * sf), height: Math.round(disp.size.height * sf) }
+    })
+    const src =
+      sources.find((s2) => String(s2.display_id) === String(disp.id)) ?? sources[0]
+    if (!src) return null
+    const dataUrl = src.thumbnail.toDataURL()
+    const win = new BrowserWindow({
+      x: disp.bounds.x,
+      y: disp.bounds.y,
+      width: disp.bounds.width,
+      height: disp.bounds.height,
+      frame: false,
+      resizable: false,
+      movable: false,
+      fullscreen: true,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: false }
+    })
+    win.setAlwaysOnTop(true, 'screen-saver')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+      html,body{margin:0;height:100%;overflow:hidden;cursor:crosshair;background:#000}
+      img{position:absolute;inset:0;width:100%;height:100%}
+      #loupe{position:fixed;width:120px;height:120px;border-radius:50%;border:2px solid #fff;
+        box-shadow:0 0 0 1px #000,0 4px 14px rgba(0,0,0,.6);pointer-events:none;display:none;
+        background-repeat:no-repeat;image-rendering:pixelated;overflow:hidden}
+      #loupe::after{content:'';position:absolute;left:50%;top:50%;width:10px;height:10px;
+        transform:translate(-50%,-50%);border:1px solid #fff;box-shadow:0 0 0 1px #000}
+      #hex{position:fixed;padding:2px 8px;border-radius:4px;background:#000;color:#fff;
+        font:12px monospace;pointer-events:none;display:none}
+    </style></head><body>
+    <img id="shot" src="${dataUrl}">
+    <div id="loupe"></div><div id="hex"></div>
+    <canvas id="cv" style="display:none"></canvas>
+    <script>
+      const sf = ${sf}
+      const img = document.getElementById('shot')
+      const loupe = document.getElementById('loupe')
+      const hexEl = document.getElementById('hex')
+      const cv = document.getElementById('cv')
+      let ctx = null
+      img.onload = () => {
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight
+        ctx = cv.getContext('2d', { willReadFrequently: true })
+        ctx.drawImage(img, 0, 0)
+      }
+      if (img.complete) img.onload()
+      const Z = 8
+      function pixelAt(e){
+        if (!ctx) return null
+        const x = Math.min(cv.width - 1, Math.max(0, Math.round(e.clientX * sf)))
+        const y = Math.min(cv.height - 1, Math.max(0, Math.round(e.clientY * sf)))
+        const d = ctx.getImageData(x, y, 1, 1).data
+        return { x, y, hex: '#' + [d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, '0')).join('') }
+      }
+      document.addEventListener('mousemove', (e) => {
+        const p = pixelAt(e)
+        if (!p) return
+        loupe.style.display = 'block'
+        hexEl.style.display = 'block'
+        loupe.style.left = (e.clientX + 20) + 'px'
+        loupe.style.top = (e.clientY + 20) + 'px'
+        hexEl.style.left = (e.clientX + 24) + 'px'
+        hexEl.style.top = (e.clientY + 146) + 'px'
+        hexEl.textContent = p.hex
+        loupe.style.backgroundImage = 'url(' + img.src + ')'
+        loupe.style.backgroundSize = (cv.width * Z / sf) + 'px ' + (cv.height * Z / sf) + 'px'
+        loupe.style.backgroundPosition = (-(p.x * Z / sf) + 60) + 'px ' + (-(p.y * Z / sf) + 60) + 'px'
+      })
+      document.addEventListener('mousedown', (e) => {
+        const p = pixelAt(e)
+        window.sticki.eyedropperResult(p ? p.hex : null)
+      })
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') window.sticki.eyedropperResult(null)
+      })
+    <\/script></body></html>`
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+    win.focus()
+    return await new Promise<string | null>((resolve) => {
+      eyedropperResolve = (hex) => {
+        resolve(hex)
+        if (!win.isDestroyed()) win.close()
+      }
+      win.on('closed', () => {
+        if (eyedropperResolve) {
+          eyedropperResolve = null
+          resolve(null)
+        }
+      })
+    })
+  })
+
   ipcMain.handle('window:suspendAlwaysOnTop', (e) => {
     suspendedOnTop = BrowserWindow.getAllWindows().filter((w) => w.isAlwaysOnTop())
     for (const w of suspendedOnTop) w.setAlwaysOnTop(false)

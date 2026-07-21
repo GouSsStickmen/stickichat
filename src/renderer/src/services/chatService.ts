@@ -200,7 +200,7 @@ class ChatService {
     if (window.location.hash) return false
     if (!msg.redeemed || !msg.text || msg.historical) return false
     if (!useSettingsStore.getState().settings.showRedeems) return false
-    const key = `${msg.channel}:${msg.login}:${msg.text}`
+    const key = `${msg.channel}:${msg.login}:${(msg.text ?? '').trim()}`
     const sup = this.redeemSuppress.get(key)
     if (sup && Date.now() - sup < 8000) {
       this.redeemSuppress.delete(key)
@@ -213,6 +213,14 @@ class ChatService {
       const held = this.pendingRedeemMsgs.get(key)
       if (!held) return
       this.pendingRedeemMsgs.delete(key)
+      // belt-and-braces: if a styled redeem line with this text ALREADY landed in the
+      // buffer (key mismatch, races), still drop the raw copy
+      const recent = useChatStore.getState().messages[held.channel]?.slice(-40) ?? []
+      const dup = recent.some(
+        (m) =>
+          m.redeemed && m.rewardTitle && m.login === held.login && (m.text ?? '').trim() === (held.text ?? '').trim()
+      )
+      if (dup) return
       this.markUnreadIfInactive(held.channel)
       this.queue(held.channel, held)
     }, 1500)
@@ -289,7 +297,7 @@ class ChatService {
     msg.color = lookupUserColor(channel, e.userLogin)
     if (e.userInput) {
       // pair up with the raw PRIVMSG copy of this redemption (either direction of the race)
-      const key = `${channel}:${e.userLogin}:${e.userInput}`
+      const key = `${channel}:${e.userLogin}:${e.userInput.trim()}`
       if (this.pendingRedeemMsgs.has(key)) this.pendingRedeemMsgs.delete(key)
       else this.redeemSuppress.set(key, Date.now())
     }

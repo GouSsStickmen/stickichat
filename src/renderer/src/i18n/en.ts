@@ -152,6 +152,8 @@ export const en = {
   'set.emojiNameLang': 'Emoji name language',
   'set.emojiNameLang.both': 'Both',
   'set.streamInfo': 'Show viewers / title / uptime of the stream',
+  'set.smoothChatScroll': 'Smooth chat scrolling',
+  'hint.smoothChatScroll': 'Chatterino-style: a new message glides the chat instead of jumping. Very fast floods may lag slightly behind.',
   'set.linkPreviews': 'Link previews in chat',
   'misc.linkShort': 'link',
   'set.linkDisplay': 'Link display',

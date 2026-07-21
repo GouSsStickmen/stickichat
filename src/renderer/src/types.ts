@@ -947,6 +947,8 @@ export interface Settings {
   linkPreviewScale: number
   /** account picker next to the input: full name select or a compact avatar button */
   inputAccountDisplay: 'name' | 'avatar'
+  /** Chatterino-style: every new message glides the chat instead of jumping */
+  smoothChatScroll: boolean
   /** which tab the highlight sidebar opens on */
   highlightSidebarDefault: 'highlights' | 'mentions' | 'redeems'
   /** extra px of line-height inside messages (emote rows overlapping) */
@@ -1126,6 +1128,7 @@ export const DEFAULT_SETTINGS: Settings = {
   linkPreviewsClipsOnly: false,
   linkPreviewScale: 100,
   inputAccountDisplay: 'name',
+  smoothChatScroll: false,
   highlightSidebarDefault: 'highlights',
   lineSpacing: 0,
   rememberWindowSize: true,

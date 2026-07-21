@@ -53,6 +53,7 @@ export default function MessageList({
   const emoteVersion = useEmotesStore((s) => s.version)
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const smoothScroll = useSettingsStore((s) => s.settings.smoothChatScroll)
   const [atBottom, setAtBottom] = useState(true)
   const atBottomRef = useRef(true)
   atBottomRef.current = atBottom
@@ -184,7 +185,7 @@ export default function MessageList({
         // — invisible. (Safe now: with stable firstItemIndex the measurement cache survives
         // buffer trims, which is what used to make a big overscan thrash.)
         increaseViewportBy={{ top: 800, bottom: 320 }}
-        followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? 'auto' : false)}
+        followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? (smoothScroll ? 'smooth' : 'auto') : false)}
         atBottomStateChange={(b) => {
           setAtBottom(b)
           if (b) followingRef.current = true

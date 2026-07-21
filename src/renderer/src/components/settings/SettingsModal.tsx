@@ -352,19 +352,10 @@ export function ColorField({
         className="ghost"
         title={t('set.eyedropper')}
         onClick={async () => {
-          // the OS eyedropper loupe renders below any always-on-top window; the settings can be
-          // a separate window while the main chat stays pinned, so drop EVERY pinned window for
-          // the duration of the pick, then restore them
-          await window.sticki.suspendAlwaysOnTop()
-          try {
-            const ed = new (window as unknown as { EyeDropper: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper()
-            const r = await ed.open()
-            apply(r.sRGBHex)
-          } catch {
-            /* cancelled / unsupported */
-          } finally {
-            await window.sticki.resumeAlwaysOnTop()
-          }
+          // OUR OWN picker: a fullscreen topmost screenshot window with a magnifier —
+          // the Chromium EyeDropper loupe kept sinking behind other chat windows
+          const hex = await window.sticki.pickScreenColor()
+          if (hex) apply(hex)
         }}
       >
         {EyedropperIcon}
@@ -637,6 +628,7 @@ function ChatSection(): React.JSX.Element {
       <Toggle label={t('set.timestampSeconds')} value={settings.timestampSeconds} onChange={(v) => set({ timestampSeconds: v })} />
       <Toggle label={t('set.altBg')} hint={t('hint.altBg')} value={settings.alternatingBackground} onChange={(v) => set({ alternatingBackground: v })} />
       <Toggle label={t('set.streamInfo')} hint={t('hint.streamInfo')} value={settings.showStreamInfo} onChange={(v) => set({ showStreamInfo: v })} />
+      <Toggle label={t('set.smoothChatScroll')} hint={t('hint.smoothChatScroll')} value={settings.smoothChatScroll} onChange={(v) => set({ smoothChatScroll: v })} />
       <Toggle label={t('set.linkPreviews')} hint={t('hint.linkPreviews')} value={settings.linkPreviews} onChange={(v) => set({ linkPreviews: v })} />
       <div className="set-row" title={t('hint.linkDisplay')}>
         <label className="has-hint">{t('set.linkDisplay')}</label>

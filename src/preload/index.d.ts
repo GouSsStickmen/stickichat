@@ -4,6 +4,8 @@ export interface StickiApi {
   getConfig(): Promise<unknown>
   setConfig(cfg: unknown): Promise<boolean>
   openExternal(url: string): Promise<void>
+  pickScreenColor(): Promise<string | null>
+  eyedropperResult(hex: string | null): void
   getVersion(): Promise<string>
   detach(hash: string): Promise<void>
   reattach(payload: string): Promise<void>

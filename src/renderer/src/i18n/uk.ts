@@ -154,6 +154,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.emojiNameLang': 'Мова назв емодзі',
   'set.emojiNameLang.both': 'Обидві',
   'set.streamInfo': 'Показувати онлайн / назву / тривалість стріму',
+  'set.smoothChatScroll': 'Плавна прокрутка чату',
+  'hint.smoothChatScroll': 'Як у Chatterino: нове повідомлення плавно підкочує чат, а не стрибає. При дуже швидкому флуді прокрутка може трохи відставати.',
   'set.linkPreviews': 'Прев’ю посилань у чаті',
   'misc.linkShort': 'посилання',
   'set.linkDisplay': 'Відображення посилань',
