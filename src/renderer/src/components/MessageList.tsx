@@ -62,6 +62,10 @@ export default function MessageList({
   // re-pin machinery keys off this — so background windows keep following through preview
   // loads, and a fast upward fling is never yanked back down.
   const followingRef = useRef(true)
+  const [following, setFollowing] = useState(true)
+  // smooth mode falls back to instant jumps during floods (glide can't keep up)
+  const smoothOkRef = useRef(true)
+  const msgTimes = useRef<number[]>([])
   const [flashId, setFlashId] = useState<string | null>(null)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
@@ -116,16 +120,27 @@ export default function MessageList({
   // rAF-driven followOutput gets throttled: an explicit re-pin keeps autoscroll alive
   useEffect(() => {
     const rePin = (): void => {
-      if (followingRef.current && !scrollLocked) {
-        virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
+      if (!followingRef.current || scrollLocked) return
+      // act on the REAL scroller distance: at the bottom this is a no-op (the old
+      // unconditional jump interrupted smooth glides every 1.5s — visible stutter),
+      // and a small distance in smooth mode means a glide is in progress — let it finish
+      const sc = wrapRef.current?.querySelector('[data-virtuoso-scroller="true"]') as HTMLElement | null
+      if (sc) {
+        const dist = sc.scrollHeight - sc.scrollTop - sc.clientHeight
+        if (dist <= 4) return
+        if (smoothScroll && dist < 400) return
       }
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
     }
     window.addEventListener('sticki:grew', rePin)
     const keepalive = window.setInterval(rePin, 1500)
     // scrolling UP breaks the follow immediately (state updates lag behind fast flings)
     const el = wrapRef.current
     const onWheel = (e: WheelEvent): void => {
-      if (e.deltaY < 0) followingRef.current = false
+      if (e.deltaY < 0) {
+        followingRef.current = false
+        setFollowing(false)
+      }
     }
     el?.addEventListener('wheel', onWheel, { passive: true })
     return () => {
@@ -134,6 +149,16 @@ export default function MessageList({
       el?.removeEventListener('wheel', onWheel)
     }
   }, [scrollLocked])
+
+  // estimate the message rate: >3 msgs/sec means gliding cannot keep up — fall back to
+  // instant jumps until the flood calms down
+  useEffect(() => {
+    const now = Date.now()
+    const t = msgTimes.current
+    t.push(now)
+    while (t.length && now - t[0] > 2000) t.shift()
+    smoothOkRef.current = t.length <= 6
+  }, [messages.length])
 
   // history often arrives AFTER the empty list mounted — snap to the bottom on first fill,
   // otherwise the view stays parked at the top of the freshly-prepended scrollback
@@ -185,10 +210,13 @@ export default function MessageList({
         // — invisible. (Safe now: with stable firstItemIndex the measurement cache survives
         // buffer trims, which is what used to make a big overscan thrash.)
         increaseViewportBy={{ top: 800, bottom: 320 }}
-        followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? (smoothScroll ? 'smooth' : 'auto') : false)}
+        followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? (smoothScroll && smoothOkRef.current ? 'smooth' : 'auto') : false)}
         atBottomStateChange={(b) => {
           setAtBottom(b)
-          if (b) followingRef.current = true
+          if (b) {
+            followingRef.current = true
+            setFollowing(true)
+          }
         }}
         atBottomThreshold={40}
         // apply resize corrections synchronously instead of on the next animation frame —
@@ -215,7 +243,7 @@ export default function MessageList({
           />
         )}
       />
-      {!atBottom && (
+      {!atBottom && !following && (
         <div
           className="new-msgs-chip"
           onClick={() =>

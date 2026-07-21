@@ -217,7 +217,7 @@ export function registerIpc(): void {
   // and restore them afterwards
   let suspendedOnTop: BrowserWindow[] = []
   let eyedropperWin: BrowserWindow | null = null
-  // ---- own screen eyedropper: screenshot + fullscreen topmost magnifier window ----
+  // ---- own screen eyedropper: per-display screenshots + fullscreen topmost magnifiers ----
   // (Chromium's built-in EyeDropper loupe kept sinking behind our other windows)
   let eyedropperResolve: ((hex: string | null) => void) | null = null
   ipcMain.on('eyedropper:result', (_e, hex: string | null) => {
@@ -225,32 +225,19 @@ export function registerIpc(): void {
     eyedropperResolve = null
   })
   ipcMain.handle('eyedropper:pick', async () => {
-    const pt = screen.getCursorScreenPoint()
-    const disp = screen.getDisplayNearestPoint(pt)
-    const sf = disp.scaleFactor || 1
+    const displays = screen.getAllDisplays()
+    const maxW = Math.max(...displays.map((d) => Math.round(d.size.width * (d.scaleFactor || 1))))
+    const maxH = Math.max(...displays.map((d) => Math.round(d.size.height * (d.scaleFactor || 1))))
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: { width: Math.round(disp.size.width * sf), height: Math.round(disp.size.height * sf) }
+      thumbnailSize: { width: maxW, height: maxH }
     })
-    const src =
-      sources.find((s2) => String(s2.display_id) === String(disp.id)) ?? sources[0]
-    if (!src) return null
-    const dataUrl = src.thumbnail.toDataURL()
-    const win = new BrowserWindow({
-      x: disp.bounds.x,
-      y: disp.bounds.y,
-      width: disp.bounds.width,
-      height: disp.bounds.height,
-      frame: false,
-      resizable: false,
-      movable: false,
-      fullscreen: true,
-      skipTaskbar: true,
-      alwaysOnTop: true,
-      webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: false }
-    })
-    win.setAlwaysOnTop(true, 'screen-saver')
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    if (!sources.length) return null
+    const wins: BrowserWindow[] = []
+    const closeAll = (): void => {
+      for (const w of wins) if (!w.isDestroyed()) w.close()
+    }
+    const pageFor = (dataUrl: string): string => `<!doctype html><html><head><meta charset="utf-8"><style>
       html,body{margin:0;height:100%;overflow:hidden;cursor:crosshair;background:#000}
       img{position:absolute;inset:0;width:100%;height:100%}
       #loupe{position:fixed;width:120px;height:120px;border-radius:50%;border:2px solid #fff;
@@ -265,7 +252,6 @@ export function registerIpc(): void {
     <div id="loupe"></div><div id="hex"></div>
     <canvas id="cv" style="display:none"></canvas>
     <script>
-      const sf = ${sf}
       const img = document.getElementById('shot')
       const loupe = document.getElementById('loupe')
       const hexEl = document.getElementById('hex')
@@ -280,24 +266,27 @@ export function registerIpc(): void {
       const Z = 8
       function pixelAt(e){
         if (!ctx) return null
-        const x = Math.min(cv.width - 1, Math.max(0, Math.round(e.clientX * sf)))
-        const y = Math.min(cv.height - 1, Math.max(0, Math.round(e.clientY * sf)))
+        // proportional mapping — immune to DPI scale differences between displays
+        const x = Math.min(cv.width - 1, Math.max(0, Math.round((e.clientX / window.innerWidth) * cv.width)))
+        const y = Math.min(cv.height - 1, Math.max(0, Math.round((e.clientY / window.innerHeight) * cv.height)))
         const d = ctx.getImageData(x, y, 1, 1).data
-        return { x, y, hex: '#' + [d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, '0')).join('') }
+        return { hex: '#' + [d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, '0')).join('') }
       }
       document.addEventListener('mousemove', (e) => {
         const p = pixelAt(e)
         if (!p) return
         loupe.style.display = 'block'
         hexEl.style.display = 'block'
-        loupe.style.left = (e.clientX + 20) + 'px'
-        loupe.style.top = (e.clientY + 20) + 'px'
-        hexEl.style.left = (e.clientX + 24) + 'px'
-        hexEl.style.top = (e.clientY + 146) + 'px'
+        const lx = Math.min(e.clientX + 20, window.innerWidth - 130)
+        const ly = Math.min(e.clientY + 20, window.innerHeight - 150)
+        loupe.style.left = lx + 'px'
+        loupe.style.top = ly + 'px'
+        hexEl.style.left = (lx + 4) + 'px'
+        hexEl.style.top = (ly + 126) + 'px'
         hexEl.textContent = p.hex
         loupe.style.backgroundImage = 'url(' + img.src + ')'
-        loupe.style.backgroundSize = (cv.width * Z / sf) + 'px ' + (cv.height * Z / sf) + 'px'
-        loupe.style.backgroundPosition = (-(p.x * Z / sf) + 60) + 'px ' + (-(p.y * Z / sf) + 60) + 'px'
+        loupe.style.backgroundSize = (window.innerWidth * Z) + 'px ' + (window.innerHeight * Z) + 'px'
+        loupe.style.backgroundPosition = (-(e.clientX * Z) + 60) + 'px ' + (-(e.clientY * Z) + 60) + 'px'
       })
       document.addEventListener('mousedown', (e) => {
         const p = pixelAt(e)
@@ -307,19 +296,44 @@ export function registerIpc(): void {
         if (e.key === 'Escape') window.sticki.eyedropperResult(null)
       })
     <\/script></body></html>`
-    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
-    win.focus()
+    displays.forEach((disp, i) => {
+      const src = sources.find((s2) => String(s2.display_id) === String(disp.id)) ?? sources[i] ?? sources[0]
+      const win = new BrowserWindow({
+        x: disp.bounds.x,
+        y: disp.bounds.y,
+        width: disp.bounds.width,
+        height: disp.bounds.height,
+        frame: false,
+        resizable: false,
+        movable: false,
+        skipTaskbar: true,
+        alwaysOnTop: true,
+        show: false,
+        backgroundColor: '#000000', // no white flash before the screenshot paints
+        webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: false }
+      })
+      win.setAlwaysOnTop(true, 'screen-saver')
+      win.setBounds(disp.bounds)
+      win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(pageFor(src.thumbnail.toDataURL())))
+      win.once('ready-to-show', () => {
+        win.show()
+        win.setBounds(disp.bounds)
+      })
+      wins.push(win)
+    })
     return await new Promise<string | null>((resolve) => {
       eyedropperResolve = (hex) => {
         resolve(hex)
-        if (!win.isDestroyed()) win.close()
+        closeAll()
       }
-      win.on('closed', () => {
-        if (eyedropperResolve) {
-          eyedropperResolve = null
-          resolve(null)
-        }
-      })
+      for (const w of wins) {
+        w.on('closed', () => {
+          if (wins.every((x) => x.isDestroyed()) && eyedropperResolve) {
+            eyedropperResolve = null
+            resolve(null)
+          }
+        })
+      }
     })
   })
 
