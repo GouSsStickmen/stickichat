@@ -353,6 +353,8 @@ export interface ChatOverlayConfig {
   pageFlip: boolean
   /** page-flip animation duration (ms) */
   pageFlipMs: number
+  /** page-flip direction: which way the filled page turns away */
+  pageFlipDir: 'up' | 'down' | 'left' | 'right'
   /** smooth push: new messages slide the chat instead of jumping */
   smoothScroll: boolean
   /** ms of the smooth push */
@@ -576,6 +578,7 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   creditsRush: false,
   pageFlip: false,
   pageFlipMs: 650,
+  pageFlipDir: 'up',
   smoothScroll: false,
   smoothScrollMs: 300,
   zonePad: 8,

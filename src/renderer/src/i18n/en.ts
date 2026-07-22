@@ -537,6 +537,7 @@ export const en = {
   'oe.scroll.credits': 'Credits (constant motion)',
   'oe.scroll.pageflip': 'Page flip',
   'oe.pageFlipMs': 'Flip duration',
+  'oe.pageFlipDir': 'Flip direction',
   'oe.pageflip.hint': 'The page fills up, then flips away (folds up) and new messages are written on a blank sheet.',
   'oe.creditsSpeed': 'Speed, px/s',
   'oe.credits.hint': 'Every message floats upward continuously like movie credits. Spacing mirrors when they were written. The visible count is capped by the "Max messages" field above.',

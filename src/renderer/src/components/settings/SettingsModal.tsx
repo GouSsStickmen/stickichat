@@ -208,6 +208,61 @@ export function NickListArea({
   )
 }
 
+/** number input that lets you type ANY value freely (no clamp-while-typing); clamps only
+ *  on blur/Enter. Fixes fields snapping to min/max mid-edit. */
+export function NumberField({
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  width = 90
+}: {
+  value: number
+  onChange: (n: number) => void
+  min: number
+  max: number
+  step?: number
+  width?: number
+}): React.JSX.Element {
+  const [buf, setBuf] = useState(String(value))
+  const focused = useRef(false)
+  useEffect(() => {
+    if (!focused.current) setBuf(String(value))
+  }, [value])
+  const commit = (): void => {
+    const n = parseFloat(buf)
+    const v = Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : value
+    onChange(v)
+    setBuf(String(v))
+  }
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      step={step}
+      style={{ width }}
+      value={buf}
+      onFocus={() => {
+        focused.current = true
+      }}
+      onChange={(e) => {
+        setBuf(e.target.value)
+        const n = parseFloat(e.target.value)
+        if (Number.isFinite(n) && n >= min && n <= max) onChange(n) // live only when valid
+      }}
+      onBlur={() => {
+        focused.current = false
+        commit()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit()
+      }}
+    />
+  )
+}
+
 /** hex → HSV (h 0–360, s/v 0–1) */
 function hexToHsv(hex: string): { h: number; s: number; v: number } {
   const m = /^#?([0-9a-f]{6})/i.exec(hex)
@@ -648,15 +703,7 @@ function ChatSection(): React.JSX.Element {
           />
           <div className="set-row" title={t('hint.linkPreviewScale')}>
             <label className="has-hint">{t('set.linkPreviewScale')}</label>
-            <input
-              type="number"
-              min={50}
-              max={150}
-              step={5}
-              style={{ width: 80 }}
-              value={settings.linkPreviewScale}
-              onChange={(e) => set({ linkPreviewScale: Math.max(50, Math.min(150, parseInt(e.target.value, 10) || 100)) })}
-            />
+            <NumberField value={settings.linkPreviewScale} min={50} max={150} step={5} width={80} onChange={(n) => set({ linkPreviewScale: n })} />
           </div>
         </>
       )}
@@ -1995,14 +2042,7 @@ function OverlaySection(): React.JSX.Element {
         <div className="set-row">
           <label>{t('overlay.port')}</label>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input
-              type="number"
-              min={1024}
-              max={65535}
-              style={{ width: 90 }}
-              value={settings.overlayPort}
-              onChange={(e) => set({ overlayPort: parseInt(e.target.value, 10) || 4715 })}
-            />
+            <NumberField value={settings.overlayPort} min={1024} max={65535} onChange={(n) => set({ overlayPort: n })} />
             <button title={t('overlay.restart.hint')} onClick={() => window.sticki.overlayRestart()}>
               ⟳ {t('overlay.restart')}
             </button>
@@ -2136,14 +2176,7 @@ function AdvancedSection(): React.JSX.Element {
     <Framed>
       <div className="set-row" title={t('hint.msgLimit')}>
         <label>{t('set.msgLimit')}</label>
-        <input
-          type="number"
-          min={100}
-          max={5000}
-          style={{ width: 90 }}
-          value={settings.messageLimit}
-          onChange={(e) => set({ messageLimit: parseInt(e.target.value, 10) || 800 })}
-        />
+        <NumberField value={settings.messageLimit} min={100} max={5000} onChange={(n) => set({ messageLimit: n })} />
       </div>
       <div className="set-row" title={t('hint.io')} style={{ alignItems: 'flex-start' }}>
         <label className="has-hint">{t('set.io')}</label>

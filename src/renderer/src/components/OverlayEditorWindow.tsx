@@ -628,10 +628,20 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               </Row>
             )}
             {ov.pageFlip && (
-              <Row label={t('oe.pageFlipMs')} hint={t('oe.pageflip.hint')}>
-                <Num v={ov.pageFlipMs} on={(n) => update({ pageFlipMs: n })} min={150} max={2500} step={50} w={72} def={650} />
-                <span className="hint">мс</span>
-              </Row>
+              <>
+                <Row label={t('oe.pageFlipDir')}>
+                  <select value={ov.pageFlipDir} onChange={(e) => update({ pageFlipDir: e.target.value as ChatOverlayConfig['pageFlipDir'] })}>
+                    <option value="up">↑ {t('oe.animDir.up')}</option>
+                    <option value="down">↓ {t('oe.animDir.down')}</option>
+                    <option value="left">← {t('oe.animDir.left')}</option>
+                    <option value="right">→ {t('oe.animDir.right')}</option>
+                  </select>
+                </Row>
+                <Row label={t('oe.pageFlipMs')} hint={t('oe.pageflip.hint')}>
+                  <Num v={ov.pageFlipMs} on={(n) => update({ pageFlipMs: n })} min={150} max={2500} step={50} w={72} def={650} />
+                  <span className="hint">мс</span>
+                </Row>
+              </>
             )}
             {ov.creditsMode && (
               <>
@@ -1618,21 +1628,9 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               </label>
               {canvas && (
                 <>
-                  <input
-                    type="number"
-                    min={120}
-                    style={{ width: 62 }}
-                    value={canvas.w}
-                    onChange={(e) => setCanvas({ w: Math.max(120, parseInt(e.target.value, 10) || 400), h: canvas.h })}
-                  />
+                  <Num v={canvas.w} on={(n) => setCanvas({ w: n, h: canvas.h })} min={120} max={4000} w={64} def={400} />
                   ×
-                  <input
-                    type="number"
-                    min={80}
-                    style={{ width: 62 }}
-                    value={canvas.h}
-                    onChange={(e) => setCanvas({ w: canvas.w, h: Math.max(80, parseInt(e.target.value, 10) || 500) })}
-                  />
+                  <Num v={canvas.h} on={(n) => setCanvas({ w: canvas.w, h: n })} min={80} max={4000} w={64} def={500} />
                 </>
               )}
             </span>
