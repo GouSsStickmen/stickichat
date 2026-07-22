@@ -1291,10 +1291,12 @@ const OVERLAY_HTML = `<!doctype html>
   }
   // per-direction transforms: [pageTurnsAwayTo, transformOrigin, newPageStartsFrom]
   function flipTransforms(dir) {
-    if (dir === 'down') return ['perspective(1600px) rotateX(100deg)', 'bottom center', 'perspective(1600px) rotateX(-90deg)']
-    if (dir === 'left') return ['perspective(1600px) rotateY(100deg)', 'left center', 'perspective(1600px) rotateY(-90deg)']
-    if (dir === 'right') return ['perspective(1600px) rotateY(-100deg)', 'right center', 'perspective(1600px) rotateY(90deg)']
-    return ['perspective(1600px) rotateX(-100deg)', 'top center', 'perspective(1600px) rotateX(90deg)'] // up
+    // the outgoing page lifts OUTWARD (translateZ toward the viewer) and turns over its
+    // hinge edge — a real page peeling off, not sinking into the screen
+    if (dir === 'down') return ['perspective(1600px) translateZ(160px) rotateX(-105deg)', 'bottom center', 'perspective(1600px) rotateX(70deg)']
+    if (dir === 'left') return ['perspective(1600px) translateZ(160px) rotateY(-105deg)', 'left center', 'perspective(1600px) rotateY(70deg)']
+    if (dir === 'right') return ['perspective(1600px) translateZ(160px) rotateY(105deg)', 'right center', 'perspective(1600px) rotateY(-70deg)']
+    return ['perspective(1600px) translateZ(160px) rotateX(105deg)', 'top center', 'perspective(1600px) rotateX(-70deg)'] // up
   }
   function doPageFlip(triggerData) {
     flipping = true

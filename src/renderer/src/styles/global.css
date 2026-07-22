@@ -3378,8 +3378,6 @@ input[type='number']::-webkit-inner-spin-button {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  outline: 1px dashed rgba(255, 255, 255, 0.55);
-  outline-offset: 0;
 }
 .oe-pv-canvas iframe {
   position: absolute;
@@ -3419,4 +3417,22 @@ input[type='number']::-webkit-inner-spin-button {
   align-items: center;
   gap: 4px;
   margin-left: 8px;
+}
+
+/* preview zone-frame overlay: sits ABOVE the pan-capture layer so the handles are grabbable */
+.oe-pv-frameoverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+.oe-pv-framebox {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  outline: 1px dashed rgba(255, 255, 255, 0.6);
+}
+.oe-pv-framebox .oe-pv-handle {
+  pointer-events: auto;
 }
