@@ -1175,6 +1175,9 @@ const OVERLAY_HTML = `<!doctype html>
   var fitPending = false
   function fitZone() {
     if (!(cfg.tiltX || cfg.tiltY || cfg.rotate)) return
+    // credits/page-flip: flying lines make the zone bbox huge — the fit would scale the
+    // whole tilted plane down to nothing. Apply the raw perspective transform and stop.
+    if (creditsActive() || cfg.pageFlip) { zone.style.transform = zoneBaseTf; return }
     var vw = window.innerWidth, vh = window.innerHeight
     zone.style.transform = zoneBaseTf
     var r = zone.getBoundingClientRect()
@@ -1298,16 +1301,46 @@ const OVERLAY_HTML = `<!doctype html>
     var dur = Math.max(150, cfg.pageFlipMs || 650)
     var tf = flipTransforms(cfg.pageFlipDir || 'up')
     var awayMs = Math.round(dur * 0.55), inMs = Math.round(dur * 0.45)
-    // move the current lines into a wrapper and turn it away (keeps #zone's own transform)
+    var rect = zone.getBoundingClientRect()
+    var cs = getComputedStyle(zone)
+    // the outgoing page is a COPY of the whole sheet (background + text), lifted into the
+    // unclipped #fx layer so the 3D turn isn't cut off by #zone's overflow. #zone itself is
+    // cleared underneath → the fresh blank sheet shows through as the old page turns (notebook)
     var page = document.createElement('div')
     page.className = 'page-flip'
+    page.style.position = 'absolute'
+    page.style.left = rect.left + 'px'
+    page.style.top = rect.top + 'px'
+    page.style.width = rect.width + 'px'
+    page.style.height = rect.height + 'px'
+    page.style.boxSizing = 'border-box'
+    page.style.paddingTop = cs.paddingTop
+    page.style.paddingRight = cs.paddingRight
+    page.style.paddingBottom = cs.paddingBottom
+    page.style.paddingLeft = cs.paddingLeft
+    page.style.backgroundColor = cs.backgroundColor
+    page.style.backgroundImage = cs.backgroundImage
+    page.style.backgroundSize = cs.backgroundSize
+    page.style.backgroundPosition = cs.backgroundPosition
+    page.style.borderRadius = cs.borderRadius
+    page.style.boxShadow = cs.boxShadow && cs.boxShadow !== 'none' ? cs.boxShadow : '0 14px 28px rgba(0,0,0,.45)'
+    page.style.fontFamily = cs.fontFamily
+    page.style.color = cs.color
+    page.style.fontSize = cs.fontSize
+    page.style.display = 'flex'
+    page.style.flexDirection = 'column'
+    page.style.justifyContent = cs.justifyContent === 'flex-start' ? 'flex-start' : 'flex-end'
+    page.style.overflow = 'hidden'
+    page.style.zIndex = '60'
     page.style.transformOrigin = tf[1]
     var kids = realLineEls()
     for (var i = 0; i < kids.length; i++) page.appendChild(kids[i])
-    zone.appendChild(page)
-    lines = []
+    lines = [];
+    (fxBox || document.body).appendChild(page)
+    void page.offsetWidth // force a reflow so the transition actually plays
     page.style.transition = 'transform ' + awayMs + 'ms ease-in, opacity ' + awayMs + 'ms ease-in'
-    requestAnimationFrame(function () { page.style.transform = tf[0]; page.style.opacity = '0' })
+    page.style.transform = tf[0]
+    page.style.opacity = '0'
     var finished = false
     function finish() {
       if (finished) return

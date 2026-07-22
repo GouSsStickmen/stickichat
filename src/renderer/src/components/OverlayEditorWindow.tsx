@@ -1687,28 +1687,41 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                   src={previewUrl}
                   title="overlay preview"
                 />
-                {canvas && (
-                  <div
-                    className="oe-pv-handle"
-                    title={t('oe.pv.canvasResize')}
-                    onPointerDown={(e) => {
-                      e.stopPropagation()
-                      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-                      canvasResize.current = { sx: e.clientX, sy: e.clientY, bw: canvas.w, bh: canvas.h }
-                    }}
-                    onPointerMove={(e) => {
-                      const d = canvasResize.current
-                      if (!d) return
-                      setCanvas({
-                        w: Math.max(120, Math.round(d.bw + (e.clientX - d.sx) / pvZoom)),
-                        h: Math.max(80, Math.round(d.bh + (e.clientY - d.sy) / pvZoom))
-                      })
-                    }}
-                    onPointerUp={() => {
-                      canvasResize.current = null
-                    }}
-                  />
-                )}
+                {canvas &&
+                  ([
+                    ['e', 1, 0, 'ew-resize'],
+                    ['w', -1, 0, 'ew-resize'],
+                    ['s', 0, 1, 'ns-resize'],
+                    ['n', 0, -1, 'ns-resize'],
+                    ['se', 1, 1, 'nwse-resize'],
+                    ['nw', -1, -1, 'nwse-resize'],
+                    ['ne', 1, -1, 'nesw-resize'],
+                    ['sw', -1, 1, 'nesw-resize']
+                  ] as [string, number, number, string][]).map(([pos, ex, ey, cursor]) => (
+                    <div
+                      key={pos}
+                      className={`oe-pv-handle h-${pos}`}
+                      style={{ cursor }}
+                      title={t('oe.pv.canvasResize')}
+                      onPointerDown={(e) => {
+                        e.stopPropagation()
+                        ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+                        canvasResize.current = { sx: e.clientX, sy: e.clientY, bw: canvas.w, bh: canvas.h }
+                      }}
+                      onPointerMove={(e) => {
+                        const d = canvasResize.current
+                        if (!d) return
+                        // centered frame → each edge grows symmetrically: delta doubled
+                        setCanvas({
+                          w: ex ? Math.max(120, Math.round(d.bw + (ex * (e.clientX - d.sx) * 2) / pvZoom)) : canvas.w,
+                          h: ey ? Math.max(80, Math.round(d.bh + (ey * (e.clientY - d.sy) * 2) / pvZoom)) : canvas.h
+                        })
+                      }}
+                      onPointerUp={() => {
+                        canvasResize.current = null
+                      }}
+                    />
+                  ))}
               </div>
             </div>
             {!editMode && (

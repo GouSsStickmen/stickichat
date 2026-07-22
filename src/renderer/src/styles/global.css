@@ -3390,15 +3390,29 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .oe-pv-handle {
   position: absolute;
-  right: -6px;
-  bottom: -6px;
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  background: var(--accent-strong);
-  border: 2px solid #fff;
-  cursor: nwse-resize;
   z-index: 4;
+  background: var(--accent-strong);
+  border: 1px solid #fff;
+  border-radius: 2px;
+}
+/* corners: small squares */
+.oe-pv-handle.h-se, .oe-pv-handle.h-nw, .oe-pv-handle.h-ne, .oe-pv-handle.h-sw {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.oe-pv-handle.h-se { right: -6px; bottom: -6px; }
+.oe-pv-handle.h-nw { left: -6px; top: -6px; }
+.oe-pv-handle.h-ne { right: -6px; top: -6px; }
+.oe-pv-handle.h-sw { left: -6px; bottom: -6px; }
+/* edges: thin bars spanning most of the side */
+.oe-pv-handle.h-e { right: -4px; top: 12px; bottom: 12px; width: 8px; }
+.oe-pv-handle.h-w { left: -4px; top: 12px; bottom: 12px; width: 8px; }
+.oe-pv-handle.h-s { bottom: -4px; left: 12px; right: 12px; height: 8px; }
+.oe-pv-handle.h-n { top: -4px; left: 12px; right: 12px; height: 8px; }
+.oe-pv-handle.h-e, .oe-pv-handle.h-w, .oe-pv-handle.h-s, .oe-pv-handle.h-n {
+  background: rgba(145, 71, 255, 0.55);
+  border: none;
 }
 .oe-canvas-ctl {
   display: inline-flex;
