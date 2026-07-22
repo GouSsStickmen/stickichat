@@ -1375,17 +1375,29 @@ const OVERLAY_HTML = `<!doctype html>
   function append(d) {
     if (editMode && d.id !== 'edit-1') return
     if (!passesFilters(d)) return
-    // page-flip mode: queue during a flip; flip when the page is already full
-    if (cfg.pageFlip && !creditsActive() && !restyling && d.kind !== undefined) {
-      if (flipping) { flipQueue.push(d); return }
-      if (realLineEls().length >= cfg.maxMessages) { doPageFlip(d); return }
-    }
+    // page-flip mode: queue new lines while a flip is mid-flight
+    var pageFlipping = cfg.pageFlip && !creditsActive() && !restyling && d.kind !== undefined
+    if (pageFlipping && flipping) { flipQueue.push(d); return }
     lines.push(d)
     if (lines.length > cfg.maxMessages + 10) lines.splice(0, lines.length - cfg.maxMessages - 10)
     var el = assemble(d)
     if (cfg.direction === 'down') zone.insertBefore(el, zone.firstChild)
     else zone.appendChild(el)
-    if (creditsActive()) {
+    // page-flip: the sheet fills by HEIGHT, not message count. Measuring the zone's own box
+    // (scrollHeight vs clientHeight) means a fixed-size "page" flips exactly when the newest
+    // line overflows it — so a single long message can't spill past the edge. We keep the
+    // line on-page only if the page was empty (nothing to flip a lone giant message onto).
+    if (pageFlipping) {
+      var others = realLineEls().length - 1
+      if (others >= 1 && zone.scrollHeight > zone.clientHeight + 1) {
+        var oip = indexOfEl(el)
+        if (oip !== -1) lines.splice(oip, 1)
+        el.remove()
+        doPageFlip(d)
+        return
+      }
+    }
+    if (!pageFlipping && creditsActive()) {
       startCredits(el)
       // the message COUNT is still capped by "max messages" — drop the oldest instantly
       var flying = zone.querySelectorAll(':scope > .line')

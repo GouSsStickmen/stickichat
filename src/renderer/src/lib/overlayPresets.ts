@@ -264,6 +264,45 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
 .badges img{filter:grayscale(.35) contrast(.9);opacity:.9}
 .body img.emote{height:1.35em!important;filter:sepia(.15) contrast(.95)}`
     }
+  },
+  {
+    id: 'notebook',
+    name: 'Блокнот',
+    patch: {
+      layout: 'list',
+      plateMode: 'none',
+      nickPos: 'inline',
+      nickFloat: false,
+      outlineWidth: 0,
+      direction: 'up',
+      maxMessages: 20,
+      lineGap: 0,
+      animIn: 'typewriter',
+      animInMs: 500,
+      animOut: 'none',
+      pageFlip: true,
+      pageFlipDir: 'left',
+      pageFlipMs: 850,
+      textColor: '#20305c',
+      // A ruled notepad that fills top→down; when the newest line reaches the bottom of the
+      // sheet the whole page peels LEFT (see overlayServer doPageFlip) onto a fresh blank page.
+      // The flip trigger is height-based, so a long message flips early instead of spilling out.
+      customCss: `@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap');
+#zone{left:26px!important;right:auto!important;top:26px!important;bottom:auto!important;width:384px!important;height:500px!important;overflow:hidden!important;justify-content:flex-start!important;box-sizing:border-box!important;padding:22px 26px 22px 60px!important;border-radius:3px 9px 9px 3px!important;background:linear-gradient(90deg,transparent 46px,rgba(214,64,64,.5) 46px 48px,transparent 48px),repeating-linear-gradient(180deg,transparent 0 33px,rgba(70,110,190,.26) 33px 34px),#fdfdf9!important;box-shadow:inset 0 0 0 1px rgba(0,0,0,.05),0 12px 26px rgba(0,0,0,.38),0 2px 4px rgba(0,0,0,.25)!important;font-family:'Caveat','Segoe Script',cursive!important}
+#zone::before{content:'';position:absolute;left:0;top:0;bottom:0;width:34px;z-index:3;pointer-events:none;background:radial-gradient(circle at 16px 22px,rgba(0,0,0,.34) 0 5px,rgba(0,0,0,.12) 6px 8px,transparent 9px);background-size:100% 44px;background-repeat:repeat-y}
+.line{position:relative;z-index:1;font-size:22px;line-height:34px}
+.cwrap,.cwrap>.content{width:100%!important;max-width:100%!important}
+.content{background:transparent!important;border:none!important;box-shadow:none!important;border-radius:0!important;padding:0!important}
+.nick{color:#c0392b!important;font-weight:700!important}
+.body,.body>span,.sysline{color:#20305c!important}
+.sysline{color:#8a1f5a!important}
+.badges img{filter:grayscale(.3) contrast(.9);opacity:.9}
+.body img.emote{height:1.3em!important}
+/* the turning sheet: force our lift shadow + curled leading (right) edge over the JS inline
+   copy, and paint a curved sheen with ::after so it reads as a real peeling page */
+.page-flip{border-radius:3px 16px 16px 3px!important;box-shadow:0 20px 44px rgba(0,0,0,.5),-10px 0 26px rgba(0,0,0,.22)!important}
+.page-flip::after{content:'';position:absolute;inset:0;z-index:5;pointer-events:none;border-radius:inherit;background:linear-gradient(90deg,rgba(0,0,0,.18) 0%,rgba(0,0,0,0) 24%,rgba(255,255,255,.22) 74%,rgba(255,255,255,.6) 100%)}`
+    }
   }
 ]
 
