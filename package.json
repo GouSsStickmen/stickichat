@@ -1,6 +1,6 @@
 {
   "name": "stickichat",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "Twitch chat client for moderators — multi-account, multi-chat, 7TV/BTTV/FFZ emotes",
   "main": "./out/main/index.js",
   "author": "Stickmen",
