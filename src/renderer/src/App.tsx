@@ -155,9 +155,6 @@ export default function App(): React.JSX.Element | null {
     root.style.setProperty('--mention-bg', hexToRgba(settings.mentionBgColor, settings.mentionBgOpacity))
     root.style.setProperty('--mention-accent', settings.mentionBgColor)
     root.style.setProperty('--flash-color', settings.flashColor)
-    // shared chat tint is user-picked: the partner channel's messages are easy to spot
-    root.style.setProperty('--shared-bg', hexToRgba(settings.sharedChatColor, settings.sharedChatOpacity))
-    root.style.setProperty('--shared-accent', settings.sharedChatColor)
     if (settings.fontFamily.trim()) {
       root.style.setProperty('--app-font', `"${settings.fontFamily.trim()}", 'Segoe UI', sans-serif`)
     } else {
@@ -172,8 +169,6 @@ export default function App(): React.JSX.Element | null {
     settings.mentionBgColor,
     settings.mentionBgOpacity,
     settings.flashColor,
-    settings.sharedChatColor,
-    settings.sharedChatOpacity,
     settings.fontFamily,
     settings.lineSpacing,
     settings.customFonts

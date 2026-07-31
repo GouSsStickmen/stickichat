@@ -94,6 +94,8 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
       plateShadowBlur: 26,
       plateShadowColor: '#000000',
       plateBlur: 16,
+      plateSaturate: 160,
+      plateGloss: 85,
       platePadX: 14,
       platePadY: 9,
       outlineWidth: 0,

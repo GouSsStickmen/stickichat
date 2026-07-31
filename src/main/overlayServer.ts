@@ -221,6 +221,10 @@ const OVERLAY_HTML = `<!doctype html>
      never clipped; slant = skewed layer, notch = clipped layer with drop-shadow outline */
   .content.shaped { isolation: isolate; background: transparent !important; border: none !important; clip-path: none !important; box-shadow: none !important; }
   .plate-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+  /* diagonal sheen for the glass effect — strength comes from --gloss (plateGloss) */
+  .has-gloss { position: relative; overflow: hidden; }
+  .has-gloss::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; z-index: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,calc(0.34 * var(--gloss, 0))) 0%, rgba(255,255,255,calc(0.07 * var(--gloss, 0))) 38%, transparent 62%); }
   /* horizontal bar: messages stretch in WIDTH, never grow in height */
   #zone.layout-horizontal .line { flex: 0 0 auto; max-width: none; }
   #zone.layout-horizontal .content { white-space: nowrap; }
@@ -237,6 +241,9 @@ const OVERLAY_HTML = `<!doctype html>
   .ts { opacity: 0.85; font-size: 0.8em; }
   .sysline { font-style: italic; opacity: 0.9; }
   .body img.emote { height: var(--emote-h, 1.4em); vertical-align: -0.3em; margin: 0 1px; }
+  /* a badge replaced by TEXT: a compact pill that lines up with the image badges */
+  .badges .badge-text { display: inline-block; padding: 0 5px; margin: 0 2px; border-radius: 4px;
+    background: rgba(255,255,255,.16); color: inherit; font-weight: 700; vertical-align: middle; white-space: nowrap; }
   /* layered ("combo") emotes: the zero-width layers sit centred on the base one */
   /* layers are CENTRED on the base emote — pinned to the top-left, a wider layer hangs off
      the side and the whole stack looks shifted */
@@ -476,7 +483,7 @@ const OVERLAY_HTML = `<!doctype html>
     plateBorderWidth: 0, plateBorderColor: '#ffffff', plateBorderStyle: 'solid',
     plateBorderOpacity: 1, plateBorderBlur: 0,
     plateShadowBlur: 0, plateShadowColor: '#000000', plateShadowX: 0, plateShadowY: 2,
-    plateGlowSize: 0, plateGlowColor: '#a970ff', plateBlur: 0, plateEdgeBlur: 0,
+    plateGlowSize: 0, plateGlowColor: '#a970ff', plateBlur: 0, plateSaturate: 100, plateGloss: 0, plateEdgeBlur: 0,
     plateShapeSize: 12, plateDepth: 0,
     plateAnim: 'none', plateAnimSpeed: 2, plateAnimColors: ['#9147ff', '#5cffe0', '#ff5c8a'], plateAnimSync: true,
     plateImage: '', plateImageOpacity: 1, plateImageFit: 'cover', plateMask: '',
@@ -755,9 +762,23 @@ const OVERLAY_HTML = `<!doctype html>
         ? 'pa-fx ' + (cfg.plateAnimSpeed || 2) + 's infinite ' + (cfg.plateAnim === 'blink' ? 'step-end' : 'linear')
         : ''
     }
-    // frosted glass behind the plate
-    el.style.backdropFilter = active && cfg.plateBlur > 0 ? 'blur(' + cfg.plateBlur + 'px)' : ''
+    // frosted glass behind the plate: blur + a saturation boost is what separates "grey box"
+    // from "pane of glass", and the gloss layer adds the diagonal sheen + lit top edge
+    var bf = []
+    if (active && cfg.plateBlur > 0) bf.push('blur(' + cfg.plateBlur + 'px)')
+    if (active && cfg.plateSaturate && cfg.plateSaturate !== 100) bf.push('saturate(' + cfg.plateSaturate + '%)')
+    el.style.backdropFilter = bf.length ? bf.join(' ') : ''
     el.style.webkitBackdropFilter = el.style.backdropFilter
+    var gloss = active ? (cfg.plateGloss || 0) / 100 : 0
+    el.classList.toggle('has-gloss', gloss > 0)
+    if (gloss > 0) {
+      el.style.setProperty('--gloss', String(gloss))
+      // a lit top edge and a shaded bottom one — the tell-tale of a glass surface
+      var extra = 'inset 0 1px 0 rgba(255,255,255,' + (0.75 * gloss).toFixed(3) + '), inset 0 -1px 0 rgba(255,255,255,' + (0.18 * gloss).toFixed(3) + ')'
+      el.style.boxShadow = el.style.boxShadow ? el.style.boxShadow + ', ' + extra : extra
+    } else {
+      el.style.removeProperty('--gloss')
+    }
     el.style.padding = active
       ? cfg.platePadY + 'px ' + cfg.platePadX + 'px'
       : (isZone ? cfg.zonePad + 'px' : '1px 0')
@@ -860,12 +881,7 @@ const OVERLAY_HTML = `<!doctype html>
       badges = document.createElement('span')
       if (cfg.badgeOffsetX || cfg.badgeOffsetY) badges.style.translate = (cfg.badgeOffsetX || 0) + 'px ' + (cfg.badgeOffsetY || 0) + 'px'
       badges.className = 'badges'
-      if (customBadge) {
-        var cb = document.createElement('img')
-        cb.src = customBadge
-        cb.style.height = cfg.badgeSize + 'px'
-        badges.appendChild(cb)
-      }
+      if (customBadge) badges.appendChild(makeBadgeNode(customBadge))
       var kindFilter = cfg.badgeKinds && cfg.badgeKinds.length ? cfg.badgeKinds : null
       var CORE_KINDS = ['broadcaster', 'moderator', 'vip', 'subscriber', 'founder']
       for (var i = 0; i < (d.badges || []).length; i++) {
@@ -876,7 +892,6 @@ const OVERLAY_HTML = `<!doctype html>
           var kind = setId && CORE_KINDS.indexOf(setId) !== -1 ? setId : 'global'
           if (kindFilter.indexOf(kind) === -1) continue
         }
-        var b = document.createElement('img')
         // replacement: the exact "set/version" key (specific predictions variant) beats
         // the kind-wide key ("predictions" = every variant)
         var ver = d.badgeVers ? d.badgeVers[i] : null
@@ -885,9 +900,7 @@ const OVERLAY_HTML = `<!doctype html>
           if (ver && cfg.badgeReplace[setId + '/' + ver]) rep = cfg.badgeReplace[setId + '/' + ver]
           else if (cfg.badgeReplace[setId]) rep = cfg.badgeReplace[setId]
         }
-        b.src = rep || d.badges[i]
-        b.style.height = cfg.badgeSize + 'px'
-        badges.appendChild(b)
+        badges.appendChild(makeBadgeNode(rep || d.badges[i]))
       }
       if (!badges.childNodes.length) badges = null
     }
@@ -1026,6 +1039,27 @@ const OVERLAY_HTML = `<!doctype html>
       units[i].style.visibility = ''
       i++
     }, per)
+  }
+
+  /**
+   * A badge is normally an image, but a replacement may instead be plain TEXT — stored with a
+   * "text:" prefix so the existing {setId: string} config shape didn't have to change. Text
+   * badges render as a small pill sized off the same badge-size control.
+   */
+  function makeBadgeNode(src) {
+    var str = String(src || '')
+    if (str.indexOf('text:') === 0) {
+      var sp = document.createElement('span')
+      sp.className = 'badge-text'
+      sp.textContent = str.slice(5)
+      sp.style.fontSize = Math.max(8, Math.round(cfg.badgeSize * 0.8)) + 'px'
+      sp.style.lineHeight = cfg.badgeSize + 'px'
+      return sp
+    }
+    var img = document.createElement('img')
+    img.src = str
+    img.style.height = cfg.badgeSize + 'px'
+    return img
   }
 
   function assemble(d) {

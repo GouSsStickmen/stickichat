@@ -35,6 +35,9 @@ export function highlightRuleMatches(msg: ChatMessage, rule: HighlightRule, ctx:
       return !!msg.isFirstInSession && !msg.isFirstMsg && !msg.system
     case 'watchStreak':
       return !!msg.watchStreak
+    case 'sharedChat':
+      // shared stream: the message came from the partner channel's chat
+      return !!msg.sourceRoomId
   }
 }
 

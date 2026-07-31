@@ -65,7 +65,14 @@ export async function loadConfig(): Promise<boolean> {
   settings.applySettings({ ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) })
   settings.setModButtons(raw.modButtons?.length ? raw.modButtons : DEFAULT_MOD_BUTTONS)
   settings.setRaidFavorites(raw.raidFavorites ?? [])
-  settings.setHighlightRules(raw.highlightRules ?? [])
+  // shared-chat used to be a pair of bespoke settings fields; it's a normal highlight rule
+  // now, so seed it once for anyone upgrading (otherwise the tint just vanishes)
+  const rules = raw.highlightRules ?? []
+  settings.setHighlightRules(
+    rules.some((r) => r.kind === 'sharedChat')
+      ? rules
+      : [...rules, { id: 'shared-chat', kind: 'sharedChat' as const, value: '', color: '#9147ff', opacity: 0.06, enabled: true }]
+  )
   settings.setFavoriteEmotes(raw.favoriteEmotes ?? [])
 
   const accounts = useAccountsStore.getState()

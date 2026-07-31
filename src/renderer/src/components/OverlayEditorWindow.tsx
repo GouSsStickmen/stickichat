@@ -988,6 +988,13 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 <Row label={t('oe.plateBlur')} hint={t('oe.plateBlur.hint')}>
                   <Num v={ov.plateBlur} on={(n) => update({ plateBlur: n })} min={0} max={40} w={54} />
                 </Row>
+                {/* the two knobs that turn a translucent box into the "Скло" preset's glass */}
+                <Row label={t('oe.plateSaturate')} hint={t('oe.plateSaturate.hint')}>
+                  <Num v={ov.plateSaturate} on={(n) => update({ plateSaturate: n })} min={50} max={300} w={54} />
+                </Row>
+                <Row label={t('oe.plateGloss')} hint={t('oe.plateGloss.hint')}>
+                  <Num v={ov.plateGloss} on={(n) => update({ plateGloss: n })} min={0} max={100} w={54} />
+                </Row>
                 <Row label={t('oe.plateEdgeBlur')} hint={t('oe.plateEdgeBlur.hint')}>
                   <Num v={ov.plateEdgeBlur} on={(n) => update({ plateEdgeBlur: n })} min={0} max={60} w={54} />
                 </Row>
@@ -1299,10 +1306,34 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                     />
                     📁
                   </label>
+                  {/* a replacement can be TEXT instead of a picture — stored with a "text:"
+                      prefix, which the overlay renders as a small pill */}
+                  <input
+                    style={{ width: 90 }}
+                    placeholder={t('oe.badgeReplace.text')}
+                    title={t('oe.badgeReplace.text.hint')}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return
+                      const v = (e.target as HTMLInputElement).value.trim()
+                      if (!v) return
+                      update({ badgeReplace: { ...ov.badgeReplace, [repSel]: `text:${v}` } })
+                      ;(e.target as HTMLInputElement).value = ''
+                    }}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim()
+                      if (!v) return
+                      update({ badgeReplace: { ...ov.badgeReplace, [repSel]: `text:${v}` } })
+                      e.target.value = ''
+                    }}
+                  />
                 </div>
                 {Object.entries(ov.badgeReplace).map(([id, img]) => (
                   <div key={id} className="oe-user-badge">
-                    <img src={img} alt="" />
+                    {img.startsWith('text:') ? (
+                      <span className="oe-badge-text-chip">{img.slice(5)}</span>
+                    ) : (
+                      <img src={img} alt="" />
+                    )}
                     <span style={{ flex: 1, fontSize: 12, color: 'var(--text-muted)' }}>{BADGE_REPLACE_LABEL[id] ?? id}</span>
                     <button
                       className="danger"

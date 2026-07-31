@@ -172,10 +172,11 @@ export type HighlightKind =
   | 'firstMsg'
   | 'firstStream'
   | 'watchStreak'
+  | 'sharedChat'
 
 /** kinds that don't need a value input (the category itself is the match) */
 export const VALUELESS_HL_KINDS: ReadonlySet<HighlightKind> = new Set([
-  'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak'
+  'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat'
 ])
 
 export interface HighlightRule {
@@ -463,6 +464,10 @@ export interface ChatOverlayConfig {
   plateGlowColor: string
   /** px backdrop blur behind the plate (frosted glass), 0 = off */
   plateBlur: number
+  /** backdrop saturation % applied with the blur (100 = untouched) — the 'glass' look */
+  plateSaturate: number
+  /** 0..100 diagonal sheen + inner edge highlight strength, like a pane of glass */
+  plateGloss: number
   /** px feathered (blurred) plate edges via mask, 0 = off */
   plateEdgeBlur: number
   plateImage?: string
@@ -640,6 +645,8 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   plateGlowSize: 0,
   plateGlowColor: '#a970ff',
   plateBlur: 0,
+  plateSaturate: 100,
+  plateGloss: 0,
   plateEdgeBlur: 0,
   plateImageOpacity: 1,
   plateImageFit: 'cover',
@@ -889,9 +896,6 @@ export interface Settings {
   caseSensitiveNicks: boolean
   /** use a user's 7TV cosmetic nick color when they have one */
   sevenTvNickColors: boolean
-  /** shared chat: tint for messages relayed from the partner channel */
-  sharedChatColor: string
-  sharedChatOpacity: number
   /** shared chat origin tag: show the avatar only, or the avatar plus the channel name */
   sharedChatTagMode: 'avatar' | 'full'
   /** post a chat line when a 7TV emote is added to / removed from the channel set */
@@ -1104,8 +1108,6 @@ export const DEFAULT_SETTINGS: Settings = {
   messageSpacing: 3,
   caseSensitiveNicks: false,
   sevenTvNickColors: true,
-  sharedChatColor: '#9147ff',
-  sharedChatOpacity: 0.06,
   sharedChatTagMode: 'full',
   announceEmoteChanges: true,
   colorBareNicks: true,

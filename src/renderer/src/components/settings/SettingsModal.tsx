@@ -1516,7 +1516,7 @@ const BADGE_OPTIONS: { id: string; labelKey: string }[] = [
   { id: 'premium', labelKey: 'badge.premium' }
 ]
 
-const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak']
+const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat']
 
 function HighlightsSection(): React.JSX.Element {
   const t = useT()
@@ -1549,20 +1549,6 @@ function HighlightsSection(): React.JSX.Element {
       </div>
       {/* shared chat (co-streams): the partner channel's viewers get their own tint */}
       <div className="set-group-title">{t('set.group.sharedChat')}</div>
-      <div className="set-row" title={t('hint.sharedChatColor')}>
-        <label className="has-hint">{t('set.sharedChatColor')}</label>
-        <ColorField value={settings.sharedChatColor} defaultValue="#9147ff" onChange={(v) => set({ sharedChatColor: v })} />
-      </div>
-      <div className="set-row">
-        <label>{t('set.sharedChatOpacity')}</label>
-        <NumberField
-          value={Math.round(settings.sharedChatOpacity * 100)}
-          min={0}
-          max={100}
-          width={80}
-          onChange={(n) => set({ sharedChatOpacity: n / 100 })}
-        />
-      </div>
       <div className="set-row" title={t('hint.sharedChatTagMode')}>
         <label className="has-hint">{t('set.sharedChatTagMode')}</label>
         <select

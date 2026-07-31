@@ -4,7 +4,8 @@ import { useUiStore, UserCardTarget } from '../store/ui'
 import { useChatStore, lookupUserBadges } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { useSettingsStore } from '../store/settings'
-import { lookupBadgeUrl, lookupBadgeTitle } from '../store/emotes'
+import { lookupBadgeUrl, lookupBadgeTitle, useEmotesStore } from '../store/emotes'
+import { loadChannelBadges, loadGlobalBadges } from '../services/emoteService'
 import { canModerate } from '../services/accountService'
 import { getFollowDate, getSubInfo, getUsers, HelixUser, SubInfo } from '../lib/helix'
 import { banUser, unbanUser, warnUser } from '../lib/helix'
@@ -46,6 +47,16 @@ export default function UserCard({
     ensureBttvBadges()
   }, [target.userId])
   const stvBadge = stvCos?.badgeUrl ? { url: stvCos.badgeUrl, title: stvCos.badgeTooltip ?? '7TV' } : undefined
+  const [globalsOpen, setGlobalsOpen] = useState(false)
+  // badge art arrives asynchronously (Helix). Without subscribing to the emote store's
+  // version the card renders once, misses the maps, and shows nothing — which is exactly
+  // the "badges sometimes don't load" report. Also request them in case this window never
+  // joined the channel itself (standalone usercard).
+  useEmotesStore((s) => s.version)
+  useEffect(() => {
+    void loadGlobalBadges()
+    if (target.channelId) void loadChannelBadges(target.channel, target.channelId)
+  }, [target.channel, target.channelId])
   const isBroadcasterAccount = account && account.login.toLowerCase() === target.channel.toLowerCase()
   const messages = useChatStore((s) => s.messages[target.channel]) ?? []
   const [info, setInfo] = useState<HelixUser | null>(null)
@@ -195,41 +206,42 @@ export default function UserCard({
               </>
             )}
           </div>
-          {/* Twitch splits a user's badges into CHANNEL ones (sub/founder/mod/vip/bits) and
-              GLOBAL ones (partner, turbo, prime, pledges…). Both arrive in the same IRC tag,
-              so group them for display and fall back to the buffer when the card was opened
-              from a bare nick with no message context. */}
+          {/* badges sit RIGHT NEXT TO THE NICK, like the viewers list — channel badges
+              (sub/founder/mod/vip/bits) inline, and the global ones behind a toggle so a
+              user with a dozen pledges doesn't push the card apart. */}
           {(() => {
             const badges = target.badges.length
               ? target.badges
               : (lookupUserBadges(target.channel, target.login) ?? [])
-            if (!badges.length && !stvBadge && !bttvBadge) return null
-            const channelSets = new Set(['subscriber', 'founder', 'moderator', 'lead_moderator', 'vip', 'broadcaster', 'bits', 'bits-leader', 'sub-gifter', 'sub-gift-leader', 'artist-badge', 'predictions'])
+            const channelSets = new Set([
+              'subscriber', 'founder', 'moderator', 'lead_moderator', 'vip', 'broadcaster',
+              'bits', 'bits-leader', 'sub-gifter', 'sub-gift-leader', 'artist-badge', 'predictions'
+            ])
             const chan = badges.filter((b) => channelSets.has(b.setId))
             const global = badges.filter((b) => !channelSets.has(b.setId))
-            const row = (list: typeof badges): React.JSX.Element[] =>
-              list
-                .map((b) => {
-                  const url = lookupBadgeUrl(target.channel, b.setId, b.version)
-                  if (!url) return null
-                  const title = lookupBadgeTitle(target.channel, b.setId, b.version) ?? b.setId
-                  return <img key={`${b.setId}/${b.version}`} src={url} alt="" title={title} />
-                })
-                .filter((x): x is React.JSX.Element => x !== null)
+            const img = (b: { setId: string; version: string }): React.JSX.Element | null => {
+              const url = lookupBadgeUrl(target.channel, b.setId, b.version)
+              if (!url) return null
+              const title = lookupBadgeTitle(target.channel, b.setId, b.version) ?? b.setId
+              return <img key={`${b.setId}/${b.version}`} src={url} alt="" title={title} />
+            }
+            const globalCount = global.length + (stvBadge ? 1 : 0) + (bttvBadge ? 1 : 0)
+            if (!chan.length && !globalCount) return null
             return (
               <>
-                {chan.length > 0 && (
+                {chan.length > 0 && <div className="uc-badges">{chan.map(img)}</div>}
+                {globalCount > 0 && (
                   <div className="uc-badges">
-                    <span className="uc-badges-label">{t('user.badgesChannel')}</span>
-                    {row(chan)}
-                  </div>
-                )}
-                {(global.length > 0 || stvBadge || bttvBadge) && (
-                  <div className="uc-badges">
-                    <span className="uc-badges-label">{t('user.badgesGlobal')}</span>
-                    {row(global)}
-                    {stvBadge && <img src={stvBadge.url} alt="" title={stvBadge.title} className="badge-3p" />}
-                    {bttvBadge && <img src={bttvBadge.url} alt="" title={bttvBadge.description} className="badge-3p" />}
+                    <button className="uc-badges-toggle" onClick={() => setGlobalsOpen((v) => !v)}>
+                      {globalsOpen ? '▾' : '▸'} {t('user.badgesGlobal')} ({globalCount})
+                    </button>
+                    {globalsOpen && (
+                      <>
+                        {global.map(img)}
+                        {stvBadge && <img src={stvBadge.url} alt="" title={stvBadge.title} className="badge-3p" />}
+                        {bttvBadge && <img src={bttvBadge.url} alt="" title={bttvBadge.description} className="badge-3p" />}
+                      </>
+                    )}
                   </div>
                 )}
               </>
