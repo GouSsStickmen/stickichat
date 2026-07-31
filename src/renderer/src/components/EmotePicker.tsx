@@ -75,6 +75,15 @@ interface Props {
 
 type Tab = 'favorites' | 'twitch' | 'thirdparty' | 'emoji' | 'kaomoji'
 
+/**
+ * Text to type for a picked emote. A saved COMBINATION expands to the base emote followed by
+ * each zero-width layer — chat re-stacks them from exactly that word order.
+ */
+export function emoteInsertText(e: Emote | FavoriteEmote): string {
+  const overlays = 'overlays' in e && e.overlays ? e.overlays : []
+  return [e.code, ...overlays.map((o) => o.code)].join(' ')
+}
+
 const PROVIDER_LABEL: Record<EmoteProvider, string> = {
   '7tv': '7TV',
   bttv: 'BTTV',
@@ -271,6 +280,10 @@ export default function EmotePicker({
     // kaomoji live under the 'emoji' provider but are long text — they need a wide cell
     // kaomoji are TEXT art; emoji ZWJ sequences also exceed 3 units but must stay square
     const isKaomoji = e.provider === 'emoji' && Array.from(e.code).length > 3 && !/\p{Extended_Pictographic}/u.test(e.code)
+    // zero-width emotes are LAYERS: they render on top of the emote before them. Outlining
+    // them (like 7TV does) is the only way to tell them apart from ordinary emotes.
+    const isLayer = 'zeroWidth' in e && !!e.zeroWidth
+    const combo = 'overlays' in e && e.overlays && e.overlays.length ? e.overlays : null
     return (
       <button
         key={favKey}
@@ -278,13 +291,15 @@ export default function EmotePicker({
         // not re-trigger the last clicked emote
         tabIndex={-1}
         onMouseDown={(ev) => ev.preventDefault()}
-        className={`emote-cell ${isKaomoji ? 'kaomoji-fav' : ''} ${favPop === favKey ? 'fav-pop' : ''}`}
+        className={`emote-cell ${isKaomoji ? 'kaomoji-fav' : ''} ${favPop === favKey ? 'fav-pop' : ''} ${isLayer ? 'zero-width' : ''} ${combo ? 'is-combo' : ''}`}
         title={
           isKaomoji
             ? e.code
             : e.provider === 'emoji'
               ? emojiLabel(e.code, emojiNameLang)
-              : `${e.code} (${PROVIDER_LABEL[e.provider]})`
+              : combo
+                ? [e.code, ...combo.map((o) => o.code)].join(' + ') + ` (${PROVIDER_LABEL[e.provider]})`
+                : `${e.code} (${PROVIDER_LABEL[e.provider]})${isLayer ? ` · ${t('picker.zeroWidth')}` : ''}`
         }
         onMouseEnter={() => setPreview(e)}
         onMouseLeave={() => setPreview((cur) => (cur === e ? null : cur))}
@@ -303,6 +318,13 @@ export default function EmotePicker({
           <span className="kaomoji-fav-text">{e.code}</span>
         ) : e.provider === 'emoji' ? (
           <EmojiGlyph char={e.code} className="emoji-cell-char" />
+        ) : combo ? (
+          <span className="emote-cell-stack">
+            <LazyImg src={e.url} alt={e.code} />
+            {combo.map((o, i) => (
+              <img key={i} className="emote-cell-ov" src={o.url} alt="" />
+            ))}
+          </span>
         ) : (
           <LazyImg src={e.url} alt={e.code} />
         )}

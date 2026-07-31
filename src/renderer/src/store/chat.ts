@@ -75,6 +75,19 @@ export function lookupUserColor(channel: string, login: string): string | undefi
   return undefined
 }
 
+/**
+ * Has this login written in the channel? Used to colorize nicks typed WITHOUT a leading "@":
+ * only words that belong to a real chatter get treated as a mention, so ordinary words are
+ * never painted by accident.
+ */
+export function isKnownChatter(channel: string, login: string): boolean {
+  const msgs = useChatStore.getState().messages[channel]
+  if (!msgs) return false
+  const lower = login.toLowerCase()
+  for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].login === lower) return true
+  return false
+}
+
 /** most recent known badges for a login in a channel (best-effort, from the local buffer) */
 export function lookupUserBadges(channel: string, login: string): BadgeRef[] | undefined {
   const msgs = useChatStore.getState().messages[channel]

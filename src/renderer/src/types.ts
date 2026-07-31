@@ -112,6 +112,11 @@ export interface Emote {
   animated?: boolean
   /** base (1x) pixel width, when known — used to sort smallest to largest */
   size?: number
+  /** provider-side emote id — lets a click open the emote's page on 7TV/BTTV/FFZ */
+  id?: string
+  /** who owns the emote (7TV), shown in the tooltip and used for "open their channel" */
+  ownerLogin?: string
+  ownerName?: string
 }
 
 export type EmoteMap = Map<string, Emote>
@@ -137,6 +142,8 @@ export interface FavoriteEmote {
   code: string
   url: string
   provider: EmoteProvider
+  /** zero-width layers saved together with the base — a whole 7TV-style combination */
+  overlays?: { code: string; url: string; provider: EmoteProvider }[]
 }
 
 // ---------- Sounds ----------
@@ -882,6 +889,15 @@ export interface Settings {
   caseSensitiveNicks: boolean
   /** use a user's 7TV cosmetic nick color when they have one */
   sevenTvNickColors: boolean
+  /** shared chat: tint for messages relayed from the partner channel */
+  sharedChatColor: string
+  sharedChatOpacity: number
+  /** shared chat origin tag: show the avatar only, or the avatar plus the channel name */
+  sharedChatTagMode: 'avatar' | 'full'
+  /** post a chat line when a 7TV emote is added to / removed from the channel set */
+  announceEmoteChanges: boolean
+  /** color nicknames typed without a leading "@" too */
+  colorBareNicks: boolean
   /** show 7TV / BetterTTV badges next to the Twitch ones */
   showThirdPartyBadges: boolean
   /** independent zoom for the tab bar (1 = default) */
@@ -1088,6 +1104,11 @@ export const DEFAULT_SETTINGS: Settings = {
   messageSpacing: 3,
   caseSensitiveNicks: false,
   sevenTvNickColors: true,
+  sharedChatColor: '#9147ff',
+  sharedChatOpacity: 0.06,
+  sharedChatTagMode: 'full',
+  announceEmoteChanges: true,
+  colorBareNicks: true,
   showThirdPartyBadges: true,
   tabScale: 1,
   tabFilter: 'all',

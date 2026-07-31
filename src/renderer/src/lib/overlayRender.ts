@@ -28,7 +28,19 @@ function bodyHtml(msg: ChatMessage): string {
         out += esc(tk.text)
         break
       case 'emote':
-        out += `<img class="emote" src="${esc(tk.emote.url)}" alt="${esc(tk.emote.code)}">`
+        // zero-width emotes are LAYERS on the base one — the overlay used to render only the
+        // base, so a combo built in chat lost its decoration on stream
+        if (tk.overlays.length) {
+          out +=
+            `<span class="emote-stack">` +
+            `<img class="emote" src="${esc(tk.emote.url)}" alt="${esc(tk.emote.code)}">` +
+            tk.overlays
+              .map((o) => `<img class="emote emote-ov" src="${esc(o.url)}" alt="">`)
+              .join('') +
+            `</span>`
+        } else {
+          out += `<img class="emote" src="${esc(tk.emote.url)}" alt="${esc(tk.emote.code)}">`
+        }
         break
       case 'emoji': {
         // same reasoning as chat: Twemoji image = consistent one-cell rendering in OBS

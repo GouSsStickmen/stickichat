@@ -15,10 +15,13 @@ export interface SetUpdate {
   added: Emote[]
   /** emote CODES removed from the set */
   removed: string[]
+  /** who added/removed them, when 7TV tells us */
+  actor?: string
 }
 
 interface DispatchBody {
   id?: string
+  actor?: { display_name?: string; username?: string }
   pushed?: { value?: SevenTvEmote }[]
   pulled?: { old_value?: { name?: string } }[]
   updated?: { value?: SevenTvEmote; old_value?: { name?: string } }[]
@@ -117,7 +120,8 @@ export class SevenTvEvents {
       if (u.old_value?.name) removed.push(u.old_value.name)
       if (u.value) added.push(sevenTvToEmote(u.value))
     }
-    if (added.length || removed.length) this.onUpdate({ channel, added, removed })
+    const actor = body.actor?.display_name ?? body.actor?.username
+    if (added.length || removed.length) this.onUpdate({ channel, added, removed, actor })
   }
 
   private subscribeAll(): void {

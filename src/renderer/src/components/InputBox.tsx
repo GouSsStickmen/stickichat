@@ -12,7 +12,7 @@ import { canModerate } from '../services/accountService'
 import { EMOJI_LIST, emojiLabel } from '../lib/emojiData'
 import { swapLayout } from '../lib/translit'
 import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
-import EmotePicker from './EmotePicker'
+import EmotePicker, { emoteInsertText } from './EmotePicker'
 import EmojiGlyph from './EmojiGlyph'
 import { useT } from '../i18n'
 import { getWatchStreakInfo } from '../lib/watchStreaks'
@@ -521,7 +521,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             channel={pane.channel}
             channelId={channelId}
             account={account}
-            onPick={(emote) => insertFromPicker(emote.code)}
+            onPick={(emote) => insertFromPicker(emoteInsertText(emote))}
             onClose={() => setPickerOpen(false)}
           />
         )}

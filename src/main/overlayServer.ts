@@ -237,6 +237,9 @@ const OVERLAY_HTML = `<!doctype html>
   .ts { opacity: 0.85; font-size: 0.8em; }
   .sysline { font-style: italic; opacity: 0.9; }
   .body img.emote { height: var(--emote-h, 1.4em); vertical-align: -0.3em; margin: 0 1px; }
+  /* layered ("combo") emotes: the zero-width layers sit centred on the base one */
+  .body .emote-stack { position: relative; display: inline-block; }
+  .body .emote-stack img.emote-ov { position: absolute; left: 0; top: 0; margin: 0; }
   .body img.emoji-img { height: 1.25em; width: 1.25em; object-fit: contain; vertical-align: -0.25em; margin: 0 1px; }
   .decor { position: absolute; pointer-events: none; }
   /* custom plate image as its own layer (opacity independent of text) */

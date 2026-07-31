@@ -11,6 +11,7 @@ interface SevenTvEmote {
     animated?: boolean
     flags?: number
     host?: { files?: { name: string; width: number }[] }
+    owner?: { username?: string; display_name?: string }
   }
 }
 
@@ -25,7 +26,10 @@ export function sevenTvToEmote(e: SevenTvEmote): Emote {
     provider: '7tv',
     zeroWidth: ((e.flags ?? 0) & ZERO_WIDTH) !== 0 || ((e.data?.flags ?? 0) & 256) !== 0,
     animated: e.data?.animated,
-    size: baseFile?.width
+    size: baseFile?.width,
+    id: e.id,
+    ownerLogin: e.data?.owner?.username,
+    ownerName: e.data?.owner?.display_name ?? e.data?.owner?.username
   }
 }
 
@@ -66,7 +70,8 @@ function bttvToEmote(e: BttvEmote): Emote {
     url: `https://cdn.betterttv.net/emote/${e.id}/2x`,
     provider: 'bttv',
     zeroWidth: BTTV_ZERO_WIDTH.has(e.code),
-    animated: e.animated ?? e.imageType === 'gif'
+    animated: e.animated ?? e.imageType === 'gif',
+    id: e.id
   }
 }
 
@@ -86,10 +91,12 @@ export async function fetchBttvChannel(twitchId: string): Promise<Emote[]> {
 // ---------- FFZ ----------
 
 interface FfzEmote {
+  id?: number
   name: string
   urls: Record<string, string>
   animated?: Record<string, string> | null
   width?: number
+  owner?: { name?: string; display_name?: string }
 }
 
 interface FfzSetResponse {
@@ -108,7 +115,10 @@ function ffzToEmote(e: FfzEmote): Emote {
     url: ffzUrl(u),
     provider: 'ffz',
     animated: !!e.animated,
-    size: e.width
+    size: e.width,
+    id: e.id != null ? String(e.id) : undefined,
+    ownerLogin: e.owner?.name,
+    ownerName: e.owner?.display_name ?? e.owner?.name
   }
 }
 
@@ -139,4 +149,16 @@ export function mergeEmotes(...lists: Emote[][]): EmoteMap {
   const map: EmoteMap = new Map()
   for (const list of lists) for (const e of list) map.set(e.code, e)
   return map
+}
+
+/**
+ * Where clicking an emote should take you. 7TV/BTTV/FFZ all have a public page per emote;
+ * Twitch has none, so its emotes stay non-clickable (the caller checks for undefined).
+ */
+export function emotePageUrl(e: Emote): string | undefined {
+  if (!e.id) return undefined
+  if (e.provider === '7tv') return `https://7tv.app/emotes/${e.id}`
+  if (e.provider === 'bttv') return `https://betterttv.com/emotes/${e.id}`
+  if (e.provider === 'ffz') return `https://frankerfacez.com/emoticon/${e.id}`
+  return undefined
 }

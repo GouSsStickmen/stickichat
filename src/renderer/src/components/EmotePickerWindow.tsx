@@ -7,7 +7,7 @@ import {
   loadChannelEmotes,
   loadTwitchUserEmotes
 } from '../services/emoteService'
-import EmotePicker from './EmotePicker'
+import EmotePicker, { emoteInsertText } from './EmotePicker'
 import Toasts from './Toasts'
 import type { EmotePickerWindowPayload } from '../App'
 import type { InsertEventDetail } from './InputBox'
@@ -51,7 +51,7 @@ export default function EmotePickerWindow({
         standalone
         onPick={(emote) => {
           window.sticki.sendEmotePick(
-            JSON.stringify({ paneId: payload.paneId, text: `${emote.code} ` } satisfies InsertEventDetail)
+            JSON.stringify({ paneId: payload.paneId, text: `${emoteInsertText(emote)} ` } satisfies InsertEventDetail)
           )
         }}
         onClose={() => setClosed(true)}

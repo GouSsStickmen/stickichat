@@ -1,8 +1,9 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Account, ChatMessage, MOD_ONLY_TYPES, Settings } from '../types'
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration, hiResEmoteUrl } from '../lib/tokenize'
+import { emotePageUrl } from '../lib/emoteProviders'
 import { lookupBadgeUrl, lookupBadgeTitle, lookupBadge4x, lookupEmote, lookupCheermote } from '../store/emotes'
-import { lookupUserColor, useChatStore } from '../store/chat'
+import { lookupUserColor, isKnownChatter, useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { highlightRuleMatches } from '../lib/highlight'
 import { openUserCard as openCard } from '../lib/openUserCard'
@@ -47,6 +48,12 @@ function formatTime(ts: number, withSeconds: boolean): string {
 function tokenContextHandler(paneId: string, text: string) {
   return (e: React.MouseEvent): void => {
     e.preventDefault()
+    // Shift+right-click copies instead of inserting — the only way to get a nick onto the
+    // clipboard without selecting it by hand
+    if (e.shiftKey) {
+      void navigator.clipboard.writeText(text.trim())
+      return
+    }
     window.dispatchEvent(
       new CustomEvent<InsertEventDetail>(e.ctrlKey ? 'sticki:send' : 'sticki:insert', {
         detail: { paneId, text }
@@ -88,7 +95,7 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
         <span
           className="mention-token"
           style={{ color: token.color }}
-          title={login}
+          title={`${login} — ${t('msg.nickHint')}`}
           onClick={(e) => {
             window.dispatchEvent(
               new CustomEvent('sticki:opencard', {
@@ -103,15 +110,63 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
       )
     }
     case 'emote': {
+      // Chatterino-style tooltip: the base emote, then each layer stacked on top of it, every
+      // line naming its provider and (7TV/FFZ) the person who made it
+      const describe = (e: typeof token.emote): string =>
+        `${e.code} — ${e.provider.toUpperCase()}${e.ownerName ? ` · ${e.ownerName}` : ''}`
+      const title = [
+        describe(token.emote),
+        ...token.overlays.map((o) => `${t('msg.overlayLayer')}: ${describe(o)}`),
+        emotePageUrl(token.emote) ? t('msg.emoteOpenHint') : '',
+        t('msg.emoteFavHint')
+      ]
+        .filter(Boolean)
+        .join('\n')
+      const page = emotePageUrl(token.emote)
+      const openEmote = (e: React.MouseEvent): void => {
+        // Alt+click stars the emote — and if it's a layered combo, the WHOLE stack, so a
+        // combination someone built in chat can be reused from the favorites tab
+        if (e.altKey) {
+          const st = useSettingsStore.getState()
+          const key = `${token.emote.provider}:${token.emote.code}`
+          const rest = st.favoriteEmotes.filter((f) => `${f.provider}:${f.code}` !== key)
+          const already = rest.length !== st.favoriteEmotes.length
+          st.setFavoriteEmotes(
+            already
+              ? rest
+              : [
+                  ...st.favoriteEmotes,
+                  {
+                    code: token.emote.code,
+                    url: token.emote.url,
+                    provider: token.emote.provider,
+                    overlays: token.overlays.map((o) => ({ code: o.code, url: o.url, provider: o.provider }))
+                  }
+                ]
+          )
+          return
+        }
+        // Ctrl+click goes to the owner's Twitch channel instead of the emote page
+        if (e.ctrlKey && token.emote.ownerLogin) {
+          window.sticki.openExternal(`https://twitch.tv/${token.emote.ownerLogin}`)
+          return
+        }
+        if (page) window.sticki.openExternal(page)
+      }
       return (
         <span
-          className="emote-wrap"
-          title={[token.emote, ...token.overlays].map((e) => e.code).join(' ')}
+          className={`emote-wrap ${page ? 'clickable' : ''}`}
+          title={title}
+          onClick={openEmote}
           onContextMenu={tokenContextHandler(paneId, `${token.emote.code} `)}
           onMouseEnter={(e) =>
-            useUiStore
-              .getState()
-              .setEmotePreview({ url: hiResEmoteUrl(token.emote.url), code: token.emote.code, x: e.clientX, y: e.clientY })
+            useUiStore.getState().setEmotePreview({
+              url: hiResEmoteUrl(token.emote.url),
+              code: token.emote.code,
+              overlayUrls: token.overlays.map((o) => hiResEmoteUrl(o.url)),
+              x: e.clientX,
+              y: e.clientY
+            })
           }
           onMouseMove={(e) => {
             const cur = useUiStore.getState().emotePreview
@@ -285,9 +340,15 @@ function SharedSourceTag({ roomId }: { roomId: string }): React.JSX.Element {
     return () => window.removeEventListener('sticki:srcchan', bump)
   }, [])
   const info = getSourceChannelInfo(roomId)
+  // avatar-only keeps a busy shared stream readable — the picture already says whose chat it is
+  const avatarOnly = useSettingsStore.getState().settings.sharedChatTagMode === 'avatar'
   return (
-    <span className="shared-src-tag" title={t('msg.sharedFrom', { channel: info?.name ?? '…' })}>
-      {info?.avatar ? <img className="shared-src-av" src={info.avatar} alt="" /> : '🔀'} {info?.name ?? '…'}
+    <span
+      className={`shared-src-tag ${avatarOnly && info?.avatar ? 'avatar-only' : ''}`}
+      title={t('msg.sharedFrom', { channel: info?.name ?? '…' })}
+    >
+      {info?.avatar ? <img className="shared-src-av" src={info.avatar} alt="" /> : '🔀'}
+      {!(avatarOnly && info?.avatar) && ` ${info?.name ?? '…'}`}
     </span>
   )
 }
@@ -388,7 +449,8 @@ function MessageViewInner({
       lookupEmote(msg.channel),
       (login) => lookupUserColor(msg.channel, login),
       settings.theme === 'dark',
-      msg.bits ? lookupCheermote(msg.channel) : undefined
+      msg.bits ? lookupCheermote(msg.channel) : undefined,
+      settings.colorBareNicks ? (login) => isKnownChatter(msg.channel, login) : undefined
     )
     // Twitch prefixes reply bodies with "@nick " — the nick already shows greyed on the
     // reply-ref line above, so drop the duplicate leading @mention (and its trailing space)
@@ -406,7 +468,7 @@ function MessageViewInner({
     }
     return toks
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [msg, emoteVersion, settings.theme])
+  }, [msg, emoteVersion, settings.theme, settings.colorBareNicks])
 
   // optional 7TV cosmetic nick color/paint: subscribe so the nick restyles when the fetch lands
   const stvWanted = settings.sevenTvNickColors || settings.showThirdPartyBadges

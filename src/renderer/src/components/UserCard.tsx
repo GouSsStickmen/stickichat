@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getWatchStreak } from '../lib/watchStreaks'
 import { useUiStore, UserCardTarget } from '../store/ui'
-import { useChatStore } from '../store/chat'
+import { useChatStore, lookupUserBadges } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { useSettingsStore } from '../store/settings'
-import { lookupBadgeUrl } from '../store/emotes'
+import { lookupBadgeUrl, lookupBadgeTitle } from '../store/emotes'
 import { canModerate } from '../services/accountService'
 import { getFollowDate, getSubInfo, getUsers, HelixUser, SubInfo } from '../lib/helix'
 import { banUser, unbanUser, warnUser } from '../lib/helix'
@@ -13,6 +13,8 @@ import { formatDuration } from '../lib/tokenize'
 import RichText from './RichText'
 import { PinButton } from './EmotePicker'
 import { localizeApiError } from '../lib/apiErrors'
+import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
+import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
 
 const TIMEOUTS = [60, 600, 3600, 86400]
 
@@ -36,6 +38,14 @@ export default function UserCard({
   const accounts = useAccountsStore((s) => s.accounts)
   const account = accounts.find((a) => a.id === target.accountId) ?? accounts[0]
   const isMod = canModerate(account, target.channel, target.channelId)
+  // third-party badges shown alongside the global Twitch ones
+  const stvCos = useSevenTvColors((s) => s.cosmetics[target.userId])
+  const bttvBadge = useBttvBadges((s) => s.badges[target.userId])
+  useEffect(() => {
+    ensureSevenTvCosmetic(target.userId)
+    ensureBttvBadges()
+  }, [target.userId])
+  const stvBadge = stvCos?.badgeUrl ? { url: stvCos.badgeUrl, title: stvCos.badgeTooltip ?? '7TV' } : undefined
   const isBroadcasterAccount = account && account.login.toLowerCase() === target.channel.toLowerCase()
   const messages = useChatStore((s) => s.messages[target.channel]) ?? []
   const [info, setInfo] = useState<HelixUser | null>(null)
@@ -185,14 +195,46 @@ export default function UserCard({
               </>
             )}
           </div>
-          {target.badges.length > 0 && (
-            <div className="uc-badges">
-              {target.badges.map((b) => {
-                const url = lookupBadgeUrl(target.channel, b.setId, b.version)
-                return url ? <img key={b.setId} src={url} alt={b.setId} title={b.setId} /> : null
-              })}
-            </div>
-          )}
+          {/* Twitch splits a user's badges into CHANNEL ones (sub/founder/mod/vip/bits) and
+              GLOBAL ones (partner, turbo, prime, pledges…). Both arrive in the same IRC tag,
+              so group them for display and fall back to the buffer when the card was opened
+              from a bare nick with no message context. */}
+          {(() => {
+            const badges = target.badges.length
+              ? target.badges
+              : (lookupUserBadges(target.channel, target.login) ?? [])
+            if (!badges.length && !stvBadge && !bttvBadge) return null
+            const channelSets = new Set(['subscriber', 'founder', 'moderator', 'lead_moderator', 'vip', 'broadcaster', 'bits', 'bits-leader', 'sub-gifter', 'sub-gift-leader', 'artist-badge', 'predictions'])
+            const chan = badges.filter((b) => channelSets.has(b.setId))
+            const global = badges.filter((b) => !channelSets.has(b.setId))
+            const row = (list: typeof badges): React.JSX.Element[] =>
+              list
+                .map((b) => {
+                  const url = lookupBadgeUrl(target.channel, b.setId, b.version)
+                  if (!url) return null
+                  const title = lookupBadgeTitle(target.channel, b.setId, b.version) ?? b.setId
+                  return <img key={`${b.setId}/${b.version}`} src={url} alt="" title={title} />
+                })
+                .filter((x): x is React.JSX.Element => x !== null)
+            return (
+              <>
+                {chan.length > 0 && (
+                  <div className="uc-badges">
+                    <span className="uc-badges-label">{t('user.badgesChannel')}</span>
+                    {row(chan)}
+                  </div>
+                )}
+                {(global.length > 0 || stvBadge || bttvBadge) && (
+                  <div className="uc-badges">
+                    <span className="uc-badges-label">{t('user.badgesGlobal')}</span>
+                    {row(global)}
+                    {stvBadge && <img src={stvBadge.url} alt="" title={stvBadge.title} className="badge-3p" />}
+                    {bttvBadge && <img src={bttvBadge.url} alt="" title={bttvBadge.description} className="badge-3p" />}
+                  </div>
+                )}
+              </>
+            )
+          })()}
           <div className="uc-sub">
             {(() => {
               const streak = getWatchStreak(target.channel, target.login)

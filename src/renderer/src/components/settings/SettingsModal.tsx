@@ -773,6 +773,8 @@ function ChatSection(): React.JSX.Element {
       )}
       <Toggle label={t('set.caseSensitiveNicks')} hint={t('hint.caseSensitiveNicks')} value={settings.caseSensitiveNicks} onChange={(v) => set({ caseSensitiveNicks: v })} />
       <Toggle label={t('set.sevenTvColors')} hint={t('hint.sevenTvColors')} value={settings.sevenTvNickColors} onChange={(v) => set({ sevenTvNickColors: v })} />
+      <Toggle label={t('set.announceEmoteChanges')} hint={t('hint.announceEmoteChanges')} value={settings.announceEmoteChanges} onChange={(v) => set({ announceEmoteChanges: v })} />
+      <Toggle label={t('set.colorBareNicks')} hint={t('hint.colorBareNicks')} value={settings.colorBareNicks} onChange={(v) => set({ colorBareNicks: v })} />
       <Toggle label={t('set.thirdPartyBadges')} hint={t('hint.thirdPartyBadges')} value={settings.showThirdPartyBadges} onChange={(v) => set({ showThirdPartyBadges: v })} />
       <div className="set-group-title">{t('highlights.title')}</div>
       <Toggle
@@ -1544,6 +1546,32 @@ function HighlightsSection(): React.JSX.Element {
       <div className="set-row" title={t('hint.flashColor')}>
         <label className="has-hint">{t('set.flashColor')}</label>
         <ColorField value={settings.flashColor} defaultValue="#a970ff" onChange={(v) => set({ flashColor: v })} />
+      </div>
+      {/* shared chat (co-streams): the partner channel's viewers get their own tint */}
+      <div className="set-group-title">{t('set.group.sharedChat')}</div>
+      <div className="set-row" title={t('hint.sharedChatColor')}>
+        <label className="has-hint">{t('set.sharedChatColor')}</label>
+        <ColorField value={settings.sharedChatColor} defaultValue="#9147ff" onChange={(v) => set({ sharedChatColor: v })} />
+      </div>
+      <div className="set-row">
+        <label>{t('set.sharedChatOpacity')}</label>
+        <NumberField
+          value={Math.round(settings.sharedChatOpacity * 100)}
+          min={0}
+          max={100}
+          width={80}
+          onChange={(n) => set({ sharedChatOpacity: n / 100 })}
+        />
+      </div>
+      <div className="set-row" title={t('hint.sharedChatTagMode')}>
+        <label className="has-hint">{t('set.sharedChatTagMode')}</label>
+        <select
+          value={settings.sharedChatTagMode}
+          onChange={(e) => set({ sharedChatTagMode: e.target.value as Settings['sharedChatTagMode'] })}
+        >
+          <option value="full">{t('set.sharedChatTagMode.full')}</option>
+          <option value="avatar">{t('set.sharedChatTagMode.avatar')}</option>
+        </select>
       </div>
       {/* mentions: built-in category, same standardized row as the rules below */}
       <div className="hl-row" title={t('hint.mentionBg')}>

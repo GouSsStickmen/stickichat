@@ -8,7 +8,7 @@ import { fallbackColor, ensureReadable } from '../lib/tokenize'
 import { useSettingsStore } from '../store/settings'
 import { localizeApiError } from '../lib/apiErrors'
 import RichText from './RichText'
-import { PinButton } from './EmotePicker'
+import { PinButton, emoteInsertText } from './EmotePicker'
 import { useT } from '../i18n'
 
 function fmtTime(ts: number): string {
@@ -351,7 +351,10 @@ export default function WhisperPanel({
                 account={accounts[0]}
                 fixed
                 onPick={(emote) => {
-                  setText((cur) => (cur.length === 0 || cur.endsWith(' ') ? cur + emote.code + ' ' : `${cur} ${emote.code} `))
+                  setText((cur) => {
+                    const txt = emoteInsertText(emote)
+                    return cur.length === 0 || cur.endsWith(' ') ? cur + txt + ' ' : `${cur} ${txt} `
+                  })
                 }}
                 onClose={() => setPickerOpen(false)}
               />

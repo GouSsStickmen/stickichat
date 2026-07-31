@@ -28,6 +28,8 @@ export interface EmotePreviewTarget {
   y: number
   /** link-preview artwork: render big and aspect-correct instead of in a square emote box */
   wide?: boolean
+  /** zero-width emotes layered on top of this one — previewed as the finished combination */
+  overlayUrls?: string[]
 }
 
 export interface ChannelPrompt {

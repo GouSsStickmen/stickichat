@@ -85,18 +85,51 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
     patch: {
       layout: 'bubble',
       plateMode: 'fit',
-      plateBg: { kind: 'solid', color: '#ffffff', opacity: 0.14, color2: '#ffffff', angle: 0 },
-      plateRadius: [16, 16, 16, 16],
+      // a real frosted pane: barely-there fill + a strong blur of whatever is behind it,
+      // so the plate reads as glass rather than as a grey box
+      plateBg: { kind: 'gradient', color: '#ffffff', opacity: 0.16, color2: '#ffffff', angle: 160 },
+      plateRadius: [18, 18, 18, 18],
       plateBorderWidth: 1,
       plateBorderColor: '#ffffff',
-      plateShadowBlur: 12,
+      plateShadowBlur: 26,
       plateShadowColor: '#000000',
+      plateBlur: 16,
+      platePadX: 14,
+      platePadY: 9,
       outlineWidth: 0,
-      shadowBlur: 3,
+      shadowBlur: 4,
       nickPos: 'above',
+      nickBlur: 12,
       animIn: 'fade',
-      lineGap: 8,
-      customCss: '.content { backdrop-filter: blur(8px); }'
+      lineGap: 10,
+      customCss: `/* Frosted glass. The blur is a backdrop-filter, so it frosts what sits BEHIND the
+   plate inside the page — in OBS a browser source is composited over the scene, so it can
+   only blur the overlay's own background image, not the game/camera underneath. Set a
+   background image in the overlay editor to see the effect on stream. */
+.content{
+  backdrop-filter: blur(16px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
+  background: linear-gradient(160deg, rgba(255,255,255,.22), rgba(255,255,255,.08) 55%, rgba(255,255,255,.14)) !important;
+  border: 1px solid rgba(255,255,255,.38) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(255,255,255,.12) !important;
+  position: relative;
+  overflow: hidden;
+}
+/* the diagonal sheen that sells the "pane of glass" look */
+.content::after{
+  content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background: linear-gradient(135deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.06) 38%, transparent 60%);
+}
+.meta{
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  background: rgba(255,255,255,.14) !important;
+  border: 1px solid rgba(255,255,255,.3) !important;
+  border-radius: 999px !important;
+  padding: 1px 10px !important;
+}
+.nick{ text-shadow: 0 1px 3px rgba(0,0,0,.5) }
+.body,.body>span{ text-shadow: 0 1px 3px rgba(0,0,0,.55) }`
     }
   },
   {

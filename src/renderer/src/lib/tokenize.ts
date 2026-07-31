@@ -68,7 +68,9 @@ export function tokenizeMessage(
   emoteLookup: (code: string) => Emote | undefined,
   mentionColorLookup?: (login: string) => string | undefined,
   dark = true,
-  cheermoteLookup?: (word: string) => { bits: number; tier: { url: string; color: string } } | undefined
+  cheermoteLookup?: (word: string) => { bits: number; tier: { url: string; color: string } } | undefined,
+  /** "is this word a real chatter here?" — enables coloring nicks typed without a leading @ */
+  knownChatter?: (login: string) => boolean
 ): Token[] {
   const cp = Array.from(msg.text) // code points
   const ranges = parseEmotesTag(msg.emotesTag ?? '')
@@ -164,6 +166,17 @@ export function tokenizeMessage(
         const raw = (mentionColorLookup?.(login)) || fallbackColor(login)
         tokens.push({ kind: 'mention', name: piece, color: ensureReadable(raw, dark) })
         continue
+      }
+      // a nick typed WITHOUT the "@" still gets the user's color. Gated on the word actually
+      // belonging to someone who has written in this channel, so ordinary words stay plain;
+      // 3+ chars and not all-digits keeps short/numeric noise out.
+      if (knownChatter && piece.length >= 3 && /^\w[\w]*[^\w]{0,2}$/.test(piece)) {
+        const login = piece.replace(/[^\w]+$/, '').toLowerCase()
+        if (login.length >= 3 && !/^\d+$/.test(login) && knownChatter(login)) {
+          const raw = (mentionColorLookup?.(login)) || fallbackColor(login)
+          tokens.push({ kind: 'mention', name: piece, color: ensureReadable(raw, dark) })
+          continue
+        }
       }
       // split out emoji so they get their own token (right-click → insert, like emotes)
       if (EMOJI_RE.test(piece)) {

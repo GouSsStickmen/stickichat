@@ -23,11 +23,23 @@ export default function EmoteHoverPreview(): React.JSX.Element | null {
     >
       {/* scale the emote UP to the chosen size (contain keeps aspect) so the setting actually
           changes how big it looks, instead of capping at the image's native resolution */}
-      <img
-        src={preview.url}
-        alt={preview.code}
-        style={{ width: size, height: preview.wide ? 'auto' : size, objectFit: 'contain' }}
-      />
+      {/* a combined emote previews as the finished stack, exactly how it reads in chat */}
+      <span className="ehp-stack" style={{ width: size, height: preview.wide ? 'auto' : size }}>
+        <img
+          src={preview.url}
+          alt={preview.code}
+          style={{ width: size, height: preview.wide ? 'auto' : size, objectFit: 'contain' }}
+        />
+        {(preview.overlayUrls ?? []).map((u, i) => (
+          <img
+            key={i}
+            src={u}
+            alt=""
+            className="ehp-overlay"
+            style={{ width: size, height: size, objectFit: 'contain' }}
+          />
+        ))}
+      </span>
       <div className="emote-hover-name">{preview.code}</div>
     </div>
   )

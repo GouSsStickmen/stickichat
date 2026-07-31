@@ -12,6 +12,8 @@ import { getChannelBadges, getCheermotes, getGlobalBadges, getUserEmotes, getUse
 import type { TwitchUserEmote } from '../lib/helix'
 import { Account } from '../types'
 import { useAccountsStore } from '../store/accounts'
+import { useSettingsStore } from '../store/settings'
+import { translate } from '../i18n'
 import { useEmotesStore } from '../store/emotes'
 import { useChatStore } from '../store/chat'
 
@@ -29,13 +31,34 @@ export async function loadGlobalEmotes(): Promise<void> {
 }
 
 // live 7TV updates: an emote the broadcaster adds/removes appears/disappears instantly
-const sevenTvEvents = new SevenTvEvents(({ channel, added, removed }) => {
-  const cur = useEmotesStore.getState().channelEmotes[channel]
-  if (!cur) return
+const sevenTvEvents = new SevenTvEvents(({ channel, added, removed, actor }) => {
+  // start from an empty map if the initial channel load hasn't landed yet — dropping the
+  // event here used to lose the emote until the next restart
+  const cur = useEmotesStore.getState().channelEmotes[channel] ?? new Map()
   const next = new Map(cur)
   for (const code of removed) next.delete(code)
   for (const e of added) next.set(e.code, e)
+  // bumps the store `version`, which re-tokenizes messages already on screen — the new emote
+  // renders immediately instead of waiting for an F5
   useEmotesStore.getState().setChannelEmotes(channel, next)
+
+  if (!useSettingsStore.getState().settings.announceEmoteChanges) return
+  const lang = useSettingsStore.getState().settings.language
+  const by = actor ? translate(lang, 'info.emoteBy', { user: actor }) : ''
+  void import('./chatService').then(({ chatService }) => {
+    if (added.length) {
+      chatService.localInfo(
+        channel,
+        translate(lang, 'info.emoteAdded', { emotes: added.map((e) => e.code).join(', ') }) + by
+      )
+    }
+    if (removed.length) {
+      chatService.localInfo(
+        channel,
+        translate(lang, 'info.emoteRemoved', { emotes: removed.join(', ') }) + by
+      )
+    }
+  })
 })
 
 export async function loadChannelEmotes(channel: string, twitchId: string): Promise<void> {
