@@ -3,8 +3,11 @@ import { useSettingsStore } from '../store/settings'
 
 export default function EmoteHoverPreview(): React.JSX.Element | null {
   const preview = useUiStore((s) => s.emotePreview)
-  const size = useSettingsStore((s) => s.settings.chatEmoteHoverSize)
+  const emoteSize = useSettingsStore((s) => s.settings.chatEmoteHoverSize)
   if (!preview) return null
+  // link artwork is wide: cap it to a comfortable share of the window instead of the (square)
+  // emote hover size, which would shrink a 16:9 thumbnail to a stamp
+  const size = preview.wide ? Math.min(560, Math.round(window.innerWidth * 0.45)) : emoteSize
 
   // anchor next to the cursor. The box grows UPWARD from a point just above the cursor via
   // translateY(-100%), so it stays glued to the cursor no matter how large `size` is. Near the
@@ -23,7 +26,7 @@ export default function EmoteHoverPreview(): React.JSX.Element | null {
       <img
         src={preview.url}
         alt={preview.code}
-        style={{ width: size, height: size, objectFit: 'contain' }}
+        style={{ width: size, height: preview.wide ? 'auto' : size, objectFit: 'contain' }}
       />
       <div className="emote-hover-name">{preview.code}</div>
     </div>

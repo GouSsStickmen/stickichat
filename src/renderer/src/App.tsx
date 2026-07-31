@@ -27,6 +27,9 @@ import { hexToRgba } from './lib/tokenize'
 import { hotkeyFor, matchHotkey } from './lib/hotkeys'
 import { useT } from './i18n'
 
+/** biggest chat text size (Ctrl+wheel and the settings field share this ceiling) */
+export const CHAT_FONT_MAX = 40
+
 interface DetachedPayload {
   name?: string
   panes: { channel: string; accountId: string | null }[]
@@ -310,14 +313,24 @@ export default function App(): React.JSX.Element | null {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Ctrl + mouse wheel = zoom chat text size
+  // Ctrl + mouse wheel zooms whatever is under the cursor: over the tab bar it scales the
+  // TABS, anywhere else the chat text. The two sizes are independent (.tabbar no longer
+  // inherits --font-size), so neither drags the other along.
   useEffect(() => {
     const onWheel = (e: WheelEvent): void => {
       if (!e.ctrlKey) return
       e.preventDefault()
-      const cur = useSettingsStore.getState().settings.fontSize
-      const next = Math.max(10, Math.min(22, cur + (e.deltaY < 0 ? 1 : -1)))
-      if (next !== cur) useSettingsStore.getState().setSettings({ fontSize: next })
+      const st = useSettingsStore.getState()
+      const step = e.deltaY < 0 ? 1 : -1
+      if ((e.target as HTMLElement | null)?.closest?.('.tabbar')) {
+        const cur = st.settings.tabScale
+        const next = Math.max(0.6, Math.min(1.8, Math.round((cur + step * 0.1) * 10) / 10))
+        if (next !== cur) st.setSettings({ tabScale: next })
+        return
+      }
+      const cur = st.settings.fontSize
+      const next = Math.max(10, Math.min(CHAT_FONT_MAX, cur + step))
+      if (next !== cur) st.setSettings({ fontSize: next })
     }
     window.addEventListener('wheel', onWheel, { passive: false })
     return () => window.removeEventListener('wheel', onWheel)

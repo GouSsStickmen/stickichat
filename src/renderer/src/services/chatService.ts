@@ -530,7 +530,7 @@ class ChatService {
           translate(lang, 'modact.timeout', {
             mod,
             user: event.timeout?.user_name ?? '?',
-            duration: secs >= 60 ? `${formatDuration(secs)} (${secs}с)` : `${secs}с`
+            duration: formatDuration(secs)
           }) + reason
         // my own account: remember the reason for the locked-input placeholder
         if (targetId && until && useAccountsStore.getState().accounts.some((a) => a.id === targetId)) {
@@ -848,8 +848,7 @@ class ChatService {
           const text = dur
             ? translate(lang, 'misc.timedOut', {
                 user: m.trailing,
-                // human-readable plus exact seconds, e.g. "10хв (600с)"
-                duration: secs >= 60 ? `${formatDuration(secs)} (${secs}с)` : `${secs}с`
+                duration: formatDuration(secs)
               })
             : translate(lang, 'misc.banned', { user: m.trailing })
           // full "who did it" lines come from channel.moderate where we're a mod — the bare

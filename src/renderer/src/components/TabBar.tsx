@@ -31,6 +31,7 @@ export default function TabBar(): React.JSX.Element {
   const tabsRef = useRef<HTMLDivElement>(null)
   const unreadWhispers = useWhispersStore((s) => s.unread)
   const whispersOpen = useUiStore((s) => s.whispersOpen)
+  const scrollSync = useUiStore((s) => s.scrollSync)
 
   const activeTab = tabs.find((x) => x.id === activeTabId)
 
@@ -108,6 +109,15 @@ export default function TabBar(): React.JSX.Element {
           A+
         </button>
       </span>
+      {activeTab && activeTab.panes.length > 1 && (
+        <button
+          className={`icon-btn ${scrollSync ? 'on' : ''}`}
+          title={t(scrollSync ? 'pane.syncScrollOff' : 'pane.syncScrollOn')}
+          onClick={() => useUiStore.getState().toggleScrollSync()}
+        >
+          {scrollSync ? '🔗' : '⛓️‍💥'}
+        </button>
+      )}
       {activeTab && activeTab.panes.length > 1 && (
         <select
           title={t('pane.columns')}

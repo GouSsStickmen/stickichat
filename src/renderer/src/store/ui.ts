@@ -26,6 +26,8 @@ export interface EmotePreviewTarget {
   code: string
   x: number
   y: number
+  /** link-preview artwork: render big and aspect-correct instead of in a square emote box */
+  wide?: boolean
 }
 
 export interface ChannelPrompt {
@@ -52,6 +54,8 @@ interface UiState {
   /** small "add this channel?" prompt (raids) */
   channelPrompt: ChannelPrompt | null
   whispersOpen: boolean
+  /** split mode: scrolling one pane scrolls the others by the same amount */
+  scrollSync: boolean
   /** accounts whose token died and need a full re-authorization (persistent banner) */
   reauthAccounts: { id: string; login: string }[]
   setSettingsOpen: (v: boolean) => void
@@ -64,6 +68,7 @@ interface UiState {
   setEmotePreview: (v: EmotePreviewTarget | null) => void
   setChannelPrompt: (v: ChannelPrompt | null) => void
   setWhispersOpen: (v: boolean) => void
+  toggleScrollSync: () => void
   markReauthNeeded: (id: string, login: string) => void
   clearReauthNeeded: (id: string) => void
 }
@@ -80,6 +85,7 @@ export const useUiStore = create<UiState>()((set) => ({
   expandedGifts: {},
   channelPrompt: null,
   whispersOpen: false,
+  scrollSync: false,
   reauthAccounts: [],
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setSettingsSection: (settingsSection) => set({ settingsSection }),
@@ -103,6 +109,7 @@ export const useUiStore = create<UiState>()((set) => ({
   setEmotePreview: (emotePreview) => set({ emotePreview }),
   setChannelPrompt: (channelPrompt) => set({ channelPrompt }),
   setWhispersOpen: (whispersOpen) => set({ whispersOpen }),
+  toggleScrollSync: () => set((s) => ({ scrollSync: !s.scrollSync })),
   markReauthNeeded: (id, login) =>
     set((s) =>
       s.reauthAccounts.some((a) => a.id === id)

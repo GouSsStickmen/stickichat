@@ -160,6 +160,9 @@ select:focus {
 /* ---------- Tab bar ---------- */
 
 .tabbar {
+  /* the tab bar is CHROME, not chat: pin it to the UI base size so Ctrl+wheel over the chat
+     (which drives --font-size) can't grow the tabs. Deliberate tab scaling = tabScale zoom. */
+  font-size: 13px;
   /* block flow: the floated actions sit top-right and tab rows wrap AROUND them,
      filling the space beneath instead of leaving a dead column */
   display: block;
@@ -3435,4 +3438,58 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .oe-pv-framebox .oe-pv-handle {
   pointer-events: auto;
+}
+
+/* ---- copying a chat selection must yield only the CHAT, not the chrome ----
+   Chromium honours user-select:none when building the clipboard payload, so every affordance
+   that lives inside .msg (swipe grip, toggles, inline buttons, sliders) is excluded from a
+   drag-selection instead of pasting as stray glyphs like "⠿" or "▼ показати всі". */
+.msg .swipe-grip,
+.msg .hover-actions,
+.msg .gift-toggle-arrow,
+.msg .raid-shoutout-btn,
+.msg .art-width-ctl,
+.msg .link-preview-toggle,
+.msg button,
+.msg input {
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* the grip is absolutely positioned at left:0 and used to overlap the first ~4px of text,
+   making the opening characters impossible to grab with the mouse */
+.msg.has-grip {
+  padding-left: 22px;
+}
+.msg.has-grip .swipe-grip {
+  width: 16px;
+}
+
+/* ---- collapsed link previews ---- */
+.lp-wrap {
+  display: block;
+}
+.link-preview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-size: 0.85em;
+  line-height: 1.6;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.link-preview-toggle:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.link-preview-toggle .lpt-label {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

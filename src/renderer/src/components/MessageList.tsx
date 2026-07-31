@@ -23,6 +23,12 @@ export interface JumpEventDetail {
   msgId: string
 }
 
+/** split-mode scroll sync: one pane's wheel delta, replayed by its siblings */
+export interface SyncScrollDetail {
+  fromPaneId: string
+  deltaY: number
+}
+
 export default function MessageList({
   pane,
   account,
@@ -141,14 +147,38 @@ export default function MessageList({
         followingRef.current = false
         setFollowing(false)
       }
+      // scroll-sync: broadcast the wheel delta so sibling panes move by the SAME amount.
+      // Driving it off the wheel (not the scroll event) keeps it user-initiated, so panes
+      // can't echo each other into a feedback loop.
+      if (useUiStore.getState().scrollSync) {
+        window.dispatchEvent(
+          new CustomEvent<SyncScrollDetail>('sticki:syncscroll', {
+            detail: { fromPaneId: pane.id, deltaY: e.deltaY }
+          })
+        )
+      }
+    }
+    // ...and follow someone else's wheel when sync is on
+    const onSync = (ev: Event): void => {
+      const d = (ev as CustomEvent<SyncScrollDetail>).detail
+      if (d.fromPaneId === pane.id || !useUiStore.getState().scrollSync) return
+      const sc = wrapRef.current?.querySelector('[data-virtuoso-scroller="true"]') as HTMLElement | null
+      if (!sc) return
+      if (d.deltaY < 0) {
+        followingRef.current = false
+        setFollowing(false)
+      }
+      sc.scrollTop += d.deltaY
     }
     el?.addEventListener('wheel', onWheel, { passive: true })
+    window.addEventListener('sticki:syncscroll', onSync)
     return () => {
       window.removeEventListener('sticki:grew', rePin)
       window.clearInterval(keepalive)
       el?.removeEventListener('wheel', onWheel)
+      window.removeEventListener('sticki:syncscroll', onSync)
     }
-  }, [scrollLocked])
+  }, [scrollLocked, pane.id])
 
   // estimate the message rate: >3 msgs/sec means gliding cannot keep up — fall back to
   // instant jumps until the flood calms down

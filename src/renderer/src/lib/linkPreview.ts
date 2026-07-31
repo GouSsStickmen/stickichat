@@ -81,6 +81,65 @@ function isFetchableHost(url: string): boolean {
   return h.includes('.')
 }
 
+/**
+ * Sites serve very different HTML to "a browser" than to a bare fetch: YouTube hands an
+ * Electron UA a consent/JS shell with no OpenGraph tags at all, which is why almost nothing
+ * except Twitch clips ever produced a card. Ask like a browser does.
+ */
+const BROWSER_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'uk,en;q=0.9'
+}
+
+function youtubeId(u: URL): string | null {
+  const h = u.hostname.replace(/^www\.|^m\./, '').toLowerCase()
+  if (h === 'youtu.be') return u.pathname.slice(1).split('/')[0] || null
+  if (h !== 'youtube.com' && h !== 'music.youtube.com') return null
+  const v = u.searchParams.get('v')
+  if (v) return v
+  const m = /^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]+)/.exec(u.pathname)
+  return m ? m[1] : null
+}
+
+/**
+ * oEmbed is the reliable path for the big video/social hosts — a small JSON document with a
+ * real title, author and thumbnail, served without consent walls or bot checks.
+ */
+async function oEmbedPreview(url: string): Promise<LinkPreviewData | null> {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return null
+  }
+  const host = u.hostname.replace(/^www\.|^m\./, '').toLowerCase()
+  let endpoint: string | null = null
+  if (youtubeId(u)) endpoint = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`
+  else if (host === 'vimeo.com') endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`
+  else if (host === 'soundcloud.com') endpoint = `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`
+  else if (host === 'reddit.com') endpoint = `https://www.reddit.com/oembed?url=${encodeURIComponent(url)}`
+  else if (host === 'tiktok.com') endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
+  if (!endpoint) return null
+
+  const res = await window.sticki.fetchJson(endpoint, { headers: BROWSER_HEADERS })
+  const j = res.json as { title?: string; author_name?: string; thumbnail_url?: string; provider_name?: string } | null
+  if (!res.ok || !j || (!j.title && !j.thumbnail_url)) return null
+  // YouTube's oEmbed thumbnail is the 480px "hqdefault"; maxres exists for most videos and
+  // looks far better in the hover-zoom, so prefer it and let the <img> fall back on error
+  let image = j.thumbnail_url
+  const yid = youtubeId(u)
+  if (yid) image = `https://i.ytimg.com/vi/${yid}/maxresdefault.jpg`
+  return {
+    kind: 'link',
+    title: j.title,
+    description: j.author_name,
+    image,
+    siteName: j.provider_name ?? host
+  }
+}
+
 async function load(url: string): Promise<LinkPreviewData | null> {
   if (!isFetchableHost(url)) return null
 
@@ -104,7 +163,10 @@ async function load(url: string): Promise<LinkPreviewData | null> {
 
   if (/\.(png|jpe?g|gif|webp|avif)(\?|#|$)/i.test(url)) return { kind: 'image', image: url }
 
-  const res = await window.sticki.fetchJson(url, { headers: { Accept: 'text/html' } })
+  const viaOEmbed = await oEmbedPreview(url).catch(() => null)
+  if (viaOEmbed) return viaOEmbed
+
+  const res = await window.sticki.fetchJson(url, { headers: BROWSER_HEADERS })
   if (!res.ok || typeof res.text !== 'string') return null
   const html = res.text.slice(0, 400_000)
   if (!/<meta|<title/i.test(html)) return null

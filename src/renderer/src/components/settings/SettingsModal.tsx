@@ -38,6 +38,7 @@ import { CHANGELOG } from '../../changelog'
 import { exportConfigJson, importConfigJson } from '../../services/config'
 import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
+import { CHAT_FONT_MAX } from '../../App'
 
 type Section =
   | 'accounts'
@@ -584,13 +585,12 @@ function AppearanceSection(): React.JSX.Element {
       </div>
       <div className="set-row">
         <label>{t('set.fontSize')}</label>
-        <input
-          type="number"
+        <NumberField
           min={10}
-          max={22}
-          style={{ width: 70 }}
+          max={CHAT_FONT_MAX}
+          width={70}
           value={settings.fontSize}
-          onChange={(e) => set({ fontSize: parseInt(e.target.value, 10) || 13 })}
+          onChange={(v) => set({ fontSize: v })}
         />
       </div>
       <div className="set-group-title">{t('set.group.emotes')}</div>
@@ -700,6 +700,12 @@ function ChatSection(): React.JSX.Element {
             hint={t('hint.linkPreviewsClipsOnly')}
             value={settings.linkPreviewsClipsOnly}
             onChange={(v) => set({ linkPreviewsClipsOnly: v })}
+          />
+          <Toggle
+            label={t('set.linkPreviewsExpanded')}
+            hint={t('hint.linkPreviewsExpanded')}
+            value={settings.linkPreviewsExpanded}
+            onChange={(v) => set({ linkPreviewsExpanded: v })}
           />
           <div className="set-row" title={t('hint.linkPreviewScale')}>
             <label className="has-hint">{t('set.linkPreviewScale')}</label>

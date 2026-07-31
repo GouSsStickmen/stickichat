@@ -152,6 +152,9 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
 let brailleCellWidth: number | null = null
 /** inline card under a message that contains a link (clip title+thumb / OG preview) */
 function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
+  const t = useT()
+  const expandDefault = useSettingsStore((s) => s.settings.linkPreviewsExpanded)
+  const [open_, setOpen] = useState(expandDefault)
   const enabled = useSettingsStore((s) => s.settings.linkPreviews)
   const clipsOnly = useSettingsStore((s) => s.settings.linkPreviewsClipsOnly)
   const scale = useSettingsStore((s) => s.settings.linkPreviewScale)
@@ -163,6 +166,7 @@ function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
     return u
   }, [enabled, clipsOnly, text])
   const [data, setData] = useState<LinkPreviewData | null>(null)
+  useEffect(() => setOpen(expandDefault), [expandDefault])
   useEffect(() => {
     let alive = true
     setData(null)
@@ -183,23 +187,90 @@ function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
   const open = (): void => {
     window.sticki.openExternal(url)
   }
+  // hovering the card blows the artwork up next to the cursor — a chat-sized thumbnail is
+  // too small to actually see what was linked
+  const hoverBig = (e: React.MouseEvent): void => {
+    if (!data.image) return
+    useUiStore.getState().setEmotePreview({
+      url: data.image,
+      code: data.title ?? data.siteName ?? url,
+      x: e.clientX,
+      y: e.clientY,
+      wide: true
+    })
+  }
+  const hoverOff = (): void => useUiStore.getState().setEmotePreview(null)
+
+  const label = data.title ?? data.siteName ?? t('misc.linkShort')
+  // collapsed by default: a spammed chat shouldn't turn into a wall of cards. The arrow chip
+  // says what's behind it, one click opens the real preview.
+  if (!open_) {
+    return (
+      <span
+        className="link-preview-toggle"
+        title={label}
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen(true)
+          window.dispatchEvent(new CustomEvent('sticki:grew'))
+        }}
+      >
+        ▸ {data.kind === 'clip' ? '🎬' : '🔗'} <span className="lpt-label">{label}</span>
+      </span>
+    )
+  }
+
+  const collapse = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    setOpen(false)
+    hoverOff()
+  }
   if (data.kind === 'image') {
-    return <img className="lp-image" style={zoomStyle} src={data.image} alt="" loading="lazy" onClick={open} title={url} />
+    return (
+      <span className="lp-wrap">
+        <span className="link-preview-toggle" onClick={collapse} title={t('misc.collapse')}>
+          ▾
+        </span>
+        <img
+          className="lp-image"
+          style={zoomStyle}
+          src={data.image}
+          alt=""
+          loading="lazy"
+          onClick={open}
+          onMouseMove={hoverBig}
+          onMouseLeave={hoverOff}
+          title={url}
+        />
+      </span>
+    )
   }
   return (
-    <div className="lp-card" style={zoomStyle} onClick={open} title={url}>
-      {data.image && <img className="lp-thumb" src={data.image} alt="" loading="lazy" />}
-      <div className="lp-body">
-        {data.siteName && (
-          <div className="lp-site">
-            {data.kind === 'clip' ? '🎬 ' : ''}
-            {data.siteName}
-          </div>
-        )}
-        {data.title && <div className="lp-title">{data.title}</div>}
-        {data.description && <div className="lp-desc">{data.description}</div>}
+    <span className="lp-wrap">
+      <span className="link-preview-toggle" onClick={collapse} title={t('misc.collapse')}>
+        ▾
+      </span>
+      <div
+        className="lp-card"
+        style={zoomStyle}
+        onClick={open}
+        onMouseMove={hoverBig}
+        onMouseLeave={hoverOff}
+        title={url}
+      >
+        {data.image && <img className="lp-thumb" src={data.image} alt="" loading="lazy" />}
+        <div className="lp-body">
+          {data.siteName && (
+            <div className="lp-site">
+              {data.kind === 'clip' ? '🎬 ' : ''}
+              {data.siteName}
+            </div>
+          )}
+          {data.title && <div className="lp-title">{data.title}</div>}
+          {data.description && <div className="lp-desc">{data.description}</div>}
+        </div>
       </div>
-    </div>
+    </span>
   )
 }
 
@@ -449,6 +520,9 @@ function MessageViewInner({
     })
   // still swipeable after a delete — you often delete first, then decide to time out too
   const swipeEnabled = isMod && canAct
+  // the grip is absolutely positioned over the row's left edge — give it its own gutter so
+  // dragging a selection across the first characters isn't intercepted by it
+  if (swipeEnabled) classes.push('has-grip')
   const swipeTiers = settings.swipeTimeouts.length ? settings.swipeTimeouts : [60, 300, 600, 1800, 3600, 86400]
   // braille "ASCII art" is drawn for a fixed line width — never rewrap it
   const brailleArt = (msg.text.match(/[⠀-⣿]/g)?.length ?? 0) >= 24
@@ -631,7 +705,9 @@ function MessageViewInner({
           </span>
         )}
         {settings.showTimestamps && (
-          <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>
+          <>
+            <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>{' '}
+          </>
         )}
         {msg.badges.map((b) => {
           const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
@@ -642,7 +718,8 @@ function MessageViewInner({
               key={`${b.setId}/${b.version}`}
               className="badge"
               src={url}
-              alt={b.setId}
+              alt=""
+              title={title}
               draggable={false}
               onMouseEnter={(e) =>
                 useUiStore.getState().setEmotePreview({

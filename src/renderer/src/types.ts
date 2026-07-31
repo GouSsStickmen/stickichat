@@ -952,6 +952,8 @@ export interface Settings {
   linkDisplay: 'full' | 'short' | 'overlayShort'
   /** link preview cards only for Twitch clip links */
   linkPreviewsClipsOnly: boolean
+  /** show link preview cards already expanded (default: collapsed behind an arrow chip) */
+  linkPreviewsExpanded: boolean
   /** preview card scale, % (100 = normal) */
   linkPreviewScale: number
   /** account picker next to the input: full name select or a compact avatar button */
@@ -1135,6 +1137,7 @@ export const DEFAULT_SETTINGS: Settings = {
   linkPreviews: true,
   linkDisplay: 'full',
   linkPreviewsClipsOnly: false,
+  linkPreviewsExpanded: false,
   linkPreviewScale: 100,
   inputAccountDisplay: 'name',
   smoothChatScroll: false,

@@ -1460,7 +1460,10 @@ const OVERLAY_HTML = `<!doctype html>
     if (!restyling && d.kind === 'msg' && d.text && cfg.triggers && cfg.triggers.length) {
       var tl = String(d.text).toLowerCase()
       var nickl = String(d.login || d.nick || '').toLowerCase()
-      for (var ti = 0; ti < cfg.triggers.length; ti++) {
+      // ONE reaction per message: the first trigger in the list that matches wins, so two
+      // rules hitting the same message can't fire on top of each other. List order = priority.
+      var fired = false
+      for (var ti = 0; ti < cfg.triggers.length && !fired; ti++) {
         var tg = cfg.triggers[ti]
         if (!tg.word || !tg.image) continue
         // one trigger can hold MANY words/phrases/nicks — one per line
@@ -1473,6 +1476,7 @@ const OVERLAY_HTML = `<!doctype html>
           var asNick = w.replace(/^@/, '')
           if (tl.indexOf(w) !== -1 || (asNick && nickl === asNick)) {
             spawnTrigger(tg, el.querySelector(':scope > .cwrap'))
+            fired = true
             break
           }
         }

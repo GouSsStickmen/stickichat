@@ -1,4 +1,5 @@
 import { ChatMessage, Emote } from '../types'
+import { useSettingsStore } from '../store/settings'
 
 export type Token =
   | { kind: 'text'; text: string }
@@ -234,9 +235,24 @@ export function hexToRgba(hex: string, opacity: number): string {
   return `rgba(${(n >> 16) & 0xff},${(n >> 8) & 0xff},${n & 0xff},${Math.max(0, Math.min(1, opacity))})`
 }
 
+/**
+ * Exact, localized duration. The old version rounded to a single unit, so a 90s timeout read
+ * as "2m" and 1h30m read as "2h" — plain wrong for a moderation line the streamer reads to
+ * know how long someone is muted. Now every non-zero unit is kept, largest two shown.
+ */
 export function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m`
-  if (seconds < 86400) return `${Math.round(seconds / 3600)}h`
-  return `${Math.round(seconds / 86400)}d`
+  const secs = Math.max(0, Math.round(seconds))
+  const lang = useSettingsStore.getState().settings.language
+  const u = lang === 'uk' ? { d: 'д', h: 'год', m: 'хв', s: 'с' } : { d: 'd', h: 'h', m: 'm', s: 's' }
+  const d = Math.floor(secs / 86400)
+  const h = Math.floor((secs % 86400) / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const sec = secs % 60
+  const parts: string[] = []
+  if (d) parts.push(`${d}${u.d}`)
+  if (h) parts.push(`${h}${u.h}`)
+  if (m) parts.push(`${m}${u.m}`)
+  if (sec || !parts.length) parts.push(`${sec}${u.s}`)
+  // two units is enough precision to be useful without turning into "1д 2год 3хв 4с"
+  return parts.slice(0, 2).join(' ')
 }
