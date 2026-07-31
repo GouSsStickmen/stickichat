@@ -137,6 +137,8 @@ export const en = {
   'set.pickerDefaultTab': 'Open emote picker on tab',
   'set.messageSpacing': 'Space between messages (px)',
   'set.caseSensitiveNicks': 'Case-sensitive nickname matching',
+  'set.thirdPartyBadges': '7TV and BetterTTV badges',
+  'hint.thirdPartyBadges': 'Show 7TV and BetterTTV badges next to the Twitch ones. BetterTTV has no nick-color API — animated nicks only come from 7TV.',
   'set.sevenTvColors': '7TV nickname colors',
   'set.charCounter': 'Show character counter (500 limit)',
   'set.emotePickerAsWindow': 'Open emote picker as a separate window',

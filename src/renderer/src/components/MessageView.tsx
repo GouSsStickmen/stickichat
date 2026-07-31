@@ -17,6 +17,7 @@ import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
 import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
+import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
 import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
 import { getSourceChannelInfo } from '../lib/sourceChannels'
 
@@ -408,12 +409,19 @@ function MessageViewInner({
   }, [msg, emoteVersion, settings.theme])
 
   // optional 7TV cosmetic nick color/paint: subscribe so the nick restyles when the fetch lands
+  const stvWanted = settings.sevenTvNickColors || settings.showThirdPartyBadges
   const stvCosmetic = useSevenTvColors((s) =>
-    settings.sevenTvNickColors && msg.userId ? s.cosmetics[msg.userId] : undefined
+    stvWanted && msg.userId ? s.cosmetics[msg.userId] : undefined
   )
   useEffect(() => {
-    if (settings.sevenTvNickColors && !msg.system) ensureSevenTvCosmetic(msg.userId)
-  }, [settings.sevenTvNickColors, msg.userId, msg.system])
+    if (stvWanted && !msg.system) ensureSevenTvCosmetic(msg.userId)
+  }, [stvWanted, msg.userId, msg.system])
+
+  // BTTV badges: one roster for everyone, so this is a lookup rather than a per-user fetch
+  const bttvBadge = useBttvBadges((s) => (msg.userId ? s.badges[msg.userId] : undefined))
+  useEffect(() => {
+    if (settings.showThirdPartyBadges) ensureBttvBadges()
+  }, [settings.showThirdPartyBadges])
 
   const isMention = settings.highlightMentions && !!msg.isMention
 
@@ -479,14 +487,20 @@ function MessageViewInner({
     stvCosmetic?.color || stvCosmetic?.paintColor || msg.color || fallbackColor(msg.login),
     dark
   )
-  // a 7TV gradient/image paint renders as the nick's own text fill (clipped background)
-  const paintStyle: React.CSSProperties | undefined = stvCosmetic?.paint
+  // a 7TV gradient/image paint renders as the nick's own text fill (clipped background).
+  // size/repeat matter for URL paints (a bare tile covered a corner of the nick) and the
+  // shadow chain is a big part of how a paint actually looks on 7TV.
+  const paintStyle: React.CSSProperties | undefined =
+    settings.sevenTvNickColors && stvCosmetic?.paint
     ? {
         background: stvCosmetic.paint,
+        backgroundSize: stvCosmetic.paintSize,
+        backgroundRepeat: stvCosmetic.paintRepeat,
         backgroundClip: 'text',
         WebkitBackgroundClip: 'text',
         color: 'transparent',
-        WebkitTextFillColor: 'transparent'
+        WebkitTextFillColor: 'transparent',
+        filter: stvCosmetic.paintShadow
       }
     : undefined
   const classes = ['msg']
@@ -733,6 +747,25 @@ function MessageViewInner({
             />
           )
         })}
+        {/* third-party badges sit after the Twitch ones, same as on 7TV/BTTV themselves */}
+        {settings.showThirdPartyBadges && stvCosmetic?.badgeUrl && (
+          <img
+            className="badge badge-3p"
+            src={stvCosmetic.badgeUrl}
+            alt=""
+            draggable={false}
+            title={stvCosmetic.badgeTooltip ?? '7TV'}
+          />
+        )}
+        {settings.showThirdPartyBadges && bttvBadge && (
+          <img
+            className="badge badge-3p"
+            src={bttvBadge.url}
+            alt=""
+            draggable={false}
+            title={bttvBadge.description}
+          />
+        )}
         <span
           className="nick"
           style={paintStyle ?? { color }}

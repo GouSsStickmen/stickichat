@@ -882,6 +882,8 @@ export interface Settings {
   caseSensitiveNicks: boolean
   /** use a user's 7TV cosmetic nick color when they have one */
   sevenTvNickColors: boolean
+  /** show 7TV / BetterTTV badges next to the Twitch ones */
+  showThirdPartyBadges: boolean
   /** independent zoom for the tab bar (1 = default) */
   tabScale: number
   /** filter tabs by live status: all · only live · only offline */
@@ -1086,6 +1088,7 @@ export const DEFAULT_SETTINGS: Settings = {
   messageSpacing: 3,
   caseSensitiveNicks: false,
   sevenTvNickColors: true,
+  showThirdPartyBadges: true,
   tabScale: 1,
   tabFilter: 'all',
   alwaysOnTop: false,

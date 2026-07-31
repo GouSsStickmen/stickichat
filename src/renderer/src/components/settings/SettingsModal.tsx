@@ -773,6 +773,7 @@ function ChatSection(): React.JSX.Element {
       )}
       <Toggle label={t('set.caseSensitiveNicks')} hint={t('hint.caseSensitiveNicks')} value={settings.caseSensitiveNicks} onChange={(v) => set({ caseSensitiveNicks: v })} />
       <Toggle label={t('set.sevenTvColors')} hint={t('hint.sevenTvColors')} value={settings.sevenTvNickColors} onChange={(v) => set({ sevenTvNickColors: v })} />
+      <Toggle label={t('set.thirdPartyBadges')} hint={t('hint.thirdPartyBadges')} value={settings.showThirdPartyBadges} onChange={(v) => set({ showThirdPartyBadges: v })} />
       <div className="set-group-title">{t('highlights.title')}</div>
       <Toggle
         label={t('set.highlightSidebar')}

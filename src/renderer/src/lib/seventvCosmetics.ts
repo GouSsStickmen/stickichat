@@ -12,8 +12,16 @@ interface Cosmetic {
   color?: string
   /** a CSS `background` value for a gradient/image paint, clipped to the text */
   paint?: string
+  /** `background-size` / `background-repeat` that go with `paint` (URL paints need them) */
+  paintSize?: string
+  paintRepeat?: string
+  /** a CSS `filter` chain reproducing the paint's drop shadows */
+  paintShadow?: string
   /** a representative flat color for the paint (used where gradient text can't render) */
   paintColor?: string
+  /** 7TV badge image + tooltip, shown next to the Twitch badges */
+  badgeUrl?: string
+  badgeTooltip?: string
 }
 
 interface SevenTvState {
@@ -21,7 +29,9 @@ interface SevenTvState {
   setCosmetic: (id: string, c: Cosmetic) => void
 }
 
-const CACHE_KEY = 'sticki:stvCosmetics:v1'
+// v2: the paint CSS builder changed (repeat/shadows/sizing + badges), so old
+// entries would keep rendering the broken look forever
+const CACHE_KEY = 'sticki:stvCosmetics:v2'
 
 function loadCache(): Record<string, Cosmetic> {
   try {
@@ -74,40 +84,99 @@ interface Paint {
   image_url?: string
   repeat?: boolean
   stops?: { at: number; color: number }[]
+  shadows?: { x_offset: number; y_offset: number; radius: number; color: number }[]
 }
 
-/** turn a 7TV paint definition into a CSS `background` value (clipped to text at the call site) */
-function paintToCss(paint: Paint): string | undefined {
-  const stops = (paint.stops ?? []).map((s) => `${intToRgba(s.color)} ${Math.round(s.at * 100)}%`)
+interface PaintCss {
+  background: string
+  size?: string
+  repeat?: string
+  shadow?: string
+}
+
+/**
+ * Turn a 7TV paint definition into CSS (clipped to the nick text at the call site).
+ *
+ * Two things used to be dropped on the floor and made paints render wrong:
+ *  - `repeat: true` means a REPEATING gradient (e.g. "Candy Cane" defines one stripe cycle
+ *    over 0…0.3 and tiles it). Rendered as a plain gradient, that cycle was stretched across
+ *    the whole nick — the wrong picture entirely, and 619 of ~1000 paints are gradients.
+ *  - URL paints ship a small tile with no sizing, so it covered a corner of the nick instead
+ *    of the text; they also need an explicit no-repeat and the highest-res layer available.
+ */
+function paintToCss(paint: Paint): PaintCss | undefined {
+  const shadow = (paint.shadows ?? [])
+    .map((sh) => `drop-shadow(${sh.x_offset}px ${sh.y_offset}px ${sh.radius}px ${intToRgba(sh.color)})`)
+    .join(' ')
+
   if (paint.function === 'URL' && paint.image_url) {
-    return `url('${paint.image_url}')`
+    // 7TV hands out the 1x layer; the same path serves 2x/3x/4x — take the sharpest
+    const url = paint.image_url.replace(/\/1x\.(webp|png|gif|avif)$/i, '/4x.$1')
+    return {
+      background: `url('${url}')`,
+      size: paint.repeat ? 'auto' : '100% 100%',
+      repeat: paint.repeat ? 'repeat' : 'no-repeat',
+      shadow: shadow || undefined
+    }
   }
+
+  const stops = (paint.stops ?? []).map((s) => `${intToRgba(s.color)} ${(s.at * 100).toFixed(2)}%`)
   if (stops.length === 0) return undefined
+  const rep = paint.repeat ? 'repeating-' : ''
   if (paint.function === 'RADIAL_GRADIENT') {
-    return `radial-gradient(${paint.shape === 'circle' ? 'circle' : 'ellipse'}, ${stops.join(', ')})`
+    return {
+      background: `${rep}radial-gradient(${paint.shape === 'circle' ? 'circle' : 'ellipse'}, ${stops.join(', ')})`,
+      shadow: shadow || undefined
+    }
   }
-  // default: linear gradient
   const angle = typeof paint.angle === 'number' ? paint.angle : 90
-  return `linear-gradient(${angle}deg, ${stops.join(', ')})`
+  return {
+    background: `${rep}linear-gradient(${angle}deg, ${stops.join(', ')})`,
+    shadow: shadow || undefined
+  }
 }
 
-// v3 GQL to resolve a user's paint definition (the REST endpoint only gives the paint id)
-async function fetchPaint(sevenTvUserId: string): Promise<Paint | null> {
+interface StvBadge {
+  id?: string
+  name?: string
+  tooltip?: string
+  host?: { url?: string; files?: { name?: string }[] }
+}
+
+/**
+ * v3 GQL resolves the user's paint AND badge (the REST endpoint only hands back ids).
+ * `shadows` is fetched too — most paints define them and they carry a lot of the look.
+ */
+async function fetchStyle(sevenTvUserId: string): Promise<{ paint: Paint | null; badge: StvBadge | null }> {
   try {
     const res = await window.sticki.fetchJson('https://7tv.io/v3/gql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query:
-          'query($id:ObjectID!){user(id:$id){style{paint{function color angle shape image_url repeat stops{at color}}}}}',
+          'query($id:ObjectID!){user(id:$id){style{paint{function color angle shape image_url repeat stops{at color} shadows{x_offset y_offset radius color}} badge{id name tooltip host{url files{name}}}}}}',
         variables: { id: sevenTvUserId }
       })
     })
-    const j = res.json as { data?: { user?: { style?: { paint?: Paint | null } } } }
-    return j?.data?.user?.style?.paint ?? null
+    const j = res.json as {
+      data?: { user?: { style?: { paint?: Paint | null; badge?: StvBadge | null } } }
+    }
+    const style = j?.data?.user?.style
+    return { paint: style?.paint ?? null, badge: style?.badge ?? null }
   } catch {
-    return null
+    return { paint: null, badge: null }
   }
+}
+
+/** pick the sharpest file the badge host offers (4x → 1x) and make the // URL absolute */
+function badgeImage(badge: StvBadge | null): string | undefined {
+  const host = badge?.host
+  if (!host?.url) return undefined
+  const names = (host.files ?? []).map((f) => f.name).filter((n): n is string => !!n)
+  const best =
+    ['4x.webp', '3x.webp', '2x.webp', '1x.webp'].find((n) => names.includes(n)) ?? names[names.length - 1] ?? '3x.webp'
+  const base = host.url.startsWith('//') ? `https:${host.url}` : host.url
+  return `${base}/${best}`
 }
 
 /** does the actual REST (+GQL) fetch once, caches the result, and resolves with the cosmetic */
@@ -122,19 +191,25 @@ function fetchCosmetic(twitchId: string): Promise<Cosmetic | undefined> {
     .fetchJson(`https://7tv.io/v3/users/twitch/${twitchId}`)
     .then(async (res) => {
       const j = res.json as {
-        user?: { id?: string; style?: { color?: number; paint_id?: string | null } }
+        user?: { id?: string; style?: { color?: number; paint_id?: string | null; badge_id?: string | null } }
       } | null
       const style = j?.user?.style
       const color = style?.color && style.color !== 0 ? intToHex(style.color) : undefined
       let cosmetic: Cosmetic | undefined
-      if (style?.paint_id && j?.user?.id) {
-        const paint = await fetchPaint(j.user.id)
-        if (paint) {
-          const css = paintToCss(paint)
+      if ((style?.paint_id || style?.badge_id) && j?.user?.id) {
+        const { paint, badge } = await fetchStyle(j.user.id)
+        const css = paint ? paintToCss(paint) : undefined
+        const badgeUrl = badgeImage(badge)
+        if (css || badgeUrl) {
           cosmetic = {
             color,
-            paint: css,
-            paintColor: paint.color ? intToHex(paint.color) : (color ?? undefined)
+            paint: css?.background,
+            paintSize: css?.size,
+            paintRepeat: css?.repeat,
+            paintShadow: css?.shadow,
+            paintColor: paint?.color ? intToHex(paint.color) : (color ?? undefined),
+            badgeUrl,
+            badgeTooltip: badge?.tooltip ?? badge?.name ?? undefined
           }
         }
       }

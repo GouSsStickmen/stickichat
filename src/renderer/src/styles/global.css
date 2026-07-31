@@ -3493,3 +3493,10 @@ input[type='number']::-webkit-inner-spin-button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 7TV / BetterTTV badges: same box as a Twitch badge, but SVG/webp artwork with its own
+   aspect ratio — let the width follow the art instead of forcing a square */
+.badge.badge-3p {
+  width: auto;
+  object-fit: contain;
+}

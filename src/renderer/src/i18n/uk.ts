@@ -139,6 +139,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.pickerDefaultTab': 'Вікно емоутів відкривати з вкладки',
   'set.messageSpacing': 'Відстань між повідомленнями (px)',
   'set.caseSensitiveNicks': 'Враховувати регістр нікнейма',
+  'set.thirdPartyBadges': 'Бейджі 7TV і BetterTTV',
+  'hint.thirdPartyBadges': 'Показувати бейджі 7TV та BetterTTV поруч із твічівськими. BetterTTV не має API кольорів ніка — анімовані ніки бувають лише з 7TV.',
   'set.sevenTvColors': 'Кольори ніків з 7TV',
   'set.charCounter': 'Показувати лічильник символів (ліміт 500)',
   'set.emotePickerAsWindow': 'Відкривати вікно емоутів окремим вікном',
