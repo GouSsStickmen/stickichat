@@ -700,11 +700,12 @@ select:focus {
 }
 .msg .emote-wrap img {
   grid-area: 1 / 1;
-  height: calc(24px * var(--emote-scale));
+  /* 1.85em == the old 24px at the default 13px text, but now it tracks the chat zoom */
+  height: calc(1.85em * var(--emote-scale));
   max-width: none;
   /* reserve at least a square before the image loads, so text doesn't reflow (and jolt the
      scroll) when a not-yet-loaded emote pops from 0 width to its real width */
-  min-width: calc(24px * var(--emote-scale));
+  min-width: calc(1.85em * var(--emote-scale));
 }
 
 /* ---------- Bits power-ups (Twitch-style) ---------- */
@@ -713,7 +714,7 @@ select:focus {
   margin: 2px 0;
 }
 .msg.gigantified .emote-wrap img {
-  height: calc(96px * var(--emote-scale));
+  height: calc(7.4em * var(--emote-scale));
 }
 /* Message Effect: animated tinted background behind the whole line. A generic shimmer
    covers every effect id; a couple of the named ones get their own gradient. */
@@ -3561,4 +3562,52 @@ input[type='number']::-webkit-inner-spin-button {
   padding: 0;
   background: none;
   vertical-align: -3px;
+}
+
+/* ---- layered emotes: same "this is a layer" frame everywhere it can appear ---- */
+/* a combination rendered in chat / in favorites gets the accent frame so it reads as a stack
+   rather than as one odd-looking emote */
+.emote-wrap.is-combo {
+  outline: 1px solid var(--accent-strong);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.emote-wrap.is-layer {
+  outline: 1px dashed var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+/* the codes behind a rendered emote, so a copied selection contains real text with real
+   spaces instead of a run of glued-together alt attributes */
+.emote-copy-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* saved combination in the picker preview: layers centred over the base */
+.picker-preview-stack {
+  position: relative;
+  display: inline-grid;
+  justify-items: center;
+  align-items: center;
+}
+.picker-preview-stack img {
+  grid-area: 1 / 1;
+  object-fit: contain;
+}
+/* link artwork blown up on hover: the image and nothing else — no padding, no caption box */
+.emote-hover-preview.wide {
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  line-height: 0;
+}
+.emote-hover-preview.wide img {
+  display: block;
+  border-radius: 6px;
 }

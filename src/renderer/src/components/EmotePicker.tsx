@@ -530,11 +530,24 @@ export default function EmotePicker({
               <span style={{ fontSize: previewSize * 0.72, lineHeight: 1 }}>
                 <EmojiGlyph char={preview.code} className="emoji-preview-glyph" />
               </span>
+            ) : 'overlays' in preview && preview.overlays && preview.overlays.length ? (
+              // a saved combination previews AS THE FINISHED STACK — seeing only the base
+              // emote tells you nothing about what you're about to send
+              <span className="picker-preview-stack" style={{ height: previewSize, width: previewSize }}>
+                <img src={preview.url} alt="" style={{ height: previewSize }} />
+                {preview.overlays.map((o, i) => (
+                  <img key={i} src={o.url} alt="" style={{ height: previewSize }} />
+                ))}
+              </span>
             ) : (
               <img src={preview.url} alt={preview.code} style={{ height: previewSize }} />
             )}
             <div className="picker-preview-name">
-              {preview.provider === 'emoji' ? emojiLabel(preview.code, emojiNameLang) : preview.code}
+              {preview.provider === 'emoji'
+                ? emojiLabel(preview.code, emojiNameLang)
+                : 'overlays' in preview && preview.overlays && preview.overlays.length
+                  ? [preview.code, ...preview.overlays.map((o) => o.code)].join(' + ')
+                  : preview.code}
             </div>
           </>
         ) : (

@@ -167,6 +167,9 @@ async function load(url: string): Promise<LinkPreviewData | null> {
   if (viaOEmbed) return viaOEmbed
 
   const res = await window.sticki.fetchJson(url, { headers: BROWSER_HEADERS })
+  // image hosts like kappa.lol serve the picture straight off an extension-less URL, so the
+  // path tells us nothing — the Content-Type does
+  if (/^image\//i.test(res.contentType ?? '')) return { kind: 'image', image: url }
   if (!res.ok || typeof res.text !== 'string') return null
   const html = res.text.slice(0, 400_000)
   if (!/<meta|<title/i.test(html)) return null

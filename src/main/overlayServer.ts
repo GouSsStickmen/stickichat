@@ -238,8 +238,11 @@ const OVERLAY_HTML = `<!doctype html>
   .sysline { font-style: italic; opacity: 0.9; }
   .body img.emote { height: var(--emote-h, 1.4em); vertical-align: -0.3em; margin: 0 1px; }
   /* layered ("combo") emotes: the zero-width layers sit centred on the base one */
-  .body .emote-stack { position: relative; display: inline-block; }
-  .body .emote-stack img.emote-ov { position: absolute; left: 0; top: 0; margin: 0; }
+  /* layers are CENTRED on the base emote — pinned to the top-left, a wider layer hangs off
+     the side and the whole stack looks shifted */
+  .body .emote-stack { position: relative; display: inline-grid; justify-items: center; align-items: center; vertical-align: -0.3em; }
+  .body .emote-stack img.emote { grid-area: 1 / 1; vertical-align: baseline; margin: 0; }
+  .body .emote-stack img.emote-ov { pointer-events: none; }
   .body img.emoji-img { height: 1.25em; width: 1.25em; object-fit: contain; vertical-align: -0.25em; margin: 0 1px; }
   .decor { position: absolute; pointer-events: none; }
   /* custom plate image as its own layer (opacity independent of text) */
@@ -1463,27 +1466,30 @@ const OVERLAY_HTML = `<!doctype html>
     if (!restyling && d.kind === 'msg' && d.text && cfg.triggers && cfg.triggers.length) {
       var tl = String(d.text).toLowerCase()
       var nickl = String(d.login || d.nick || '').toLowerCase()
-      // ONE reaction per message: the first trigger in the list that matches wins, so two
-      // rules hitting the same message can't fire on top of each other. List order = priority.
-      var fired = false
-      for (var ti = 0; ti < cfg.triggers.length && !fired; ti++) {
+      // ONE reaction per message, and the winner is decided by the MESSAGE, not by the order
+      // the triggers were added: whichever trigger word appears EARLIEST in the text fires.
+      // With rules on "!" and "?", "привіт? ок!" fires "?" while "ок! так?" fires "!".
+      // A nick match sorts before everything (the nick precedes the text); ties keep list order.
+      var best = null, bestAt = Infinity
+      for (var ti = 0; ti < cfg.triggers.length; ti++) {
         var tg = cfg.triggers[ti]
         if (!tg.word || !tg.image) continue
         // one trigger can hold MANY words/phrases/nicks — one per line
         // NB: this whole page lives in a TS template literal — regex escapes like \\n get
         // mangled there, so split on the raw newline char code instead
         var words = String(tg.word).split(String.fromCharCode(10))
+        var at = Infinity
         for (var wi = 0; wi < words.length; wi++) {
           var w = words[wi].trim().toLowerCase()
           if (!w) continue
           var asNick = w.replace(/^@/, '')
-          if (tl.indexOf(w) !== -1 || (asNick && nickl === asNick)) {
-            spawnTrigger(tg, el.querySelector(':scope > .cwrap'))
-            fired = true
-            break
-          }
+          if (asNick && nickl === asNick) { at = -1; break }
+          var idx = tl.indexOf(w)
+          if (idx !== -1 && idx < at) at = idx
         }
+        if (at < bestAt) { bestAt = at; best = tg }
       }
+      if (best) spawnTrigger(best, el.querySelector(':scope > .cwrap'))
     }
     scheduleFit()
   }

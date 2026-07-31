@@ -13,6 +13,8 @@ interface EmotesState {
   twitchByAccount: Record<string, TwitchUserEmote[]>
   /** twitch user id -> display name, for labeling emote groups by channel */
   ownerNames: Record<string, string>
+  /** twitch user id -> login, used to build the channel URL when an emote is clicked */
+  ownerLogins: Record<string, string>
   /** twitch user id -> avatar url, for the emote-picker owner rail */
   ownerAvatars: Record<string, string>
   globalBadges: BadgeMap
@@ -25,6 +27,7 @@ interface EmotesState {
   setChannelEmotes: (channel: string, m: EmoteMap) => void
   setTwitchEmotes: (accountId: string, list: TwitchUserEmote[]) => void
   setOwnerNames: (names: Record<string, string>) => void
+  setOwnerLogins: (logins: Record<string, string>) => void
   setOwnerAvatars: (avatars: Record<string, string>) => void
   setGlobalBadges: (b: BadgeMap) => void
   setChannelBadges: (channel: string, b: BadgeMap) => void
@@ -36,6 +39,7 @@ export const useEmotesStore = create<EmotesState>()((set) => ({
   channelEmotes: {},
   twitchByAccount: {},
   ownerNames: {},
+  ownerLogins: {},
   ownerAvatars: {},
   globalBadges: {},
   channelBadges: {},
@@ -54,6 +58,8 @@ export const useEmotesStore = create<EmotesState>()((set) => ({
     })),
   setOwnerNames: (names) =>
     set((s) => ({ ownerNames: { ...s.ownerNames, ...names }, version: s.version + 1 })),
+  setOwnerLogins: (logins) =>
+    set((s) => ({ ownerLogins: { ...s.ownerLogins, ...logins }, version: s.version + 1 })),
   setOwnerAvatars: (avatars) =>
     set((s) => ({ ownerAvatars: { ...s.ownerAvatars, ...avatars }, version: s.version + 1 })),
   setGlobalBadges: (b) => set((s) => ({ globalBadges: b, version: s.version + 1 })),
@@ -115,4 +121,21 @@ export function lookupBadge4x(channel: string, setId: string, version: string): 
   const st = useEmotesStore.getState()
   const key = `${setId}/${version}:4x`
   return st.channelBadges[channel]?.[key] ?? st.globalBadges[key]
+}
+
+/**
+ * Owner of a TWITCH emote, resolved by code across every account's emote list. Twitch gives
+ * no public per-emote page, so a click opens the owning channel instead — for that we need
+ * the owner's login, which only the user-emotes payload carries.
+ */
+export function lookupTwitchEmoteOwner(code: string): { login?: string; name?: string } | undefined {
+  const st = useEmotesStore.getState()
+  for (const list of Object.values(st.twitchByAccount)) {
+    for (const e of list) {
+      if (e.code === code && e.ownerId && e.ownerId !== '0') {
+        return { login: st.ownerLogins[e.ownerId], name: st.ownerNames[e.ownerId] }
+      }
+    }
+  }
+  return undefined
 }

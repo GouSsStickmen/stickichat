@@ -418,6 +418,12 @@ export function registerIpc(): void {
           headers: options?.headers,
           body: options?.body
         })
+        const contentType = res.headers.get('content-type') ?? ''
+        // binary payloads (an image behind an extension-less URL, say) have nothing useful to
+        // read as text — hand back the type alone so the caller can react to it
+        if (/^(image|video|audio|application\/(octet-stream|pdf|zip))/i.test(contentType)) {
+          return { ok: res.ok, status: res.status, json: null, text: '', contentType }
+        }
         const text = await res.text()
         let json: unknown = null
         try {
@@ -425,9 +431,9 @@ export function registerIpc(): void {
         } catch {
           /* not json */
         }
-        return { ok: res.ok, status: res.status, json, text }
+        return { ok: res.ok, status: res.status, json, text, contentType }
       } catch (err) {
-        return { ok: false, status: 0, json: null, text: String(err) }
+        return { ok: false, status: 0, json: null, text: String(err), contentType: '' }
       }
     }
   )

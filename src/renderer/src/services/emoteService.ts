@@ -212,15 +212,18 @@ export async function loadEmoteOwnerNames(account: Account, ids: string[]): Prom
   try {
     const names: Record<string, string> = {}
     const avatars: Record<string, string> = {}
+    const logins: Record<string, string> = {}
     for (let i = 0; i < missing.length; i += 100) {
       const batch = missing.slice(i, i + 100)
       const users = await getUsers(account, { ids: batch })
       for (const u of users) {
         names[u.id] = u.display_name
+        logins[u.id] = u.login
         if (u.profile_image_url) avatars[u.id] = u.profile_image_url
       }
     }
     useEmotesStore.getState().setOwnerNames(names)
+    useEmotesStore.getState().setOwnerLogins(logins)
     useEmotesStore.getState().setOwnerAvatars(avatars)
   } finally {
     missing.forEach((id) => ownerNamesLoading.delete(id))

@@ -5,7 +5,7 @@ export type Token =
   | { kind: 'text'; text: string }
   | { kind: 'emote'; emote: Emote; overlays: Emote[] }
   | { kind: 'link'; url: string; label: string }
-  | { kind: 'mention'; name: string; color: string }
+  | { kind: 'mention'; name: string; color: string; bare?: boolean }
   | { kind: 'emoji'; char: string }
   /** a "!command" at the very start of the message — right-click inserts it into the input */
   | { kind: 'command'; text: string }
@@ -174,7 +174,7 @@ export function tokenizeMessage(
         const login = piece.replace(/[^\w]+$/, '').toLowerCase()
         if (login.length >= 3 && !/^\d+$/.test(login) && knownChatter(login)) {
           const raw = (mentionColorLookup?.(login)) || fallbackColor(login)
-          tokens.push({ kind: 'mention', name: piece, color: ensureReadable(raw, dark) })
+          tokens.push({ kind: 'mention', name: piece, color: ensureReadable(raw, dark), bare: true })
           continue
         }
       }

@@ -64,7 +64,7 @@ const api = {
   fetchJson: (
     url: string,
     options?: { method?: string; headers?: Record<string, string>; body?: string }
-  ): Promise<{ ok: boolean; status: number; json: unknown; text: string }> =>
+  ): Promise<{ ok: boolean; status: number; json: unknown; text: string; contentType: string }> =>
     ipcRenderer.invoke('net:fetch', url, options)
 }
 

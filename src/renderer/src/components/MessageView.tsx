@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Account, ChatMessage, MOD_ONLY_TYPES, Settings } from '../types'
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration, hiResEmoteUrl } from '../lib/tokenize'
 import { emotePageUrl } from '../lib/emoteProviders'
-import { lookupBadgeUrl, lookupBadgeTitle, lookupBadge4x, lookupEmote, lookupCheermote } from '../store/emotes'
+import { lookupBadgeUrl, lookupBadgeTitle, lookupBadge4x, lookupEmote, lookupCheermote, lookupTwitchEmoteOwner } from '../store/emotes'
 import { lookupUserColor, isKnownChatter, useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { highlightRuleMatches } from '../lib/highlight'
@@ -95,7 +95,7 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
         <span
           className="mention-token"
           style={{ color: token.color }}
-          title={`${login} — ${t('msg.nickHint')}`}
+          title={`${login} — ${t(token.bare ? 'msg.nickHintBare' : 'msg.nickHint')}`}
           onClick={(e) => {
             window.dispatchEvent(
               new CustomEvent('sticki:opencard', {
@@ -103,7 +103,14 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
               })
             )
           }}
-          onContextMenu={tokenContextHandler(paneId, `@${login} `)}
+          onContextMenu={
+            token.bare
+              ? (e) => {
+                  e.preventDefault()
+                  void navigator.clipboard.writeText(login)
+                }
+              : tokenContextHandler(paneId, `@${login} `)
+          }
         >
           {token.name}
         </span>
@@ -112,12 +119,19 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
     case 'emote': {
       // Chatterino-style tooltip: the base emote, then each layer stacked on top of it, every
       // line naming its provider and (7TV/FFZ) the person who made it
+      // Twitch has no per-emote page, but it does have the OWNING CHANNEL — resolve it from
+      // the account's emote list so a click can go there like it does on Twitch itself
+      const twOwner = token.emote.provider === 'twitch' ? lookupTwitchEmoteOwner(token.emote.code) : undefined
+      const ownerLogin = token.emote.ownerLogin ?? twOwner?.login
+      const ownerName = token.emote.ownerName ?? twOwner?.name
       const describe = (e: typeof token.emote): string =>
-        `${e.code} — ${e.provider.toUpperCase()}${e.ownerName ? ` · ${e.ownerName}` : ''}`
+        `${e.code} — ${e.provider.toUpperCase()}${
+          (e === token.emote ? ownerName : e.ownerName) ? ` · ${e === token.emote ? ownerName : e.ownerName}` : ''
+        }`
       const title = [
         describe(token.emote),
         ...token.overlays.map((o) => `${t('msg.overlayLayer')}: ${describe(o)}`),
-        emotePageUrl(token.emote) ? t('msg.emoteOpenHint') : '',
+        emotePageUrl(token.emote) ? t('msg.emoteOpenHint') : ownerLogin ? t('msg.emoteChannelHint') : '',
         t('msg.emoteFavHint')
       ]
         .filter(Boolean)
@@ -146,16 +160,20 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
           )
           return
         }
-        // Ctrl+click goes to the owner's Twitch channel instead of the emote page
-        if (e.ctrlKey && token.emote.ownerLogin) {
-          window.sticki.openExternal(`https://twitch.tv/${token.emote.ownerLogin}`)
+        // Ctrl+click goes to the owner's Twitch channel instead of the emote page.
+        // Twitch emotes have no page at all, so a plain click goes to the channel directly.
+        if ((e.ctrlKey || !page) && ownerLogin) {
+          window.sticki.openExternal(`https://twitch.tv/${ownerLogin}`)
           return
         }
         if (page) window.sticki.openExternal(page)
       }
+      const codes = [token.emote.code, ...token.overlays.map((o) => o.code)].join(' ')
       return (
         <span
-          className={`emote-wrap ${page ? 'clickable' : ''}`}
+          className={`emote-wrap ${page || ownerLogin ? 'clickable' : ''} ${
+            token.overlays.length ? 'is-combo' : token.emote.zeroWidth ? 'is-layer' : ''
+          }`}
           title={title}
           onClick={openEmote}
           onContextMenu={tokenContextHandler(paneId, `${token.emote.code} `)}
@@ -176,10 +194,14 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
         >
           {/* NOT lazy: lazy images loaded mid-scroll, reflowing text and jolting the virtualized
               list. Eager load happens while the row is still in the overscan zone. */}
-          <img src={hiRes ? hiResEmoteUrl(token.emote.url) : token.emote.url} alt={token.emote.code} />
+          <img src={hiRes ? hiResEmoteUrl(token.emote.url) : token.emote.url} alt="" />
           {token.overlays.map((o, i) => (
-            <img key={i} src={o.url} alt={o.code} />
+            <img key={i} src={o.url} alt="" />
           ))}
+          {/* Chromium glues adjacent img alt texts together ("KappaKeepo") and drops the
+              layers of a stack entirely. A clipped text node copies as real words with real
+              spaces, so a combination pastes back exactly as it must be typed. */}
+          <span className="emote-copy-text">{codes} </span>
         </span>
       )
     }

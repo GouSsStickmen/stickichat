@@ -81,10 +81,18 @@ export function lookupUserColor(channel: string, login: string): string | undefi
  * never painted by accident.
  */
 export function isKnownChatter(channel: string, login: string): boolean {
+  const lower = login.toLowerCase()
+  // the broadcaster counts even if they never type in their own chat — their name is the
+  // single most common thing people write without an "@"
+  if (lower === channel.toLowerCase()) return true
   const msgs = useChatStore.getState().messages[channel]
   if (!msgs) return false
-  const lower = login.toLowerCase()
-  for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].login === lower) return true
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i]
+    if (m.login === lower) return true
+    // someone who was replied to / raided in is a real user here too, even with no message
+    if (m.replyParent?.login === lower) return true
+  }
   return false
 }
 
