@@ -142,6 +142,8 @@ export interface FavoriteEmote {
   code: string
   url: string
   provider: EmoteProvider
+  /** this emote is itself a zero-width LAYER — kept so the favorites tab can mark it too */
+  zeroWidth?: boolean
   /** zero-width layers saved together with the base — a whole 7TV-style combination */
   overlays?: { code: string; url: string; provider: EmoteProvider }[]
 }
@@ -896,6 +898,8 @@ export interface Settings {
   caseSensitiveNicks: boolean
   /** use a user's 7TV cosmetic nick color when they have one */
   sevenTvNickColors: boolean
+  /** append an invisible character so Twitch accepts repeated identical messages */
+  bypassDuplicateLimit: boolean
   /** shared chat origin tag: show the avatar only, or the avatar plus the channel name */
   sharedChatTagMode: 'avatar' | 'full'
   /** post a chat line when a 7TV emote is added to / removed from the channel set */
@@ -1108,6 +1112,7 @@ export const DEFAULT_SETTINGS: Settings = {
   messageSpacing: 3,
   caseSensitiveNicks: false,
   sevenTvNickColors: true,
+  bypassDuplicateLimit: true,
   sharedChatTagMode: 'full',
   announceEmoteChanges: true,
   colorBareNicks: true,

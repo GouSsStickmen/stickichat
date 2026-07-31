@@ -774,6 +774,7 @@ function ChatSection(): React.JSX.Element {
       <Toggle label={t('set.caseSensitiveNicks')} hint={t('hint.caseSensitiveNicks')} value={settings.caseSensitiveNicks} onChange={(v) => set({ caseSensitiveNicks: v })} />
       <Toggle label={t('set.sevenTvColors')} hint={t('hint.sevenTvColors')} value={settings.sevenTvNickColors} onChange={(v) => set({ sevenTvNickColors: v })} />
       <Toggle label={t('set.announceEmoteChanges')} hint={t('hint.announceEmoteChanges')} value={settings.announceEmoteChanges} onChange={(v) => set({ announceEmoteChanges: v })} />
+      <Toggle label={t('set.bypassDuplicateLimit')} hint={t('hint.bypassDuplicateLimit')} value={settings.bypassDuplicateLimit} onChange={(v) => set({ bypassDuplicateLimit: v })} />
       <Toggle label={t('set.colorBareNicks')} hint={t('hint.colorBareNicks')} value={settings.colorBareNicks} onChange={(v) => set({ colorBareNicks: v })} />
       <Toggle label={t('set.thirdPartyBadges')} hint={t('hint.thirdPartyBadges')} value={settings.showThirdPartyBadges} onChange={(v) => set({ showThirdPartyBadges: v })} />
       <div className="set-group-title">{t('highlights.title')}</div>
@@ -2104,7 +2105,7 @@ function OverlaySection(): React.JSX.Element {
             <button
               title={t('oe.copyUrl')}
               onClick={() => {
-                navigator.clipboard?.writeText(urlFor(o))
+                window.sticki.copyText(urlFor(o))
                 setCopiedId(o.id)
                 window.setTimeout(() => setCopiedId(''), 1500)
               }}

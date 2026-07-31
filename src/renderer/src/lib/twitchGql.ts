@@ -34,3 +34,53 @@ export async function fetchChatRules(login: string): Promise<string[]> {
     return []
   }
 }
+
+/** one badge as Twitch's own viewer card lists it */
+export interface GqlBadge {
+  setId: string
+  version: string
+  title: string
+  url: string
+}
+
+const badgeCache = new Map<string, GqlBadge[]>()
+
+/**
+ * Every badge Twitch reports for a user, via the public GQL endpoint — the same source the
+ * web viewer card's badge grid reads. Helix has no equivalent: it only exposes badge SETS,
+ * never which ones a given user owns, so the IRC tag (what they wear in THIS channel) was
+ * all we had. Best-effort; any failure returns [].
+ *
+ * NB: only badges the user currently displays are public. Twitch's full "all badges I ever
+ * earned" collection is readable for your OWN account only, so this is the honest maximum.
+ */
+export async function fetchUserBadges(login: string): Promise<GqlBadge[]> {
+  const key = login.toLowerCase()
+  const cached = badgeCache.get(key)
+  if (cached) return cached
+  try {
+    const res = await window.sticki.fetchJson(GQL_URL, {
+      method: 'POST',
+      headers: { 'Client-Id': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query { user(login: "${key}") { displayBadges { setID version title imageURL(size: DOUBLE) } } }`
+      })
+    })
+    if (!res.ok) return []
+    const json = res.json as {
+      data?: { user?: { displayBadges?: { setID?: string; version?: string; title?: string; imageURL?: string }[] } }
+    }
+    const list = (json?.data?.user?.displayBadges ?? [])
+      .filter((b) => b.setID && b.imageURL)
+      .map((b) => ({
+        setId: String(b.setID),
+        version: String(b.version ?? '1'),
+        title: String(b.title ?? b.setID),
+        url: String(b.imageURL)
+      }))
+    badgeCache.set(key, list)
+    return list
+  } catch {
+    return []
+  }
+}

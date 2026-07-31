@@ -30,6 +30,8 @@ export interface EmotePreviewTarget {
   wide?: boolean
   /** zero-width emotes layered on top of this one — previewed as the finished combination */
   overlayUrls?: string[]
+  /** extra caption lines under the name (provider, author…) */
+  subtitle?: string[]
 }
 
 export interface ChannelPrompt {

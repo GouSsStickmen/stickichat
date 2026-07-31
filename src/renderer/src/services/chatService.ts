@@ -1320,12 +1320,32 @@ class ChatService {
     useUiStore.getState().clearReauthNeeded(accountId)
   }
 
+  /**
+   * Twitch drops a message that is byte-identical to your previous one within ~30s ("your
+   * message was not sent because it is identical..."). 7TV/Chatterino get around it by
+   * appending an invisible TAG character (U+E0000): Twitch sees a different string while
+   * chat renders nothing extra. Alternating it on/off keeps repeats working indefinitely.
+   */
+  private lastSent = new Map<string, { text: string; at: number; tagged: boolean }>()
+
+  private dedupeSuffix(account: Account, channel: string, text: string): string {
+    if (!useSettingsStore.getState().settings.bypassDuplicateLimit) return text
+    const key = `${account.id}:${channel}`
+    const prev = this.lastSent.get(key)
+    const now = Date.now()
+    const same = !!prev && prev.text === text && now - prev.at < 30_000
+    const tagged = same ? !prev.tagged : false
+    this.lastSent.set(key, { text, at: now, tagged })
+    return tagged ? `${text} \u{E0000}` : text
+  }
+
   async sendMessage(
     account: Account,
     channel: string,
     text: string,
     replyParentMsgId?: string
   ): Promise<void> {
+    text = this.dedupeSuffix(account, channel, text)
     const sender = await this.ensureSender(account)
     // send FIRST — no awaits in the hot path (the token check used to add visible input lag).
     // If the socket is stale, say() queues the line and reconnects with a fresh token anyway.

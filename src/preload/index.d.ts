@@ -35,6 +35,7 @@ export interface StickiApi {
   downloadUpdate(): Promise<void>
   installUpdate(): Promise<void>
   onUpdateStatus(cb: (status: unknown) => void): () => void
+  copyText(text: string): Promise<void>
   fetchJson(
     url: string,
     options?: { method?: string; headers?: Record<string, string>; body?: string }

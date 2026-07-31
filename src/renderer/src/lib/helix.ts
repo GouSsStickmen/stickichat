@@ -163,11 +163,17 @@ export async function sendShoutout(
   fromBroadcasterId: string,
   toBroadcasterId: string
 ): Promise<HttpResponse> {
-  return helixRequest(account, 'POST', '/chat/shoutouts', {
+  const res = await helixRequest(account, 'POST', '/chat/shoutouts', {
     from_broadcaster_id: fromBroadcasterId,
     to_broadcaster_id: toBroadcasterId,
     moderator_id: account.id
   })
+  // Twitch's shoutout cooldowns aren't reported by the API, so time them from our own sends
+  if (res.ok) {
+    const { recordShoutout } = await import('./shoutoutCooldown')
+    recordShoutout(fromBroadcasterId, toBroadcasterId)
+  }
+  return res
 }
 
 export async function startRaid(

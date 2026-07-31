@@ -306,7 +306,12 @@ export default function EmotePicker({
         onClick={() => onPick(e)}
         onContextMenu={(ev) => {
           ev.preventDefault()
-          toggleFavorite({ code: e.code, url: e.url, provider: e.provider })
+          toggleFavorite({
+            code: e.code,
+            url: e.url,
+            provider: e.provider,
+            zeroWidth: 'zeroWidth' in e ? e.zeroWidth : undefined
+          })
           if (!isFav) {
             setFavPop(favKey)
             window.setTimeout(() => setFavPop((cur) => (cur === favKey ? null : cur)), 500)

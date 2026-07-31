@@ -159,7 +159,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             // RMB: insert the streamer's nick into the input · Ctrl+RMB: copy it
             e.preventDefault()
             if (e.ctrlKey) {
-              navigator.clipboard?.writeText(pane.channel).catch(() => {})
+              window.sticki.copyText(pane.channel).catch(() => {})
             } else {
               window.dispatchEvent(
                 new CustomEvent('sticki:insert', { detail: { paneId: pane.id, text: `@${pane.channel} ` } })

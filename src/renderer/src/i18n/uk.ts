@@ -73,6 +73,9 @@ export const uk: Record<TranslationKey, string> = {
   // Emote picker
   'picker.open': 'Емоути',
   'picker.search': 'Пошук емоутів…',
+  'picker.twitchEmote': 'Емоут Twitch',
+  'picker.channelEmote': 'Емоут каналу',
+  'picker.by': 'Автор:',
   'picker.favorites': 'Обрані',
   'picker.pinOwnerHint': 'ПКМ: закріпити стрімера зверху',
   'picker.channel': 'Канал',
@@ -88,6 +91,7 @@ export const uk: Record<TranslationKey, string> = {
   'mod.unban': 'Розбан',
   'mod.delete': 'Видалити повідомлення',
   'mod.warn': 'Попередження',
+  'mod.shoutoutCooldown': 'Наступний шаутаут можна дати через {time}',
   'mod.shoutout': 'Шатаут',
   'mod.raid': 'Рейд',
   'mod.raidTarget': 'Канал для рейду…',
@@ -108,6 +112,7 @@ export const uk: Record<TranslationKey, string> = {
 
   // User card
   'user.badgesChannel': 'На каналі:',
+  'user.badgesAll': 'Усі бейджі',
   'user.badgesGlobal': 'Глобальні:',
   'user.created': 'Створений',
   'user.channelRules': 'Правила чату',
@@ -146,6 +151,8 @@ export const uk: Record<TranslationKey, string> = {
   'info.emoteAdded': '😃 Нові емоути 7TV: {emotes}',
   'info.emoteRemoved': '🗑 Прибрано емоути 7TV: {emotes}',
   'info.emoteBy': ' (від {user})',
+  'set.bypassDuplicateLimit': 'Дозволяти надсилати однакові повідомлення підряд',
+  'hint.bypassDuplicateLimit': 'Twitch відхиляє повідомлення, ідентичне до попереднього (протягом ~30 с). Додаємо невидимий символ, як роблять 7TV і Chatterino — у чаті нічого зайвого не видно.',
   'set.colorBareNicks': 'Підсвічувати ніки, написані без «@»',
   'hint.colorBareNicks': 'Слово фарбується кольором користувача, лише якщо він справді писав у цьому чаті. Клік — картка юзера, ПКМ — вставити в поле, Shift+ПКМ — скопіювати.',
   'msg.emoteChannelHint': 'Клік — канал, чий це емоут',

@@ -1,4 +1,4 @@
-import { ipcMain, safeStorage, shell, app, BrowserWindow, desktopCapturer, screen } from 'electron'
+import { ipcMain, safeStorage, shell, app, BrowserWindow, desktopCapturer, screen, clipboard } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
 import { overlayConfigure, overlayDelete, overlayPush, overlayRestart, OverlayDelete, OverlayStyle, OverlayLine } from './overlayServer'
@@ -405,6 +405,10 @@ export function registerIpc(): void {
   })
 
   // All HTTP goes through the main process so the renderer never hits CORS walls
+  ipcMain.handle('clipboard:write', (_e, text: string) => {
+    clipboard.writeText(String(text ?? ''))
+  })
+
   ipcMain.handle(
     'net:fetch',
     async (

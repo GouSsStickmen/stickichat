@@ -71,6 +71,9 @@ export const en = {
   // Emote picker
   'picker.open': 'Emotes',
   'picker.search': 'Search emotes…',
+  'picker.twitchEmote': 'Twitch Emote',
+  'picker.channelEmote': 'Channel Emote',
+  'picker.by': 'By:',
   'picker.favorites': 'Favorites',
   'picker.pinOwnerHint': 'Right-click: pin this streamer to the top',
   'picker.channel': 'Channel',
@@ -86,6 +89,7 @@ export const en = {
   'mod.unban': 'Unban',
   'mod.delete': 'Delete message',
   'mod.warn': 'Warn',
+  'mod.shoutoutCooldown': 'Next shoutout available in {time}',
   'mod.shoutout': 'Shoutout',
   'mod.raid': 'Raid',
   'mod.raidTarget': 'Raid target channel…',
@@ -106,6 +110,7 @@ export const en = {
 
   // User card
   'user.badgesChannel': 'In channel:',
+  'user.badgesAll': 'All badges',
   'user.badgesGlobal': 'Global:',
   'user.created': 'Created',
   'user.channelRules': 'Chat rules',
@@ -144,6 +149,8 @@ export const en = {
   'info.emoteAdded': '😃 New 7TV emotes: {emotes}',
   'info.emoteRemoved': '🗑 Removed 7TV emotes: {emotes}',
   'info.emoteBy': ' (by {user})',
+  'set.bypassDuplicateLimit': 'Allow sending identical messages in a row',
+  'hint.bypassDuplicateLimit': 'Twitch rejects a message identical to your previous one (within ~30s). We append an invisible character, the same trick 7TV and Chatterino use — nothing extra shows in chat.',
   'set.colorBareNicks': 'Highlight nicknames written without "@"',
   'hint.colorBareNicks': 'A word is painted with the user’s color only if they have actually written in this chat. Click — user card, RMB — insert, Shift+RMB — copy.',
   'msg.emoteChannelHint': 'Click — the channel this emote belongs to',

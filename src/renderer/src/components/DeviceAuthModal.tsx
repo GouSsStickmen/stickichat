@@ -84,7 +84,7 @@ export default function DeviceAuthModal({ onClose }: { onClose: () => void }): R
                 <button
                   title={t('auth.copyLink')}
                   onClick={() => {
-                    navigator.clipboard.writeText(verifyUri)
+                    window.sticki.copyText(verifyUri)
                     useUiStore.getState().toast(t('auth.linkCopied'))
                   }}
                 >
@@ -93,7 +93,7 @@ export default function DeviceAuthModal({ onClose }: { onClose: () => void }): R
                 <button
                   title={t('auth.copyCode')}
                   onClick={() => {
-                    navigator.clipboard.writeText(userCode)
+                    window.sticki.copyText(userCode)
                     useUiStore.getState().toast(t('auth.linkCopied'))
                   }}
                 >

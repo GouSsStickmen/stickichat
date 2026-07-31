@@ -2909,9 +2909,16 @@ input[type='number']::-webkit-inner-spin-button {
   align-items: center;
   gap: 4px;
 }
+/* the size comes from the inline style (chatEmoteHoverSize, or the wide link size) — a hard
+   112px cap here silently clamped every preview, which is what broke emote/badge/link ones */
 .emote-hover-preview img {
-  max-height: 112px;
-  max-width: 112px;
+  max-width: min(90vw, 900px);
+  max-height: 85vh;
+}
+.emote-hover-sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.35;
 }
 .emote-hover-name {
   font-size: 11px;
@@ -3621,4 +3628,32 @@ input[type='number']::-webkit-inner-spin-button {
   font-weight: 700;
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* usercard: the full badge collection opens as a wrapping grid, like Twitch's own card */
+.uc-badges-all {
+  display: block;
+}
+.uc-badges-toggle {
+  padding: 1px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  cursor: pointer;
+}
+.uc-badges-toggle:hover {
+  color: var(--text);
+}
+.uc-badges-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  max-width: 260px;
+}
+/* the shoutout button while its cooldown runs */
+.raid-shoutout-btn.cooling {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

@@ -41,7 +41,16 @@ export default function EmoteHoverPreview(): React.JSX.Element | null {
         ))}
       </span>
       {/* the link preview is JUST the picture — a caption strip under it only adds empty space */}
-      {!preview.wide && <div className="emote-hover-name">{preview.code}</div>}
+      {!preview.wide && (
+        <>
+          <div className="emote-hover-name">{preview.code}</div>
+          {(preview.subtitle ?? []).map((line, i) => (
+            <div key={i} className="emote-hover-sub">
+              {line}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   )
 }

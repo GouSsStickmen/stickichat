@@ -21,6 +21,7 @@ import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics
 import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
 import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
 import { getSourceChannelInfo } from '../lib/sourceChannels'
+import { useShoutoutCooldown, shoutoutStatus, formatCooldown } from '../lib/shoutoutCooldown'
 
 interface Props {
   msg: ChatMessage
@@ -51,7 +52,7 @@ function tokenContextHandler(paneId: string, text: string) {
     // Shift+right-click copies instead of inserting — the only way to get a nick onto the
     // clipboard without selecting it by hand
     if (e.shiftKey) {
-      void navigator.clipboard.writeText(text.trim())
+      void window.sticki.copyText(text.trim())
       return
     }
     window.dispatchEvent(
@@ -107,7 +108,9 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
             token.bare
               ? (e) => {
                   e.preventDefault()
-                  void navigator.clipboard.writeText(login)
+                  e.stopPropagation()
+                  void window.sticki.copyText(login)
+                  useUiStore.getState().toast(`${login} ✓`, 'ok')
                 }
               : tokenContextHandler(paneId, `@${login} `)
           }
@@ -171,9 +174,7 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
       const codes = [token.emote.code, ...token.overlays.map((o) => o.code)].join(' ')
       return (
         <span
-          className={`emote-wrap ${page || ownerLogin ? 'clickable' : ''} ${
-            token.overlays.length ? 'is-combo' : token.emote.zeroWidth ? 'is-layer' : ''
-          }`}
+          className={`emote-wrap ${page || ownerLogin ? 'clickable' : ''}`}
           title={title}
           onClick={openEmote}
           onContextMenu={tokenContextHandler(paneId, `${token.emote.code} `)}
@@ -182,6 +183,12 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
               url: hiResEmoteUrl(token.emote.url),
               code: token.emote.code,
               overlayUrls: token.overlays.map((o) => hiResEmoteUrl(o.url)),
+              subtitle: [
+                token.emote.provider === 'twitch'
+                  ? t('picker.twitchEmote')
+                  : `${t('picker.channelEmote')} ${token.emote.provider.toUpperCase()}`,
+                ownerName ? `${t('picker.by')} ${ownerName}` : ''
+              ].filter(Boolean),
               x: e.clientX,
               y: e.clientY
             })
@@ -507,6 +514,10 @@ function MessageViewInner({
     if (settings.showThirdPartyBadges) ensureBttvBadges()
   }, [settings.showThirdPartyBadges])
 
+  // shoutout cooldown countdown (subscribing to `tick` is what re-renders it each second)
+  useShoutoutCooldown((s) => s.tick)
+  const soLeft = msg.raidFrom ? shoutoutStatus(channelId).left : 0
+
   const isMention = settings.highlightMentions && !!msg.isMention
 
   const customBg = useMemo(() => {
@@ -756,8 +767,13 @@ function MessageViewInner({
             {/* incoming raid + mod rights → one-click shoutout for the raider */}
             {msg.raidFrom && isMod && account && !msg.historical && (
               <button
-                className="raid-shoutout-btn"
-                title={`${t('mod.shoutout')}: ${msg.raidFrom}`}
+                className={`raid-shoutout-btn ${soLeft > 0 ? 'cooling' : ''}`}
+                disabled={soLeft > 0}
+                title={
+                  soLeft > 0
+                    ? t('mod.shoutoutCooldown', { time: formatCooldown(soLeft) })
+                    : `${t('mod.shoutout')}: ${msg.raidFrom}`
+                }
                 onClick={async (e) => {
                   e.stopPropagation()
                   const { resolveUserId } = await import('../services/modActions')
@@ -777,7 +793,7 @@ function MessageViewInner({
                   }
                 }}
               >
-                📣 {t('mod.shoutout')}
+                📣 {soLeft > 0 ? formatCooldown(soLeft) : t('mod.shoutout')}
               </button>
             )}
           </span>

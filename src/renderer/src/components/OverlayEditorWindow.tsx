@@ -499,7 +499,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
         />
         <div className="spacer" />
         <button
-          onClick={() => navigator.clipboard?.writeText(obsUrl)}
+          onClick={() => window.sticki.copyText(obsUrl)}
           title={obsUrl}
         >
           📋 {t('oe.copyUrl')}
@@ -1606,7 +1606,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 className="ghost"
                 style={{ padding: '0 6px' }}
                 title={t('oe.copyHint')}
-                onClick={() => navigator.clipboard?.writeText(t('oe.css.hint'))}
+                onClick={() => window.sticki.copyText(t('oe.css.hint'))}
               >
                 📋
               </button>

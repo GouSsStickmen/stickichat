@@ -61,6 +61,8 @@ const api = {
     ipcRenderer.on('updater:status', listener)
     return () => ipcRenderer.removeListener('updater:status', listener)
   },
+  /** clipboard through the main process — navigator.clipboard is undefined on file:// */
+  copyText: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
   fetchJson: (
     url: string,
     options?: { method?: string; headers?: Record<string, string>; body?: string }

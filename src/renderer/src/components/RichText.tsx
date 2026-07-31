@@ -37,7 +37,7 @@ export default function RichText({
 
   const copy = (text: string) => (e: React.MouseEvent): void => {
     e.preventDefault()
-    navigator.clipboard.writeText(text.trim())
+    window.sticki.copyText(text.trim())
     useUiStore.getState().toast('📋')
   }
 

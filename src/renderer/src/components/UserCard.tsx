@@ -14,6 +14,7 @@ import { formatDuration } from '../lib/tokenize'
 import RichText from './RichText'
 import { PinButton } from './EmotePicker'
 import { localizeApiError } from '../lib/apiErrors'
+import { fetchUserBadges, GqlBadge } from '../lib/twitchGql'
 import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
 import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
 
@@ -48,6 +49,17 @@ export default function UserCard({
   }, [target.userId])
   const stvBadge = stvCos?.badgeUrl ? { url: stvCos.badgeUrl, title: stvCos.badgeTooltip ?? '7TV' } : undefined
   const [globalsOpen, setGlobalsOpen] = useState(false)
+  // the user's public badge collection (GQL) — Helix can't tell us which badges someone owns
+  const [allBadges, setAllBadges] = useState<GqlBadge[]>([])
+  useEffect(() => {
+    let alive = true
+    void fetchUserBadges(target.login).then((b) => {
+      if (alive) setAllBadges(b)
+    })
+    return () => {
+      alive = false
+    }
+  }, [target.login])
   // badge art arrives asynchronously (Helix). Without subscribing to the emote store's
   // version the card renders once, misses the maps, and shows nothing — which is exactly
   // the "badges sometimes don't load" report. Also request them in case this window never
@@ -206,41 +218,40 @@ export default function UserCard({
               </>
             )}
           </div>
-          {/* badges sit RIGHT NEXT TO THE NICK, like the viewers list — channel badges
-              (sub/founder/mod/vip/bits) inline, and the global ones behind a toggle so a
-              user with a dozen pledges doesn't push the card apart. */}
+          {/* every badge the user is wearing here, right next to the nick like the viewers
+              list — plus a toggle that reveals their whole public badge collection (Twitch
+              GQL; Helix never exposes which badges a given user owns). */}
           {(() => {
-            const badges = target.badges.length
+            const worn = target.badges.length
               ? target.badges
               : (lookupUserBadges(target.channel, target.login) ?? [])
-            const channelSets = new Set([
-              'subscriber', 'founder', 'moderator', 'lead_moderator', 'vip', 'broadcaster',
-              'bits', 'bits-leader', 'sub-gifter', 'sub-gift-leader', 'artist-badge', 'predictions'
-            ])
-            const chan = badges.filter((b) => channelSets.has(b.setId))
-            const global = badges.filter((b) => !channelSets.has(b.setId))
             const img = (b: { setId: string; version: string }): React.JSX.Element | null => {
               const url = lookupBadgeUrl(target.channel, b.setId, b.version)
               if (!url) return null
               const title = lookupBadgeTitle(target.channel, b.setId, b.version) ?? b.setId
               return <img key={`${b.setId}/${b.version}`} src={url} alt="" title={title} />
             }
-            const globalCount = global.length + (stvBadge ? 1 : 0) + (bttvBadge ? 1 : 0)
-            if (!chan.length && !globalCount) return null
+            // anything GQL knows about that isn't already on the worn row
+            const wornKeys = new Set(worn.map((b) => `${b.setId}/${b.version}`))
+            const extra = allBadges.filter((b) => !wornKeys.has(`${b.setId}/${b.version}`))
+            const extraCount = extra.length + (stvBadge ? 1 : 0) + (bttvBadge ? 1 : 0)
+            if (!worn.length && !extraCount) return null
             return (
               <>
-                {chan.length > 0 && <div className="uc-badges">{chan.map(img)}</div>}
-                {globalCount > 0 && (
-                  <div className="uc-badges">
+                {worn.length > 0 && <div className="uc-badges">{worn.map(img)}</div>}
+                {extraCount > 0 && (
+                  <div className="uc-badges uc-badges-all">
                     <button className="uc-badges-toggle" onClick={() => setGlobalsOpen((v) => !v)}>
-                      {globalsOpen ? '▾' : '▸'} {t('user.badgesGlobal')} ({globalCount})
+                      {globalsOpen ? '▾' : '▸'} {t('user.badgesAll')} ({extraCount})
                     </button>
                     {globalsOpen && (
-                      <>
-                        {global.map(img)}
+                      <div className="uc-badges-grid">
+                        {extra.map((b) => (
+                          <img key={`${b.setId}/${b.version}`} src={b.url} alt="" title={b.title} />
+                        ))}
                         {stvBadge && <img src={stvBadge.url} alt="" title={stvBadge.title} className="badge-3p" />}
                         {bttvBadge && <img src={bttvBadge.url} alt="" title={bttvBadge.description} className="badge-3p" />}
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
@@ -300,7 +311,7 @@ export default function UserCard({
       <div className="uc-actions">
         <button
           onClick={() => {
-            navigator.clipboard.writeText(target.login)
+            window.sticki.copyText(target.login)
           }}
         >
           {t('user.copyName')}
