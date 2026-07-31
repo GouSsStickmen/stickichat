@@ -980,6 +980,12 @@ export interface Settings {
   linkPreviewsClipsOnly: boolean
   /** show link preview cards already expanded (default: collapsed behind an arrow chip) */
   linkPreviewsExpanded: boolean
+  /** blow the artwork up next to the cursor when hovering a link preview */
+  linkHoverPreview: boolean
+  /** hover preview only for real pictures/GIFs — skip video thumbnails (clips, YouTube…) */
+  linkHoverImagesOnly: boolean
+  /** width of that hover preview, px */
+  linkHoverSize: number
   /** preview card scale, % (100 = normal) */
   linkPreviewScale: number
   /** account picker next to the input: full name select or a compact avatar button */
@@ -1169,6 +1175,9 @@ export const DEFAULT_SETTINGS: Settings = {
   linkDisplay: 'full',
   linkPreviewsClipsOnly: false,
   linkPreviewsExpanded: false,
+  linkHoverPreview: true,
+  linkHoverImagesOnly: false,
+  linkHoverSize: 560,
   linkPreviewScale: 100,
   inputAccountDisplay: 'name',
   smoothChatScroll: false,

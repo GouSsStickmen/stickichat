@@ -707,6 +707,26 @@ function ChatSection(): React.JSX.Element {
             value={settings.linkPreviewsExpanded}
             onChange={(v) => set({ linkPreviewsExpanded: v })}
           />
+          <Toggle
+            label={t('set.linkHoverPreview')}
+            hint={t('hint.linkHoverPreview')}
+            value={settings.linkHoverPreview}
+            onChange={(v) => set({ linkHoverPreview: v })}
+          />
+          {settings.linkHoverPreview && (
+            <>
+              <Toggle
+                label={t('set.linkHoverImagesOnly')}
+                hint={t('hint.linkHoverImagesOnly')}
+                value={settings.linkHoverImagesOnly}
+                onChange={(v) => set({ linkHoverImagesOnly: v })}
+              />
+              <div className="set-row" title={t('hint.linkHoverSize')}>
+                <label className="has-hint">{t('set.linkHoverSize')}</label>
+                <NumberField value={settings.linkHoverSize} min={120} max={1400} step={20} width={80} onChange={(n) => set({ linkHoverSize: n })} />
+              </div>
+            </>
+          )}
           <div className="set-row" title={t('hint.linkPreviewScale')}>
             <label className="has-hint">{t('set.linkPreviewScale')}</label>
             <NumberField value={settings.linkPreviewScale} min={50} max={150} step={5} width={80} onChange={(n) => set({ linkPreviewScale: n })} />

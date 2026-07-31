@@ -32,6 +32,8 @@ export interface EmotePreviewTarget {
   overlayUrls?: string[]
   /** extra caption lines under the name (provider, author…) */
   subtitle?: string[]
+  /** requested width for a `wide` preview, px */
+  wideSize?: number
 }
 
 export interface ChannelPrompt {

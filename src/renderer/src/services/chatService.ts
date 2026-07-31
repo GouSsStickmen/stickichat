@@ -31,6 +31,13 @@ const SUB_EVENT_IDS = new Set([
 ])
 import { PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
 
+/**
+ * Invisible U+E0000 (a Unicode TAG character): appended to a repeated message so Twitch
+ * sees a different string and stops rejecting it as "identical to the previous one".
+ * Chat clients render nothing for it — the same trick 7TV and Chatterino use.
+ */
+const DEDUPE_TAG = '\u{E0000}'
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -1306,6 +1313,10 @@ class ChatService {
       // sender connections only care about being kicked / notices
       onMessage: (m) => {
         if (m.command === 'NOTICE' && m.channel) {
+          // "identical to the previous message" — resend it with the invisible tag rather
+          // than surfacing an error. This is the safety net for the proactive alternation
+          // in dedupeSuffix (which can miss e.g. after a reconnect drops our local state).
+          if (m.tags['msg-id'] === 'msg_duplicate' && this.resendTagged(account, m.channel)) return
           this.queue(m.channel, this.systemMessage(m.channel, m.trailing, true))
         }
       }
@@ -1326,17 +1337,31 @@ class ChatService {
    * appending an invisible TAG character (U+E0000): Twitch sees a different string while
    * chat renders nothing extra. Alternating it on/off keeps repeats working indefinitely.
    */
-  private lastSent = new Map<string, { text: string; at: number; tagged: boolean }>()
+  private lastSent = new Map<string, { text: string; at: number; tagged: boolean; retried?: boolean }>()
+
+  /**
+   * Twitch refused our last line as a duplicate — push it again with the invisible tag.
+   * Returns true when a retry was actually sent (so the error line stays hidden).
+   */
+  private resendTagged(account: Account, channel: string): boolean {
+    if (!useSettingsStore.getState().settings.bypassDuplicateLimit) return false
+    const key = `${account.id}:${channel.toLowerCase()}`
+    const prev = this.lastSent.get(key)
+    if (!prev || Date.now() - prev.at > 30_000 || prev.retried) return false
+    this.lastSent.set(key, { ...prev, tagged: true, retried: true })
+    this.senders.get(account.id)?.say(channel, `${prev.text} ${DEDUPE_TAG}`)
+    return true
+  }
 
   private dedupeSuffix(account: Account, channel: string, text: string): string {
     if (!useSettingsStore.getState().settings.bypassDuplicateLimit) return text
-    const key = `${account.id}:${channel}`
+    const key = `${account.id}:${channel.toLowerCase()}`
     const prev = this.lastSent.get(key)
     const now = Date.now()
     const same = !!prev && prev.text === text && now - prev.at < 30_000
     const tagged = same ? !prev.tagged : false
     this.lastSent.set(key, { text, at: now, tagged })
-    return tagged ? `${text} \u{E0000}` : text
+    return tagged ? `${text} ${DEDUPE_TAG}` : text
   }
 
   async sendMessage(

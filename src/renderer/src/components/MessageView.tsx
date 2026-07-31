@@ -96,7 +96,7 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
         <span
           className="mention-token"
           style={{ color: token.color }}
-          title={`${login} — ${t(token.bare ? 'msg.nickHintBare' : 'msg.nickHint')}`}
+          title={`${login} — ${t('msg.nickHint')}`}
           onClick={(e) => {
             window.dispatchEvent(
               new CustomEvent('sticki:opencard', {
@@ -104,16 +104,7 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
               })
             )
           }}
-          onContextMenu={
-            token.bare
-              ? (e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  void window.sticki.copyText(login)
-                  useUiStore.getState().toast(`${login} ✓`, 'ok')
-                }
-              : tokenContextHandler(paneId, `@${login} `)
-          }
+          onContextMenu={tokenContextHandler(paneId, `@${login} `)}
         >
           {token.name}
         </span>
@@ -127,6 +118,8 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
       const twOwner = token.emote.provider === 'twitch' ? lookupTwitchEmoteOwner(token.emote.code) : undefined
       const ownerLogin = token.emote.ownerLogin ?? twOwner?.login
       const ownerName = token.emote.ownerName ?? twOwner?.name
+      // the full combination, in the word order chat re-stacks it from
+      const codes = [token.emote.code, ...token.overlays.map((o) => o.code)].join(' ')
       const describe = (e: typeof token.emote): string =>
         `${e.code} — ${e.provider.toUpperCase()}${
           (e === token.emote ? ownerName : e.ownerName) ? ` · ${e === token.emote ? ownerName : e.ownerName}` : ''
@@ -171,13 +164,12 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
         }
         if (page) window.sticki.openExternal(page)
       }
-      const codes = [token.emote.code, ...token.overlays.map((o) => o.code)].join(' ')
       return (
         <span
           className={`emote-wrap ${page || ownerLogin ? 'clickable' : ''}`}
           title={title}
           onClick={openEmote}
-          onContextMenu={tokenContextHandler(paneId, `${token.emote.code} `)}
+          onContextMenu={tokenContextHandler(paneId, `${codes} `)}
           onMouseEnter={(e) =>
             useUiStore.getState().setEmotePreview({
               url: hiResEmoteUrl(token.emote.url),
@@ -239,6 +231,9 @@ let brailleCellWidth: number | null = null
 function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
   const t = useT()
   const expandDefault = useSettingsStore((s) => s.settings.linkPreviewsExpanded)
+  const hoverEnabled = useSettingsStore((s) => s.settings.linkHoverPreview)
+  const hoverImagesOnly = useSettingsStore((s) => s.settings.linkHoverImagesOnly)
+  const hoverSize = useSettingsStore((s) => s.settings.linkHoverSize)
   const [open_, setOpen] = useState(expandDefault)
   const enabled = useSettingsStore((s) => s.settings.linkPreviews)
   const clipsOnly = useSettingsStore((s) => s.settings.linkPreviewsClipsOnly)
@@ -275,13 +270,17 @@ function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
   // hovering the card blows the artwork up next to the cursor — a chat-sized thumbnail is
   // too small to actually see what was linked
   const hoverBig = (e: React.MouseEvent): void => {
-    if (!data.image) return
+    if (!data.image || !hoverEnabled) return
+    // "pictures only" skips video artwork (Twitch clips, YouTube thumbs) — those are just a
+    // still frame, so blowing them up adds nothing
+    if (hoverImagesOnly && data.kind !== 'image') return
     useUiStore.getState().setEmotePreview({
       url: data.image,
       code: data.title ?? data.siteName ?? url,
       x: e.clientX,
       y: e.clientY,
-      wide: true
+      wide: true,
+      wideSize: hoverSize
     })
   }
   const hoverOff = (): void => useUiStore.getState().setEmotePreview(null)

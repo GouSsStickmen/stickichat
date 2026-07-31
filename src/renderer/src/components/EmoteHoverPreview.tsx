@@ -7,7 +7,10 @@ export default function EmoteHoverPreview(): React.JSX.Element | null {
   if (!preview) return null
   // link artwork is wide: cap it to a comfortable share of the window instead of the (square)
   // emote hover size, which would shrink a 16:9 thumbnail to a stamp
-  const size = preview.wide ? Math.min(900, Math.round(window.innerWidth * 0.62)) : emoteSize
+  // wide previews use the user's chosen width, still capped so they can't exceed the window
+  const size = preview.wide
+    ? Math.min(preview.wideSize ?? 560, Math.round(window.innerWidth * 0.9))
+    : emoteSize
 
   // anchor next to the cursor. The box grows UPWARD from a point just above the cursor via
   // translateY(-100%), so it stays glued to the cursor no matter how large `size` is. Near the
