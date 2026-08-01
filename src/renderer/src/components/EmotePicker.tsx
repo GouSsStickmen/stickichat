@@ -248,7 +248,15 @@ export default function EmotePicker({
       if (g) g.emotes.push(e)
       else groups.set(key, { label: ownerLabel(key), emotes: [e] })
     }
-    for (const g of groups.values()) g.emotes.sort((a, b) => a.code.localeCompare(b.code))
+    // usable emotes first, padlocked (sub-only) ones after them — while you have no sub the
+    // grid should lead with what you can actually send
+    for (const g of groups.values()) {
+      g.emotes.sort((a, b) => {
+        const la = a.locked ? 1 : 0
+        const lb = b.locked ? 1 : 0
+        return la !== lb ? la - lb : a.code.localeCompare(b.code)
+      })
+    }
     const pinned = pinnedOwners
     const entries = [...groups.entries()]
     entries.sort(([keyA, a], [keyB, b]) => {

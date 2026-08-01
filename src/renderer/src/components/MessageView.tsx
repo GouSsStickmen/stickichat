@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Account, ChatMessage, MOD_ONLY_TYPES, Settings } from '../types'
+import { Account, ChatMessage, FavoriteEmote, MOD_ONLY_TYPES, Settings } from '../types'
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration, hiResEmoteUrl } from '../lib/tokenize'
 import { emotePageUrl } from '../lib/emoteProviders'
 import { lookupBadgeUrl, lookupBadgeTitle, lookupBadge4x, lookupEmote, lookupCheermote, lookupTwitchEmoteOwner } from '../store/emotes'
@@ -7,7 +7,7 @@ import { lookupUserColor, isKnownChatter, useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { highlightRuleMatches } from '../lib/highlight'
 import { openUserCard as openCard } from '../lib/openUserCard'
-import { useSettingsStore } from '../store/settings'
+import { useSettingsStore, favKey } from '../store/settings'
 import { useUiStore } from '../store/ui'
 import { runModButton } from '../services/modActions'
 import { banUser, deleteChatMessage } from '../lib/helix'
@@ -139,22 +139,20 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
         // combination someone built in chat can be reused from the favorites tab
         if (e.altKey) {
           const st = useSettingsStore.getState()
-          const key = `${token.emote.provider}:${token.emote.code}`
-          const rest = st.favoriteEmotes.filter((f) => `${f.provider}:${f.code}` !== key)
+          // identity must include the LAYERS. Matching on the base code alone meant starring
+          // "Kappa + fire" first deleted a plain "Kappa" favorite (and a second combo on the
+          // same base deleted the first one) instead of adding a new entry.
+          const entry: FavoriteEmote = {
+            code: token.emote.code,
+            url: token.emote.url,
+            provider: token.emote.provider,
+            zeroWidth: token.emote.zeroWidth,
+            overlays: token.overlays.map((o) => ({ code: o.code, url: o.url, provider: o.provider }))
+          }
+          const key = favKey(entry)
+          const rest = st.favoriteEmotes.filter((f) => favKey(f) !== key)
           const already = rest.length !== st.favoriteEmotes.length
-          st.setFavoriteEmotes(
-            already
-              ? rest
-              : [
-                  ...st.favoriteEmotes,
-                  {
-                    code: token.emote.code,
-                    url: token.emote.url,
-                    provider: token.emote.provider,
-                    overlays: token.overlays.map((o) => ({ code: o.code, url: o.url, provider: o.provider }))
-                  }
-                ]
-          )
+          st.setFavoriteEmotes(already ? rest : [...st.favoriteEmotes, entry])
           return
         }
         // Ctrl+click goes to the owner's Twitch channel instead of the emote page.

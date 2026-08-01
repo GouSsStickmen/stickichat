@@ -1530,17 +1530,20 @@ const OVERLAY_HTML = `<!doctype html>
 
   var fxBox = document.getElementById('fx')
   var activeTriggers = {}
-  function spawnTrigger(tg, wrap) {
-    var onMessage = tg.attach === 'message' && wrap
-    if (!onMessage && tg.id !== '__preview__') {
-      if (activeTriggers[tg.id]) return // one instance of a screen trigger at a time
-      activeTriggers[tg.id] = true
-    }
-    var box = document.createElement('div')
-    box.className = 'tgi'
+  /**
+   * Apply a trigger's size/anchor/offsets to its box. Split out of spawnTrigger so the LIVE
+   * position preview can re-apply it on every config push without rebuilding the element —
+   * rebuilding replayed the entrance animation, which read as the image blinking away every
+   * time the editor pushed an update (i.e. on every keystroke while nudging the offsets).
+   */
+  function positionTrigger(box, tg, onMessage) {
     box.style.width = (tg.size || 96) + 'px'
     var dx = (tg.dx || 0) + 'px', dy = (tg.dy || 0) + 'px'
     var p = tg.pos || 'br'
+    // clear whatever the previous position set, or old anchors linger and fight the new ones
+    box.style.left = box.style.right = box.style.top = box.style.bottom = ''
+    box.style.marginLeft = box.style.marginRight = ''
+    box.style.transform = ''
     if (onMessage) {
       // pinned NEXT TO the triggering message — decor-image positioning logic: anchored to
       // the plate wrapper's edge via left/right + margins (no transforms, so the entrance
@@ -1568,6 +1571,17 @@ const OVERLAY_HTML = `<!doctype html>
     else { box.style.right = dx; box.style.top = 'calc(50% + ' + dy + ')' }
     // slide direction: from the nearest horizontal edge
     box.style.setProperty('--tx', p === 'tl' || p === 'left' || p === 'bl' ? '-60px' : '60px')
+  }
+
+  function spawnTrigger(tg, wrap) {
+    var onMessage = tg.attach === 'message' && wrap
+    if (!onMessage && tg.id !== '__preview__') {
+      if (activeTriggers[tg.id]) return // one instance of a screen trigger at a time
+      activeTriggers[tg.id] = true
+    }
+    var box = document.createElement('div')
+    box.className = 'tgi'
+    positionTrigger(box, tg, onMessage)
     // entrance animation on the box, gentle bob loop on the image inside
     var an = tg.anim || 'pop'
     var img = document.createElement('img')
@@ -1590,32 +1604,42 @@ const OVERLAY_HTML = `<!doctype html>
   }
 
   // ---------- live position preview for the trigger being edited ----------
-  var previewTriggerBox = null
+  // The box is created ONCE and then only re-styled, so dragging the offsets/size moves and
+  // scales it smoothly instead of making it vanish and pop back on every config push.
+  var previewBox = null
+  var previewId = null
   function syncTriggerPreview() {
-    if (previewTriggerBox) {
-      previewTriggerBox.remove()
-      previewTriggerBox = null
-    }
     var id = cfg.triggerPreviewId
-    if (!id) return
     var tg = null
-    for (var i = 0; i < (cfg.triggers || []).length; i++) {
+    for (var i = 0; id && i < (cfg.triggers || []).length; i++) {
       if (cfg.triggers[i].id === id) { tg = cfg.triggers[i]; break }
     }
-    if (!tg || !tg.image) return
-    // duration 0 = stays put; attach to the newest line so message-anchored reactions are
-    // positioned against a real message, exactly as they will be in production
-    var pinned = {}
-    for (var k in tg) pinned[k] = tg[k]
-    pinned.durationS = 0
-    pinned.id = '__preview__'
+    if (!tg || !tg.image) {
+      if (previewBox) previewBox.remove()
+      previewBox = null
+      previewId = null
+      return
+    }
     var lines = realLineEls()
     var wrap = lines.length ? lines[lines.length - 1].querySelector(':scope > .cwrap') : null
-    delete activeTriggers['__preview__']
-    spawnTrigger(pinned, wrap)
-    // remember the node so the next cfg push replaces rather than stacks it
-    var boxes = (pinned.attach === 'message' && wrap ? wrap : fxBox).querySelectorAll('.tgi')
-    previewTriggerBox = boxes.length ? boxes[boxes.length - 1] : null
+    var onMessage = tg.attach === 'message' && !!wrap
+    var host = onMessage ? wrap : fxBox
+    // rebuild only when it's really gone (a restyle wipes the lines) or points elsewhere
+    if (!previewBox || !previewBox.isConnected || previewId !== id || previewBox.parentNode !== host) {
+      if (previewBox) previewBox.remove()
+      previewBox = document.createElement('div')
+      previewBox.className = 'tgi tgi-preview'
+      previewBox.appendChild(document.createElement('img'))
+      host.appendChild(previewBox)
+      previewId = id
+    }
+    var pimg = previewBox.firstChild
+    if (pimg.getAttribute('src') !== tg.image) pimg.setAttribute('src', tg.image)
+    // a positioning aid must sit still: no entrance animation, no idle bob
+    previewBox.style.animation = 'none'
+    previewBox.style.opacity = '1'
+    pimg.style.animation = 'none'
+    positionTrigger(previewBox, tg, onMessage)
   }
 
   // ---------- config application ----------
