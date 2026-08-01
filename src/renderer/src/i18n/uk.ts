@@ -80,7 +80,7 @@ export const uk: Record<TranslationKey, string> = {
   'picker.pinOwnerHint': 'ПКМ: закріпити стрімера зверху',
   'picker.channel': 'Канал',
   'picker.global': 'Глобальні',
-  'picker.favHint': 'Правий клік по емоуту — додати/прибрати з обраних',
+  'picker.favHint': 'ПКМ — обране · Ctrl+ЛКМ — сторінка емоута · Ctrl+Shift+ЛКМ — канал автора',
   'picker.empty': 'Тут поки порожньо',
 
   // Mod

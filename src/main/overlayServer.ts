@@ -1543,7 +1543,7 @@ const OVERLAY_HTML = `<!doctype html>
     // clear whatever the previous position set, or old anchors linger and fight the new ones
     box.style.left = box.style.right = box.style.top = box.style.bottom = ''
     box.style.marginLeft = box.style.marginRight = ''
-    box.style.transform = ''
+    box.style.translate = ''
     if (onMessage) {
       // pinned NEXT TO the triggering message — decor-image positioning logic: anchored to
       // the plate wrapper's edge via left/right + margins (no transforms, so the entrance
@@ -1558,17 +1558,17 @@ const OVERLAY_HTML = `<!doctype html>
       if (p === 'bl' || p === 'br' || p === 'bottom') box.style.bottom = (tg.dy || 0) + 'px'
       else if (p === 'left' || p === 'right') {
         box.style.top = 'calc(50% + ' + (tg.dy || 0) + 'px)'
-        box.style.transform = 'translateY(-50%)'
+        box.style.translate = '0 -50%'
       } else box.style.top = (tg.dy || 0) + 'px'
       box.style.zIndex = '5'
     } else if (p === 'tl') { box.style.left = dx; box.style.top = dy }
     else if (p === 'tr') { box.style.right = dx; box.style.top = dy }
     else if (p === 'bl') { box.style.left = dx; box.style.bottom = dy }
     else if (p === 'br') { box.style.right = dx; box.style.bottom = dy }
-    else if (p === 'top') { box.style.left = 'calc(50% + ' + dx + ')'; box.style.top = dy; box.style.transform = 'translateX(-50%)' }
-    else if (p === 'bottom') { box.style.left = 'calc(50% + ' + dx + ')'; box.style.bottom = dy; box.style.transform = 'translateX(-50%)' }
-    else if (p === 'left') { box.style.left = dx; box.style.top = 'calc(50% + ' + dy + ')' }
-    else { box.style.right = dx; box.style.top = 'calc(50% + ' + dy + ')' }
+    else if (p === 'top') { box.style.left = 'calc(50% + ' + dx + ')'; box.style.top = dy; box.style.translate = '-50% 0' }
+    else if (p === 'bottom') { box.style.left = 'calc(50% + ' + dx + ')'; box.style.bottom = dy; box.style.translate = '-50% 0' }
+    else if (p === 'left') { box.style.left = dx; box.style.top = 'calc(50% + ' + dy + ')'; box.style.translate = '0 -50%' }
+    else { box.style.right = dx; box.style.top = 'calc(50% + ' + dy + ')'; box.style.translate = '0 -50%' }
     // slide direction: from the nearest horizontal edge
     box.style.setProperty('--tx', p === 'tl' || p === 'left' || p === 'bl' ? '-60px' : '60px')
   }
@@ -1635,10 +1635,11 @@ const OVERLAY_HTML = `<!doctype html>
     }
     var pimg = previewBox.firstChild
     if (pimg.getAttribute('src') !== tg.image) pimg.setAttribute('src', tg.image)
-    // a positioning aid must sit still: no entrance animation, no idle bob
+    // skip only the ENTRANCE animation (replaying it on every push is what made the image
+    // blink); the idle bob stays so the preview matches the real reaction's resting look
     previewBox.style.animation = 'none'
     previewBox.style.opacity = '1'
-    pimg.style.animation = 'none'
+    pimg.style.animation = 'tg-bob 2.2s ease-in-out 0.6s infinite'
     positionTrigger(previewBox, tg, onMessage)
   }
 

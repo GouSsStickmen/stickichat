@@ -78,7 +78,7 @@ export const en = {
   'picker.pinOwnerHint': 'Right-click: pin this streamer to the top',
   'picker.channel': 'Channel',
   'picker.global': 'Global',
-  'picker.favHint': 'Right click on an emote — add/remove favorite',
+  'picker.favHint': 'RMB — favorite · Ctrl+LMB — emote page · Ctrl+Shift+LMB — author channel',
   'picker.empty': 'Nothing here yet',
 
   // Mod

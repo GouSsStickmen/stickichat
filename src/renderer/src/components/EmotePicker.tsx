@@ -352,8 +352,18 @@ export default function EmotePicker({
                 : `${e.code} (${PROVIDER_LABEL[e.provider]})${isLayer ? ` · ${t('picker.zeroWidth')}` : ''}`
         }
         onMouseEnter={() => setPreview(e)}
-        onMouseLeave={() => setPreview((cur) => (cur === e ? null : cur))}
-        onClick={() => {
+
+        onClick={(ev) => {
+          const page = e.provider !== 'emoji' ? emotePageUrl(e as Emote) : undefined
+          const login = 'ownerLogin' in e ? e.ownerLogin : undefined
+          if (ev.ctrlKey && ev.shiftKey && login) {
+            window.sticki.openExternal(`https://twitch.tv/${login}`)
+            return
+          }
+          if (ev.ctrlKey && page) {
+            window.sticki.openExternal(page)
+            return
+          }
           if (locked) return
           onPick(e)
         }}
@@ -363,7 +373,8 @@ export default function EmotePicker({
             code: e.code,
             url: e.url,
             provider: e.provider,
-            zeroWidth: 'zeroWidth' in e ? e.zeroWidth : undefined
+            zeroWidth: 'zeroWidth' in e ? e.zeroWidth : undefined,
+            overlays: combo ?? undefined
           })
           if (!isFav) {
             setFavPop(cellKey)
@@ -461,8 +472,14 @@ export default function EmotePicker({
                 {editFavs
                   ? favorites.map((f, i) => (
                       <button
-                        key={`${f.provider}:${f.code}`}
-                        className="emote-cell fav-editing"
+                        key={favKeyOf(f)}
+                        className={`emote-cell fav-editing ${
+                          f.provider === 'emoji' &&
+                          Array.from(f.code).length > 3 &&
+                          !/\p{Extended_Pictographic}/u.test(f.code)
+                            ? 'kaomoji-fav'
+                            : ''
+                        }`}
                         title={t('picker.editFavs')}
                         onPointerDown={(e) => {
                           if (!favGridRef.current) return
@@ -485,7 +502,20 @@ export default function EmotePicker({
                         }}
                       >
                         {f.provider === 'emoji' ? (
-                          <EmojiGlyph char={f.code} className="emoji-cell-char" />
+                          Array.from(f.code).length > 3 && !/\p{Extended_Pictographic}/u.test(f.code) ? (
+                            <span className="kaomoji-fav-text">{f.code}</span>
+                          ) : (
+                            <EmojiGlyph char={f.code} className="emoji-cell-char" />
+                          )
+                        ) : f.overlays && f.overlays.length ? (
+                          // reorder mode must show a combination as the finished stack too,
+                          // otherwise every combo looks like its bare base emote
+                          <span className="emote-cell-stack">
+                            <LazyImg src={f.url} alt={f.code} />
+                            {f.overlays.map((o, k) => (
+                              <img key={k} className="emote-cell-ov" src={o.url} alt="" />
+                            ))}
+                          </span>
                         ) : (
                           <LazyImg src={f.url} alt={f.code} />
                         )}
