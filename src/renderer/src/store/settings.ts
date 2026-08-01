@@ -25,6 +25,12 @@ interface SettingsState {
   setFavoriteEmotes: (list: FavoriteEmote[]) => void
 }
 
+/** stable identity of a favorite: provider + base code + every layer, in order */
+export function favKey(e: FavoriteEmote): string {
+  const overlays = e.overlays?.map((o) => o.code).join('+') ?? ''
+  return `${e.provider}:${e.code}${overlays ? `+${overlays}` : ''}`
+}
+
 export const useSettingsStore = create<SettingsState>()((set) => ({
   clientId: '',
   settings: DEFAULT_SETTINGS,
@@ -43,10 +49,12 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setHighlightRules: (highlightRules) => set({ highlightRules }),
   toggleFavoriteEmote: (e) =>
     set((s) => {
-      const exists = s.favoriteEmotes.some((f) => f.code === e.code && f.provider === e.provider)
+      // identity includes the LAYERS: "Kappa" and "Kappa + SoSnowy" are different favorites,
+      // so saving a second combination on the same base no longer deletes the first
+      const exists = s.favoriteEmotes.some((f) => favKey(f) === favKey(e))
       return {
         favoriteEmotes: exists
-          ? s.favoriteEmotes.filter((f) => !(f.code === e.code && f.provider === e.provider))
+          ? s.favoriteEmotes.filter((f) => favKey(f) !== favKey(e))
           : [...s.favoriteEmotes, e]
       }
     }),

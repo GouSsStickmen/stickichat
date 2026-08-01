@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { BadgeRef } from '../types'
+import { useSettingsStore } from './settings'
 
 export interface UserCardTarget {
   channel: string
@@ -19,6 +20,8 @@ export interface Toast {
   id: number
   text: string
   kind: 'ok' | 'error'
+  /** stable key for "don't show again" — the message text with volatile bits stripped */
+  muteKey?: string
 }
 
 export interface EmotePreviewTarget {
@@ -81,6 +84,18 @@ interface UiState {
 
 let toastId = 0
 
+/**
+ * Identity of an error for the "don't show again" list: the same failure carries different
+ * accounts/nicks/durations each time, so strip the volatile parts and keep the wording.
+ */
+export function errorMuteKey(text: string): string {
+  return text
+    .replace(/\d+/g, '#')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+}
+
 export const useUiStore = create<UiState>()((set) => ({
   settingsOpen: false,
   settingsSection: null,
@@ -100,8 +115,11 @@ export const useUiStore = create<UiState>()((set) => ({
   setAddAccountOpen: (addAccountOpen) => set({ addAccountOpen }),
   setUserCard: (userCard) => set({ userCard }),
   toast: (text, kind = 'ok') => {
+    const muteKey = kind === 'error' ? errorMuteKey(text) : undefined
+    // silently drop errors the user has told us to stop showing
+    if (muteKey && useSettingsStore.getState().settings.mutedErrors.includes(muteKey)) return
     const id = ++toastId
-    set((s) => ({ toasts: [...s.toasts, { id, text, kind }] }))
+    set((s) => ({ toasts: [...s.toasts, { id, text, kind, muteKey }] }))
     // error toasts can optionally chime; lazy import avoids a static ui⇄sound cycle
     if (kind === 'error') {
       import('../lib/sound').then((m) => m.playErrorSound()).catch(() => {})

@@ -30,8 +30,18 @@ function roleOf(channel: string, login: string, mods: Set<string>, vips: Set<str
   return 'viewer'
 }
 
-function badgesOf(channel: string, login: string): { setId: string; version: string }[] {
-  return lookupUserBadges(channel, login) ?? []
+/**
+ * Badges for EVERY login in one pass over the buffer. Calling lookupUserBadges per row meant
+ * ~400 full backward scans of the message buffer on each render — that was the scroll jank.
+ */
+function buildBadgeMap(channel: string): Map<string, { setId: string; version: string }[]> {
+  const msgs = useChatStore.getState().messages[channel] ?? []
+  const map = new Map<string, { setId: string; version: string }[]>()
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i]
+    if (m.login && !map.has(m.login) && m.badges?.length) map.set(m.login, m.badges)
+  }
+  return map
 }
 
 export default function ChattersList({ pane, account, channelId, isMod, onClose }: Props): React.JSX.Element {
@@ -108,6 +118,9 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
       : chatters
   }, [chatters, query])
 
+  // one pass over the buffer, reused by every row
+  const badgeMap = useMemo(() => buildBadgeMap(pane.channel), [pane.channel, chatters])
+
   const grouped = useMemo(() => {
     const groups: Record<Role, Chatter[]> = { moderator: [], vip: [], viewer: [], broadcaster: [] }
     for (const c of filtered) groups[roleOf(pane.channel, c.user_login, mods, vips)].push(c)
@@ -129,7 +142,7 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
   }
 
   const row = (c: Chatter): React.JSX.Element => {
-    const badges = badgesOf(pane.channel, c.user_login)
+    const badges = badgeMap.get(c.user_login) ?? []
     return (
       <button key={c.user_login} className="chatter-row" onClick={() => insert(c.user_login)}>
         {badges.map((b) => {

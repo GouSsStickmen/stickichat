@@ -29,6 +29,7 @@ import {
   playMentionSound,
   playFirstMessageSound,
   playKeywordSound,
+  playNickAlertSound,
   playStreamUpSound,
   playWhisperSound,
   playRaidSound,
@@ -804,6 +805,14 @@ function ChatSection(): React.JSX.Element {
       <Toggle label={t('set.caseSensitiveNicks')} hint={t('hint.caseSensitiveNicks')} value={settings.caseSensitiveNicks} onChange={(v) => set({ caseSensitiveNicks: v })} />
       <Toggle label={t('set.sevenTvColors')} hint={t('hint.sevenTvColors')} value={settings.sevenTvNickColors} onChange={(v) => set({ sevenTvNickColors: v })} />
       <Toggle label={t('set.announceEmoteChanges')} hint={t('hint.announceEmoteChanges')} value={settings.announceEmoteChanges} onChange={(v) => set({ announceEmoteChanges: v })} />
+      {settings.mutedErrors.length > 0 && (
+        <div className="set-row" title={t('hint.mutedErrors')}>
+          <label className="has-hint">{t('set.mutedErrors')}</label>
+          <button onClick={() => set({ mutedErrors: [] })}>
+            {t('set.mutedErrors.clear', { n: settings.mutedErrors.length })}
+          </button>
+        </div>
+      )}
       <Toggle label={t('set.bypassDuplicateLimit')} hint={t('hint.bypassDuplicateLimit')} value={settings.bypassDuplicateLimit} onChange={(v) => set({ bypassDuplicateLimit: v })} />
       <Toggle label={t('set.colorBareNicks')} hint={t('hint.colorBareNicks')} value={settings.colorBareNicks} onChange={(v) => set({ colorBareNicks: v })} />
       <Toggle label={t('set.thirdPartyBadges')} hint={t('hint.thirdPartyBadges')} value={settings.showThirdPartyBadges} onChange={(v) => set({ showThirdPartyBadges: v })} />
@@ -862,6 +871,27 @@ function NotificationsSection(): React.JSX.Element {
             />
           </div>
           <SoundSettings kind="keyword" />
+        </>
+      )}
+      {/* same matching as keywords, separate list + separate sound: being called by name is
+          a different kind of ping than a topic word */}
+      <Toggle label={t('set.nickAlertSound')} hint={t('hint.nickAlertSound')} value={settings.nickAlertSound} onChange={(v) => set({ nickAlertSound: v })} />
+      {settings.nickAlertSound && (
+        <>
+          <div className="set-row" style={{ alignItems: 'flex-start' }}>
+            <label>{t('set.nickAlerts')}</label>
+            <textarea
+              rows={3}
+              style={{ flex: 1, resize: 'vertical' }}
+              placeholder={t('set.nickAlerts.placeholder')}
+              value={settings.nickAlerts.join('\n')}
+              onChange={(e) => set({ nickAlerts: e.target.value.split('\n') })}
+              onBlur={(e) =>
+                set({ nickAlerts: e.target.value.split('\n').map((w) => w.trim()).filter(Boolean) })
+              }
+            />
+          </div>
+          <SoundSettings kind="nickAlert" />
         </>
       )}
       <div className="set-group-title">{t('whisper.title')}</div>
@@ -983,7 +1013,7 @@ function WindowsSection(): React.JSX.Element {
   )
 }
 
-type SoundKind = 'mention' | 'firstMessage' | 'keyword' | 'streamUp' | 'whisper' | 'raid' | 'error'
+type SoundKind = 'mention' | 'firstMessage' | 'keyword' | 'nickAlert' | 'streamUp' | 'whisper' | 'raid' | 'error'
 
 const SOUND_KEYS = {
   mention: { type: 'mentionSoundType', volume: 'mentionSoundVolume', customId: 'mentionSoundCustomId' },
@@ -993,6 +1023,7 @@ const SOUND_KEYS = {
     customId: 'firstMessageSoundCustomId'
   },
   keyword: { type: 'keywordSoundType', volume: 'keywordSoundVolume', customId: 'keywordSoundCustomId' },
+  nickAlert: { type: 'nickAlertSoundType', volume: 'nickAlertSoundVolume', customId: 'nickAlertSoundCustomId' },
   streamUp: { type: 'streamUpSoundType', volume: 'streamUpSoundVolume', customId: 'streamUpSoundCustomId' },
   whisper: { type: 'whisperSoundType', volume: 'whisperSoundVolume', customId: 'whisperSoundCustomId' },
   raid: { type: 'raidSoundType', volume: 'raidSoundVolume', customId: 'raidSoundCustomId' },
@@ -1003,6 +1034,7 @@ const SOUND_PLAYERS: Record<SoundKind, (s: Settings, force?: boolean) => void> =
   mention: playMentionSound,
   firstMessage: playFirstMessageSound,
   keyword: playKeywordSound,
+  nickAlert: playNickAlertSound,
   streamUp: playStreamUpSound,
   whisper: playWhisperSound,
   raid: playRaidSound,

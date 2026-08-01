@@ -120,6 +120,14 @@ export function playFirstMessageSound(
   playAlertSound({ type: s.firstMessageSoundType, volume: s.firstMessageSoundVolume, data }, 'first-message', force)
 }
 
+export function playNickAlertSound(
+  s: Pick<Settings, 'nickAlertSoundType' | 'nickAlertSoundVolume' | 'nickAlertSoundCustomId' | 'customSounds'>,
+  force = false
+): void {
+  const data = s.customSounds.find((c) => c.id === s.nickAlertSoundCustomId)?.data
+  playAlertSound({ type: s.nickAlertSoundType, volume: s.nickAlertSoundVolume, data }, 'nickAlert', force)
+}
+
 export function playKeywordSound(
   s: Pick<Settings, 'keywordSoundType' | 'keywordSoundVolume' | 'keywordSoundCustomId' | 'customSounds'>,
   force = false

@@ -549,6 +549,9 @@ export interface ChatOverlayConfig {
 
   // ----- word/symbol triggers -----
   triggers: OverlayTrigger[]
+  /** id of the trigger being edited: the overlay pins it permanently so its position can be
+   *  dialled in live instead of waiting for someone to type the word. Never persisted. */
+  triggerPreviewId?: string | null
 
   // ----- content -----
   hiddenUsers: string[]
@@ -934,6 +937,16 @@ export interface Settings {
   firstMessageBgColor: string
   /** words/phrases that trigger the keyword alert sound */
   keywordAlerts: string[]
+  /** error messages the user chose never to see again (see Toast.muteKey) */
+  mutedErrors: string[]
+  /** spellings of YOUR nick that Twitch's @-mention never catches ("стікмен", "stiki"…).
+   *  Functionally the same match as a keyword, but with its own sound so a personal call-out
+   *  is audibly different from a topic word. */
+  nickAlerts: string[]
+  nickAlertSound: boolean
+  nickAlertSoundType: SoundChoice
+  nickAlertSoundVolume: number
+  nickAlertSoundCustomId?: string
   keywordSound: boolean
   keywordSoundType: SoundChoice
   keywordSoundVolume: number
@@ -1138,6 +1151,11 @@ export const DEFAULT_SETTINGS: Settings = {
   mentionBgColor: '#8b5cf6',
   firstMessageBgColor: '#22c55e',
   keywordAlerts: [],
+  mutedErrors: [],
+  nickAlerts: [],
+  nickAlertSound: true,
+  nickAlertSoundType: 'ping',
+  nickAlertSoundVolume: 0.5,
   keywordSound: true,
   keywordSoundType: 'ping',
   keywordSoundVolume: 0.5,

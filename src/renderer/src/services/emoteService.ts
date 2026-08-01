@@ -172,7 +172,13 @@ export async function loadTwitchChannelEmotes(account: Account, channelId: strin
   const st = useEmotesStore.getState()
   const mine = st.twitchByAccount[account.id] ?? []
   const usable = new Set(mine.map((e) => e.code))
-  const extra = all.filter((e) => !usable.has(e.code)).map((e) => ({ ...e, locked: true }))
+  // Only SUBSCRIPTION/bits tiers are actually gated. Follower emotes (and anything Twitch
+  // labels otherwise) are free to use, so padlocking every emote missing from our own list
+  // was wrong — /chat/emotes/user simply hadn't been refreshed for them.
+  const GATED = new Set(['subscriptions', 'bitstier'])
+  const extra = all
+    .filter((e) => !usable.has(e.code))
+    .map((e) => ({ ...e, locked: GATED.has(e.emoteType) }))
   if (!extra.length) return
   st.setTwitchEmotes(account.id, [...mine, ...extra])
   void loadEmoteOwnerNames(account, [channelId])

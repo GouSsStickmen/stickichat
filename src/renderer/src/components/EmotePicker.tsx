@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Account, Emote, EmoteProvider, FavoriteEmote, Settings } from '../types'
 import type { TwitchUserEmote } from '../lib/helix'
+import { emotePageUrl } from '../lib/emoteProviders'
 import { useEmotesStore } from '../store/emotes'
-import { useSettingsStore } from '../store/settings'
+import { useSettingsStore, favKey as favKeyOf } from '../store/settings'
 import { loadTwitchUserEmotes, loadTwitchChannelEmotes, loadEmoteOwnerNames } from '../services/emoteService'
 import { EMOJI_LIST, emojiLabel, emojiSearchText } from '../lib/emojiData'
 import { KAOMOJI } from '../lib/kaomoji'
@@ -32,6 +33,23 @@ const imgObserver =
       )
     : null
 
+/** url -> "is this emote noticeably wider than tall?", measured once and reused */
+const aspectCache = new Map<string, boolean>()
+let aspectTimer: number | null = null
+const aspectSubs = new Set<() => void>()
+
+function noteAspect(url: string, wide: boolean): void {
+  if (aspectCache.get(url) === wide) return
+  aspectCache.set(url, wide)
+  if (!wide) return // only widening changes the layout
+  if (aspectTimer !== null) return
+  // coalesce a burst of loads into a single layout pass once scrolling settles
+  aspectTimer = window.setTimeout(() => {
+    aspectTimer = null
+    for (const fn of aspectSubs) fn()
+  }, 350)
+}
+
 function LazyImg({ src, alt }: { src: string; alt: string }): React.JSX.Element {
   const ref = useRef<HTMLImageElement>(null)
   useEffect(() => {
@@ -46,11 +64,13 @@ function LazyImg({ src, alt }: { src: string; alt: string }): React.JSX.Element 
     return () => imgObserver.unobserve(img)
   }, [src])
   // a wide emote is only known for sure once the image is decoded (BTTV ships no size in its
-  // metadata) — tag the owning cell so the grid can give it a double-width slot
+  // metadata). Mutating the cell's class right here reflowed the whole grid on every lazy
+  // load while scrolling — the "picker scrolls badly" jank. Record it instead and let one
+  // debounced re-render pick the new widths up.
   const onLoad = (e: React.SyntheticEvent<HTMLImageElement>): void => {
     const img = e.currentTarget
     if (!img.naturalWidth || !img.naturalHeight) return
-    if (img.naturalWidth / img.naturalHeight >= 1.6) img.closest('.emote-cell')?.classList.add('wide')
+    noteAspect(src, img.naturalWidth / img.naturalHeight >= 1.6)
   }
   return <img ref={ref} alt={alt} decoding="async" draggable={false} onError={retryImg} onLoad={onLoad} />
 }
@@ -163,6 +183,15 @@ export default function EmotePicker({
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<Tab>(defaultTab)
   const ref = useRef<HTMLDivElement>(null)
+  // re-render when newly measured wide emotes are flushed (see noteAspect)
+  const [, bumpAspect] = useState(0)
+  useEffect(() => {
+    const fn = (): void => bumpAspect((v) => v + 1)
+    aspectSubs.add(fn)
+    return () => {
+      aspectSubs.delete(fn)
+    }
+  }, [])
 
   // sub/follower/global twitch emotes for the sending account, plus THIS channel's full
   // set (so its free/locked emotes show even without a sub)
@@ -279,14 +308,11 @@ export default function EmotePicker({
   const favGridRef = useRef<HTMLDivElement>(null)
   const setFavoriteEmotes = useSettingsStore((s) => s.setFavoriteEmotes)
 
-  const favSet = useMemo(
-    () => new Set(favorites.map((f) => `${f.provider}:${f.code}`)),
-    [favorites]
-  )
+  const favSet = useMemo(() => new Set(favorites.map(favKeyOf)), [favorites])
 
   const cell = (e: Emote | FavoriteEmote): React.JSX.Element => {
-    const favKey = `${e.provider}:${e.code}`
-    const isFav = favSet.has(favKey)
+    const cellKey = favKeyOf(e as FavoriteEmote)
+    const isFav = favSet.has(cellKey)
     // kaomoji live under the 'emoji' provider but are long text — they need a wide cell
     // kaomoji are TEXT art; emoji ZWJ sequences also exceed 3 units but must stay square
     const isKaomoji = e.provider === 'emoji' && Array.from(e.code).length > 3 && !/\p{Extended_Pictographic}/u.test(e.code)
@@ -299,15 +325,15 @@ export default function EmotePicker({
     const locked = 'locked' in e && !!(e as { locked?: boolean }).locked
     // 7TV/BTTV/FFZ emotes are often much wider than tall; a square cell squashes them, so a
     // wide emote gets a wide cell (the grid is dense-packed, so the row simply reflows)
-    const wide = !!('size' in e && e.size && e.size >= 48)
+    const wide = ('size' in e && !!e.size && e.size >= 48) || aspectCache.get(e.url) === true
     return (
       <button
-        key={favKey}
+        key={cellKey}
         // never keep keyboard focus on a cell: Enter must go to the message input,
         // not re-trigger the last clicked emote
         tabIndex={-1}
         onMouseDown={(ev) => ev.preventDefault()}
-        className={`emote-cell ${isKaomoji ? 'kaomoji-fav' : ''} ${favPop === favKey ? 'fav-pop' : ''} ${isLayer ? 'zero-width' : ''} ${combo ? 'is-combo' : ''} ${locked ? 'locked' : ''} ${wide ? 'wide' : ''}`}
+        className={`emote-cell ${isKaomoji ? 'kaomoji-fav' : ''} ${favPop === cellKey ? 'fav-pop' : ''} ${isLayer ? 'zero-width' : ''} ${combo ? 'is-combo' : ''} ${locked ? 'locked' : ''} ${wide ? 'wide' : ''}`}
         title={
           isKaomoji
             ? e.code
@@ -332,8 +358,8 @@ export default function EmotePicker({
             zeroWidth: 'zeroWidth' in e ? e.zeroWidth : undefined
           })
           if (!isFav) {
-            setFavPop(favKey)
-            window.setTimeout(() => setFavPop((cur) => (cur === favKey ? null : cur)), 500)
+            setFavPop(cellKey)
+            window.setTimeout(() => setFavPop((cur) => (cur === cellKey ? null : cur)), 500)
           }
         }}
       >
@@ -574,6 +600,41 @@ export default function EmotePicker({
                   ? [preview.code, ...preview.overlays.map((o) => o.code)].join(' + ')
                   : preview.code}
             </div>
+            {/* who made it — and a click straight to their channel/page, same as in chat */}
+            {(() => {
+              const owner = 'ownerName' in preview ? preview.ownerName : undefined
+              const login = 'ownerLogin' in preview ? preview.ownerLogin : undefined
+              const page = preview.provider !== 'emoji' ? emotePageUrl(preview as Emote) : undefined
+              if (!owner && !page) return null
+              return (
+                <div className="picker-preview-owner">
+                  {owner && (
+                    <a
+                      href="#"
+                      title={t('picker.openAuthor')}
+                      onClick={(ev) => {
+                        ev.preventDefault()
+                        if (login) window.sticki.openExternal(`https://twitch.tv/${login}`)
+                      }}
+                    >
+                      {t('picker.by')} {owner}
+                    </a>
+                  )}
+                  {page && (
+                    <a
+                      href="#"
+                      title={t('picker.openEmotePage')}
+                      onClick={(ev) => {
+                        ev.preventDefault()
+                        window.sticki.openExternal(page)
+                      }}
+                    >
+                      ↗ {preview.provider.toUpperCase()}
+                    </a>
+                  )}
+                </div>
+              )
+            })()}
           </>
         ) : (
           <div className="picker-preview-name">{t('picker.previewHint')}</div>

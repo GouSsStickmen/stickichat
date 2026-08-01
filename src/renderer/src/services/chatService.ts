@@ -15,6 +15,7 @@ import {
   playMentionSound,
   playFirstMessageSound,
   playKeywordSound,
+  playNickAlertSound,
   playStreamUpSound,
   playWhisperSound,
   playRaidSound
@@ -1110,15 +1111,21 @@ class ChatService {
     // own messages never trigger keyword alerts
     if (useAccountsStore.getState().accounts.some((a) => a.id === msg.userId)) return
     const settings = useSettingsStore.getState().settings
-    if (!settings.keywordSound || settings.keywordAlerts.length === 0) return
     const lower = msg.text.toLowerCase()
-    const hit = settings.keywordAlerts.find((w) => {
-      const needle = w.trim().toLowerCase()
-      return needle.length > 0 && lower.includes(needle)
-    })
+    const match = (list: string[]): string | undefined =>
+      list.find((w) => {
+        const needle = w.trim().toLowerCase()
+        return needle.length > 0 && lower.includes(needle)
+      })
+
+    // nickname spellings come first and get their OWN sound: being called by name is a
+    // different kind of ping than a topic word, even though the matching is identical
+    const nickHit = settings.nickAlertSound ? match(settings.nickAlerts) : undefined
+    const hit = nickHit ?? (settings.keywordSound ? match(settings.keywordAlerts) : undefined)
     if (!hit) return
     msg.isMention = true // highlight it like a mention so it's visible in chat/sidebar
-    playKeywordSound(settings)
+    if (nickHit) playNickAlertSound(settings)
+    else playKeywordSound(settings)
     // tag the channel's tab with the matched word while the tab is inactive
     const { tabs, activeTabId } = useLayoutStore.getState()
     const activeChannels = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []

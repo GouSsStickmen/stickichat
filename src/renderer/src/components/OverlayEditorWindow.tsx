@@ -1478,8 +1478,24 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
 
           <Sec title={`🎉 ${t('oe.sec.triggers')}`}>
             <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>{t('oe.triggers.hint')}</p>
+            <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+              {t('oe.triggers.previewHint')}
+              {ov.triggerPreviewId && (
+                <button style={{ marginLeft: 8 }} onClick={() => update({ triggerPreviewId: null })}>
+                  {t('oe.triggers.previewOff')}
+                </button>
+              )}
+            </p>
             {ov.triggers.map((tr) => (
-              <div key={tr.id} className="oe-decor">
+              <div
+                key={tr.id}
+                className={`oe-decor ${ov.triggerPreviewId === tr.id ? 'previewing' : ''}`}
+                // pin this reaction in the overlay while its row is being worked on, so the
+                // offsets can be dialled in live instead of waiting for someone to type the
+                // word (the old flow was pure guesswork)
+                onPointerEnter={() => update({ triggerPreviewId: tr.id })}
+                onFocusCapture={() => update({ triggerPreviewId: tr.id })}
+              >
                 <img src={tr.image} alt="" />
                 <div className="oe-decor-ctl">
                   <textarea

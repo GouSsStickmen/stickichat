@@ -501,7 +501,7 @@ const OVERLAY_HTML = `<!doctype html>
     avatarShow: false, avatarPos: 'left', avatarSize: 28, avatarRadius: 50,
     badgesShow: true, badgesPos: 'before', badgeSize: 18,
     tsShow: false, tsSeconds: false, tsColor: '#b8b8c0', tsPos: 'after',
-    decors: [], triggers: [], hiddenUsers: [],
+    decors: [], triggers: [], triggerPreviewId: null, hiddenUsers: [],
     hideCommands: false, showRedeems: true, showBits: true, showSubs: true, showModActions: false,
     customCss: ''
   }
@@ -1532,7 +1532,7 @@ const OVERLAY_HTML = `<!doctype html>
   var activeTriggers = {}
   function spawnTrigger(tg, wrap) {
     var onMessage = tg.attach === 'message' && wrap
-    if (!onMessage) {
+    if (!onMessage && tg.id !== '__preview__') {
       if (activeTriggers[tg.id]) return // one instance of a screen trigger at a time
       activeTriggers[tg.id] = true
     }
@@ -1552,7 +1552,11 @@ const OVERLAY_HTML = `<!doctype html>
         box.style.left = '100%'
         box.style.marginLeft = 6 + (tg.dx || 0) + 'px'
       }
-      box.style.top = (tg.dy || 0) + 'px'
+      if (p === 'bl' || p === 'br' || p === 'bottom') box.style.bottom = (tg.dy || 0) + 'px'
+      else if (p === 'left' || p === 'right') {
+        box.style.top = 'calc(50% + ' + (tg.dy || 0) + 'px)'
+        box.style.transform = 'translateY(-50%)'
+      } else box.style.top = (tg.dy || 0) + 'px'
       box.style.zIndex = '5'
     } else if (p === 'tl') { box.style.left = dx; box.style.top = dy }
     else if (p === 'tr') { box.style.right = dx; box.style.top = dy }
@@ -1583,6 +1587,35 @@ const OVERLAY_HTML = `<!doctype html>
         }, 450)
       }, life)
     }
+  }
+
+  // ---------- live position preview for the trigger being edited ----------
+  var previewTriggerBox = null
+  function syncTriggerPreview() {
+    if (previewTriggerBox) {
+      previewTriggerBox.remove()
+      previewTriggerBox = null
+    }
+    var id = cfg.triggerPreviewId
+    if (!id) return
+    var tg = null
+    for (var i = 0; i < (cfg.triggers || []).length; i++) {
+      if (cfg.triggers[i].id === id) { tg = cfg.triggers[i]; break }
+    }
+    if (!tg || !tg.image) return
+    // duration 0 = stays put; attach to the newest line so message-anchored reactions are
+    // positioned against a real message, exactly as they will be in production
+    var pinned = {}
+    for (var k in tg) pinned[k] = tg[k]
+    pinned.durationS = 0
+    pinned.id = '__preview__'
+    var lines = realLineEls()
+    var wrap = lines.length ? lines[lines.length - 1].querySelector(':scope > .cwrap') : null
+    delete activeTriggers['__preview__']
+    spawnTrigger(pinned, wrap)
+    // remember the node so the next cfg push replaces rather than stacks it
+    var boxes = (pinned.attach === 'message' && wrap ? wrap : fxBox).querySelectorAll('.tgi')
+    previewTriggerBox = boxes.length ? boxes[boxes.length - 1] : null
   }
 
   // ---------- config application ----------
@@ -1678,6 +1711,8 @@ const OVERLAY_HTML = `<!doctype html>
     for (var j = 0; j < data.length; j++) append(data[j])
     restyling = false
     cfg.animIn = savedAnim
+    // re-pin the trigger under edit so its offsets update live while the user drags them
+    syncTriggerPreview()
   }
 
   // ---------- SSE ----------
