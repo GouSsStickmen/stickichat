@@ -158,6 +158,8 @@ export const en = {
   'msg.emoteFavHint': 'Alt+LEFT-click — save the emote (or the whole combination) to favorites',
   'picker.openAuthor': 'Open the author’s channel',
   'picker.openEmotePage': 'Open the emote page',
+  'set.soundOnActive': '↳ play even on the active tab',
+  'hint.soundOnActive': 'By default the sound stays quiet when you are already looking at that chat. Turn it on if a busy chat scrolls the mention away before you notice.',
   'set.nickAlertSound': 'Sound for spellings of my nick',
   'hint.nickAlertSound': 'Ways people write your name that Twitch never catches as an @-mention — its own list and its own sound, so a personal call-out sounds different from a topic word.',
   'set.nickAlerts': 'Nick spellings',

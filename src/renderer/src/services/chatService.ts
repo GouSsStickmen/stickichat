@@ -1099,8 +1099,9 @@ class ChatService {
     const visible = activeChannels.includes(msg.channel)
 
     const settings = useSettingsStore.getState().settings
-    // no ping for a channel you're already watching — you can see the mention
-    if (settings.mentionSound && !visible) playMentionSound(settings)
+    // by default no ping for a channel you're already watching — you can see the mention.
+    // The switch exists because a busy chat scrolls a mention away before you notice it.
+    if (settings.mentionSound && (!visible || settings.mentionSoundOnActive)) playMentionSound(settings)
 
     if (!visible) useChatStore.getState().setUnreadMention(msg.channel)
   }
@@ -1124,12 +1125,17 @@ class ChatService {
     const hit = nickHit ?? (settings.keywordSound ? match(settings.keywordAlerts) : undefined)
     if (!hit) return
     msg.isMention = true // highlight it like a mention so it's visible in chat/sidebar
-    if (nickHit) playNickAlertSound(settings)
-    else playKeywordSound(settings)
-    // tag the channel's tab with the matched word while the tab is inactive
     const { tabs, activeTabId } = useLayoutStore.getState()
     const activeChannels = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
-    if (!activeChannels.includes(msg.channel)) {
+    const visible = activeChannels.includes(msg.channel)
+    // each alert kind decides for itself whether it still sounds while you're on that tab
+    if (nickHit) {
+      if (!visible || settings.nickAlertSoundOnActive) playNickAlertSound(settings)
+    } else if (!visible || settings.keywordSoundOnActive) {
+      playKeywordSound(settings)
+    }
+    // tag the channel's tab with the matched word while the tab is inactive
+    if (!visible) {
       useChatStore.getState().setUnreadKeyword(msg.channel, hit.trim())
     }
   }

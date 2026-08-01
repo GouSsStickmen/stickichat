@@ -846,7 +846,17 @@ function NotificationsSection(): React.JSX.Element {
     <Framed>
       <div className="set-group-title">{t('set.group.chatAlerts')}</div>
       <Toggle label={t('set.mentionSound')} hint={t('hint.mentionSound')} value={settings.mentionSound} onChange={(v) => set({ mentionSound: v })} />
-      {settings.mentionSound && <SoundSettings kind="mention" />}
+      {settings.mentionSound && (
+        <>
+          <Toggle
+            label={t('set.soundOnActive')}
+            hint={t('hint.soundOnActive')}
+            value={settings.mentionSoundOnActive}
+            onChange={(v) => set({ mentionSoundOnActive: v })}
+          />
+          <SoundSettings kind="mention" />
+        </>
+      )}
       <Toggle
         label={t('set.firstMessageSound')}
         hint={t('hint.firstMessageSound')}
@@ -870,6 +880,12 @@ function NotificationsSection(): React.JSX.Element {
               }
             />
           </div>
+          <Toggle
+            label={t('set.soundOnActive')}
+            hint={t('hint.soundOnActive')}
+            value={settings.keywordSoundOnActive}
+            onChange={(v) => set({ keywordSoundOnActive: v })}
+          />
           <SoundSettings kind="keyword" />
         </>
       )}
@@ -891,6 +907,12 @@ function NotificationsSection(): React.JSX.Element {
               }
             />
           </div>
+          <Toggle
+            label={t('set.soundOnActive')}
+            hint={t('hint.soundOnActive')}
+            value={settings.nickAlertSoundOnActive}
+            onChange={(v) => set({ nickAlertSoundOnActive: v })}
+          />
           <SoundSettings kind="nickAlert" />
         </>
       )}

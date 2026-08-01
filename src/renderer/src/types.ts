@@ -879,6 +879,8 @@ export interface Settings {
   loadHistory: boolean // recent-messages.robotty.de
   highlightMentions: boolean
   mentionSound: boolean
+  /** also play the ping when the mentioned channel is on screen (default: stay quiet) */
+  mentionSoundOnActive: boolean
   mentionSoundType: SoundChoice
   mentionSoundVolume: number // 0..1
   /** data URL of a user-provided sound file */
@@ -944,10 +946,12 @@ export interface Settings {
    *  is audibly different from a topic word. */
   nickAlerts: string[]
   nickAlertSound: boolean
+  nickAlertSoundOnActive: boolean
   nickAlertSoundType: SoundChoice
   nickAlertSoundVolume: number
   nickAlertSoundCustomId?: string
   keywordSound: boolean
+  keywordSoundOnActive: boolean
   keywordSoundType: SoundChoice
   keywordSoundVolume: number
   keywordSoundCustomId?: string
@@ -1116,6 +1120,7 @@ export const DEFAULT_SETTINGS: Settings = {
   loadHistory: true,
   highlightMentions: true,
   mentionSound: true,
+  mentionSoundOnActive: false,
   mentionSoundType: 'ping',
   mentionSoundVolume: 0.5,
   firstMessageSound: false,
@@ -1154,9 +1159,11 @@ export const DEFAULT_SETTINGS: Settings = {
   mutedErrors: [],
   nickAlerts: [],
   nickAlertSound: true,
+  nickAlertSoundOnActive: true,
   nickAlertSoundType: 'ping',
   nickAlertSoundVolume: 0.5,
   keywordSound: true,
+  keywordSoundOnActive: true,
   keywordSoundType: 'ping',
   keywordSoundVolume: 0.5,
   streamUpSound: false,
