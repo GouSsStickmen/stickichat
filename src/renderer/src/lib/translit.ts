@@ -3,6 +3,7 @@
  * layout between QWERTY and the Ukrainian ЙЦУКЕН layout (both directions).
  */
 import { useSettingsStore } from '../store/settings'
+import { useEmotesStore } from '../store/emotes'
 
 // letter keys only (both cases handled below). Punctuation lives in the pair tables so it
 // isn't wrongly upper-cased — "[".toUpperCase() === "[", which used to clobber "["→х into "["→Х.
@@ -74,10 +75,33 @@ export function swapLayout(text: string): string {
   const exclude = new Set(
     useSettingsStore.getState().settings.translitExcludeWords.map((w) => w.toLowerCase())
   )
+  // …and so are EMOTE CODES. Converting "Kappa" into "Клзздф" turns a working emote into
+  // gibberish, which is never what the layout fix is for. Covers Twitch, 7TV, BTTV and FFZ,
+  // since they all live in the same lookup.
+  const isEmote = emoteChecker()
   return text
     .split(/(\s+)/)
-    .map((tok) => (/^\s+$/.test(tok) || exclude.has(tok.toLowerCase()) ? tok : convert(tok, map)))
+    .map((tok) =>
+      /^\s+$/.test(tok) || exclude.has(tok.toLowerCase()) || isEmote(tok) ? tok : convert(tok, map)
+    )
     .join('')
+}
+
+/**
+ * "Is this word an emote?" across every open channel plus the global sets — the converter runs
+ * on a field, not on a specific chat, so it can't know which channel the text is destined for.
+ */
+function emoteChecker(): (code: string) => boolean {
+  const st = useEmotesStore.getState()
+  return (code) => {
+    if (!code) return false
+    if (st.globalEmotes.has(code)) return true
+    for (const map of Object.values(st.channelEmotes)) if (map.has(code)) return true
+    for (const list of Object.values(st.twitchByAccount)) {
+      if (list.some((e) => e.code === code)) return true
+    }
+    return false
+  }
 }
 
 /**

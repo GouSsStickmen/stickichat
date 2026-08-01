@@ -2449,6 +2449,8 @@ input[type='number']::-webkit-inner-spin-button {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
   gap: 2px;
+  /* wide emotes take two columns — dense flow backfills the gap they'd otherwise leave */
+  grid-auto-flow: row dense;
 }
 /* Twitch tab: streamer avatar rail (sticky) + emote groups */
 .picker-twitch {
@@ -3656,4 +3658,32 @@ input[type='number']::-webkit-inner-spin-button {
 .raid-shoutout-btn.cooling {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ---- picker: locked (sub-only) emotes and wide emotes ---- */
+.emote-cell.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.emote-cell.locked:hover {
+  opacity: 0.7;
+}
+.emote-lock {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
+/* a wide emote spans two grid columns so it isn't squeezed into a square */
+.picker-grid .emote-cell.wide {
+  grid-column: span 2;
+}
+.picker-grid .emote-cell.wide img {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
 }

@@ -9,6 +9,7 @@ import { ChatMessage } from '../types'
 import RichText from './RichText'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
+import { ZoomIcon } from './Icons'
 
 type Mode = 'highlights' | 'mentions' | 'redeems' | 'subs'
 type Order = 'newest-top' | 'newest-bottom'
@@ -175,10 +176,10 @@ export default function HighlightSidebar({
           {order === 'newest-top' ? '↓' : '↑'}
         </button>
         <button className="ghost" onClick={() => set({ highlightsFontSize: Math.max(9, fontSize - 1) })}>
-          A−
+          <ZoomIcon dir="out" />
         </button>
         <button className="ghost" onClick={() => set({ highlightsFontSize: Math.min(22, fontSize + 1) })}>
-          A+
+          <ZoomIcon dir="in" />
         </button>
         {!standalone && (
           <button className="ghost" title={t('highlights.openWindow')} onClick={openWindow}>

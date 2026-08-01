@@ -3,7 +3,7 @@ import { Account, Emote, EmoteProvider, FavoriteEmote, Settings } from '../types
 import type { TwitchUserEmote } from '../lib/helix'
 import { useEmotesStore } from '../store/emotes'
 import { useSettingsStore } from '../store/settings'
-import { loadTwitchUserEmotes, loadEmoteOwnerNames } from '../services/emoteService'
+import { loadTwitchUserEmotes, loadTwitchChannelEmotes, loadEmoteOwnerNames } from '../services/emoteService'
 import { EMOJI_LIST, emojiLabel, emojiSearchText } from '../lib/emojiData'
 import { KAOMOJI } from '../lib/kaomoji'
 import EmojiGlyph from './EmojiGlyph'
@@ -45,7 +45,14 @@ function LazyImg({ src, alt }: { src: string; alt: string }): React.JSX.Element 
     imgObserver.observe(img)
     return () => imgObserver.unobserve(img)
   }, [src])
-  return <img ref={ref} alt={alt} decoding="async" draggable={false} onError={retryImg} />
+  // a wide emote is only known for sure once the image is decoded (BTTV ships no size in its
+  // metadata) — tag the owning cell so the grid can give it a double-width slot
+  const onLoad = (e: React.SyntheticEvent<HTMLImageElement>): void => {
+    const img = e.currentTarget
+    if (!img.naturalWidth || !img.naturalHeight) return
+    if (img.naturalWidth / img.naturalHeight >= 1.6) img.closest('.emote-cell')?.classList.add('wide')
+  }
+  return <img ref={ref} alt={alt} decoding="async" draggable={false} onError={retryImg} onLoad={onLoad} />
 }
 
 /** retry once with a cache-buster when the CDN hiccups (images silently stop loading) */
@@ -157,10 +164,13 @@ export default function EmotePicker({
   const [tab, setTab] = useState<Tab>(defaultTab)
   const ref = useRef<HTMLDivElement>(null)
 
-  // sub/follower/global twitch emotes for the sending account
+  // sub/follower/global twitch emotes for the sending account, plus THIS channel's full
+  // set (so its free/locked emotes show even without a sub)
   useEffect(() => {
-    if (account) loadTwitchUserEmotes(account)
-  }, [account])
+    if (!account) return
+    loadTwitchUserEmotes(account)
+    if (channelId) loadTwitchChannelEmotes(account, channelId)
+  }, [account, channelId])
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent): void => {
@@ -284,6 +294,12 @@ export default function EmotePicker({
     // them (like 7TV does) is the only way to tell them apart from ordinary emotes.
     const isLayer = 'zeroWidth' in e && !!e.zeroWidth
     const combo = 'overlays' in e && e.overlays && e.overlays.length ? e.overlays : null
+    // sub-only emote of a channel we're not subscribed to: shown so you know it exists, with
+    // a padlock, and picking it would only produce plain text — so it doesn't insert
+    const locked = 'locked' in e && !!(e as { locked?: boolean }).locked
+    // 7TV/BTTV/FFZ emotes are often much wider than tall; a square cell squashes them, so a
+    // wide emote gets a wide cell (the grid is dense-packed, so the row simply reflows)
+    const wide = !!('size' in e && e.size && e.size >= 48)
     return (
       <button
         key={favKey}
@@ -291,7 +307,7 @@ export default function EmotePicker({
         // not re-trigger the last clicked emote
         tabIndex={-1}
         onMouseDown={(ev) => ev.preventDefault()}
-        className={`emote-cell ${isKaomoji ? 'kaomoji-fav' : ''} ${favPop === favKey ? 'fav-pop' : ''} ${isLayer ? 'zero-width' : ''} ${combo ? 'is-combo' : ''}`}
+        className={`emote-cell ${isKaomoji ? 'kaomoji-fav' : ''} ${favPop === favKey ? 'fav-pop' : ''} ${isLayer ? 'zero-width' : ''} ${combo ? 'is-combo' : ''} ${locked ? 'locked' : ''} ${wide ? 'wide' : ''}`}
         title={
           isKaomoji
             ? e.code
@@ -303,7 +319,10 @@ export default function EmotePicker({
         }
         onMouseEnter={() => setPreview(e)}
         onMouseLeave={() => setPreview((cur) => (cur === e ? null : cur))}
-        onClick={() => onPick(e)}
+        onClick={() => {
+          if (locked) return
+          onPick(e)
+        }}
         onContextMenu={(ev) => {
           ev.preventDefault()
           toggleFavorite({
@@ -319,6 +338,7 @@ export default function EmotePicker({
         }}
       >
         {isFav && <span className="fav-star">⭐</span>}
+        {locked && <span className="emote-lock" title={t('picker.locked')}>🔒</span>}
         {isKaomoji ? (
           <span className="kaomoji-fav-text">{e.code}</span>
         ) : e.provider === 'emoji' ? (

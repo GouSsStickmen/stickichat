@@ -132,7 +132,8 @@ export const uk: Record<TranslationKey, string> = {
   'user.openWindow': 'Відкрити окремим вікном (можна розтягувати)',
   'set.fontFamily': 'Шрифт застосунку',
   'set.fontFamily.placeholder': 'напр. Inter, Verdana… (порожньо = стандартний)',
-  'set.translit': 'Конвертер неправильної розкладки (кнопка Aа + Ctrl+Shift+T)',
+  'set.translit': 'Конвертер неправильної розкладки (кнопка',
+  'set.translit.suffix': 'біля поля вводу + Ctrl+Shift+T)',
 
   // Settings
   'set.title': 'Налаштування',
@@ -157,6 +158,7 @@ export const uk: Record<TranslationKey, string> = {
   'hint.colorBareNicks': 'Слово фарбується кольором користувача, лише якщо він справді писав у цьому чаті. Клік — картка юзера, ПКМ — вставити в поле, Shift+ПКМ — скопіювати.',
   'msg.emoteChannelHint': 'Клік — канал, чий це емоут',
   'msg.emoteFavHint': 'Alt+клік — зберегти емоут (або всю комбінацію) в обране',
+  'picker.locked': 'Доступний із підпискою на канал',
   'picker.zeroWidth': 'шар — накладається на попередній емоут',
   'msg.overlayLayer': 'Шар',
   'msg.emoteOpenHint': 'Клік — сторінка емоута · Ctrl+клік — канал автора',

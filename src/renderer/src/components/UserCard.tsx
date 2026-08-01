@@ -17,6 +17,8 @@ import { localizeApiError } from '../lib/apiErrors'
 import { fetchUserBadges, GqlBadge } from '../lib/twitchGql'
 import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
 import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
+import { useFfzBadges, ensureFfzBadges } from '../lib/ffzCosmetics'
+import { ZoomIcon } from './Icons'
 
 const TIMEOUTS = [60, 600, 3600, 86400]
 
@@ -43,9 +45,11 @@ export default function UserCard({
   // third-party badges shown alongside the global Twitch ones
   const stvCos = useSevenTvColors((s) => s.cosmetics[target.userId])
   const bttvBadge = useBttvBadges((s) => s.badges[target.userId])
+  const ffzBadgeList = useFfzBadges((s) => s.badges[target.userId])
   useEffect(() => {
     ensureSevenTvCosmetic(target.userId)
     ensureBttvBadges()
+    ensureFfzBadges()
   }, [target.userId])
   const stvBadge = stvCos?.badgeUrl ? { url: stvCos.badgeUrl, title: stvCos.badgeTooltip ?? '7TV' } : undefined
   const [globalsOpen, setGlobalsOpen] = useState(false)
@@ -199,8 +203,8 @@ export default function UserCard({
       {standalone && (
         <div className="uc-zoom">
           <PinButton settingKey="usercardPinned" />
-          <button onClick={() => setSettings({ usercardFontSize: Math.max(10, ucFontSize - 1) })}>A−</button>
-          <button onClick={() => setSettings({ usercardFontSize: Math.min(28, ucFontSize + 1) })}>A+</button>
+          <button onClick={() => setSettings({ usercardFontSize: Math.max(10, ucFontSize - 1) })}><ZoomIcon dir="out" /></button>
+          <button onClick={() => setSettings({ usercardFontSize: Math.min(28, ucFontSize + 1) })}><ZoomIcon dir="in" /></button>
         </div>
       )}
       <div className="uc-head" onPointerDown={standalone ? undefined : startDrag} style={{ cursor: standalone ? undefined : 'grab' }}>
@@ -234,7 +238,7 @@ export default function UserCard({
             // anything GQL knows about that isn't already on the worn row
             const wornKeys = new Set(worn.map((b) => `${b.setId}/${b.version}`))
             const extra = allBadges.filter((b) => !wornKeys.has(`${b.setId}/${b.version}`))
-            const extraCount = extra.length + (stvBadge ? 1 : 0) + (bttvBadge ? 1 : 0)
+            const extraCount = extra.length + (stvBadge ? 1 : 0) + (bttvBadge ? 1 : 0) + (ffzBadgeList?.length ?? 0)
             if (!worn.length && !extraCount) return null
             return (
               <>
@@ -251,6 +255,9 @@ export default function UserCard({
                         ))}
                         {stvBadge && <img src={stvBadge.url} alt="" title={stvBadge.title} className="badge-3p" />}
                         {bttvBadge && <img src={bttvBadge.url} alt="" title={bttvBadge.description} className="badge-3p" />}
+                        {(ffzBadgeList ?? []).map((b, i) => (
+                          <img key={i} src={b.url} alt="" title={b.title} className="badge-3p" style={b.color ? { background: b.color } : undefined} />
+                        ))}
                       </div>
                     )}
                   </div>

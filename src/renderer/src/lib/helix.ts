@@ -298,12 +298,42 @@ export async function getChatters(
   return { list: out, total: total || out.length }
 }
 
+/**
+ * The channel's real moderator and VIP lists. The chatters endpoint reports no roles, and the
+ * message buffer only knows about people who have spoken recently — so a VIP who has been
+ * quiet (or whose messages were trimmed) looked like a plain viewer. Needs the broadcaster's
+ * token (or a moderator token for the mod list); returns [] when the scope isn't granted,
+ * and the caller falls back to badges from the buffer.
+ */
+export async function getRoleLogins(
+  account: Account,
+  broadcasterId: string,
+  kind: 'moderators' | 'vips'
+): Promise<string[]> {
+  const path = kind === 'moderators' ? '/moderation/moderators' : '/channels/vips'
+  const out: string[] = []
+  let cursor: string | undefined
+  for (let i = 0; i < 10; i++) {
+    const params: Record<string, string | undefined> = { broadcaster_id: broadcasterId, first: '100', after: cursor }
+    if (kind === 'moderators') params.moderator_id = account.id
+    const res = await helixRequest(account, 'GET', path, params)
+    if (!res.ok) break
+    const j = res.json as { data?: { user_login?: string }[]; pagination?: { cursor?: string } }
+    for (const u of j.data ?? []) if (u.user_login) out.push(u.user_login.toLowerCase())
+    cursor = j.pagination?.cursor
+    if (!cursor) break
+  }
+  return out
+}
+
 export interface TwitchUserEmote {
   code: string
   url: string
   provider: 'twitch'
   ownerId: string
   emoteType: string
+  /** this account cannot actually send it (sub-only emote of a channel we're not subbed to) */
+  locked?: boolean
 }
 
 /**
@@ -349,6 +379,37 @@ export async function getUserEmotes(
     if (!cursor) break
   }
   return out
+}
+
+/**
+ * EVERY emote a channel has, regardless of whether this account may use them. `/chat/emotes/user`
+ * only returns what you already unlocked, which is why followers/non-subs saw nothing at all for
+ * a channel — even its free follower emotes. This endpoint needs no sub, so the picker can list
+ * the full set and mark the locked ones.
+ */
+export async function getChannelEmotes(account: Account, broadcasterId: string): Promise<TwitchUserEmote[]> {
+  const res = await helixRequest(account, 'GET', '/chat/emotes', { broadcaster_id: broadcasterId })
+  if (!res.ok) return []
+  const j = res.json as {
+    data?: { id: string; name: string; emote_type?: string; tier?: string; format?: string[]; scale?: string[] }[]
+    template?: string
+  }
+  const template =
+    j.template ?? 'https://static-cdn.jtvnw.net/emoticons/v2/{{id}}/{{format}}/{{theme_mode}}/{{scale}}'
+  return (j.data ?? []).map((e) => {
+    const scale = e.scale?.includes('2.0') ? '2.0' : (e.scale?.[0] ?? '1.0')
+    return {
+      code: e.name,
+      url: template
+        .replace('{{id}}', e.id)
+        .replace('{{format}}', 'default')
+        .replace('{{theme_mode}}', 'dark')
+        .replace('{{scale}}', scale),
+      provider: 'twitch' as const,
+      ownerId: broadcasterId,
+      emoteType: e.emote_type ?? 'subscriptions'
+    }
+  })
 }
 
 /** requires moderator:read:followers; account must be a mod (or the broadcaster) of the channel */

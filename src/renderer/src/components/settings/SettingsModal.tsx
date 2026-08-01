@@ -39,6 +39,7 @@ import { exportConfigJson, importConfigJson } from '../../services/config'
 import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
 import { CHAT_FONT_MAX } from '../../App'
+import { TranslitIcon } from '../Icons'
 
 type Section =
   | 'accounts'
@@ -775,7 +776,16 @@ function ChatSection(): React.JSX.Element {
         <BotCommandsEditor />
       </div>
       <Toggle label={t('set.charCounter')} hint={t('hint.charCounter')} value={settings.showCharCounter} onChange={(v) => set({ showCharCounter: v })} />
-      <Toggle label={t('set.translit')} hint={t('hint.translit')} value={settings.translitEnabled} onChange={(v) => set({ translitEnabled: v })} />
+      <Toggle
+        label={
+          <>
+            {t('set.translit')} <TranslitIcon size={16} /> {t('set.translit.suffix')}
+          </>
+        }
+        hint={t('hint.translit')}
+        value={settings.translitEnabled}
+        onChange={(v) => set({ translitEnabled: v })}
+      />
       {settings.translitEnabled && (
         <div className="set-row" style={{ alignItems: 'flex-start' }} title={t('hint.translitExclude')}>
           <label className="has-hint">{t('set.translitExclude')}</label>
@@ -1145,7 +1155,8 @@ export function Toggle({
   onChange,
   hint
 }: {
-  label: string
+  /** plain text, or a fragment when the label embeds an icon (e.g. the translit glyph) */
+  label: React.ReactNode
   value: boolean
   onChange: (v: boolean) => void
   hint?: string

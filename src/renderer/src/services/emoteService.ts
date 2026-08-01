@@ -8,7 +8,7 @@ import {
   mergeEmotes
 } from '../lib/emoteProviders'
 import { SevenTvEvents } from '../lib/seventvEvents'
-import { getChannelBadges, getCheermotes, getGlobalBadges, getUserEmotes, getUsers } from '../lib/helix'
+import { getChannelBadges, getChannelEmotes, getCheermotes, getGlobalBadges, getUserEmotes, getUsers } from '../lib/helix'
 import type { TwitchUserEmote } from '../lib/helix'
 import { Account } from '../types'
 import { useAccountsStore } from '../store/accounts'
@@ -152,6 +152,32 @@ function readTwitchEmotesCache(accountId: string): TwitchEmotesCache | null {
 }
 
 /** lazily loads all twitch emotes usable by the account (incl. sub emotes) */
+/**
+ * The channel's own emote sets, merged into the account's usable list with a `locked` flag on
+ * anything the account can't actually send. Without this, a viewer with no sub saw NOTHING for
+ * the channel — not even its free follower emotes — because /chat/emotes/user only returns
+ * emotes you already unlocked.
+ */
+const channelEmoteSetsLoaded = new Set<string>()
+
+export async function loadTwitchChannelEmotes(account: Account, channelId: string): Promise<void> {
+  const key = `${account.id}:${channelId}`
+  if (channelEmoteSetsLoaded.has(key)) return
+  channelEmoteSetsLoaded.add(key)
+  const all = await getChannelEmotes(account, channelId)
+  if (!all.length) {
+    channelEmoteSetsLoaded.delete(key)
+    return
+  }
+  const st = useEmotesStore.getState()
+  const mine = st.twitchByAccount[account.id] ?? []
+  const usable = new Set(mine.map((e) => e.code))
+  const extra = all.filter((e) => !usable.has(e.code)).map((e) => ({ ...e, locked: true }))
+  if (!extra.length) return
+  st.setTwitchEmotes(account.id, [...mine, ...extra])
+  void loadEmoteOwnerNames(account, [channelId])
+}
+
 export async function loadTwitchUserEmotes(account: Account): Promise<void> {
   // guard on a "fully loaded" flag, not store presence: pages stream into the store while
   // loading, and a mid-way failure must stay retryable instead of freezing a partial list

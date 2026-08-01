@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Account, Pane } from '../types'
-import { getChatters, Chatter } from '../lib/helix'
+import { getChatters, getRoleLogins, Chatter } from '../lib/helix'
 import { useChatStore, lookupUserBadges } from '../store/chat'
 import { lookupBadgeUrl } from '../store/emotes'
 import { InsertEventDetail } from './InputBox'
@@ -16,7 +16,12 @@ interface Props {
 
 type Role = 'broadcaster' | 'moderator' | 'vip' | 'viewer'
 
-function roleOf(channel: string, login: string): Role {
+function roleOf(channel: string, login: string, mods: Set<string>, vips: Set<string>): Role {
+  // the channel owner is the broadcaster whether or not they've spoken
+  if (login === channel.toLowerCase()) return 'broadcaster'
+  if (mods.has(login)) return 'moderator'
+  if (vips.has(login)) return 'vip'
+  // fallback: badges from the message buffer (only knows people who wrote recently)
   const badges = lookupUserBadges(channel, login)
   if (!badges) return 'viewer'
   if (badges.some((b) => b.setId === 'broadcaster')) return 'broadcaster'
@@ -53,6 +58,23 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
     }
   }, [onClose])
 
+  // real moderator/VIP lists (best effort: needs the broadcaster's or a mod's scopes)
+  const [mods, setMods] = useState<Set<string>>(new Set())
+  const [vips, setVips] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!account || !channelId) return
+    let cancelled = false
+    void getRoleLogins(account, channelId, 'moderators').then((l) => {
+      if (!cancelled && l.length) setMods(new Set(l))
+    })
+    void getRoleLogins(account, channelId, 'vips').then((l) => {
+      if (!cancelled && l.length) setVips(new Set(l))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [account, channelId])
+
   // full list via Helix for mods, fallback to recently-active from the buffer
   useEffect(() => {
     let cancelled = false
@@ -81,19 +103,21 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
   const filtered = useMemo(() => {
     if (!chatters) return []
     const q = query.trim().toLowerCase()
-    const list = q
+    return q
       ? chatters.filter((c) => c.user_login.includes(q) || c.user_name.toLowerCase().includes(q))
       : chatters
-    return list.slice(0, 400)
   }, [chatters, query])
 
   const grouped = useMemo(() => {
     const groups: Record<Role, Chatter[]> = { moderator: [], vip: [], viewer: [], broadcaster: [] }
-    for (const c of filtered) groups[roleOf(pane.channel, c.user_login)].push(c)
+    for (const c of filtered) groups[roleOf(pane.channel, c.user_login, mods, vips)].push(c)
     // A→Z within each role group
     for (const g of Object.values(groups)) g.sort((a, b) => a.user_login.localeCompare(b.user_login))
+    // cap AFTER grouping: capping the flat list first pushed mods/VIPs past the limit in busy
+    // channels, so their sections came up empty even though those users were right there
+    groups.viewer = groups.viewer.slice(0, 400)
     return groups
-  }, [filtered, pane.channel])
+  }, [filtered, pane.channel, mods, vips])
 
   const insert = (login: string): void => {
     window.dispatchEvent(

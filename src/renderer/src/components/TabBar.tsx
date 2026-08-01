@@ -9,6 +9,7 @@ import { buildChannelSeed } from '../lib/detachSeed'
 import { useFlip } from '../lib/useFlip'
 import WhisperPanel from './WhisperPanel'
 import { useT } from '../i18n'
+import { ZoomIcon } from './Icons'
 
 export default function TabBar(): React.JSX.Element {
   const t = useT()
@@ -103,10 +104,10 @@ export default function TabBar(): React.JSX.Element {
       </button>
       <span className="tab-zoom">
         <button className="icon-btn" title={t('tab.zoomOut')} onClick={() => setSettings({ tabScale: Math.max(0.6, Math.round((tabScale - 0.1) * 10) / 10) })}>
-          A−
+          <ZoomIcon dir="out" />
         </button>
         <button className="icon-btn" title={t('tab.zoomIn')} onClick={() => setSettings({ tabScale: Math.min(1.8, Math.round((tabScale + 0.1) * 10) / 10) })}>
-          A+
+          <ZoomIcon dir="in" />
         </button>
       </span>
       {activeTab && activeTab.panes.length > 1 && (

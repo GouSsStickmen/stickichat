@@ -99,7 +99,24 @@ export default function MessageList({
           // old head is gone (trimmed) — count how many rows were cut off the front
           const idxInOld = prev.findIndex((m) => m.id === messages[0].id)
           if (idxInOld >= 0) firstIndexRef.current += idxInOld
-          else firstIndexRef.current = FIRST_BASE // disjoint lists (clear) — start over
+          else {
+            // Neither head lines up (a big flood trim, or a filter change such as expanding a
+            // gift group). Re-anchor on ANY row the two lists still share instead of resetting
+            // the virtual index space: a hard reset contradicts Virtuoso's shift bookkeeping
+            // and blanks the list for a frame — the "chat vanishes for a split second" report.
+            const prevPos = new Map(prev.map((m, i) => [m.id, i]))
+            let anchored = false
+            for (let i = 0; i < messages.length; i++) {
+              const was = prevPos.get(messages[i].id)
+              if (was !== undefined) {
+                firstIndexRef.current += was - i
+                anchored = true
+                break
+              }
+            }
+            // genuinely disjoint (channel cleared/switched) — only then start the space over
+            if (!anchored) firstIndexRef.current = FIRST_BASE
+          }
         }
       } else if (prev.length === 0) {
         firstIndexRef.current = FIRST_BASE

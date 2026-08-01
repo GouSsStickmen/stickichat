@@ -130,7 +130,8 @@ export const en = {
   'user.openWindow': 'Open in a separate window (resizable)',
   'set.fontFamily': 'App font',
   'set.fontFamily.placeholder': 'e.g. Inter, Verdana… (empty = default)',
-  'set.translit': 'Wrong-layout converter (Aа button + Ctrl+Shift+T)',
+  'set.translit': 'Wrong-layout converter (the',
+  'set.translit.suffix': 'button next to the input + Ctrl+Shift+T)',
 
   // Settings
   'set.title': 'Settings',
@@ -155,6 +156,7 @@ export const en = {
   'hint.colorBareNicks': 'A word is painted with the user’s color only if they have actually written in this chat. Click — user card, RMB — insert, Shift+RMB — copy.',
   'msg.emoteChannelHint': 'Click — the channel this emote belongs to',
   'msg.emoteFavHint': 'Alt+click — save the emote (or the whole combination) to favorites',
+  'picker.locked': 'Unlocked with a channel subscription',
   'picker.zeroWidth': 'layer — stacks onto the previous emote',
   'msg.overlayLayer': 'Layer',
   'msg.emoteOpenHint': 'Click — emote page · Ctrl+click — author channel',

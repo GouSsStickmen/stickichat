@@ -5,7 +5,8 @@ import {
   loadGlobalEmotes,
   loadChannelBadges,
   loadChannelEmotes,
-  loadTwitchUserEmotes
+  loadTwitchUserEmotes,
+  loadTwitchChannelEmotes
 } from '../services/emoteService'
 import EmotePicker, { emoteInsertText } from './EmotePicker'
 import Toasts from './Toasts'
@@ -37,7 +38,9 @@ export default function EmotePickerWindow({
   // load this account's Twitch emotes + owner names/avatars (the Twitch tab's rail) — without
   // this the standalone window's Twitch tab had emotes but no streamer avatars
   useEffect(() => {
-    if (account) loadTwitchUserEmotes(account)
+    if (!account) return
+    loadTwitchUserEmotes(account)
+    if (payload.channelId) loadTwitchChannelEmotes(account, payload.channelId)
   }, [account])
 
   if (closed) return <div className="app" />

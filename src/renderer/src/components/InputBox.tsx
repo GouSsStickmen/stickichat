@@ -11,6 +11,7 @@ import { matchCommands, runSlashCommand, SlashCommand } from '../lib/slashComman
 import { canModerate } from '../services/accountService'
 import { EMOJI_LIST, emojiLabel } from '../lib/emojiData'
 import { swapLayout } from '../lib/translit'
+import { TranslitIcon } from './Icons'
 import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
 import EmotePicker, { emoteInsertText } from './EmotePicker'
 import EmojiGlyph from './EmojiGlyph'
@@ -640,35 +641,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
               taRef.current?.focus()
             }}
           >
-            {/* monochrome "A ⇄ Ф" layout-swap glyph; currentColor follows the button state */}
-            <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
-              <text
-                x="7"
-                y="11.5"
-                textAnchor="middle"
-                fontSize="11.5"
-                fontWeight="700"
-                fill="currentColor"
-              >
-                A
-              </text>
-              <text
-                x="17"
-                y="23"
-                textAnchor="middle"
-                fontSize="11.5"
-                fontWeight="700"
-                fill="currentColor"
-              >
-                Ф
-              </text>
-              <g stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 10 V7.5 Q21 5 18.5 5 H14.5" />
-                <path d="M16.5 2.5 L14 5 L16.5 7.5" />
-                <path d="M3 14 V16.5 Q3 19 5.5 19 H9.5" />
-                <path d="M7.5 16.5 L10 19 L7.5 21.5" />
-              </g>
-            </svg>
+            <TranslitIcon />
           </button>
         )}
         <button

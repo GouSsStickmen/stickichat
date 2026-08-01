@@ -19,6 +19,7 @@ import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
 import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
 import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
+import { useFfzBadges, ensureFfzBadges } from '../lib/ffzCosmetics'
 import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
 import { getSourceChannelInfo } from '../lib/sourceChannels'
 import { useShoutoutCooldown, shoutoutStatus, formatCooldown } from '../lib/shoutoutCooldown'
@@ -507,11 +508,22 @@ function MessageViewInner({
     if (stvWanted && !msg.system) ensureSevenTvCosmetic(msg.userId)
   }, [stvWanted, msg.userId, msg.system])
 
-  // BTTV badges: one roster for everyone, so this is a lookup rather than a per-user fetch
+  // BTTV and FFZ publish one roster for everyone, so these are lookups rather than per-user
+  // fetches; 7TV's badge rides along with the cosmetic request above
   const bttvBadge = useBttvBadges((s) => (msg.userId ? s.badges[msg.userId] : undefined))
+  const ffzBadgeList = useFfzBadges((s) => (msg.userId ? s.badges[msg.userId] : undefined))
   useEffect(() => {
-    if (settings.showThirdPartyBadges) ensureBttvBadges()
+    if (!settings.showThirdPartyBadges) return
+    ensureBttvBadges()
+    ensureFfzBadges()
   }, [settings.showThirdPartyBadges])
+  const thirdPartyBadges = useMemo(() => {
+    const out: { url: string; title: string; color?: string }[] = []
+    if (stvCosmetic?.badgeUrl) out.push({ url: stvCosmetic.badgeUrl, title: stvCosmetic.badgeTooltip ?? '7TV' })
+    if (bttvBadge) out.push({ url: bttvBadge.url, title: bttvBadge.description })
+    for (const b of ffzBadgeList ?? []) out.push({ url: b.url, title: b.title, color: b.color })
+    return out
+  }, [stvCosmetic?.badgeUrl, stvCosmetic?.badgeTooltip, bttvBadge, ffzBadgeList])
 
   // shoutout cooldown countdown (subscribing to `tick` is what re-renders it each second)
   useShoutoutCooldown((s) => s.tick)
@@ -846,25 +858,29 @@ function MessageViewInner({
             />
           )
         })}
-        {/* third-party badges sit after the Twitch ones, same as on 7TV/BTTV themselves */}
-        {settings.showThirdPartyBadges && stvCosmetic?.badgeUrl && (
-          <img
-            className="badge badge-3p"
-            src={stvCosmetic.badgeUrl}
-            alt=""
-            draggable={false}
-            title={stvCosmetic.badgeTooltip ?? '7TV'}
-          />
-        )}
-        {settings.showThirdPartyBadges && bttvBadge && (
-          <img
-            className="badge badge-3p"
-            src={bttvBadge.url}
-            alt=""
-            draggable={false}
-            title={bttvBadge.description}
-          />
-        )}
+        {/* third-party badges sit after the Twitch ones, same as on 7TV/BTTV/FFZ themselves,
+            and hover-preview exactly like a Twitch badge does */}
+        {settings.showThirdPartyBadges &&
+          thirdPartyBadges.map((b, i) => (
+            <img
+              key={`${b.title}-${i}`}
+              className="badge badge-3p"
+              style={b.color ? { background: b.color } : undefined}
+              src={b.url}
+              alt=""
+              draggable={false}
+              title={b.title}
+              onMouseEnter={(e) =>
+                useUiStore.getState().setEmotePreview({
+                  url: b.url,
+                  code: b.title,
+                  x: e.clientX,
+                  y: e.clientY
+                })
+              }
+              onMouseLeave={() => useUiStore.getState().setEmotePreview(null)}
+            />
+          ))}
         <span
           className="nick"
           style={paintStyle ?? { color }}
