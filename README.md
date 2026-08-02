@@ -60,4 +60,24 @@ npm run dist       # інсталятор Windows (electron-builder)
 
 ---
 
+## Ліцензія
+
+StickiChat поширюється за **[GNU General Public License v3.0 або пізнішою](LICENSE)**.
+
+Коротко, що це означає:
+
+- застосунок вільний — ним можна користуватись з будь-якою метою, зокрема комерційно;
+- вихідний код можна вивчати, змінювати й поширювати;
+- якщо ви поширюєте змінену версію, ви **зобов'язані відкрити її код** під тією ж ліцензією.
+
+Copyright © 2026 GouS_Stickmen
+
+## Підпис збірок
+
+Порядок підпису релізів описано в [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+Офіційні інсталятори публікуються **лише** на сторінці
+[Releases](https://github.com/GouSsStickmen/stickichat/releases) цього репозиторію.
+
+---
+
 Автор: **GouS_Stickmen** · [github.com/GouSsStickmen/stickichat](https://github.com/GouSsStickmen/stickichat)
