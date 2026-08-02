@@ -90,6 +90,13 @@ class ChatService {
   /** channel -> was live at the previous poll */
   private wasLive = new Map<string, boolean>()
   private started = false
+  /**
+   * Alert sounds belong to exactly ONE window. Utility windows (highlights, user card,
+   * detached chat) each run a full chatService — same reader, same PubSub, and each with its
+   * own 2s throttle — so a mention or raid played once per open window. The main window owns
+   * the audio; everything else stays silent.
+   */
+  private readonly ownsSound = !window.location.hash
 
   start(): void {
     if (this.started) return
@@ -462,7 +469,7 @@ class ChatService {
       const settings = useSettingsStore.getState().settings
       // no ping for the conversation the user is looking at right now (any window)
       const openThread = getOpenWhisperThread()
-      if (settings.whisperSound && openThread !== (event.from_user_login ?? '').toLowerCase()) {
+      if (this.ownsSound && settings.whisperSound && openThread !== (event.from_user_login ?? '').toLowerCase()) {
         playWhisperSound(settings)
       }
     } else if (type === 'channel.raid') {
@@ -669,7 +676,7 @@ class ChatService {
   /** a watched channel just went live: optional sound + a banner toast */
   private onStreamWentLive(channel: string): void {
     const settings = useSettingsStore.getState().settings
-    if (settings.streamUpSound) playStreamUpSound(settings)
+    if (this.ownsSound && settings.streamUpSound) playStreamUpSound(settings)
     if (settings.streamUpNotify) {
       const name = useChatStore.getState().channelNames[channel] ?? channel
       const lang = settings.language
@@ -1101,7 +1108,7 @@ class ChatService {
     const settings = useSettingsStore.getState().settings
     // by default no ping for a channel you're already watching — you can see the mention.
     // The switch exists because a busy chat scrolls a mention away before you notice it.
-    if (settings.mentionSound && (!visible || settings.mentionSoundOnActive)) playMentionSound(settings)
+    if (this.ownsSound && settings.mentionSound && (!visible || settings.mentionSoundOnActive)) playMentionSound(settings)
 
     if (!visible) useChatStore.getState().setUnreadMention(msg.channel)
   }
@@ -1129,10 +1136,12 @@ class ChatService {
     const activeChannels = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
     const visible = activeChannels.includes(msg.channel)
     // each alert kind decides for itself whether it still sounds while you're on that tab
-    if (nickHit) {
-      if (!visible || settings.nickAlertSoundOnActive) playNickAlertSound(settings)
-    } else if (!visible || settings.keywordSoundOnActive) {
-      playKeywordSound(settings)
+    if (this.ownsSound) {
+      if (nickHit) {
+        if (!visible || settings.nickAlertSoundOnActive) playNickAlertSound(settings)
+      } else if (!visible || settings.keywordSoundOnActive) {
+        playKeywordSound(settings)
+      }
     }
     // tag the channel's tab with the matched word while the tab is inactive
     if (!visible) {
@@ -1158,7 +1167,7 @@ class ChatService {
     // don't ping yourself
     if (useAccountsStore.getState().accounts.some((a) => a.id === msg.userId)) return
     const settings = useSettingsStore.getState().settings
-    if (!settings.firstMessageSound) return
+    if (!this.ownsSound || !settings.firstMessageSound) return
     const { tabs, activeTabId } = useLayoutStore.getState()
     const activeChannels = tabs.find((t) => t.id === activeTabId)?.panes.map((p) => p.channel) ?? []
     if (!activeChannels.includes(msg.channel)) return
@@ -1250,7 +1259,7 @@ class ChatService {
       from: contextChannel,
       existing: open.includes(targetChannel)
     })
-    if (s.raidSound) playRaidSound(s)
+    if (this.ownsSound && s.raidSound) playRaidSound(s)
   }
 
   /** channel -> highlight expiry: known raiders keep the tag until this time */
