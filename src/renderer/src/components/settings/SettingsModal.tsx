@@ -846,6 +846,12 @@ function NotificationsSection(): React.JSX.Element {
     <Framed>
       <div className="set-group-title">{t('set.group.chatAlerts')}</div>
       <Toggle label={t('set.mentionSound')} hint={t('hint.mentionSound')} value={settings.mentionSound} onChange={(v) => set({ mentionSound: v })} />
+      <Toggle
+        label={t('set.alertSoundCooldown')}
+        hint={t('hint.alertSoundCooldown')}
+        value={settings.alertSoundCooldown}
+        onChange={(v) => set({ alertSoundCooldown: v })}
+      />
       {settings.mentionSound && (
         <>
           <Toggle

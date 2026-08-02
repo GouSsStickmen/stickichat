@@ -79,10 +79,14 @@ interface AlertSoundOpts {
 
 /** Plays an alert sound. Each `throttleKey` gets its own 2s anti-spam cooldown. `force` skips it (for previews). */
 function playAlertSound(opts: AlertSoundOpts, throttleKey: string, force = false): void {
+  const settings = useSettingsStore.getState().settings
   // global mute (except explicit previews from the settings UI)
-  if (!force && useSettingsStore.getState().settings.muted) return
+  if (!force && settings.muted) return
   const now = Date.now()
-  if (!force && now - (lastPlayed[throttleKey] ?? 0) < 2000) return
+  // the 2s guard keeps a flood from turning into a machine-gun; users who want to hear EVERY
+  // call-out (mention, reply, keyword, nick spelling) can switch it off
+  const gap = settings.alertSoundCooldown ? 2000 : 0
+  if (!force && gap && now - (lastPlayed[throttleKey] ?? 0) < gap) return
   lastPlayed[throttleKey] = now
   const volume = Math.max(0, Math.min(1, opts.volume ?? 0.5))
   if (volume === 0) return

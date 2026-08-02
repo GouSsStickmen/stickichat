@@ -189,6 +189,23 @@ function badgeImage(badge: StvBadge | null): string | undefined {
   return `${base}/${best}`
 }
 
+/** resolve true once a paint's background image has really decoded (false on error/timeout) */
+function imageLoads(cssUrl: string): Promise<boolean> {
+  const m = /url\('([^']+)'\)/.exec(cssUrl)
+  if (!m) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    const img = new Image()
+    const done = (ok: boolean): void => {
+      img.onload = img.onerror = null
+      resolve(ok)
+    }
+    img.onload = () => done(true)
+    img.onerror = () => done(false)
+    img.src = m[1]
+    window.setTimeout(() => done(false), 8000)
+  })
+}
+
 /** does the actual REST (+GQL) fetch once, caches the result, and resolves with the cosmetic */
 function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | undefined> {
   const st = useSevenTvColors.getState()
@@ -202,6 +219,10 @@ function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | unde
   const p = window.sticki
     .fetchJson(`https://7tv.io/v3/users/twitch/${twitchId}`)
     .then(async (res) => {
+      // A failed/rate-limited request has no body. Treating that as "this user has no
+      // cosmetic" is what erased real colours during a refresh burst — bail out and keep
+      // whatever we already had.
+      if (!res.ok || !res.json) return useSevenTvColors.getState().cosmetics[twitchId]
       const j = res.json as {
         user?: { id?: string; style?: { color?: number; paint_id?: string | null; badge_id?: string | null } }
       } | null
@@ -226,10 +247,21 @@ function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | unde
         }
       }
       if (!cosmetic && color) cosmetic = { color }
-      if (cosmetic) useSevenTvColors.getState().setCosmetic(twitchId, cosmetic)
-      else {
-        // the user cleared their paint/colour on 7TV — drop ours too, and remember the
-        // timestamp so we don't re-ask on every single message
+      if (cosmetic) {
+        // a URL paint makes the nick text transparent so the image shows through it. If that
+        // image never loads the nick is invisible and only its box shows — the "rectangle
+        // instead of a nick" report. Commit the paint only once the image is really there.
+        if (cosmetic.paint?.startsWith('url(')) {
+          const ok = await imageLoads(cosmetic.paint)
+          if (!ok) {
+            const { paint, paintSize, paintRepeat, paintShadow, ...rest } = cosmetic
+            void paint, paintSize, paintRepeat, paintShadow
+            cosmetic = rest
+          }
+        }
+        useSevenTvColors.getState().setCosmetic(twitchId, cosmetic)
+      } else {
+        // the response was fine and the user genuinely has no cosmetic — clear ours
         useSevenTvColors.getState().setCosmetic(twitchId, {})
         negative.add(twitchId)
       }
@@ -261,14 +293,25 @@ export function ensureSevenTvCosmetic(twitchId?: string): Cosmetic | undefined {
   return undefined
 }
 
-/** forget every cached cosmetic AND re-read them now (bound to the reconnect hotkey) */
-export function refreshAllSevenTvCosmetics(): void {
+/**
+ * Forget every cached cosmetic and re-read them, a few at a time.
+ *
+ * Firing one request per cached user at once (and each of those spawns a second GQL call)
+ * saturated the network and pegged the CPU hard enough to stutter audio in other apps, and
+ * the resulting rate-limiting then wiped colours. Refreshing is a background chore, so it
+ * runs with a small concurrency limit and yields between batches.
+ */
+const REFRESH_CONCURRENCY = 3
+
+export async function refreshAllSevenTvCosmetics(): Promise<void> {
   const ids = Object.keys(useSevenTvColors.getState().cosmetics)
   negative.clear()
   useSevenTvColors.setState({ fetchedAt: {} })
-  // actually re-request: only dropping the timestamps left every rendered message showing
-  // the stale colour until that user happened to send another message
-  for (const id of ids) void fetchCosmetic(id, true)
+  for (let i = 0; i < ids.length; i += REFRESH_CONCURRENCY) {
+    await Promise.all(ids.slice(i, i + REFRESH_CONCURRENCY).map((id) => fetchCosmetic(id, true)))
+    // let the UI (and everything else on the machine) breathe between batches
+    await new Promise((r) => setTimeout(r, 120))
+  }
 }
 
 /**
@@ -347,14 +390,19 @@ export function applyLiveCosmetic(e: {
     const def = paintDefs.get(e.id)
     if (!def) return // definition hasn't arrived yet; the next fetch will pick it up
     negative.delete(id)
-    store.setCosmetic(id, {
-      ...cur,
-      paint: def.background,
-      paintSize: def.size,
-      paintRepeat: def.repeat,
-      paintShadow: def.shadow,
-      paintColor: def.color ?? cur.paintColor
-    })
+    const commit = (withImage: boolean): void =>
+      store.setCosmetic(id, {
+        ...cur,
+        paint: withImage ? def.background : undefined,
+        paintSize: withImage ? def.size : undefined,
+        paintRepeat: withImage ? def.repeat : undefined,
+        paintShadow: withImage ? def.shadow : undefined,
+        paintColor: def.color ?? cur.paintColor
+      })
+    // same guard as the fetch path: never make the nick transparent for an image that
+    // hasn't loaded, or the user sees an empty rectangle where their name should be
+    if (def.background.startsWith('url(')) void imageLoads(def.background).then(commit)
+    else commit(true)
   } else {
     const def = badgeDefs.get(e.id)
     if (!def) return

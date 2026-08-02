@@ -879,6 +879,8 @@ export interface Settings {
   loadHistory: boolean // recent-messages.robotty.de
   highlightMentions: boolean
   mentionSound: boolean
+  /** keep the 2s gap between repeated alert sounds (off = every call-out is heard) */
+  alertSoundCooldown: boolean
   /** also play the ping when the mentioned channel is on screen (default: stay quiet) */
   mentionSoundOnActive: boolean
   mentionSoundType: SoundChoice
@@ -1120,6 +1122,7 @@ export const DEFAULT_SETTINGS: Settings = {
   loadHistory: true,
   highlightMentions: true,
   mentionSound: true,
+  alertSoundCooldown: true,
   mentionSoundOnActive: false,
   mentionSoundType: 'ping',
   mentionSoundVolume: 0.5,

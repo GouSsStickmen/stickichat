@@ -3779,11 +3779,7 @@ input[type='number']::-webkit-inner-spin-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-bottom: 6px;
   margin-bottom: 7px;
-  border-bottom: 1px solid currentColor;
-  /* the divider must be a hint, not a stripe */
-  border-bottom-color: color-mix(in srgb, currentColor 22%, transparent);
 }
 .toast-mute {
   margin: 0;
