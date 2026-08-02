@@ -3771,26 +3771,59 @@ input[type='number']::-webkit-inner-spin-button {
   border-radius: 6px;
 }
 
-/* ---- toasts: actions in a header row above the text ---- */
+
+/* ---- toasts: actions in a header row above the text ----
+   "don't show again" sits on the LEFT, ✕ on the right, both outlined and separated from the
+   message by a divider so they read as controls rather than as part of the error text. */
 .toast-actions {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 8px;
+  padding-bottom: 6px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid currentColor;
+  /* the divider must be a hint, not a stripe */
+  border-bottom-color: color-mix(in srgb, currentColor 22%, transparent);
 }
-.toast-close {
-  padding: 0 5px;
-  border: none;
+.toast-mute {
+  margin: 0;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 8px;
   background: transparent;
   color: inherit;
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.8;
+  cursor: pointer;
+}
+.toast-mute:hover {
+  opacity: 1;
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.toast-close {
+  /* pushed to the far right; with no mute button it is the only control and stays right */
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
   line-height: 1;
-  opacity: 0.65;
+  opacity: 0.8;
   cursor: pointer;
 }
 .toast-close:hover {
   opacity: 1;
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 .toast-text {
   /* long error wording must wrap instead of stretching the toast off-screen */

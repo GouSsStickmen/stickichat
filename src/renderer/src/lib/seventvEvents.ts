@@ -27,6 +27,29 @@ interface DispatchBody {
   updated?: { value?: SevenTvEmote; old_value?: { name?: string } }[]
 }
 
+/** a cosmetic definition or a grant of one, straight off the EventAPI */
+export interface CosmeticEvent {
+  kind: 'definition' | 'grant' | 'revoke'
+  /** PAINT | BADGE */
+  type: string
+  /** cosmetic id (definition) or ref_id (grant/revoke) */
+  id: string
+  /** definition payload, for kind === 'definition' */
+  data?: Record<string, unknown>
+  /** twitch user id, for grant/revoke */
+  twitchId?: string
+}
+
+interface CosmeticBody {
+  object?: {
+    id?: string
+    kind?: string
+    ref_id?: string
+    data?: Record<string, unknown>
+    user?: { connections?: { platform?: string; id?: string }[] }
+  }
+}
+
 export class SevenTvEvents {
   private ws: WebSocket | null = null
   private closed = false
@@ -34,12 +57,28 @@ export class SevenTvEvents {
   private reconnectTimer: number | null = null
   /** setId -> channel login */
   private watched = new Map<string, string>()
+  /** twitch channel ids whose COSMETICS we follow (paints/badges of everyone chatting there) */
+  private watchedChannels = new Set<string>()
   /** set ids already subscribed on the CURRENT socket */
   private subscribed = new Set<string>()
   private onUpdate: (u: SetUpdate) => void
+  private onCosmetic?: (e: CosmeticEvent) => void
 
-  constructor(onUpdate: (u: SetUpdate) => void) {
+  constructor(onUpdate: (u: SetUpdate) => void, onCosmetic?: (e: CosmeticEvent) => void) {
     this.onUpdate = onUpdate
+    this.onCosmetic = onCosmetic
+  }
+
+  /**
+   * Follow the cosmetics (paints/badges) of everyone chatting in a channel — the same
+   * channel-scoped subscription Chatterino uses. This is what makes a nick colour change on
+   * 7TV appear in chat within seconds instead of whenever a cache happens to expire.
+   */
+  watchCosmetics(twitchChannelId: string): void {
+    if (!twitchChannelId || this.watchedChannels.has(twitchChannelId)) return
+    this.watchedChannels.add(twitchChannelId)
+    if (!this.ws) this.connect()
+    else this.subscribeAll()
   }
 
   /** track a channel's emote set; connects lazily on the first watch */
@@ -77,14 +116,17 @@ export class SevenTvEvents {
     }
     ws.onmessage = (ev) => {
       if (this.ws !== ws) return
-      let msg: { op: number; d?: { type?: string; body?: DispatchBody } }
+      let msg: { op: number; d?: { type?: string; body?: unknown } }
       try {
         msg = JSON.parse(String(ev.data))
       } catch {
         return
       }
       if (msg.op === 0 && msg.d?.type === 'emote_set.update' && msg.d.body) {
-        this.handleUpdate(msg.d.body)
+        this.handleUpdate(msg.d.body as DispatchBody)
+      }
+      if (msg.op === 0 && msg.d?.type && /^(cosmetic|entitlement)\./.test(msg.d.type)) {
+        this.handleCosmetic(msg.d.type, msg.d.body as CosmeticBody)
       }
       // op 7 = RECONNECT request
       if (msg.op === 7) {
@@ -124,6 +166,29 @@ export class SevenTvEvents {
     if (added.length || removed.length) this.onUpdate({ channel, added, removed, actor })
   }
 
+  /** cosmetic.create -> a definition; entitlement.create/delete -> who wears it */
+  private handleCosmetic(type: string, body?: CosmeticBody): void {
+    const obj = body?.object
+    if (!obj || !this.onCosmetic) return
+    const kindName = String(obj.kind ?? '')
+    if (kindName !== 'PAINT' && kindName !== 'BADGE') return
+
+    if (type.startsWith('cosmetic.')) {
+      if (!obj.id || !obj.data) return
+      this.onCosmetic({ kind: 'definition', type: kindName, id: String(obj.id), data: obj.data })
+      return
+    }
+    // entitlement: find the holder's TWITCH id among their linked platform accounts
+    const conn = (obj.user?.connections ?? []).find((c) => c.platform === 'TWITCH')
+    if (!conn?.id || !obj.ref_id) return
+    this.onCosmetic({
+      kind: type.endsWith('.delete') ? 'revoke' : 'grant',
+      type: kindName,
+      id: String(obj.ref_id),
+      twitchId: String(conn.id)
+    })
+  }
+
   private subscribeAll(): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     for (const setId of this.watched.keys()) {
@@ -132,6 +197,15 @@ export class SevenTvEvents {
       this.ws.send(
         JSON.stringify({ op: 35, d: { type: 'emote_set.update', condition: { object_id: setId } } })
       )
+    }
+    for (const chanId of this.watchedChannels) {
+      const key = `cos:${chanId}`
+      if (this.subscribed.has(key)) continue
+      this.subscribed.add(key)
+      const condition = { platform: 'TWITCH', ctx: 'channel', id: chanId }
+      for (const type of ['cosmetic.*', 'entitlement.*']) {
+        this.ws.send(JSON.stringify({ op: 35, d: { type, condition } }))
+      }
     }
   }
 

@@ -59,6 +59,9 @@ const sevenTvEvents = new SevenTvEvents(({ channel, added, removed, actor }) => 
       )
     }
   })
+}, (e) => {
+  // paints/badges pushed by the EventAPI go straight into the cosmetics store
+  void import('../lib/seventvCosmetics').then((m) => m.applyLiveCosmetic(e))
 })
 
 export async function loadChannelEmotes(channel: string, twitchId: string): Promise<void> {
@@ -71,6 +74,8 @@ export async function loadChannelEmotes(channel: string, twitchId: string): Prom
   ])
   useEmotesStore.getState().setChannelEmotes(channel, mergeEmotes(ffz, bttv, stv.emotes))
   if (stv.setId) sevenTvEvents.watch(channel, stv.setId)
+  // follow paint/badge changes of everyone chatting here, so nick colours update live
+  sevenTvEvents.watchCosmetics(twitchId)
 }
 
 export async function loadGlobalBadges(): Promise<void> {

@@ -261,10 +261,14 @@ export function ensureSevenTvCosmetic(twitchId?: string): Cosmetic | undefined {
   return undefined
 }
 
-/** forget every cached cosmetic and re-read them (bound to the F5 emote reload) */
+/** forget every cached cosmetic AND re-read them now (bound to the reconnect hotkey) */
 export function refreshAllSevenTvCosmetics(): void {
+  const ids = Object.keys(useSevenTvColors.getState().cosmetics)
   negative.clear()
   useSevenTvColors.setState({ fetchedAt: {} })
+  // actually re-request: only dropping the timestamps left every rendered message showing
+  // the stale colour until that user happened to send another message
+  for (const id of ids) void fetchCosmetic(id, true)
 }
 
 /**
@@ -281,4 +285,80 @@ export async function awaitSevenTvCosmetic(twitchId?: string): Promise<Cosmetic 
 export function ensureSevenTvColor(twitchId?: string): string | undefined {
   const c = ensureSevenTvCosmetic(twitchId)
   return c?.color ?? c?.paintColor
+}
+
+// ---------------------------------------------------------------------------
+// LIVE cosmetics (7TV EventAPI)
+//
+// Polling could never feel instant: a paint change only showed up when a cache entry
+// happened to expire. The EventAPI pushes the same two things Chatterino listens for —
+// `cosmetic.create` (what a paint/badge looks like) and `entitlement.create/delete`
+// (who is wearing it) — scoped to a channel, so nick colours update within seconds.
+// ---------------------------------------------------------------------------
+
+/** cosmetic id -> its rendered form, remembered until a grant references it */
+const paintDefs = new Map<string, PaintCss & { color?: string }>()
+const badgeDefs = new Map<string, { url: string; tooltip: string }>()
+
+/** feed one EventAPI cosmetic message into the store */
+export function applyLiveCosmetic(e: {
+  kind: 'definition' | 'grant' | 'revoke'
+  type: string
+  id: string
+  data?: Record<string, unknown>
+  twitchId?: string
+}): void {
+  if (e.kind === 'definition') {
+    if (e.type === 'PAINT') {
+      const paint = e.data as unknown as Paint
+      const css = paintToCss(paint)
+      if (css) paintDefs.set(e.id, { ...css, color: paint.color ? intToHex(paint.color) : undefined })
+    } else {
+      const b = e.data as unknown as StvBadge
+      const url = badgeImage(b)
+      if (url) badgeDefs.set(e.id, { url, tooltip: b.tooltip ?? b.name ?? '7TV' })
+    }
+    return
+  }
+
+  const id = e.twitchId
+  if (!id) return
+  const store = useSevenTvColors.getState()
+  const cur = store.cosmetics[id] ?? {}
+
+  if (e.kind === 'revoke') {
+    const next: Cosmetic = { ...cur }
+    if (e.type === 'PAINT') {
+      delete next.paint
+      delete next.paintSize
+      delete next.paintRepeat
+      delete next.paintShadow
+      delete next.paintColor
+    } else {
+      delete next.badgeUrl
+      delete next.badgeTooltip
+    }
+    negative.delete(id)
+    store.setCosmetic(id, next)
+    return
+  }
+
+  if (e.type === 'PAINT') {
+    const def = paintDefs.get(e.id)
+    if (!def) return // definition hasn't arrived yet; the next fetch will pick it up
+    negative.delete(id)
+    store.setCosmetic(id, {
+      ...cur,
+      paint: def.background,
+      paintSize: def.size,
+      paintRepeat: def.repeat,
+      paintShadow: def.shadow,
+      paintColor: def.color ?? cur.paintColor
+    })
+  } else {
+    const def = badgeDefs.get(e.id)
+    if (!def) return
+    negative.delete(id)
+    store.setCosmetic(id, { ...cur, badgeUrl: def.url, badgeTooltip: def.tooltip })
+  }
 }

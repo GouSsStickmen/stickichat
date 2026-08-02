@@ -1,33 +1,49 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useUiStore } from '../store/ui'
 import { useSettingsStore } from '../store/settings'
 
 export default function EmoteHoverPreview(): React.JSX.Element | null {
   const preview = useUiStore((s) => s.emotePreview)
   const emoteSize = useSettingsStore((s) => s.settings.chatEmoteHoverSize)
+  const boxRef = useRef<HTMLDivElement>(null)
+  // measured height of the box; until it's known the box is rendered invisibly so it can't
+  // flash in the wrong place
+  const [boxH, setBoxH] = useState(0)
+
+  // A link picture's height is only known once it has decoded. Reserving the CSS maximum
+  // (78vh) instead made a short image sit as if it were tall — the box ended up far ABOVE
+  // the cursor whenever the message was near the bottom of the chat. Measure the real box.
+  useLayoutEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const measure = (): void => setBoxH(el.getBoundingClientRect().height)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [preview?.url, preview?.wide, preview?.wideSize, emoteSize])
+
   if (!preview) return null
   // link artwork is wide: cap it to a comfortable share of the window instead of the (square)
   // emote hover size, which would shrink a 16:9 thumbnail to a stamp
-  // wide previews use the user's chosen width, still capped so they can't exceed the window
   const size = preview.wide
     ? Math.min(preview.wideSize ?? 560, Math.round(window.innerWidth * 0.9))
     : emoteSize
 
-  // Height isn't known until the image decodes, so budget for the CSS cap and place the box
-  // on whichever side of the cursor has room. It always stays NEXT TO the cursor — an earlier
-  // attempt pinned wide previews to the middle of the window, which read as "flying away".
-  const budgetH = preview.wide ? Math.round(window.innerHeight * 0.78) : size + 34
-  const roomAbove = preview.y - 12
-  const roomBelow = window.innerHeight - preview.y - 20
-  const below = roomAbove < budgetH && roomBelow > roomAbove
-  const x = Math.max(8, Math.min(preview.x + 14, window.innerWidth - size - 24))
-  // anchor to the cursor, then clamp so neither edge leaves the window (no cropping)
-  let y = below ? preview.y + 20 : preview.y - 12 - budgetH
-  y = Math.max(8, Math.min(y, window.innerHeight - 8 - budgetH))
+  const GAP = 14
+  const h = boxH || 0
+  // sit just above the cursor by default; drop below only when there genuinely isn't room
+  let y = preview.y - GAP - h
+  if (y < 8) y = preview.y + GAP + 6
+  // and clamp so the box never leaves the window (no cropping at either edge)
+  y = Math.max(8, Math.min(y, window.innerHeight - 8 - h))
+  const x = Math.max(8, Math.min(preview.x + GAP, window.innerWidth - size - 24))
 
   return (
     <div
+      ref={boxRef}
       className={`emote-hover-preview ${preview.wide ? 'wide' : ''}`}
-      style={{ left: x, top: y }}
+      style={{ left: x, top: y, visibility: h ? 'visible' : 'hidden' }}
     >
       {/* scale the emote UP to the chosen size (contain keeps aspect) so the setting actually
           changes how big it looks, instead of capping at the image's native resolution */}
