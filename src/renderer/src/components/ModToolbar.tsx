@@ -27,6 +27,7 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
   const [announceColor, setAnnounceColor] = useState<'primary' | 'blue' | 'green' | 'orange' | 'purple'>('primary')
   const [modes, setModes] = useState<ChatSettingsPatch | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const isBroadcaster = account.login.toLowerCase() === pane.channel.toLowerCase()
 
   const openModes = async (): Promise<void> => {
     setPopover((p) => (p === 'modes' ? null : 'modes'))
@@ -106,6 +107,9 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
     <div className="mod-toolbar" style={{ position: 'relative' }} ref={rootRef}>
       {toolbarButtons.map((btn) => {
         if (btn.type === 'raid' && !btn.text) {
+          // Twitch rejects raids started by anyone but the channel owner, so a moderator
+          // pressing this could only ever get an error — hide it for them
+          if (!isBroadcaster) return null
           return (
             <button
               key={btn.id}
@@ -163,9 +167,6 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
             onClick={openModes}
           >
             🛡 {t('modes.title')}
-          </button>
-          <button disabled title={t('mod.pinUnavailable')}>
-            📌 {t('mod.pin')}
           </button>
         </>
       )}

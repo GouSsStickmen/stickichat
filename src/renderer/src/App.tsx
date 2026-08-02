@@ -293,6 +293,9 @@ export default function App(): React.JSX.Element | null {
       if (matchHotkey(e, hotkeyFor(useSettingsStore.getState().settings, 'reconnect'))) {
         e.preventDefault()
         chatService.reconnect()
+        // a manual reconnect is also the natural "refresh everything" gesture — drop cached
+        // 7TV cosmetics so changed paints/badges come back immediately
+        void import('./lib/seventvCosmetics').then((m) => m.refreshAllSevenTvCosmetics())
         useUiStore.getState().toast(t('misc.reconnecting'))
       }
     }

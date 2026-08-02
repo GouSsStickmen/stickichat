@@ -26,12 +26,20 @@ interface Cosmetic {
 
 interface SevenTvState {
   cosmetics: Record<string, Cosmetic> // twitchUserId -> cosmetic
+  /** twitchUserId -> when it was fetched, so a stale entry can be refreshed */
+  fetchedAt: Record<string, number>
   setCosmetic: (id: string, c: Cosmetic) => void
 }
 
-// v2: the paint CSS builder changed (repeat/shadows/sizing + badges), so old
-// entries would keep rendering the broken look forever
-const CACHE_KEY = 'sticki:stvCosmetics:v2'
+/**
+ * How long a cached cosmetic is trusted. People change their 7TV paint/badge and expect chat
+ * to follow; an unbounded cache meant the old colour stuck until the app was reinstalled.
+ * Short enough to feel live, long enough not to hammer 7TV on every message.
+ */
+const COSMETIC_TTL = 10 * 60 * 1000
+
+// v3: entries now carry a timestamp so they can expire (v2 had no TTL and went stale forever)
+const CACHE_KEY = 'sticki:stvCosmetics:v3'
 
 function loadCache(): Record<string, Cosmetic> {
   try {
@@ -43,15 +51,17 @@ function loadCache(): Record<string, Cosmetic> {
 
 export const useSevenTvColors = create<SevenTvState>()((set) => ({
   cosmetics: loadCache(),
+  fetchedAt: {},
   setCosmetic: (id, c) =>
     set((s) => {
       const cosmetics = { ...s.cosmetics, [id]: c }
+      const fetchedAt = { ...s.fetchedAt, [id]: Date.now() }
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(cosmetics))
       } catch {
         /* quota — non-critical */
       }
-      return { cosmetics }
+      return { cosmetics, fetchedAt }
     })
 }))
 
@@ -180,10 +190,12 @@ function badgeImage(badge: StvBadge | null): string | undefined {
 }
 
 /** does the actual REST (+GQL) fetch once, caches the result, and resolves with the cosmetic */
-function fetchCosmetic(twitchId: string): Promise<Cosmetic | undefined> {
-  const cached = useSevenTvColors.getState().cosmetics[twitchId]
-  if (cached) return Promise.resolve(cached)
-  if (negative.has(twitchId)) return Promise.resolve(undefined)
+function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | undefined> {
+  const st = useSevenTvColors.getState()
+  const cached = st.cosmetics[twitchId]
+  const fresh = Date.now() - (st.fetchedAt[twitchId] ?? 0) < COSMETIC_TTL
+  if (cached && fresh && !force) return Promise.resolve(cached)
+  if (negative.has(twitchId) && !force) return Promise.resolve(undefined)
   const existing = inFlight.get(twitchId)
   if (existing) return existing
   // through the main process — a raw renderer fetch to 7tv.io is blocked by the app CSP
@@ -215,7 +227,12 @@ function fetchCosmetic(twitchId: string): Promise<Cosmetic | undefined> {
       }
       if (!cosmetic && color) cosmetic = { color }
       if (cosmetic) useSevenTvColors.getState().setCosmetic(twitchId, cosmetic)
-      else negative.add(twitchId)
+      else {
+        // the user cleared their paint/colour on 7TV — drop ours too, and remember the
+        // timestamp so we don't re-ask on every single message
+        useSevenTvColors.getState().setCosmetic(twitchId, {})
+        negative.add(twitchId)
+      }
       return cosmetic
     })
     .catch(() => {
@@ -233,11 +250,21 @@ function fetchCosmetic(twitchId: string): Promise<Cosmetic | undefined> {
  */
 export function ensureSevenTvCosmetic(twitchId?: string): Cosmetic | undefined {
   if (!twitchId) return undefined
-  const cached = useSevenTvColors.getState().cosmetics[twitchId]
+  const st = useSevenTvColors.getState()
+  const cached = st.cosmetics[twitchId]
+  const stale = Date.now() - (st.fetchedAt[twitchId] ?? 0) >= COSMETIC_TTL
+  // keep showing what we have while a stale entry refreshes in the background, so a changed
+  // paint appears on its own instead of waiting for a restart
+  if (stale) void fetchCosmetic(twitchId)
   if (cached) return cached
   if (negative.has(twitchId)) return undefined
-  void fetchCosmetic(twitchId)
   return undefined
+}
+
+/** forget every cached cosmetic and re-read them (bound to the F5 emote reload) */
+export function refreshAllSevenTvCosmetics(): void {
+  negative.clear()
+  useSevenTvColors.setState({ fetchedAt: {} })
 }
 
 /**

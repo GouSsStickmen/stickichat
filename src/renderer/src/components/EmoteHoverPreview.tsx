@@ -12,26 +12,22 @@ export default function EmoteHoverPreview(): React.JSX.Element | null {
     ? Math.min(preview.wideSize ?? 560, Math.round(window.innerWidth * 0.9))
     : emoteSize
 
-  // anchor next to the cursor. The box grows UPWARD from a point just above the cursor via
-  // translateY(-100%), so it stays glued to the cursor no matter how large `size` is. Near the
-  // top of the screen we flip it below the cursor instead.
-  const flipBelow = preview.y - size - 40 < 8
+  // Height isn't known until the image decodes, so budget for the CSS cap and place the box
+  // on whichever side of the cursor has room. It always stays NEXT TO the cursor — an earlier
+  // attempt pinned wide previews to the middle of the window, which read as "flying away".
+  const budgetH = preview.wide ? Math.round(window.innerHeight * 0.78) : size + 34
+  const roomAbove = preview.y - 12
+  const roomBelow = window.innerHeight - preview.y - 20
+  const below = roomAbove < budgetH && roomBelow > roomAbove
   const x = Math.max(8, Math.min(preview.x + 14, window.innerWidth - size - 24))
-  let y = flipBelow ? preview.y + 20 : preview.y - 12
-  let translate = flipBelow ? undefined : 'translateY(-100%)'
-  if (preview.wide) {
-    // a link picture's height isn't known until it decodes, so the "grow upward from the
-    // cursor" trick could run the image off the bottom (or top) of the window and crop it.
-    // Pin a wide preview inside the viewport instead, capped to the same 78vh the CSS uses.
-    const maxH = Math.round(window.innerHeight * 0.78)
-    y = Math.max(8, Math.min(preview.y - maxH / 2, window.innerHeight - 8 - maxH))
-    translate = undefined
-  }
+  // anchor to the cursor, then clamp so neither edge leaves the window (no cropping)
+  let y = below ? preview.y + 20 : preview.y - 12 - budgetH
+  y = Math.max(8, Math.min(y, window.innerHeight - 8 - budgetH))
 
   return (
     <div
       className={`emote-hover-preview ${preview.wide ? 'wide' : ''}`}
-      style={{ left: x, top: y, transform: translate }}
+      style={{ left: x, top: y }}
     >
       {/* scale the emote UP to the chosen size (contain keeps aspect) so the setting actually
           changes how big it looks, instead of capping at the image's native resolution */}

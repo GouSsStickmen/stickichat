@@ -74,12 +74,18 @@ export function hlIngest(channel: string, msg: ChatMessage): void {
   // main window only — other windows would double-write the same storage key
   if (window.location.hash) return
   const st = useSettingsStore.getState()
-  const men = !!(msg.isMention || msg.replyToMe)
+  // a word/phrase alert is a call-out just like an @mention, so it belongs in the same tab.
+  // Matched here rather than relying on `isMention`, which is set by a different code path
+  // and would make the tab depend on ingest ordering.
+  const kwHit =
+    !msg.system &&
+    (matchesKeywords(msg.text, st.settings.keywordAlerts) ||
+      matchesKeywords(msg.text, st.settings.nickAlerts))
+  const men = !!(msg.isMention || msg.replyToMe || kwHit)
   const red = !!msg.redeemed
   const sub = !!msg.subEvent
   const hl =
-    isHighlightedMessage(msg, st.highlightRules, { caseSensitiveNicks: st.settings.caseSensitiveNicks }) ||
-    (!msg.system && matchesKeywords(msg.text, st.settings.keywordAlerts))
+    isHighlightedMessage(msg, st.highlightRules, { caseSensitiveNicks: st.settings.caseSensitiveNicks }) || kwHit
   if (!men && !red && !hl && !sub) return
   const map = loadSavedMap(channel)
   if (map.has(msg.id)) return
