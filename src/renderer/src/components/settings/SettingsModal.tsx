@@ -2004,9 +2004,21 @@ function HighlightsSection(): React.JSX.Element {
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
   const [mutedInput, setMutedInput] = useState('')
+  const listRef = useRef<HTMLDivElement>(null)
+  const [dragging, setDragging] = useState<string | null>(null)
+  useFlip(listRef, '.hl-card', !!dragging)
 
   const update = (id: string, patch: Partial<HighlightRule>): void => {
     setRules(rules.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }
+
+  /** rules are evaluated top-down and the first match wins, so their order IS the priority */
+  const reorderRules = (from: number, to: number): void => {
+    const next = [...useSettingsStore.getState().highlightRules]
+    if (from < 0 || to < 0 || from >= next.length || to >= next.length) return
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    setRules(next)
   }
 
   const addMuted = (): void => {
@@ -2038,35 +2050,64 @@ function HighlightsSection(): React.JSX.Element {
           <option value="avatar">{t('set.sharedChatTagMode.avatar')}</option>
         </select>
       </div>
-      {/* mentions: built-in category, same standardized row as the rules below */}
-      <div className="hl-row" title={t('hint.mentionBg')}>
-        <input
-          type="checkbox"
-          title={t('hl.enabled')}
-          checked={settings.showMentionBg}
-          onChange={(e) => set({ showMentionBg: e.target.checked })}
-        />
-        <span className="hl-kind-label">@ {t('hl.mention')}</span>
-        <ColorField
-          value={settings.mentionBgColor}
-          defaultValue="#8b5cf6"
-          onChange={(v) => set({ mentionBgColor: v })}
-        />
-        <input
-          type="range"
-          title={`${t('hl.opacity')}: ${Math.round(settings.mentionBgOpacity * 100)}%`}
-          min={5}
-          max={100}
-          value={Math.round(settings.mentionBgOpacity * 100)}
-          onChange={(e) => set({ mentionBgOpacity: parseInt(e.target.value, 10) / 100 })}
-        />
-        <span className="hl-preview" style={{ background: hexToRgba(settings.mentionBgColor, settings.mentionBgOpacity) }}>
-          Text
-        </span>
-        <div className="spacer" />
+      {/* mentions are a built-in category: no drag handle and no delete, but the same column
+          grid as the rules below so every control lines up down the page */}
+      <div className="hl-card hl-card-fixed">
+        <div className="hl-row" title={t('hint.mentionBg')}>
+          <span className="hl-drag-spacer" />
+          <input
+            type="checkbox"
+            title={t('hl.enabled')}
+            checked={settings.showMentionBg}
+            onChange={(e) => set({ showMentionBg: e.target.checked })}
+          />
+          <span className="hl-kind-label" style={{ gridColumn: 'span 2' }}>
+            @ {t('hl.mention')}
+          </span>
+          <ColorField
+            value={settings.mentionBgColor}
+            defaultValue="#8b5cf6"
+            onChange={(v) => set({ mentionBgColor: v })}
+          />
+          <span />
+          <input
+            type="range"
+            title={`${t('hl.opacity')}: ${Math.round(settings.mentionBgOpacity * 100)}%`}
+            min={5}
+            max={100}
+            value={Math.round(settings.mentionBgOpacity * 100)}
+            onChange={(e) => set({ mentionBgOpacity: parseInt(e.target.value, 10) / 100 })}
+          />
+          <span className="hl-preview" style={{ background: hexToRgba(settings.mentionBgColor, settings.mentionBgOpacity) }}>
+            {t('hl.sample')}
+          </span>
+          <span />
+        </div>
       </div>
-      {rules.map((r) => (
-        <div key={r.id} className="hl-row">
+      <div ref={listRef}>
+      {rules.map((r, index) => (
+        <div key={r.id} data-flipid={r.id} className={`hl-card ${dragging === r.id ? 'dragging' : ''}`}>
+        <div className="hl-row">
+          <span
+            className="hl-drag"
+            title={t('hl.reorder')}
+            onPointerDown={(e) => {
+              if (!listRef.current) return
+              e.preventDefault()
+              startPointerReorder({
+                e,
+                container: listRef.current,
+                itemSelector: '.hl-card',
+                index,
+                axis: 'y',
+                threshold: 3,
+                onMove: reorderRules,
+                onDragState: (d) => setDragging(d ? r.id : null)
+              })
+            }}
+          >
+            ⠿
+          </span>
           <input
             type="checkbox"
             title={t('hl.enabled')}
@@ -2086,7 +2127,9 @@ function HighlightsSection(): React.JSX.Element {
               </option>
             ))}
           </select>
-          {r.kind === 'badge' && (
+          {/* the value cell is always rendered, empty for the categories that don't take one.
+              Skipping it was why every row had a different shape and nothing lined up. */}
+          {r.kind === 'badge' ? (
             <select value={r.value} onChange={(e) => update(r.id, { value: e.target.value })}>
               <option value="" disabled>
                 {t('hl.value')}
@@ -2097,18 +2140,19 @@ function HighlightsSection(): React.JSX.Element {
                 </option>
               ))}
             </select>
-          )}
-          {r.kind === 'nick' && (
+          ) : r.kind === 'nick' ? (
             <input
               placeholder={t('hl.nickPlaceholder')}
               value={r.value}
               spellCheck={false}
               onChange={(e) => update(r.id, { value: e.target.value.trim() })}
             />
+          ) : (
+            <span />
           )}
           {r.adaptColor ? (
             <span className="hl-adapt-tag" title={t('hl.adapt.hint')}>
-              🎨 {t('hl.adaptShort')}
+              <PaletteIcon size={12} /> {t('hl.adaptShort')}
             </span>
           ) : (
             <ColorField value={r.color} defaultValue="#9147ff" onChange={(v) => update(r.id, { color: v })} />
@@ -2118,7 +2162,7 @@ function HighlightsSection(): React.JSX.Element {
             title={t('hl.adapt.hint')}
             onClick={() => update(r.id, { adaptColor: !r.adaptColor })}
           >
-            🎨
+            <PaletteIcon size={13} />
           </button>
           <input
             type="range"
@@ -2132,14 +2176,19 @@ function HighlightsSection(): React.JSX.Element {
             className="hl-preview"
             style={{ background: hexToRgba(r.adaptColor ? '#888888' : r.color, r.opacity) }}
           >
-            Text
+            {t('hl.sample')}
           </span>
-          <div className="spacer" />
-          <button className="danger" onClick={() => setRules(rules.filter((x) => x.id !== r.id))}>
-            ✕
+          <button
+            className="danger icon-btn"
+            title={t('hl.remove')}
+            onClick={() => setRules(rules.filter((x) => x.id !== r.id))}
+          >
+            <CloseIcon size={13} />
           </button>
         </div>
+        </div>
       ))}
+      </div>
       <button
         style={{ marginTop: 10 }}
         onClick={() =>
@@ -2170,8 +2219,11 @@ function HighlightsSection(): React.JSX.Element {
         {t('muted.hint')}
       </p>
       {settings.mutedUsers.map((u) => (
-        <div key={u.login} className="hl-row">
-          <b style={{ minWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.login}</b>
+        <div key={u.login} className="hl-card">
+        {/* muted users have their own column set — nick, mode, opacity — so they get their
+            own grid rather than borrowing the rule grid and leaving holes in it */}
+        <div className="muted-row">
+          <b style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.login}</b>
           <select
             value={u.mode}
             onChange={(e) =>
@@ -2201,15 +2253,16 @@ function HighlightsSection(): React.JSX.Element {
             }
           />
           <span className="hl-preview" style={{ opacity: u.mode === 'hide' ? 0.15 : u.opacity }}>
-            Text
+            {t('hl.sample')}
           </span>
-          <div className="spacer" />
           <button
-            className="danger"
+            className="danger icon-btn"
+            title={t('hl.remove')}
             onClick={() => set({ mutedUsers: settings.mutedUsers.filter((x) => x.login !== u.login) })}
           >
-            ✕
+            <CloseIcon size={13} />
           </button>
+        </div>
         </div>
       ))}
       <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>

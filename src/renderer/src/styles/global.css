@@ -1902,14 +1902,75 @@ select:focus {
   border: 1px solid var(--border);
 }
 /* standardized highlight-rule / muted-user row */
+/* One rule = one card, like the mod buttons, and the row inside it is a GRID with fixed
+   columns. It used to be a wrapping flexbox whose children changed per rule — a nick rule
+   added a text field, a badge rule a select, "adapt to nick" swapped the picker for a tag —
+   so every row had a different shape and no two sliders, swatches or eyedroppers lined up. */
+.hl-card {
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+  padding: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-1);
+}
+.hl-card.dragging {
+  opacity: 0.55;
+  border-color: var(--accent);
+}
+.hl-card-fixed {
+  border-style: dashed;
+}
 .hl-row {
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns:
+    16px 18px minmax(120px, 170px) minmax(90px, 170px)
+    auto 28px minmax(80px, 1fr) 52px 28px;
+  gap: var(--space-2);
   align-items: center;
-  flex-wrap: wrap;
   min-width: 0;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 5px 0;
+}
+.hl-row > * {
+  min-width: 0;
+}
+.hl-row select,
+.hl-row input[type='text'],
+.hl-row > input:not([type]) {
+  width: 100%;
+}
+.hl-row input[type='range'] {
+  width: 100%;
+  margin: 0;
+}
+.muted-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 190px) minmax(100px, 150px) minmax(80px, 1fr) 52px 28px;
+  gap: var(--space-2);
+  align-items: center;
+  padding: 5px 0;
+  min-width: 0;
+}
+.muted-row > * {
+  min-width: 0;
+}
+.muted-row select,
+.muted-row input[type='range'] {
+  width: 100%;
+  margin: 0;
+}
+.hl-drag,
+.hl-drag-spacer {
+  display: inline-block;
+  width: 16px;
+  color: var(--text-faint);
+  text-align: center;
+  user-select: none;
+}
+.hl-drag {
+  cursor: grab;
+}
+.hl-drag:active {
+  cursor: grabbing;
 }
 .hl-row .spacer {
   flex: 1;
