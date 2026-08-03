@@ -28,6 +28,8 @@ const api = {
     return () => ipcRenderer.removeListener('app:emotePicked', listener)
   },
   setAlwaysOnTop: (flag: boolean): Promise<void> => ipcRenderer.invoke('window:setAlwaysOnTop', flag),
+  setImageAnimation: (enabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('window:setImageAnimation', enabled),
   suspendAlwaysOnTop: (): Promise<void> => ipcRenderer.invoke('window:suspendAlwaysOnTop'),
   resumeAlwaysOnTop: (): Promise<void> => ipcRenderer.invoke('window:resumeAlwaysOnTop'),
   focusSelf: (): Promise<void> => ipcRenderer.invoke('window:focusSelf'),

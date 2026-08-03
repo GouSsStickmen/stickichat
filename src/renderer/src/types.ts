@@ -905,6 +905,8 @@ export interface Settings {
   theme: string
   /** themes the user built or imported; they live alongside the built-ins everywhere */
   customThemes: CustomTheme[]
+  /** freeze animated emotes while this window isn't focused — the first frame stays visible */
+  pauseEmotesUnfocused: boolean
   fontSize: number // px
   emoteScale: number // 1 = 100%
   showTimestamps: boolean
@@ -1149,6 +1151,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'uk',
   theme: 'dark',
   customThemes: [],
+  pauseEmotesUnfocused: false,
   fontSize: 13,
   emoteScale: 1,
   showTimestamps: true,

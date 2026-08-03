@@ -185,6 +185,19 @@ export function registerIpc(): void {
     }
   })
 
+  /**
+   * Freeze or resume animated images for THIS window.
+   *
+   * Chromium exposes this at the web-contents level, which is the only mechanism that
+   * actually works here: pausing a GIF/WebP is impossible from CSS, and snapshotting frames
+   * to a canvas taints it for BTTV and Twitch — neither CDN sends an Access-Control-Allow-Origin
+   * header, unlike 7TV and FFZ. 'noAnimation' leaves the first frame on screen, so chat stays
+   * readable while it costs nothing to paint.
+   */
+  ipcMain.handle('window:setImageAnimation', (e, enabled: boolean) => {
+    e.sender.setImageAnimationPolicy(enabled ? 'animate' : 'noAnimation')
+  })
+
   ipcMain.handle('window:setAlwaysOnTop', (e, flag: boolean) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     if (!win) return

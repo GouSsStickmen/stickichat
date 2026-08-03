@@ -18,6 +18,7 @@ export interface StickiApi {
   sendEmotePick(payload: string): Promise<void>
   onEmotePicked(cb: (payload: string) => void): () => void
   setAlwaysOnTop(flag: boolean): Promise<void>
+  setImageAnimation(enabled: boolean): Promise<void>
   suspendAlwaysOnTop(): Promise<void>
   resumeAlwaysOnTop(): Promise<void>
   focusSelf(): Promise<void>

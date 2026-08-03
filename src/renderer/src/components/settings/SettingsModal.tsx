@@ -985,6 +985,13 @@ function AppearanceSection(): React.JSX.Element {
     <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
       <ThemeSection />
+      <div className="set-group-title">{t('set.group.performance')}</div>
+      <Toggle
+        label={t('set.pauseEmotesUnfocused')}
+        hint={t('hint.pauseEmotesUnfocused')}
+        value={settings.pauseEmotesUnfocused}
+        onChange={(v) => set({ pauseEmotesUnfocused: v })}
+      />
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
         <FontPicker value={settings.fontFamily} onChange={(v) => set({ fontFamily: v })} />

@@ -205,6 +205,30 @@ export default function App(): React.JSX.Element | null {
     window.sticki.overlayConfigure(settings.overlayEnabled, settings.overlayPort, styles)
   }, [settings.overlayEnabled, settings.overlayPort, settings.chatOverlays, settings.customFonts, special])
 
+  /**
+   * Optional: freeze animated emotes while this window isn't focused.
+   *
+   * With a fast channel the visible chat costs most of a core just to paint, which is what
+   * makes dragging the window feel like it snags. Nobody is reading animations they aren't
+   * looking at, so this hands that back — off by default, because it's a visible change.
+   */
+  useEffect(() => {
+    const pause = settings.pauseEmotesUnfocused
+    const apply = (): void => {
+      void window.sticki.setImageAnimation(!pause || document.hasFocus())
+    }
+    apply()
+    if (!pause) return
+    window.addEventListener('focus', apply)
+    window.addEventListener('blur', apply)
+    return () => {
+      window.removeEventListener('focus', apply)
+      window.removeEventListener('blur', apply)
+      // leaving the setting behind must not leave the window frozen
+      void window.sticki.setImageAnimation(true)
+    }
+  }, [settings.pauseEmotesUnfocused])
+
   useEffect(() => {
     if (!booted || !onboarded) return
     if (
