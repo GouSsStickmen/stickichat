@@ -922,6 +922,13 @@ select:focus {
 /* jump-to flash + swipe moderation */
 .msg-outer {
   position: relative;
+  /* Not clipped: the hover buttons now hang above the row's top edge and have to be allowed
+     out. The only thing that ever needs clipping is a swipe in progress, where the row slides
+     sideways and would otherwise smear over its neighbours — so the clip is put on for exactly
+     as long as that lasts. */
+  overflow: visible;
+}
+.msg-outer:has(.msg.swiping) {
   overflow: hidden;
 }
 .msg.flash {
@@ -951,14 +958,18 @@ select:focus {
   z-index: 0;
 }
 
-/* hover actions on messages (kept inside the row so overflow never clips them) */
+/* hover actions on messages */
 .msg .hover-actions {
   display: none;
   position: absolute;
   right: 6px;
-  /* INSIDE the message's top-right corner — sitting above the row (negative top) let it be
-     clipped by the scroller and overlapped by the neighbouring row */
-  top: 2px;
+  /* Straddles the row's TOP EDGE, mostly above it. Inside the row it landed on the first line
+     of the very message you were reading, which made selecting that text awkward; up here it
+     overlaps the previous row instead — and the hovered row carries z-index 5, so it is drawn
+     on top of that row rather than under it. translateY keeps this independent of how tall the
+     pill turns out to be with the user's chosen mod buttons. */
+  top: 0;
+  transform: translateY(-68%);
   gap: 3px;
   background: var(--surface-3);
   border: 1px solid var(--border);
