@@ -920,11 +920,15 @@ select:focus {
 }
 
 /* jump-to flash + swipe moderation */
-/* The unclipped frame. Only the hover buttons stick out of it, and they are positioned
-   against it — everything that could actually spill sideways lives in .msg-outer below, so
-   this box never widens the list and never produces a horizontal scrollbar. */
+/* The frame the hover buttons hang out of. `clip` rather than `visible`: clip never scrolls
+   and never hands scrollable overflow up to the list, so nothing in here can put a horizontal
+   scrollbar under the chat — while overflow-clip-margin still lets the buttons stick out far
+   enough to sit above the row. (overflow-x: clip is not an option: pairing it with a visible
+   other axis forces that axis to hidden, which would cut the buttons off.) */
 .msg-row {
   position: relative;
+  overflow: clip;
+  overflow-clip-margin: 40px;
 }
 /* clipped: the row slides sideways during a swipe and must not smear over its neighbours */
 .msg-outer {
@@ -991,7 +995,9 @@ select:focus {
   content: '';
   position: absolute;
   left: -12px;
-  right: -8px;
+  /* not past the pill's own 6px inset from the row's right edge — sticking out further is
+     what put a horizontal scrollbar under the chat on hover */
+  right: -4px;
   top: -6px;
   bottom: -6px;
   z-index: -1;
