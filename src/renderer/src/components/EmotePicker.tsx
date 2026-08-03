@@ -10,6 +10,7 @@ import { KAOMOJI } from '../lib/kaomoji'
 import EmojiGlyph from './EmojiGlyph'
 import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
+import { StarIcon, LockIcon, PinIcon } from './Icons'
 
 // One shared observer: an <img> gets its real src only when it approaches the viewport.
 // Native loading="lazy" still fired THOUSANDS of parallel requests for big 7TV channels
@@ -382,8 +383,8 @@ export default function EmotePicker({
           }
         }}
       >
-        {isFav && <span className="fav-star">⭐</span>}
-        {locked && <span className="emote-lock" title={t('picker.locked')}>🔒</span>}
+        {isFav && <span className="fav-star"><StarIcon filled size={12} /></span>}
+        {locked && <span className="emote-lock" title={t('picker.locked')}><LockIcon size={12} /></span>}
         {isKaomoji ? (
           <span className="kaomoji-fav-text">{e.code}</span>
         ) : e.provider === 'emoji' ? (
@@ -558,7 +559,7 @@ export default function EmotePicker({
                     ) : (
                       <span>{g.label.replace('#', '').slice(0, 2)}</span>
                     )}
-                    {pinnedOwners.includes(g.key) && <span className="picker-owner-pin">📌</span>}
+                    {pinnedOwners.includes(g.key) && <span className="picker-owner-pin"><PinIcon size={13} /></span>}
                   </button>
                 ))}
               </div>
@@ -600,7 +601,7 @@ export default function EmotePicker({
                           toggleFavorite({ code: k, url: '', provider: 'emoji' })
                         }}
                       >
-                        {isFav && <span className="fav-star">⭐</span>}
+                        {isFav && <span className="fav-star"><StarIcon filled size={12} /></span>}
                         {k}
                       </button>
                     )

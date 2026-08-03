@@ -16,6 +16,7 @@ import ChattersList from './ChattersList'
 import HighlightSidebar from './HighlightSidebar'
 import { AddPaneForm } from './SplitGrid'
 import { useT } from '../i18n'
+import { EyeIcon, ClockIcon, GameIcon } from './Icons'
 
 function formatUptime(startedAt: string): string {
   const ms = Date.now() - new Date(startedAt).getTime()
@@ -177,8 +178,8 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         )}
         {showStreamInfo && streamInfo && (
           <span className="stream-info" title={streamInfo.title}>
-            <span className="si-icon">👁</span> {streamInfo.viewers.toLocaleString('uk-UA')} ·{' '}
-            <span className="si-icon">⏱</span> {formatUptime(streamInfo.startedAt)}
+            <span className="si-icon"><EyeIcon size={13} /></span> {streamInfo.viewers.toLocaleString('uk-UA')} ·{' '}
+            <span className="si-icon"><ClockIcon size={13} /></span> {formatUptime(streamInfo.startedAt)}
             {streamInfo.title ? ` · ${streamInfo.title}` : ''}
           </span>
         )}
@@ -261,7 +262,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
       </div>
       {showStreamInfo && streamInfo?.game && (
         <div className="pane-subheader" title={streamInfo.game}>
-          <span className="si-icon">🎮</span> {streamInfo.game}
+          <span className="si-icon"><GameIcon size={13} /></span> {streamInfo.game}
         </div>
       )}
       {searchOpen && <ChatSearch channel={pane.channel} onClose={() => setSearchOpen(false)} />}

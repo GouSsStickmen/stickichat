@@ -9,7 +9,7 @@ import { buildChannelSeed } from '../lib/detachSeed'
 import { useFlip } from '../lib/useFlip'
 import WhisperPanel from './WhisperPanel'
 import { useT } from '../i18n'
-import { ZoomIcon } from './Icons'
+import { ZoomIcon, MailIcon, SpeakerIcon, PinIcon, GearIcon } from './Icons'
 
 export default function TabBar(): React.JSX.Element {
   const t = useT()
@@ -149,7 +149,7 @@ export default function TabBar(): React.JSX.Element {
             }
           }}
         >
-          ✉
+          <MailIcon />
           {unreadWhispers > 0 && <span className="whisper-badge">{unreadWhispers}</span>}
         </button>
         {whispersOpen && <WhisperPanel onClose={() => useUiStore.getState().setWhispersOpen(false)} />}
@@ -159,14 +159,14 @@ export default function TabBar(): React.JSX.Element {
         title={t('set.mute')}
         onClick={() => setSettings({ muted: !muted })}
       >
-        {muted ? '🔇' : '🔊'}
+        <SpeakerIcon muted={muted} />
       </button>
       <button
         className={`icon-btn ${alwaysOnTop ? 'active' : ''}`}
         title={t('set.alwaysOnTop')}
         onClick={() => setSettings({ alwaysOnTop: !alwaysOnTop })}
       >
-        📌
+        <PinIcon />
       </button>
       <button
         className="icon-btn"
@@ -179,15 +179,15 @@ export default function TabBar(): React.JSX.Element {
           }
         }}
       >
-        ⚙
+        <GearIcon />
       </button>
-      </div>
-      <div className="tabbar-tabs" ref={tabsRef} style={{ zoom: tabScale }}>
       <span
         className="conn-dot"
         title={connState === 'open' ? t('misc.connected') : t('misc.disconnected')}
         style={{ background: connState === 'open' ? 'var(--success)' : 'var(--danger)' }}
       />
+      </div>
+      <div className="tabbar-tabs" ref={tabsRef} style={{ zoom: tabScale }}>
       {visibleTabs.map((tab, index) => {
         const hasLive = tab.panes.some((p) => liveChannels[p.channel])
         const hasMention = tab.panes.some((p) => unreadMentions[p.channel])

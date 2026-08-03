@@ -41,7 +41,15 @@ import { exportConfigJson, importConfigJson } from '../../services/config'
 import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
 import { CHAT_FONT_MAX } from '../../App'
-import { TranslitIcon } from '../Icons'
+import {
+  TranslitIcon,
+  PlayIcon,
+  TrashIcon,
+  PencilIcon,
+  CloseIcon,
+  TrayArrowIcon,
+  PaletteIcon
+} from '../Icons'
 import {
   THEMES,
   getTheme,
@@ -684,7 +692,7 @@ function ThemeSection(): React.JSX.Element {
                       setEditing({ ...(th as CustomTheme), tokens: { ...DEFAULT_TOKENS, ...th.tokens } })
                     }}
                   >
-                    &#9998;
+                    <PencilIcon size={13} />
                   </button>
                   <button
                     title={t('theme.export')}
@@ -694,7 +702,7 @@ function ThemeSection(): React.JSX.Element {
                       download(exportThemeJson(th as CustomTheme), `${safe(th.name)}.stickichat-theme.json`)
                     }}
                   >
-                    &#11015;
+                    <TrayArrowIcon dir="out" size={13} />
                   </button>
                   <button
                     title={t('theme.delete')}
@@ -709,7 +717,7 @@ function ThemeSection(): React.JSX.Element {
                       })
                     }}
                   >
-                    &#10005;
+                    <CloseIcon size={13} />
                   </button>
                 </span>
               )}
@@ -721,7 +729,9 @@ function ThemeSection(): React.JSX.Element {
         </button>
       </div>
       <div className="ov-io" style={{ marginTop: 2 }}>
-        <button onClick={() => importRef.current?.click()}>&#11165; {t('theme.io.import')}</button>
+        <button onClick={() => importRef.current?.click()}>
+          <TrayArrowIcon dir="in" /> {t('theme.io.import')}
+        </button>
         <button
           disabled={!custom.length}
           onClick={() =>
@@ -731,7 +741,7 @@ function ThemeSection(): React.JSX.Element {
             )
           }
         >
-          &#11015; {t('theme.io.exportAll')}
+          <TrayArrowIcon dir="out" /> {t('theme.io.exportAll')}
         </button>
         <input
           ref={importRef}
@@ -1407,17 +1417,17 @@ function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
             ))}
             {settings.customSounds.map((c) => (
               <option key={c.id} value={`custom:${c.id}`}>
-                🎵 {c.name}
+                {c.name}
               </option>
             ))}
           </select>
           <button onClick={() => play(true)} title={t('set.sound.preview')}>
-            ▶
+            <PlayIcon />
           </button>
           {/* delete the currently-selected uploaded sound right here — no bulky bottom list */}
           {type === 'custom' && customId && (
             <button className="danger" title={t('set.sound.delete')} onClick={() => removeCustomSound(customId)}>
-              🗑
+              <TrashIcon />
             </button>
           )}
         </div>
@@ -2515,9 +2525,11 @@ function OverlaySection(): React.JSX.Element {
       )}
 
       <div className="ov-io" title={t('oe.io.hint')}>
-        <button onClick={() => importRef.current?.click()}>⭱ {t('oe.io.import')}</button>
+        <button onClick={() => importRef.current?.click()}>
+          <TrayArrowIcon dir="in" /> {t('oe.io.import')}
+        </button>
         <button disabled={!settings.chatOverlays.length} onClick={exportAll}>
-          ⭳ {t('oe.io.exportAll')}
+          <TrayArrowIcon dir="out" /> {t('oe.io.exportAll')}
         </button>
         <input
           ref={importRef}

@@ -302,11 +302,14 @@ select:focus {
 .tabbar .spacer {
   flex: 1;
 }
+/* the connection dot lives in the ACTIONS group, not in the tab flow. As the first inline
+   child of the tab rows it was pushing row one a few pixels right of the rows below it — and
+   as a plain <span> its width/height did nothing, so it never drew a dot in the first place. */
 .conn-dot {
+  display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: var(--radius-circle);
-  margin-right: 6px;
   flex-shrink: 0;
 }
 .live-dot {
@@ -1926,9 +1929,9 @@ select:focus {
   font-weight: 600;
 }
 /* labels that carry a long-hover hint get a subtle affordance */
+/* no underline: with a hint on nearly every row the dotted rules became a texture of their
+   own and made the panel look busier than it is. The cursor still says "there's more here". */
 .set-row label.has-hint {
-  text-decoration: underline dotted var(--text-faint);
-  text-underline-offset: 3px;
   cursor: help;
 }
 
