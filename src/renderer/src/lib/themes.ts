@@ -47,9 +47,9 @@ const DARK: Record<string, string> = {
   '--shadow-md': '0 4px 14px rgba(0, 0, 0, 0.4)',
   '--shadow': '0 8px 30px rgba(0, 0, 0, 0.55)',
   '--shadow-lg': '0 12px 40px rgba(0, 0, 0, 0.55)',
-  '--scrim': 'rgba(0, 0, 0, 0.55)',
-  '--checker-a': '#2a2a30',
-  '--checker-b': '#202024'
+  '--scrim': 'rgba(0, 0, 0, 0.42)',
+  '--checker-a': '#33333b',
+  '--checker-b': '#1c1c20'
 }
 
 /** the token names a theme is allowed to define — used to validate imported themes */
@@ -87,9 +87,10 @@ export const THEMES: Theme[] = [
       '--shadow-md': '0 4px 14px rgba(0, 0, 0, 0.12)',
       '--shadow': '0 8px 30px rgba(0, 0, 0, 0.18)',
       '--shadow-lg': '0 12px 40px rgba(0, 0, 0, 0.2)',
-      '--scrim': 'rgba(0, 0, 0, 0.35)',
-      '--checker-a': '#e4e4e8',
-      '--checker-b': '#f4f4f6'
+      // a light UI needs far less dimming before the dialog reads as "on top"
+      '--scrim': 'rgba(0, 0, 0, 0.2)',
+      '--checker-a': '#c9c9d2',
+      '--checker-b': '#eeeef2'
     }
   },
   {
@@ -105,8 +106,8 @@ export const THEMES: Theme[] = [
       '--border': '#26262b',
       '--text': '#f2f2f4',
       '--scrollbar': '#2e2e34',
-      '--checker-a': '#1a1a1f',
-      '--checker-b': '#101013'
+      '--checker-a': '#232329',
+      '--checker-b': '#0c0c0f'
     }
   },
   {
@@ -129,8 +130,8 @@ export const THEMES: Theme[] = [
       '--warning': '#d29922',
       '--danger': '#f85149',
       '--scrollbar': '#31404f',
-      '--checker-a': '#22303f',
-      '--checker-b': '#1a2330'
+      '--checker-a': '#2a3b4e',
+      '--checker-b': '#161d27'
     }
   },
   {
@@ -155,8 +156,10 @@ export const THEMES: Theme[] = [
       '--danger': '#bf616a',
       '--highlight-bg': 'rgba(191, 97, 106, 0.16)',
       '--scrollbar': '#4c566a',
-      '--checker-a': '#434c5e',
-      '--checker-b': '#3b4252'
+      // tinted with the palette's own deep tone: neutral black greys a mid-tone theme out
+      '--scrim': 'rgba(17, 21, 28, 0.42)',
+      '--checker-a': '#4c566a',
+      '--checker-b': '#333a47'
     }
   },
   {
@@ -181,8 +184,9 @@ export const THEMES: Theme[] = [
       '--danger': '#fb4934',
       '--highlight-bg': 'rgba(251, 73, 52, 0.14)',
       '--scrollbar': '#504945',
-      '--checker-a': '#3c3836',
-      '--checker-b': '#32302f'
+      '--scrim': 'rgba(12, 13, 13, 0.42)',
+      '--checker-a': '#4a4441',
+      '--checker-b': '#2a2827'
     }
   },
   {
@@ -211,9 +215,9 @@ export const THEMES: Theme[] = [
       '--shadow-md': '0 4px 14px rgba(87, 82, 121, 0.14)',
       '--shadow': '0 8px 30px rgba(87, 82, 121, 0.18)',
       '--shadow-lg': '0 12px 40px rgba(87, 82, 121, 0.2)',
-      '--scrim': 'rgba(87, 82, 121, 0.35)',
-      '--checker-a': '#e9ded4',
-      '--checker-b': '#f2e9e1'
+      '--scrim': 'rgba(87, 82, 121, 0.18)',
+      '--checker-a': '#d3c2b4',
+      '--checker-b': '#f4ece5'
     }
   }
 ]
@@ -241,5 +245,8 @@ export function applyTheme(id: string): void {
   for (const [name, value] of Object.entries(tokens)) root.style.setProperty(name, value)
   // some CSS still keys off light/dark, and so do native controls (scrollbars, form widgets)
   root.dataset.theme = theme.dark ? 'dark' : 'light'
-  root.style.colorScheme = theme.dark ? 'dark' : 'light'
+  // NOTE: deliberately no `color-scheme` here. Declaring one makes the root canvas opaque,
+  // and that opacity is inherited by embedded documents — it turned the overlay editor's
+  // preview iframe into a solid white (light theme) or black (dark) rectangle instead of
+  // letting the transparent overlay page show the checkerboard behind it.
 }

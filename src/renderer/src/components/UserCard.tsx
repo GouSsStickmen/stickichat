@@ -16,6 +16,7 @@ import { PinButton } from './EmotePicker'
 import { localizeApiError } from '../lib/apiErrors'
 import { fetchUserBadges, GqlBadge } from '../lib/twitchGql'
 import { useSevenTvColors, ensureSevenTvCosmetic, paintStyleOf } from '../lib/seventvCosmetics'
+import { isDarkTheme } from '../lib/themes'
 import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
 import { useFfzBadges, ensureFfzBadges } from '../lib/ffzCosmetics'
 import { ZoomIcon } from './Icons'
@@ -54,7 +55,7 @@ export default function UserCard({
   const stvBadge = stvCos?.badgeUrl ? { url: stvCos.badgeUrl, title: stvCos.badgeTooltip ?? '7TV' } : undefined
   // the card should show the same nick the user sees in chat, paint and all
   const stvOn = useSettingsStore((s) => s.settings.sevenTvNickColors)
-  const nickPaint = stvOn ? paintStyleOf(stvCos) : undefined
+  const nickPaint = stvOn ? paintStyleOf(stvCos, isDarkTheme(useSettingsStore.getState().settings.theme)) : undefined
   const nickColor = (stvOn && stvCos?.color) || target.color
   const paintKey = stvCos?.paint ?? 'plain'
   // the user's public badge collection (GQL) — Helix can't tell us which badges someone owns

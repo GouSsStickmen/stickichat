@@ -112,7 +112,7 @@ function TokenView({
       const login = mentionLogin
       // a mention should look like the person it names — same 7TV paint/colour as their nick
       const cos = mentionCos
-      const mPaint = paintStyleOf(cos)
+      const mPaint = paintStyleOf(cos, isDarkTheme(useSettingsStore.getState().settings.theme))
       const mColor = cos?.color ?? cos?.paintColor ?? token.color
       return (
         <span
@@ -616,7 +616,7 @@ function MessageViewInner({
   // a 7TV gradient/image paint renders as the nick's own text fill (clipped background).
   // size/repeat matter for URL paints (a bare tile covered a corner of the nick) and the
   // shadow chain is a big part of how a paint actually looks on 7TV.
-  const paintStyle = settings.sevenTvNickColors ? paintStyleOf(stvCosmetic) : undefined
+  const paintStyle = settings.sevenTvNickColors ? paintStyleOf(stvCosmetic, dark) : undefined
   const classes = ['msg']
   // shared chat: visitors from the partner channel get a subtle tint + origin tag
   if (msg.sourceRoomId) classes.push('shared-msg')

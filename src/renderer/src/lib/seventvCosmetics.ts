@@ -33,8 +33,13 @@ export interface Cosmetic {
  * fills the whole box and you get a coloured bar where the nick should be. Callers therefore
  * give the element a `key` derived from the paint so it remounts on change.
  */
-export function paintStyleOf(c?: Cosmetic): CSSProperties | undefined {
+export function paintStyleOf(c?: Cosmetic, darkBg = true): CSSProperties | undefined {
   if (!c?.paint) return undefined
+  // People pick their paint on 7TV, where chat is always dark, so plenty of paints run
+  // through near-white. On a light theme those stops vanish and the nick reads with holes
+  // in it ("PotatBotat" → "P⋯atB⋯at"). A hairline dark halo keeps every stop legible
+  // without touching the paint's own colours — recolouring it would misrepresent the paint.
+  const legible = darkBg ? '' : ' drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.45))'
   return {
     background: c.paint,
     backgroundSize: c.paintSize,
@@ -43,7 +48,7 @@ export function paintStyleOf(c?: Cosmetic): CSSProperties | undefined {
     WebkitBackgroundClip: 'text',
     color: 'transparent',
     WebkitTextFillColor: 'transparent',
-    filter: c.paintShadow
+    filter: `${c.paintShadow ?? ''}${legible}`.trim() || undefined
   }
 }
 

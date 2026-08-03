@@ -101,11 +101,11 @@
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
-  /* dim behind modals and popovers */
-  --scrim: rgba(0, 0, 0, 0.55);
+  /* dim behind modals and popovers — enough to focus the dialog, not enough to fog the app */
+  --scrim: rgba(0, 0, 0, 0.42);
   /* transparency checkerboard behind images with alpha */
-  --checker-a: #2a2a30;
-  --checker-b: #202024;
+  --checker-a: #33333b;
+  --checker-b: #1c1c20;
 }
 
 * {

@@ -39,11 +39,13 @@ function HlNick({
   userId,
   color,
   enabled,
+  dark,
   children
 }: {
   userId?: string
   color?: string
   enabled: boolean
+  dark: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   const cos = useSevenTvColors((s) => (enabled && userId ? s.cosmetics[userId] : undefined))
@@ -51,7 +53,7 @@ function HlNick({
     // saved highlights outlive the chat buffer, so the author may not have been fetched yet
     if (enabled && userId) ensureSevenTvCosmetic(userId)
   }, [enabled, userId])
-  const paint = paintStyleOf(cos)
+  const paint = paintStyleOf(cos, dark)
   return (
     // key: Chromium keeps the old text clip when a live element's background changes
     <span
@@ -243,7 +245,7 @@ export default function HighlightSidebar({
                 className={`highlight-item ${m.timestamp > lastReadAt ? 'unread' : ''}`}
                 onClick={() => jumpTo(m.id)}
               >
-                <HlNick userId={m.userId} color={color} enabled={stvOn}>
+                <HlNick userId={m.userId} color={color} enabled={stvOn} dark={dark}>
                   {m.rewardIcon ? (
                     <img className="hl-redeem-icon" src={m.rewardIcon} alt="" />
                   ) : (
@@ -265,7 +267,7 @@ export default function HighlightSidebar({
               className={`highlight-item ${m.timestamp > lastReadAt ? 'unread' : ''}`}
               onClick={() => jumpTo(m.id)}
             >
-              <HlNick userId={m.userId} color={color} enabled={stvOn}>
+              <HlNick userId={m.userId} color={color} enabled={stvOn} dark={dark}>
                 {m.redeemed && '🔴 '}
                 {!m.system &&
                   m.badges.map((b) => {
