@@ -1409,17 +1409,19 @@ select:focus {
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
-  width: min(680px, 92vw);
-  max-height: 88vh;
+  /* the viewport terms are divided by --panel-scale because the settings panel zooms itself
+     (see SettingsModal): without that, at 180% a "96vw" cap would paint 1.7 screens wide */
+  width: min(680px, calc(92vw / var(--panel-scale, 1)));
+  max-height: calc(88vh / var(--panel-scale, 1));
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 .modal.small {
-  width: min(440px, 92vw);
+  width: min(440px, calc(92vw / var(--panel-scale, 1)));
 }
 .modal.wide {
-  width: min(940px, 96vw);
+  width: min(940px, calc(96vw / var(--panel-scale, 1)));
 }
 .standalone-settings {
   width: 100%;
@@ -1967,9 +1969,13 @@ select:focus {
 }
 .hl-row {
   display: grid;
+  /* The colour cell is max-content, not auto: `auto` let the swatch be the track that gave
+     way when the panel narrowed, and a colour you cannot see is not a setting. The two
+     selects and the opacity slider are the ones that shrink, and their floors are low enough
+     that the row still fits in a narrow panel. */
   grid-template-columns:
-    16px 18px minmax(120px, 170px) minmax(90px, 170px)
-    auto 28px minmax(80px, 1fr) 52px 28px;
+    16px 18px minmax(92px, 170px) minmax(80px, 170px)
+    max-content 28px minmax(64px, 1fr) 52px 28px;
   gap: var(--space-2);
   align-items: center;
   min-width: 0;
@@ -1977,6 +1983,10 @@ select:focus {
 }
 .hl-row > * {
   min-width: 0;
+}
+/* …except the colour cell, which the rule above would otherwise let collapse anyway */
+.hl-row > .color-field {
+  min-width: max-content;
 }
 .hl-row select,
 .hl-row input[type='text'],
@@ -2054,7 +2064,22 @@ select:focus {
   padding: 8px;
   min-width: 190px;
 }
+/* A colour picker that shrinks is a colour picker you cannot see the colour of. Every row it
+   sits in is a grid or a flexbox with something stretchy next to it, so by default it was the
+   thing that gave way: in a narrow settings panel the swatch squeezed to a sliver and then
+   vanished entirely. Nothing in here yields — the flexible controls beside it do. */
+.color-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  flex: none;
+}
+.color-field > * {
+  flex: none;
+}
 .color-swatch-main {
+  flex: none;
   width: 34px;
   height: 22px;
   border-radius: var(--radius-sm);

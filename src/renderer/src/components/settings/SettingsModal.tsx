@@ -198,9 +198,20 @@ export default function SettingsModal({
 
   if (standalone) return <div className="modal standalone-settings">{body}</div>
 
+  // As a panel inside the chat window the scale slider did nothing: the app-level effect that
+  // applies it zooms the document root, and it only runs in the utility windows — doing it
+  // here would scale the chat along with the panel. So the panel scales ITSELF. Its own width
+  // and height caps are in viewport units, which zoom multiplies, so they are divided back out
+  // via --panel-scale; the panel grows with the setting but still stops at the window edge.
+  const panelScale = clampUiScale(settings.windowScales?.settings ?? 100) / 100
   return (
     <div className="modal-backdrop">
-      <div className="modal wide">{body}</div>
+      <div
+        className="modal wide"
+        style={{ zoom: panelScale, '--panel-scale': panelScale } as React.CSSProperties}
+      >
+        {body}
+      </div>
     </div>
   )
 }
@@ -433,7 +444,7 @@ export function ColorField({
   }
 
   return (
-    <span ref={rootRef} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', position: 'relative' }}>
+    <span ref={rootRef} className="color-field">
       <button
         className="color-swatch-main"
         style={{ background: value }}
