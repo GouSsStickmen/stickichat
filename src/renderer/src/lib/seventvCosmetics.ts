@@ -62,14 +62,16 @@ interface SevenTvState {
 /**
  * How long a cached cosmetic is trusted.
  *
- * This, not the EventAPI, is what actually notices a changed paint. Measured against
- * wss://events.7tv.io/v3 on a busy channel: subscribing to `entitlement.*` scoped to the
- * channel produced ONE entitlement dispatch in 75 seconds, and it was an EMOTE_SET, not a
- * paint. 7TV only dispatches a user's entitlements to a channel where that user has
- * PRESENCE, and presence is published by their own 7TV client — so for everyone without the
- * extension or Chatterino open, no event will ever arrive and this timer is the whole
- * mechanism. At ten minutes that meant someone could change their colour, keep talking, and
- * still show the old one for most of a stream.
+ * This, not the EventAPI, is what notices a changed paint — for everybody, not just for
+ * people without a 7TV client. Measured against wss://events.7tv.io/v3 on a busy channel,
+ * subscribing to `cosmetic.*` and `entitlement.*` scoped to that channel exactly as this app
+ * does (both SUBSCRIBEs acknowledged): one entitlement dispatch in 75 seconds, and it was an
+ * EMOTE_SET rather than a paint; then zero in a further four minutes. The likely reason is
+ * that 7TV dispatches a user's entitlements only to channels where that user has PRESENCE,
+ * which their own 7TV client publishes — but whatever the cause, the push path cannot be
+ * relied on for anything, so this timer has to be sized as the real mechanism. At ten minutes
+ * someone could change their colour, keep talking, and still render the old one for most of a
+ * stream.
  *
  * A cosmetic is only re-fetched when the user actually renders, so the cost tracks the
  * people on screen rather than the whole roster, and every fetch goes through the gate below.
