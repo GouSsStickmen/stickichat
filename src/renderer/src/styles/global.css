@@ -2887,6 +2887,108 @@ input[type='number']::-webkit-inner-spin-button {
   font-size: var(--fs-sm);
   font-weight: 600;
 }
+/* edit / export / delete appear on the card itself, so a custom theme is managed where it is
+   seen rather than in a separate list */
+.theme-card-actions {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: none;
+  gap: 1px;
+}
+.theme-card {
+  position: relative;
+}
+.theme-card:hover .theme-card-actions {
+  display: flex;
+}
+.theme-card-actions button {
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.theme-card-actions button:hover {
+  background: transparent;
+  filter: brightness(1.6);
+}
+.theme-card-new {
+  justify-content: center;
+  align-items: center;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-color: var(--border);
+  font-size: var(--fs-sm);
+  min-height: 46px;
+}
+
+/* ---------- Theme editor ---------- */
+
+.theme-editor {
+  gap: var(--space-3);
+}
+.theme-editor-head {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.theme-editor-head input[type='text'],
+.theme-editor-head > input {
+  flex: 1;
+}
+.theme-dark-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-md);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+/* a live WCAG readout, because a palette that measures badly looks merely "soft" until you
+   put a number on it */
+.theme-contrast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+  font-size: var(--fs-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+}
+.theme-contrast .ok {
+  color: var(--success);
+}
+.theme-contrast .warn {
+  color: var(--warning);
+}
+.theme-contrast .bad {
+  color: var(--danger);
+}
+.theme-token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+.theme-token {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  min-width: 0;
+}
+.theme-token > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.theme-editor-foot {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
 
 /* ---------- Chat modes popover ---------- */
 

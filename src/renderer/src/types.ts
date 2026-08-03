@@ -868,10 +868,28 @@ export interface Tab {
 
 // ---------- Settings ----------
 
+/**
+ * A user-made theme. Declared here rather than in lib/themes.ts so the settings layer never
+ * has to import the theme registry — the registry imports the settings store, and one of the
+ * two directions has to stay clean.
+ *
+ * `tokens` holds only the colours the editor exposes; the derived ones (shadows, scrim,
+ * checkerboard, highlight tint) are computed at save time from `dark` and the palette,
+ * because getting those wrong is what made the built-in palettes look broken.
+ */
+export interface CustomTheme {
+  id: string
+  name: string
+  dark: boolean
+  tokens: Record<string, string>
+}
+
 export interface Settings {
   language: 'uk' | 'en'
-  /** a theme id from lib/themes.ts — deliberately a plain string so themes stay data */
+  /** a theme id — a built-in from lib/themes.ts or one of `customThemes` */
   theme: string
+  /** themes the user built or imported; they live alongside the built-ins everywhere */
+  customThemes: CustomTheme[]
   fontSize: number // px
   emoteScale: number // 1 = 100%
   showTimestamps: boolean
@@ -1115,6 +1133,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   language: 'uk',
   theme: 'dark',
+  customThemes: [],
   fontSize: 13,
   emoteScale: 1,
   showTimestamps: true,

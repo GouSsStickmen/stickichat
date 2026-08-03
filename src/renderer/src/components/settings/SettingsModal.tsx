@@ -2,20 +2,21 @@ import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState 
 import { useSettingsStore } from '../../store/settings'
 import { useAccountsStore } from '../../store/accounts'
 import { useUiStore } from '../../store/ui'
-import { useT } from '../../i18n'
+import { useT, TranslationKey } from '../../i18n'
 import {
   ChatOverlayConfig,
+  CustomTheme,
   DEFAULT_CHAT_OVERLAY,
   DEFAULT_HOTKEYS,
   DEFAULT_OVERLAY_STYLE,
   HighlightKind,
   HighlightRule,
   HotkeyAction,
-  ModButton,
   ModActionType,
+  ModButton,
   OverlayProfile,
-  Settings,
   SOUND_PRESETS,
+  Settings,
   VALUELESS_HL_KINDS
 } from '../../types'
 import { nextId, useLayoutStore } from '../../store/layout'
@@ -41,7 +42,18 @@ import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
 import { CHAT_FONT_MAX } from '../../App'
 import { TranslitIcon } from '../Icons'
-import { THEMES, getTheme } from '../../lib/themes'
+import {
+  THEMES,
+  getTheme,
+  applyTheme,
+  applyTokens,
+  contrast,
+  deriveTokens,
+  DEFAULT_THEME,
+  DEFAULT_TOKENS,
+  EDITABLE_TOKENS
+} from '../../lib/themes'
+import { exportThemeJson, parseThemeImport, nextThemeId, uniqueThemeName } from '../../lib/themeShare'
 
 type Section =
   | 'accounts'
@@ -568,6 +580,278 @@ function AccountsSection(): React.JSX.Element {
   )
 }
 
+/**
+ * Theme picker plus the editor for user-made themes.
+ *
+ * The grid shows built-ins and custom themes together on purpose: a theme the user built is
+ * not a second-class thing, it goes through exactly the same registry and the same applyTheme.
+ */
+function ThemeSection(): React.JSX.Element {
+  const t = useT()
+  const settings = useSettingsStore((s) => s.settings)
+  const set = useSettingsStore((s) => s.setSettings)
+  const custom = settings.customThemes ?? []
+  const [editing, setEditing] = useState<CustomTheme | null>(null)
+  const importRef = useRef<HTMLInputElement>(null)
+  const [ioMsg, setIoMsg] = useState('')
+
+  const label = (th: { id: string; name: string }): string =>
+    th.id === 'dark' ? t('set.theme.dark') : th.id === 'light' ? t('set.theme.light') : th.name
+
+  const startNew = (): void => {
+    const base = getTheme(settings.theme)
+    setEditing({
+      id: nextThemeId(custom),
+      name: uniqueThemeName(
+        label(base) + ' ' + t('theme.copySuffix'),
+        new Set([...custom.map((c) => c.name), ...THEMES.map((c) => c.name)])
+      ),
+      dark: base.dark,
+      tokens: { ...DEFAULT_TOKENS, ...base.tokens }
+    })
+  }
+
+  const download = (json: string, name: string): void => {
+    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+  const safe = (x: string): string => x.replace(/[^\w\-. ]+/g, '_').trim() || 'theme'
+
+  const importFile = (file: File | undefined): void => {
+    if (!file) return
+    void file.text().then((text) => {
+      const parsed = parseThemeImport(text, custom)
+      if (!parsed) {
+        setIoMsg(t('theme.io.bad'))
+        return
+      }
+      set({ customThemes: [...useSettingsStore.getState().settings.customThemes, ...parsed] })
+      setIoMsg(t('theme.io.imported', { n: parsed.length }))
+    })
+  }
+
+  if (editing) {
+    return (
+      <ThemeEditor
+        draft={editing}
+        onCancel={() => {
+          setEditing(null)
+          applyTheme(settings.theme)
+        }}
+        onSave={(th) => {
+          const rest = custom.filter((c) => c.id !== th.id)
+          set({ customThemes: [...rest, th], theme: th.id })
+          setEditing(null)
+        }}
+      />
+    )
+  }
+
+  return (
+    <div className="set-row set-row-block">
+      <label>{t('set.theme')}</label>
+      {/* swatches rather than a dropdown: a theme is a set of colours, and picking one by
+          name alone means switching back and forth to find out what it looks like */}
+      <div className="theme-grid">
+        {[...THEMES, ...custom].map((th) => {
+          const tk = { ...DEFAULT_TOKENS, ...th.tokens }
+          const mine = custom.some((c) => c.id === th.id)
+          return (
+            <div
+              key={th.id}
+              className={`theme-card ${settings.theme === th.id ? 'active' : ''}`}
+              onClick={() => set({ theme: th.id })}
+              style={{ background: tk['--bg'], borderColor: tk['--border'] }}
+            >
+              <span className="theme-dots">
+                <i style={{ background: tk['--surface-2'] }} />
+                <i style={{ background: tk['--accent'] }} />
+                <i style={{ background: tk['--text'] }} />
+              </span>
+              {/* only "dark"/"light" are words; the rest are proper names and stay as-is */}
+              <span className="theme-name" style={{ color: tk['--text'] }}>{label(th)}</span>
+              {mine && (
+                <span className="theme-card-actions">
+                  <button
+                    title={t('theme.edit')}
+                    style={{ color: tk['--text-muted'] }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setEditing({ ...(th as CustomTheme), tokens: { ...DEFAULT_TOKENS, ...th.tokens } })
+                    }}
+                  >
+                    &#9998;
+                  </button>
+                  <button
+                    title={t('theme.export')}
+                    style={{ color: tk['--text-muted'] }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      download(exportThemeJson(th as CustomTheme), `${safe(th.name)}.stickichat-theme.json`)
+                    }}
+                  >
+                    &#11015;
+                  </button>
+                  <button
+                    title={t('theme.delete')}
+                    style={{ color: tk['--danger'] }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      // fall back to the built-in dark rather than leaving a dangling id
+                      const next = custom.filter((c) => c.id !== th.id)
+                      set({
+                        customThemes: next,
+                        theme: settings.theme === th.id ? DEFAULT_THEME : settings.theme
+                      })
+                    }}
+                  >
+                    &#10005;
+                  </button>
+                </span>
+              )}
+            </div>
+          )
+        })}
+        <button className="theme-card theme-card-new" onClick={startNew}>
+          + {t('theme.new')}
+        </button>
+      </div>
+      <div className="ov-io" style={{ marginTop: 2 }}>
+        <button onClick={() => importRef.current?.click()}>&#11165; {t('theme.io.import')}</button>
+        <button
+          disabled={!custom.length}
+          onClick={() =>
+            download(
+              exportThemeJson(custom),
+              `stickichat-themes-${new Date().toISOString().slice(0, 10)}.json`
+            )
+          }
+        >
+          &#11015; {t('theme.io.exportAll')}
+        </button>
+        <input
+          ref={importRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            importFile(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+        {ioMsg && <span className="hint" style={{ color: 'var(--text-faint)' }}>{ioMsg}</span>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The editor. Every change paints straight onto :root so the theme is judged in the running
+ * app rather than in a swatch; cancelling puts the active theme back.
+ *
+ * Only colours are exposed. Shadows, the modal scrim, the transparency checkerboard and the
+ * highlight tint are derived on save, because every one of those is a value the built-in
+ * palettes originally got wrong by hand.
+ */
+function ThemeEditor({
+  draft,
+  onSave,
+  onCancel
+}: {
+  draft: CustomTheme
+  onSave: (t: CustomTheme) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const t = useT()
+  const [name, setName] = useState(draft.name)
+  const [dark, setDark] = useState(draft.dark)
+  const [tokens, setTokens] = useState<Record<string, string>>(draft.tokens)
+
+  useEffect(() => {
+    applyTokens(deriveTokens(tokens, dark), dark)
+  }, [tokens, dark])
+
+  const ratio = contrast(tokens['--text'] ?? '#ffffff', tokens['--bg'] ?? '#000000')
+  const faint = contrast(tokens['--text-faint'] ?? '#888888', tokens['--bg'] ?? '#000000')
+
+  return (
+    <div className="set-row set-row-block theme-editor">
+      <div className="theme-editor-head">
+        <input
+          value={name}
+          maxLength={40}
+          placeholder={t('theme.name')}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <label className="theme-dark-toggle" title={t('hint.themeDark')}>
+          <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
+          {t('theme.isDark')}
+        </label>
+      </div>
+      {/* the readout is the point: Nord and Gruvbox once shipped a third less contrasty than
+          everything else, and nothing in the UI said so until it was measured */}
+      <div className="theme-contrast">
+        <span className={ratio < 9 ? 'bad' : ratio < 12 ? 'warn' : 'ok'}>
+          {t('theme.contrastText')}: {ratio.toFixed(1)}
+        </span>
+        <span className={faint < 4.5 ? 'bad' : faint < 5.5 ? 'warn' : 'ok'}>
+          {t('theme.contrastFaint')}: {faint.toFixed(1)}
+        </span>
+        <span className="hint">{t('theme.contrastHint')}</span>
+      </div>
+      {EDITABLE_TOKENS.map((grp) => (
+        <div key={grp.group} className="theme-token-group">
+          <div className="set-group-title">{t(THEME_GROUP_KEYS[grp.group])}</div>
+          <div className="theme-token-grid">
+            {grp.tokens.map((tk) => (
+              <div key={tk} className="theme-token">
+                <ColorField
+                  value={tokens[tk] ?? '#000000'}
+                  defaultValue={DEFAULT_TOKENS[tk] ?? '#000000'}
+                  onChange={(v) => setTokens((prev) => ({ ...prev, [tk]: v }))}
+                />
+                <span>{tk.replace('--', '')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="theme-editor-foot">
+        <button
+          className="primary"
+          onClick={() =>
+            onSave({
+              id: draft.id,
+              name: name.trim() || draft.name,
+              dark,
+              tokens: deriveTokens(tokens, dark)
+            })
+          }
+        >
+          {t('theme.save')}
+        </button>
+        <button onClick={onCancel}>{t('theme.cancel')}</button>
+        <button className="ghost" onClick={() => setTokens({ ...DEFAULT_TOKENS })}>
+          {t('theme.reset')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** group id -> i18n key, so the lookup stays typed instead of a template string */
+const THEME_GROUP_KEYS: Record<string, TranslationKey> = {
+  base: 'theme.group.base',
+  text: 'theme.group.text',
+  accent: 'theme.group.accent',
+  state: 'theme.group.state',
+  misc: 'theme.group.misc'
+}
+
 function AppearanceSection(): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
@@ -575,38 +859,7 @@ function AppearanceSection(): React.JSX.Element {
   return (
     <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
-      <div className="set-row set-row-block">
-        <label>{t('set.theme')}</label>
-        {/* swatches rather than a dropdown: a theme is a set of colours, and picking one by
-            name alone means switching back and forth to find out what it looks like */}
-        <div className="theme-grid">
-          {THEMES.map((th) => {
-            const tk = { ...getTheme('dark').tokens, ...th.tokens }
-            return (
-              <button
-                key={th.id}
-                className={`theme-card ${settings.theme === th.id ? 'active' : ''}`}
-                onClick={() => set({ theme: th.id })}
-                style={{ background: tk['--bg'], borderColor: tk['--border'] }}
-              >
-                <span className="theme-dots">
-                  <i style={{ background: tk['--surface-2'] }} />
-                  <i style={{ background: tk['--accent'] }} />
-                  <i style={{ background: tk['--text'] }} />
-                </span>
-                {/* only "dark"/"light" are words; the rest are proper names and stay as-is */}
-                <span className="theme-name" style={{ color: tk['--text'] }}>
-                  {th.id === 'dark'
-                    ? t('set.theme.dark')
-                    : th.id === 'light'
-                      ? t('set.theme.light')
-                      : th.name}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <ThemeSection />
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
         <FontPicker value={settings.fontFamily} onChange={(v) => set({ fontFamily: v })} />

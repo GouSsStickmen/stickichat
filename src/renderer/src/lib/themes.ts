@@ -10,6 +10,8 @@
  * has to state what it actually changes.
  */
 
+import { useSettingsStore } from '../store/settings'
+
 export interface Theme {
   id: string
   /** shown in the picker; proper names stay untranslated, dark/light go through i18n */
@@ -224,13 +226,94 @@ export const THEMES: Theme[] = [
 
 export const DEFAULT_THEME = 'dark'
 
+/** the built-in dark palette, used as the fallback layer and as the editor's starting point */
+export const DEFAULT_TOKENS = DARK
+
+/** the colours the editor exposes, grouped the way they're shown. Everything NOT in here is
+ *  derived by `deriveTokens` — those are the values that are easy to get wrong by hand. */
+export const EDITABLE_TOKENS: { group: string; tokens: string[] }[] = [
+  { group: 'base', tokens: ['--bg', '--surface', '--surface-2', '--surface-3', '--border'] },
+  { group: 'text', tokens: ['--text', '--text-muted', '--text-faint', '--system-text'] },
+  { group: 'accent', tokens: ['--accent', '--accent-strong', '--accent-text', '--link'] },
+  { group: 'state', tokens: ['--danger', '--success', '--warning', '--live'] },
+  { group: 'misc', tokens: ['--scrollbar'] }
+]
+
+/** #rrggbb -> relative luminance, for the contrast readout and the derived tones */
+export function luminance(hex: string): number {
+  const h = hex.replace('#', '')
+  const v = [0, 2, 4].map((i) => {
+    const c = parseInt(h.slice(i, i + 2) || '0', 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]
+}
+
+/** WCAG contrast ratio between two hex colours */
+export function contrast(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)]
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+}
+
+/** shift a hex colour toward white or black by `amount` (0..1) */
+function shift(hex: string, amount: number, toward: 'light' | 'dark'): string {
+  const h = hex.replace('#', '')
+  const target = toward === 'light' ? 255 : 0
+  const ch = [0, 2, 4].map((i) => {
+    const c = parseInt(h.slice(i, i + 2) || '0', 16)
+    return Math.round(c + (target - c) * amount)
+  })
+  return '#' + ch.map((c) => c.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Fill in the tokens the editor doesn't ask for.
+ *
+ * These are exactly the ones that broke the built-in palettes when they were guessed: a light
+ * theme wearing dark-theme shadows looks bruised, a flat 55%-black scrim fogs anything that
+ * isn't near-black, and a checkerboard whose two squares land a few percent apart stops
+ * reading as a checkerboard at all. Deriving them from `dark` and the palette means a
+ * user-made theme cannot repeat any of it.
+ */
+export function deriveTokens(tokens: Record<string, string>, dark: boolean): Record<string, string> {
+  const bg = tokens['--bg'] ?? DARK['--bg']
+  const a = dark ? 0.14 : 0.1
+  return {
+    ...tokens,
+    '--shadow-sm': dark ? '0 1px 3px rgba(0, 0, 0, 0.35)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+    '--shadow-md': dark ? '0 4px 14px rgba(0, 0, 0, 0.4)' : '0 4px 14px rgba(0, 0, 0, 0.12)',
+    '--shadow': dark ? '0 8px 30px rgba(0, 0, 0, 0.55)' : '0 8px 30px rgba(0, 0, 0, 0.18)',
+    '--shadow-lg': dark ? '0 12px 40px rgba(0, 0, 0, 0.55)' : '0 12px 40px rgba(0, 0, 0, 0.2)',
+    '--scrim': dark ? 'rgba(0, 0, 0, 0.42)' : 'rgba(0, 0, 0, 0.2)',
+    // stepped off the background in both directions so the two squares always differ
+    '--checker-a': shift(bg, a + 0.08, dark ? 'light' : 'dark'),
+    '--checker-b': shift(bg, a - 0.06, dark ? 'light' : 'dark'),
+    '--highlight-bg': `color-mix(in srgb, ${tokens['--danger'] ?? DARK['--danger']} ${dark ? 12 : 14}%, transparent)`
+  }
+}
+
+/** built-ins plus the user's own, which behave identically everywhere */
+export function allThemes(): Theme[] {
+  const custom = useSettingsStore.getState().settings.customThemes ?? []
+  return [...THEMES, ...custom.map((c) => ({ id: c.id, name: c.name, dark: c.dark, tokens: c.tokens }))]
+}
+
 export function getTheme(id: string): Theme {
-  return THEMES.find((t) => t.id === id) ?? THEMES[0]
+  return allThemes().find((t) => t.id === id) ?? THEMES[0]
 }
 
 /** is the active theme dark? drives nick contrast correction, not just looks */
 export function isDarkTheme(id: string): boolean {
   return getTheme(id).dark
+}
+
+/** paint an arbitrary token set onto :root — used for the editor's live preview */
+export function applyTokens(tokens: Record<string, string>, dark: boolean): void {
+  const root = document.documentElement
+  for (const [name, value] of Object.entries({ ...DARK, ...tokens })) {
+    root.style.setProperty(name, value)
+  }
+  root.dataset.theme = dark ? 'dark' : 'light'
 }
 
 /**
