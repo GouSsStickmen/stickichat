@@ -81,6 +81,9 @@ const COSMETIC_TTL = 2 * 60 * 1000
 // v3: entries now carry a timestamp so they can expire (v2 had no TTL and went stale forever)
 const CACHE_KEY = 'sticki:stvCosmetics:v3'
 
+/** entries kept on disk; the rest are cheap to re-ask for and cost everyone else their quota */
+const CACHE_LIMIT = 2000
+
 function loadCache(): Record<string, Cosmetic> {
   try {
     return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
@@ -89,18 +92,47 @@ function loadCache(): Record<string, Cosmetic> {
   }
 }
 
-export const useSevenTvColors = create<SevenTvState>()((set) => ({
+/**
+ * Persist on a timer, and only what is worth persisting.
+ *
+ * This used to serialise the WHOLE map inside every setCosmetic. That was tolerable at a
+ * ten-minute TTL and is not at two: on a busy channel it means stringifying a map of every
+ * user ever seen, several times a second, and writing it into a localStorage that this app
+ * also keeps chat history, whispers and redeems in — one shared, finite quota. Users with no
+ * cosmetic are dropped from the written copy: they are the bulk of the entries, they are
+ * re-queried on the next launch anyway (timestamps do not survive a restart), and every one
+ * of them was taking space away from the histories.
+ */
+let saveTimer: number | null = null
+
+function scheduleSave(get: () => Record<string, Cosmetic>): void {
+  if (saveTimer !== null) return
+  saveTimer = window.setTimeout(() => {
+    saveTimer = null
+    try {
+      const all = get()
+      const keep: Record<string, Cosmetic> = {}
+      let n = 0
+      for (const [id, c] of Object.entries(all)) {
+        if (!c || !Object.keys(c).length) continue
+        if (n++ >= CACHE_LIMIT) break
+        keep[id] = c
+      }
+      localStorage.setItem(CACHE_KEY, JSON.stringify(keep))
+    } catch {
+      /* quota — non-critical, the cache is an optimisation */
+    }
+  }, 3000)
+}
+
+export const useSevenTvColors = create<SevenTvState>()((set, get) => ({
   cosmetics: loadCache(),
   fetchedAt: {},
   setCosmetic: (id, c) =>
     set((s) => {
       const cosmetics = { ...s.cosmetics, [id]: c }
       const fetchedAt = { ...s.fetchedAt, [id]: Date.now() }
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cosmetics))
-      } catch {
-        /* quota — non-critical */
-      }
+      scheduleSave(() => get().cosmetics)
       return { cosmetics, fetchedAt }
     })
 }))

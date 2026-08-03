@@ -22,12 +22,27 @@ const SAVED_LIMIT = 300
 const maps = new Map<string, Map<string, HlSavedItem>>()
 const timers = new Map<string, number>()
 
+/**
+ * Channels whose stored history could not be read. They are NOT written back to.
+ *
+ * A failed read used to return an empty map, which the next incoming message then persisted
+ * straight over the stored value — turning one bad read (a truncated write, a quota failure,
+ * anything) into permanent loss of that channel's history. Refusing to write keeps the bytes
+ * on disk so a restart can try again.
+ */
+const unreadable = new Set<string>()
+
 function readStorage(channel: string): Map<string, HlSavedItem> {
+  const raw = localStorage.getItem(hlSavedKey(channel))
+  if (!raw) return new Map()
   try {
-    const raw = localStorage.getItem(hlSavedKey(channel))
-    const list = raw ? (JSON.parse(raw) as HlSavedItem[]) : []
+    const list = JSON.parse(raw) as HlSavedItem[]
+    if (!Array.isArray(list)) throw new Error('not an array')
+    unreadable.delete(channel)
     return new Map(list.map((i) => [i.id, i]))
-  } catch {
+  } catch (e) {
+    unreadable.add(channel)
+    console.error(`[hl] saved history for ${channel} is unreadable, not overwriting it`, e)
     return new Map()
   }
 }
@@ -47,6 +62,7 @@ export function reloadSavedMap(channel: string): void {
 }
 
 export function persistSaved(channel: string): void {
+  if (unreadable.has(channel)) return
   if (timers.has(channel)) return
   timers.set(
     channel,
