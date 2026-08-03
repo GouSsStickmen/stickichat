@@ -175,7 +175,11 @@ export default function App(): React.JSX.Element | null {
     // `zoom` on the ROOT element instead. Unlike zoom on a child, this scales the layout
     // viewport too, so `100vh` inside still means "this window" and the panels end exactly at
     // its edges. And it is a DOM property, so it belongs to this window and nothing else.
-    document.documentElement.style.zoom = scalable ? String(clampUiScale(winScale ?? 100) / 100) : ''
+    // only set it when it actually differs: `zoom` — even `zoom: 1` — makes the element a
+    // containing block for fixed-position descendants and changes how percentage heights
+    // resolve under it, which is enough to leave a strip of bare page under a panel
+    const k = clampUiScale(winScale ?? 100) / 100
+    document.documentElement.style.zoom = scalable && k !== 1 ? String(k) : ''
   }, [scalable, winScale])
 
   useEffect(() => {

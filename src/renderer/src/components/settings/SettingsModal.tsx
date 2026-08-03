@@ -931,6 +931,47 @@ const TAB_COLOR_FIELDS: [keyof TabColors, TranslationKey, string][] = [
   ['activeBorder', 'tab.color.activeBorder', '--border']
 ]
 
+/**
+ * The scale slider for the window it is drawn in.
+ *
+ * It cannot apply while you drag: the control resizes the window it lives in, so the thumb
+ * slides out from under the cursor and the pointer ends up somewhere else entirely — the
+ * scale becomes almost impossible to set. It shows the value live and commits on release.
+ */
+function WindowScaleSlider(): React.JSX.Element {
+  const saved = useSettingsStore((s) => s.settings.windowScales?.settings ?? 100)
+  const [draft, setDraft] = useState<number | null>(null)
+  const value = draft ?? saved
+
+  const commit = (v: number): void => {
+    setDraft(null)
+    const st = useSettingsStore.getState()
+    st.setSettings({
+      windowScales: { ...st.settings.windowScales, settings: clampUiScale(v) }
+    })
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <input
+        type="range"
+        min={UI_SCALE_MIN}
+        max={UI_SCALE_MAX}
+        step={10}
+        value={value}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onPointerUp={(e) => commit(Number(e.currentTarget.value))}
+        onKeyUp={(e) => commit(Number(e.currentTarget.value))}
+        onBlur={(e) => commit(Number(e.currentTarget.value))}
+        style={{ width: 150 }}
+      />
+      <span className="hint" style={{ minWidth: 38, textAlign: 'right' }}>
+        {value}%
+      </span>
+    </div>
+  )
+}
+
 /** export part -> its label */
 const CONFIG_PART_LABELS: Record<ConfigPart, TranslationKey> = {
   appearance: 'io.part.appearance',
@@ -1009,27 +1050,7 @@ function AppearanceSection(): React.JSX.Element {
       <ThemeSection />
       <div className="set-row">
         <label className="has-hint" title={t('hint.uiScale')}>{t('set.uiScale')}</label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="range"
-            min={UI_SCALE_MIN}
-            max={UI_SCALE_MAX}
-            step={10}
-            value={settings.windowScales?.settings ?? 100}
-            onChange={(e) =>
-              set({
-                windowScales: {
-                  ...useSettingsStore.getState().settings.windowScales,
-                  settings: clampUiScale(Number(e.target.value))
-                }
-              })
-            }
-            style={{ width: 150 }}
-          />
-          <span className="hint" style={{ minWidth: 38, textAlign: 'right' }}>
-            {settings.windowScales?.settings ?? 100}%
-          </span>
-        </div>
+        <WindowScaleSlider />
       </div>
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>

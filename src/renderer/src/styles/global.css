@@ -1404,7 +1404,7 @@ select:focus {
 }
 .standalone-settings {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   /* .modal caps at 88vh — as a window that left a bar of raw page background at the bottom */
   max-height: none;
   margin: 0;
@@ -1491,11 +1491,13 @@ select:focus {
   color: var(--text-muted);
   font-size: var(--fs-sm);
 }
-/* full-window user card: fills the window; text size set by the A−/A+ controls */
+/* full-window user card: fills the window; text size set by the A−/A+ controls.
+   `height: 100%` and not 100vh — html/body/#root are already full height, and a viewport unit
+   stops agreeing with them the moment the root carries a zoom. */
 .usercard.usercard-standalone {
   position: static;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   max-height: none;
   margin: 0;
   border: none;
@@ -2767,7 +2769,7 @@ input[type='number']::-webkit-inner-spin-button {
 .emote-picker-standalone {
   position: static;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   margin: 0;
   border: none;
   border-radius: 0;
@@ -3499,7 +3501,7 @@ button:has(> svg) {
 .whisper-panel-standalone {
   position: static;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   max-width: none;
   border: none;
   border-radius: 0;
