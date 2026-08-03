@@ -1738,6 +1738,9 @@ select:focus {
   overflow-x: hidden;
   max-height: 68vh;
   min-width: 0;
+  /* rows inside adapt to THIS column, not to the window: the same panel can be a narrow strip
+     beside the chat or a wide separate window, and a media query cannot tell those apart */
+  container: setpane / inline-size;
 }
 .set-row {
   display: flex;
@@ -1820,7 +1823,9 @@ select:focus {
   padding: 5px 7px;
   font-size: var(--fs-md);
   min-width: 0;
-  flex-shrink: 1;
+  /* same reason as .chan-select: a basis of auto here resolves to the select's longest option,
+     which is wide enough to shove whatever follows off the visible area rather than wrap */
+  flex: 1 1 130px;
 }
 .modbtn-drag {
   cursor: grab;
@@ -1832,7 +1837,10 @@ select:focus {
 /* channel multi-select dropdown (mod-button "channels") */
 .chan-select {
   position: relative;
-  flex: 1;
+  /* A flex item with a ZERO basis never wraps — it always "fits", so it just gets squeezed,
+     and in a narrow panel this one was squeezed to a sliver and then clipped by the settings
+     column. A real basis means the line breaks and it gets a row of its own instead. */
+  flex: 1 1 150px;
   min-width: 0;
 }
 .chan-select-btn {
@@ -2043,6 +2051,52 @@ select:focus {
 }
 .hl-kind-label {
   font-weight: 600;
+}
+
+/**
+ * Narrow panel: the nine-column row cannot fit, and `overflow-x: hidden` on the settings
+ * column meant the tail of it — palette, opacity, preview, delete — was simply cut off with
+ * no scrollbar and no hint that anything was missing.
+ *
+ * It wraps instead. The break falls where the meaning does: WHAT the rule matches on the
+ * first line, HOW it looks on the second. Alignment across rows survives because every rule
+ * carries the same controls in the same order.
+ */
+@container setpane (max-width: 640px) {
+  .hl-row,
+  .muted-row {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+  .hl-row > *,
+  .muted-row > * {
+    width: auto;
+  }
+  /* the empty grid placeholders have no job once this is a flexbox */
+  .hl-row > span:empty,
+  .muted-row > span:empty {
+    display: none;
+  }
+  /* basis small and min-width 0 so the category and its value share the first line instead of
+     the first one eating it — a select's intrinsic width is its longest option, which here is
+     "Перше повідомлення за стрим" */
+  .hl-row select,
+  .hl-row input[type='text'],
+  .hl-row input:not([type]),
+  .muted-row select {
+    flex: 1 1 92px;
+    min-width: 0;
+    width: auto;
+  }
+  /* the slider gives up the most: it is the one control that reads fine at any length, and
+     keeping its basis small is what lets the delete button stay on the same line as the
+     preview instead of being orphaned on a line of its own */
+  .hl-row input[type='range'],
+  .muted-row input[type='range'] {
+    flex: 1 1 56px;
+    width: auto;
+  }
 }
 /* labels that carry a long-hover hint get a subtle affordance */
 /* no underline: with a hint on nearly every row the dotted rules became a texture of their
