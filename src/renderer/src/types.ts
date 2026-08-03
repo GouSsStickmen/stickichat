@@ -890,6 +890,8 @@ export interface Settings {
   theme: string
   /** themes the user built or imported; they live alongside the built-ins everywhere */
   customThemes: CustomTheme[]
+  /** corner roundness as a percentage of the design scale: 0 = square, 100 = default */
+  uiRadius: number
   fontSize: number // px
   emoteScale: number // 1 = 100%
   showTimestamps: boolean
@@ -1134,6 +1136,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'uk',
   theme: 'dark',
   customThemes: [],
+  uiRadius: 100,
   fontSize: 13,
   emoteScale: 1,
   showTimestamps: true,

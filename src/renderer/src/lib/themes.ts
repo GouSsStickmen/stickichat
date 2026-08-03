@@ -226,6 +226,29 @@ export const THEMES: Theme[] = [
 
 export const DEFAULT_THEME = 'dark'
 
+/**
+ * The corner-radius scale at 100%. Kept here rather than only in CSS so the "roundness"
+ * setting can scale every step from one place — a slider that only reached some of the
+ * corners would look worse than no slider at all.
+ */
+export const RADIUS_BASE: Record<string, number> = {
+  '--radius-xs': 3,
+  '--radius-sm': 4,
+  '--radius-md': 6,
+  '--radius-lg': 8,
+  '--radius-xl': 10,
+  '--radius-2xl': 12
+}
+
+/** write the radius scale at `pct` percent; --radius-pill/circle stay as they are */
+export function applyRadius(pct: number): void {
+  const root = document.documentElement
+  const k = Math.max(0, pct) / 100
+  for (const [name, base] of Object.entries(RADIUS_BASE)) {
+    root.style.setProperty(name, `${Math.round(base * k)}px`)
+  }
+}
+
 /** the built-in dark palette, used as the fallback layer and as the editor's starting point */
 export const DEFAULT_TOKENS = DARK
 

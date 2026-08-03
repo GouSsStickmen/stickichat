@@ -871,6 +871,25 @@ function AppearanceSection(): React.JSX.Element {
       <div className="set-group-title">{t('set.group.general')}</div>
       <ThemeSection />
       <div className="set-row">
+        <label className="has-hint" title={t('hint.uiRadius')}>{t('set.uiRadius')}</label>
+        {/* one slider drives the whole radius scale — a control that only reached some of the
+            corners would look worse than having none */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="range"
+            min={0}
+            max={200}
+            step={10}
+            value={settings.uiRadius ?? 100}
+            onChange={(e) => set({ uiRadius: Number(e.target.value) })}
+            style={{ width: 150 }}
+          />
+          <span className="hint" style={{ minWidth: 38, textAlign: 'right' }}>
+            {settings.uiRadius ?? 100}%
+          </span>
+        </div>
+      </div>
+      <div className="set-row">
         <label>{t('set.fontFamily')}</label>
         <FontPicker value={settings.fontFamily} onChange={(v) => set({ fontFamily: v })} />
       </div>

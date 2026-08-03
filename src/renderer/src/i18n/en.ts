@@ -370,6 +370,8 @@ export const en = {
   'theme.io.bad': 'Not a StickiChat theme file',
   'theme.io.imported': 'Imported {n} theme(s)',
   'hint.themeDark': 'Not just looks: this decides which way nick colours are contrast-corrected. On for a dark background, off for a light one.',
+  'set.uiRadius': 'Corner roundness',
+  'hint.uiRadius': 'How rounded buttons, fields, panels and windows are. 0% is fully square, 100% is the default.',
   'set.theme': 'Theme',
   'set.theme.dark': 'Dark',
   'set.theme.light': 'Light',
