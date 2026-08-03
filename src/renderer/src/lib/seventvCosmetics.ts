@@ -108,7 +108,18 @@ export const useSevenTvColors = create<SevenTvState>()((set) => ({
 // in-flight fetches are stored as shared promises so both the sync `ensure` and the async
 // `await` variant hook onto the same request (the overlay needs to await before it pushes)
 const inFlight = new Map<string, Promise<Cosmetic | undefined>>()
-const negative = new Set<string>()
+/**
+ * Users 7TV answered for with "nothing" — twitch id -> when we asked.
+ *
+ * Most chatters have no 7TV cosmetic at all, and asking again for every one of them on every
+ * TTL tick would be the bulk of the traffic for no result. But this used to be a permanent
+ * block, which meant somebody who had no colour and then SET one could never appear until the
+ * app restarted — the one case where a person is most likely to be watching for it. So it
+ * expires too, just on a slower clock than a cosmetic that actually exists.
+ */
+const negative = new Map<string, number>()
+const NEGATIVE_TTL = 5 * 60 * 1000
+const knownEmpty = (id: string): boolean => Date.now() - (negative.get(id) ?? 0) < NEGATIVE_TTL
 
 /**
  * A global gate on how many cosmetic requests may be in flight at once.
@@ -279,7 +290,7 @@ function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | unde
   const cached = st.cosmetics[twitchId]
   const fresh = Date.now() - (st.fetchedAt[twitchId] ?? 0) < COSMETIC_TTL
   if (cached && fresh && !force) return Promise.resolve(cached)
-  if (negative.has(twitchId) && !force) return Promise.resolve(undefined)
+  if (knownEmpty(twitchId) && !force) return Promise.resolve(undefined)
   const existing = inFlight.get(twitchId)
   if (existing) return existing
   // through the main process — a raw renderer fetch to 7tv.io is blocked by the app CSP
@@ -331,7 +342,7 @@ function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | unde
       } else {
         // the response was fine and the user genuinely has no cosmetic — clear ours
         useSevenTvColors.getState().setCosmetic(twitchId, {})
-        negative.add(twitchId)
+        negative.set(twitchId, Date.now())
       }
       return cosmetic
     })
@@ -359,9 +370,7 @@ export function ensureSevenTvCosmetic(twitchId?: string): Cosmetic | undefined {
   // keep showing what we have while a stale entry refreshes in the background, so a changed
   // paint appears on its own instead of waiting for a restart
   if (stale) void fetchCosmetic(twitchId)
-  if (cached) return cached
-  if (negative.has(twitchId)) return undefined
-  return undefined
+  return cached
 }
 
 /**
