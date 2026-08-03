@@ -884,6 +884,17 @@ export interface CustomTheme {
   tokens: Record<string, string>
 }
 
+/** the tab strip's own palette — see the --tab-* custom properties in global.css */
+export interface TabColors {
+  bg: string
+  text: string
+  border: string
+  hoverBg: string
+  activeBg: string
+  activeText: string
+  activeBorder: string
+}
+
 export interface Settings {
   language: 'uk' | 'en'
   /** a theme id — a built-in from lib/themes.ts or one of `customThemes` */
@@ -892,6 +903,9 @@ export interface Settings {
   customThemes: CustomTheme[]
   /** corner roundness as a percentage of the design scale: 0 = square, 100 = default */
   uiRadius: number
+  /** tab colours override the theme when on; each empty value falls back to the theme */
+  tabColorsCustom: boolean
+  tabColors: TabColors
   fontSize: number // px
   emoteScale: number // 1 = 100%
   showTimestamps: boolean
@@ -1137,6 +1151,16 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   customThemes: [],
   uiRadius: 100,
+  tabColorsCustom: false,
+  tabColors: {
+    bg: '#18181b',
+    text: '#adadb8',
+    border: '#303036',
+    hoverBg: '#26262c',
+    activeBg: '#1f1f23',
+    activeText: '#efeff1',
+    activeBorder: '#303036'
+  },
   fontSize: 13,
   emoteScale: 1,
   showTimestamps: true,

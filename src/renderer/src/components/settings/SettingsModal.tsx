@@ -17,6 +17,7 @@ import {
   OverlayProfile,
   SOUND_PRESETS,
   Settings,
+  TabColors,
   VALUELESS_HL_KINDS
 } from '../../types'
 import { nextId, useLayoutStore } from '../../store/layout'
@@ -859,6 +860,18 @@ ${tk}`}>{t(TOKEN_LABELS[tk])}</span>
   )
 }
 
+/** the tab strip's editable colours: settings key, label, and the dark-theme default the
+ *  reset arrow returns to */
+const TAB_COLOR_FIELDS: [keyof TabColors, TranslationKey, string][] = [
+  ['bg', 'tab.color.bg', '#18181b'],
+  ['text', 'tab.color.text', '#adadb8'],
+  ['border', 'tab.color.border', '#303036'],
+  ['hoverBg', 'tab.color.hoverBg', '#26262c'],
+  ['activeBg', 'tab.color.activeBg', '#1f1f23'],
+  ['activeText', 'tab.color.activeText', '#efeff1'],
+  ['activeBorder', 'tab.color.activeBorder', '#303036']
+]
+
 /** token -> i18n key. Typed lookups rather than template strings so a missing label is a
  *  compile error instead of a raw "--surface-2" leaking into the UI */
 const TOKEN_LABELS: Record<string, TranslationKey> = {
@@ -922,6 +935,38 @@ function AppearanceSection(): React.JSX.Element {
     <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
       <ThemeSection />
+      <div className="set-group-title">{t('set.group.tabs')}</div>
+      <div className="set-block">
+        <Toggle
+          label={t('set.tabColorsCustom')}
+          hint={t('hint.tabColorsCustom')}
+          value={settings.tabColorsCustom}
+          onChange={(v) => set({ tabColorsCustom: v })}
+        />
+        {settings.tabColorsCustom && (
+          <div className="set-sub">
+            <div className="theme-token-grid">
+              {TAB_COLOR_FIELDS.map(([key, label, def]) => (
+                <div key={String(key)} className="theme-token">
+                  <ColorField
+                    value={settings.tabColors?.[key] ?? def}
+                    defaultValue={def}
+                    onChange={(v) =>
+                      set({
+                        tabColors: {
+                          ...useSettingsStore.getState().settings.tabColors,
+                          [key]: v
+                        }
+                      })
+                    }
+                  />
+                  <span>{t(label)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       <div className="set-row">
         <label className="has-hint" title={t('hint.uiRadius')}>{t('set.uiRadius')}</label>
         {/* one slider drives the whole radius scale — a control that only reached some of the
