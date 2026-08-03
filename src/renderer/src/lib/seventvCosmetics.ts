@@ -60,11 +60,21 @@ interface SevenTvState {
 }
 
 /**
- * How long a cached cosmetic is trusted. People change their 7TV paint/badge and expect chat
- * to follow; an unbounded cache meant the old colour stuck until the app was reinstalled.
- * Short enough to feel live, long enough not to hammer 7TV on every message.
+ * How long a cached cosmetic is trusted.
+ *
+ * This, not the EventAPI, is what actually notices a changed paint. Measured against
+ * wss://events.7tv.io/v3 on a busy channel: subscribing to `entitlement.*` scoped to the
+ * channel produced ONE entitlement dispatch in 75 seconds, and it was an EMOTE_SET, not a
+ * paint. 7TV only dispatches a user's entitlements to a channel where that user has
+ * PRESENCE, and presence is published by their own 7TV client — so for everyone without the
+ * extension or Chatterino open, no event will ever arrive and this timer is the whole
+ * mechanism. At ten minutes that meant someone could change their colour, keep talking, and
+ * still show the old one for most of a stream.
+ *
+ * A cosmetic is only re-fetched when the user actually renders, so the cost tracks the
+ * people on screen rather than the whole roster, and every fetch goes through the gate below.
  */
-const COSMETIC_TTL = 10 * 60 * 1000
+const COSMETIC_TTL = 2 * 60 * 1000
 
 // v3: entries now carry a timestamp so they can expire (v2 had no TTL and went stale forever)
 const CACHE_KEY = 'sticki:stvCosmetics:v3'
@@ -447,7 +457,15 @@ export function applyLiveCosmetic(e: {
 
   if (e.type === 'PAINT') {
     const def = paintDefs.get(e.id)
-    if (!def) return // definition hasn't arrived yet; the next fetch will pick it up
+    // The grant names a paint whose `cosmetic.create` we never saw — it was broadcast before
+    // we subscribed, or on a connection we have since lost. Dropping it wasted the one live
+    // signal we get, so ask 7TV for this user directly instead; the fetch carries the full
+    // paint with it.
+    if (!def) {
+      negative.delete(id)
+      void fetchCosmetic(id, true)
+      return
+    }
     negative.delete(id)
     const commit = (withImage: boolean): void =>
       store.setCosmetic(id, {
@@ -465,7 +483,11 @@ export function applyLiveCosmetic(e: {
     else commit(true)
   } else {
     const def = badgeDefs.get(e.id)
-    if (!def) return
+    if (!def) {
+      negative.delete(id)
+      void fetchCosmetic(id, true)
+      return
+    }
     negative.delete(id)
     store.setCosmetic(id, { ...cur, badgeUrl: def.url, badgeTooltip: def.tooltip })
   }
