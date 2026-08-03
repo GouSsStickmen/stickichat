@@ -408,6 +408,8 @@ export const en = {
   'notice.bad_ban_mod': 'You cannot ban a moderator.',
   'notice.bad_timeout_self': 'You cannot time yourself out.',
   'notice.msg_rejected_mandatory': 'Message held by AutoMod.',
+  'hk.editable': 'Editable',
+  'hint.whisperSound': 'Sound for a new private message.',
   'set.theme': 'Theme',
   'set.theme.dark': 'Dark',
   'set.theme.light': 'Light',

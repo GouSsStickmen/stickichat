@@ -2846,38 +2846,57 @@ input[type='number']::-webkit-inner-spin-button {
 /* ---------- Settings rhythm ---------- */
 
 /*
- * The notification page was the worst of it: a toggle, then its sound, volume and upload rows,
- * then the NEXT toggle — all as flat siblings at the same indent, so nothing said which rows
- * belonged to which switch. Two rules fix the whole window at once rather than per screen.
+ * Separation by WHITESPACE and grouping, not by lines.
+ *
+ * A hairline between every row was the first attempt and it was wrong: at one rule per row
+ * the lines stop reading as separators and become a texture — the page looked busier than the
+ * wall it replaced. Rows are separated by space; only a real change of subject gets a line.
  */
 
-/* rows that only exist because the switch above them is on: indented, on their own tint, with
-   a rail tying them to their parent */
+.set-row {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+/* an alert (or any switch with options hanging off it) is one card, so "which rows belong to
+   which switch" is answered by the box rather than by counting indents */
+.set-block {
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  margin-bottom: var(--space-3);
+  background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+}
+.set-block > .set-block-title {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--text);
+  margin: var(--space-1) 0 var(--space-1);
+}
+.set-block .set-row:first-of-type {
+  padding-top: 0;
+}
+.set-block .set-row:last-child {
+  padding-bottom: 0;
+}
+
+/* the rows that only exist because the switch above them is on — indented under it, no box of
+   their own so cards don't nest visually */
 .set-sub {
-  margin: 2px 0 var(--space-3) var(--space-4);
-  padding: var(--space-1) 0 var(--space-1) var(--space-4);
-  border-left: 2px solid var(--border);
-  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  margin: var(--space-1) 0 0 var(--space-4);
+  padding-left: var(--space-4);
+  border-left: 2px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 .set-sub .set-row {
   padding-top: 3px;
   padding-bottom: 3px;
 }
 
-/* a group heading is a real break, not a slightly different line of text */
+/* a group heading is the one place a rule earns its keep */
 .set-group-title:not(:first-child) {
   margin-top: var(--space-5);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);
-}
-
-/* hairlines between rows: enough to separate, faint enough not to become a grid */
-.set-row + .set-row {
-  border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
-}
-.set-sub .set-row + .set-row {
-  border-top-color: color-mix(in srgb, var(--border) 30%, transparent);
 }
 
 /* ---------- Theme picker ---------- */

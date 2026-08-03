@@ -132,8 +132,10 @@ export default function SettingsModal({
           style={{ marginRight: 6, padding: '4px 7px', fontSize: 12 }}
           onChange={(e) => set({ language: e.target.value as 'uk' | 'en' })}
         >
-          <option value="uk">🇺🇦 Українська</option>
-          <option value="en">🇬🇧 English</option>
+          {/* no flags: Windows has no regional-indicator glyphs, so 🇺🇦 renders as the
+              literal letters "UA" sitting in front of the name */}
+          <option value="uk">Українська</option>
+          <option value="en">English</option>
         </select>
         {standalone && <PinButton settingKey="settingsPinned" />}
         {!standalone && (
@@ -1178,61 +1180,75 @@ function NotificationsSection(): React.JSX.Element {
   return (
     <Framed>
       <div className="set-group-title">{t('set.group.chatAlerts')}</div>
-      <Toggle label={t('set.mentionSound')} hint={t('hint.mentionSound')} value={settings.mentionSound} onChange={(v) => set({ mentionSound: v })} />
+      {/* the cooldown applies to every alert below, so it sits above them rather than between
+          the mention switch and the mention sound where it read as a mention option */}
       <Toggle
         label={t('set.alertSoundCooldown')}
         hint={t('hint.alertSoundCooldown')}
         value={settings.alertSoundCooldown}
         onChange={(v) => set({ alertSoundCooldown: v })}
       />
-      {settings.mentionSound && (
-        <>
-          <Toggle
-            label={t('set.soundOnActive')}
-            hint={t('hint.soundOnActive')}
-            value={settings.mentionSoundOnActive}
-            onChange={(v) => set({ mentionSoundOnActive: v })}
-          />
-          <SoundSettings kind="mention" />
-        </>
-      )}
-      <Toggle
-        label={t('set.firstMessageSound')}
-        hint={t('hint.firstMessageSound')}
-        value={settings.firstMessageSound}
-        onChange={(v) => set({ firstMessageSound: v })}
-      />
-      {settings.firstMessageSound && <SoundSettings kind="firstMessage" />}
-      <Toggle label={t('set.keywordSound')} hint={t('hint.keywordSound')} value={settings.keywordSound} onChange={(v) => set({ keywordSound: v })} />
-      {settings.keywordSound && (
-        <>
-          <div className="set-row" style={{ alignItems: 'flex-start' }}>
-            <label>{t('set.keywords')}</label>
-            <textarea
-              rows={4}
-              style={{ flex: 1, resize: 'vertical' }}
-              placeholder={t('set.keywords.placeholder')}
-              value={settings.keywordAlerts.join('\n')}
-              onChange={(e) => set({ keywordAlerts: e.target.value.split('\n') })}
-              onBlur={(e) =>
-                set({ keywordAlerts: e.target.value.split('\n').map((w) => w.trim()).filter(Boolean) })
-              }
+      {/* one card per alert: the box answers "which rows belong to which switch" */}
+      <div className="set-block">
+        <Toggle label={t('set.mentionSound')} hint={t('hint.mentionSound')} value={settings.mentionSound} onChange={(v) => set({ mentionSound: v })} />
+        {settings.mentionSound && (
+          <div className="set-sub">
+            <Toggle
+              label={t('set.soundOnActive')}
+              hint={t('hint.soundOnActive')}
+              value={settings.mentionSoundOnActive}
+              onChange={(v) => set({ mentionSoundOnActive: v })}
             />
+            <SoundSettings kind="mention" />
           </div>
-          <Toggle
-            label={t('set.soundOnActive')}
-            hint={t('hint.soundOnActive')}
-            value={settings.keywordSoundOnActive}
-            onChange={(v) => set({ keywordSoundOnActive: v })}
-          />
-          <SoundSettings kind="keyword" />
-        </>
-      )}
+        )}
+      </div>
+      <div className="set-block">
+        <Toggle
+          label={t('set.firstMessageSound')}
+          hint={t('hint.firstMessageSound')}
+          value={settings.firstMessageSound}
+          onChange={(v) => set({ firstMessageSound: v })}
+        />
+        {settings.firstMessageSound && (
+          <div className="set-sub">
+            <SoundSettings kind="firstMessage" />
+          </div>
+        )}
+      </div>
+      <div className="set-block">
+        <Toggle label={t('set.keywordSound')} hint={t('hint.keywordSound')} value={settings.keywordSound} onChange={(v) => set({ keywordSound: v })} />
+        {settings.keywordSound && (
+          <div className="set-sub">
+            <div className="set-row" style={{ alignItems: 'flex-start' }}>
+              <label>{t('set.keywords')}</label>
+              <textarea
+                rows={4}
+                style={{ flex: 1, resize: 'vertical' }}
+                placeholder={t('set.keywords.placeholder')}
+                value={settings.keywordAlerts.join('\n')}
+                onChange={(e) => set({ keywordAlerts: e.target.value.split('\n') })}
+                onBlur={(e) =>
+                  set({ keywordAlerts: e.target.value.split('\n').map((w) => w.trim()).filter(Boolean) })
+                }
+              />
+            </div>
+            <Toggle
+              label={t('set.soundOnActive')}
+              hint={t('hint.soundOnActive')}
+              value={settings.keywordSoundOnActive}
+              onChange={(v) => set({ keywordSoundOnActive: v })}
+            />
+            <SoundSettings kind="keyword" />
+          </div>
+        )}
+      </div>
       {/* same matching as keywords, separate list + separate sound: being called by name is
           a different kind of ping than a topic word */}
+      <div className="set-block">
       <Toggle label={t('set.nickAlertSound')} hint={t('hint.nickAlertSound')} value={settings.nickAlertSound} onChange={(v) => set({ nickAlertSound: v })} />
       {settings.nickAlertSound && (
-        <>
+        <div className="set-sub">
           <div className="set-row" style={{ alignItems: 'flex-start' }}>
             <label>{t('set.nickAlerts')}</label>
             <textarea
@@ -1253,15 +1269,28 @@ function NotificationsSection(): React.JSX.Element {
             onChange={(v) => set({ nickAlertSoundOnActive: v })}
           />
           <SoundSettings kind="nickAlert" />
-        </>
+        </div>
       )}
+      </div>
       <div className="set-group-title">{t('whisper.title')}</div>
-      <Toggle label={t('set.whisperSound')} value={settings.whisperSound} onChange={(v) => set({ whisperSound: v })} />
-      {settings.whisperSound && <SoundSettings kind="whisper" />}
+      <div className="set-block">
+        <Toggle label={t('set.whisperSound')} hint={t('hint.whisperSound')} value={settings.whisperSound} onChange={(v) => set({ whisperSound: v })} />
+        {settings.whisperSound && (
+          <div className="set-sub">
+            <SoundSettings kind="whisper" />
+          </div>
+        )}
+      </div>
       <div className="set-group-title">{t('set.group.streamUp')}</div>
-      <Toggle label={t('set.streamUpNotify')} hint={t('hint.streamUp')} value={settings.streamUpNotify} onChange={(v) => set({ streamUpNotify: v })} />
-      <Toggle label={t('set.streamUpSound')} hint={t('hint.streamUp')} value={settings.streamUpSound} onChange={(v) => set({ streamUpSound: v })} />
-      {settings.streamUpSound && <SoundSettings kind="streamUp" />}
+      <div className="set-block">
+        <Toggle label={t('set.streamUpNotify')} hint={t('hint.streamUp')} value={settings.streamUpNotify} onChange={(v) => set({ streamUpNotify: v })} />
+        <Toggle label={t('set.streamUpSound')} hint={t('hint.streamUp')} value={settings.streamUpSound} onChange={(v) => set({ streamUpSound: v })} />
+        {settings.streamUpSound && (
+          <div className="set-sub">
+            <SoundSettings kind="streamUp" />
+          </div>
+        )}
+      </div>
       <div className="set-group-title">{t('mod.raid')}</div>
       <Toggle label={t('set.raidPrompt')} hint={t('hint.raidPrompt')} value={settings.raidPrompt} onChange={(v) => set({ raidPrompt: v })} />
       <Toggle label={t('set.raidSound')} value={settings.raidSound} onChange={(v) => set({ raidSound: v })} />
@@ -2245,12 +2274,13 @@ function HotkeysSection(): React.JSX.Element {
     ['Shift+Enter', t('hk.fixed.newline')],
     ['Tab', t('hk.fixed.autocomplete')],
     ['↑ / ↓', t('hk.fixed.history')],
-    ['Ctrl+🖱 wheel', t('hk.fixed.zoom')],
+    ['Ctrl + колесо', t('hk.fixed.zoom')],
     ['Ctrl+Z / Ctrl+Shift+Z / Ctrl+C / Ctrl+V', t('hk.fixed.native')]
   ]
   return (
-    <div>
-      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+    <Framed>
+      <div className="set-group-title">{t('hk.editable')}</div>
+      <p className="hint" style={{ color: 'var(--text-faint)', margin: '0 0 6px' }}>
         {t('hk.hint')}
       </p>
       {EDITABLE_HOTKEYS.map((a) => (
@@ -2259,16 +2289,14 @@ function HotkeysSection(): React.JSX.Element {
           <HotkeyInput action={a} />
         </div>
       ))}
-      <div className="set-group-title" style={{ marginTop: 20 }}>
-        {t('hk.builtin')}
-      </div>
+      <div className="set-group-title">{t('hk.builtin')}</div>
       {builtin.map(([keys, desc]) => (
         <div key={keys} className="set-row">
           <label>{desc}</label>
           <span className="hotkey-fixed">{keys}</span>
         </div>
       ))}
-    </div>
+    </Framed>
   )
 }
 

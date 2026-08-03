@@ -410,6 +410,8 @@ export const uk: Record<TranslationKey, string> = {
   'notice.bad_ban_mod': 'Не можна забанити модератора.',
   'notice.bad_timeout_self': 'Не можна дати тайм-аут самому собі.',
   'notice.msg_rejected_mandatory': 'Повідомлення відхилено автомодератором.',
+  'hk.editable': 'Налаштовувані',
+  'hint.whisperSound': 'Звук на нове приватне повідомлення.',
   'set.theme': 'Тема',
   'set.theme.dark': 'Темна',
   'set.theme.light': 'Світла',
