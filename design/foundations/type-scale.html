@@ -1,0 +1,342 @@
+<!-- @dsCard group="Foundations" name="Type scale" subtitle="7 steps, 9–15px" width="1180" height="760" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StickiChat — Type scale</title>
+<style>
+:root {
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+  --fs-2xs: 9px;
+  --fs-xs: 10px;
+  --fs-sm: 11px;
+  --fs-md: 12px;
+  --fs-lg: 13px;
+  --fs-xl: 14px;
+  --fs-2xl: 15px;
+  --fs-3xl: 34px;
+  --dur-fast: 90ms;
+  --dur-med: 160ms;
+  --dur-slow: 260ms;
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --font: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Every theme, generated from src/renderer/src/lib/themes.ts. Do not hand-edit. */
+.t-dark {
+  --bg: #0e0e10;
+  --surface: #18181b;
+  --surface-2: #1f1f23;
+  --surface-3: #26262c;
+  --border: #303036;
+  --text: #efeff1;
+  --text-muted: #adadb8;
+  --text-faint: #77777f;
+  --accent: #a970ff;
+  --accent-strong: #9147ff;
+  --accent-text: #ffffff;
+  --danger: #eb4c4c;
+  --live: #e91916;
+  --success: #45c26f;
+  --warning: #f5b83d;
+  --highlight-bg: rgba(255, 92, 92, 0.12);
+  --system-text: #adadb8;
+  --link: #8ab4f8;
+  --scrollbar: #3a3a41;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.42);
+  --checker-a: #33333b;
+  --checker-b: #1c1c20;
+}
+.t-light {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f2f2f3;
+  --surface-3: #e8e8ea;
+  --border: #d8d8dc;
+  --text: #0e0e10;
+  --text-muted: #53535f;
+  --text-faint: #6f6f7c;
+  --accent: #9147ff;
+  --accent-strong: #772ce8;
+  --accent-text: #ffffff;
+  --danger: #d43a3a;
+  --live: #e91916;
+  --success: #1a9648;
+  --warning: #c98a12;
+  --highlight-bg: rgba(255, 92, 92, 0.14);
+  --system-text: #53535f;
+  --link: #1a6dcc;
+  --scrollbar: #c5c5cc;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.12);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.2);
+  --scrim: rgba(0, 0, 0, 0.2);
+  --checker-a: #c9c9d2;
+  --checker-b: #eeeef2;
+}
+.t-amoled {
+  --bg: #000000;
+  --surface: #0a0a0c;
+  --surface-2: #121215;
+  --surface-3: #1a1a1f;
+  --border: #26262b;
+  --text: #f2f2f4;
+  --text-muted: #adadb8;
+  --text-faint: #77777f;
+  --accent: #a970ff;
+  --accent-strong: #9147ff;
+  --accent-text: #ffffff;
+  --danger: #eb4c4c;
+  --live: #e91916;
+  --success: #45c26f;
+  --warning: #f5b83d;
+  --highlight-bg: rgba(255, 92, 92, 0.12);
+  --system-text: #adadb8;
+  --link: #8ab4f8;
+  --scrollbar: #2e2e34;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.42);
+  --checker-a: #232329;
+  --checker-b: #0c0c0f;
+}
+.t-midnight {
+  --bg: #0d1117;
+  --surface: #141b24;
+  --surface-2: #1a2330;
+  --surface-3: #22303f;
+  --border: #2b3a4a;
+  --text: #e6edf3;
+  --text-muted: #9fb0c0;
+  --text-faint: #6b7d8e;
+  --accent: #58a6ff;
+  --accent-strong: #3b82f6;
+  --accent-text: #ffffff;
+  --danger: #f85149;
+  --live: #e91916;
+  --success: #3fb950;
+  --warning: #d29922;
+  --highlight-bg: rgba(255, 92, 92, 0.12);
+  --system-text: #adadb8;
+  --link: #79c0ff;
+  --scrollbar: #31404f;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.42);
+  --checker-a: #2a3b4e;
+  --checker-b: #161d27;
+}
+.t-nord {
+  --bg: #191d24;
+  --surface: #22272f;
+  --surface-2: #2e3440;
+  --surface-3: #3b4252;
+  --border: #434c5e;
+  --text: #f0f4fa;
+  --text-muted: #cdd6e3;
+  --text-faint: #94a2b5;
+  --accent: #8fd0e0;
+  --accent-strong: #5e81ac;
+  --accent-text: #161a20;
+  --danger: #bf616a;
+  --live: #e91916;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+  --highlight-bg: rgba(191, 97, 106, 0.16);
+  --system-text: #adadb8;
+  --link: #96c8c6;
+  --scrollbar: #434c5e;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(12, 15, 19, 0.42);
+  --checker-a: #3b4252;
+  --checker-b: #252a33;
+}
+.t-gruvbox {
+  --bg: #121414;
+  --surface: #1d2021;
+  --surface-2: #282828;
+  --surface-3: #32302f;
+  --border: #453f3b;
+  --text: #f6e8c8;
+  --text-muted: #cdbe9f;
+  --text-faint: #a3937f;
+  --accent: #fabd2f;
+  --accent-strong: #d79921;
+  --accent-text: #121414;
+  --danger: #fb4934;
+  --live: #e91916;
+  --success: #b8bb26;
+  --warning: #fe8019;
+  --highlight-bg: rgba(251, 73, 52, 0.14);
+  --system-text: #adadb8;
+  --link: #8ec07c;
+  --scrollbar: #453f3b;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(8, 9, 9, 0.42);
+  --checker-a: #3c3836;
+  --checker-b: #1f2122;
+}
+.t-rose {
+  --bg: #faf4ed;
+  --surface: #fffaf3;
+  --surface-2: #f2e9e1;
+  --surface-3: #e9ded4;
+  --border: #dfd4c8;
+  --text: #403a5e;
+  --text-muted: #5b567a;
+  --text-faint: #6b6683;
+  --accent: #a2506a;
+  --accent-strong: #8f4a5e;
+  --accent-text: #ffffff;
+  --danger: #b4637a;
+  --live: #e91916;
+  --success: #568f7c;
+  --warning: #ea9d34;
+  --highlight-bg: rgba(180, 99, 122, 0.14);
+  --system-text: #5b567a;
+  --link: #286983;
+  --scrollbar: #d7c9bb;
+  --shadow-sm: 0 1px 3px rgba(87, 82, 121, 0.12);
+  --shadow-md: 0 4px 14px rgba(87, 82, 121, 0.14);
+  --shadow: 0 8px 30px rgba(87, 82, 121, 0.18);
+  --shadow-lg: 0 12px 40px rgba(87, 82, 121, 0.2);
+  --scrim: rgba(87, 82, 121, 0.18);
+  --checker-a: #d3c2b4;
+  --checker-b: #f4ece5;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: #101013;
+  color: #efeff1;
+  font-size: var(--fs-lg);
+  padding: 24px;
+}
+h1 { font-size: 20px; margin: 0 0 4px; font-weight: 650; }
+h1 + p { margin: 0 0 20px; color: #9a9aa4; font-size: var(--fs-md); max-width: 70ch; line-height: 1.5; }
+h2 { font-size: var(--fs-md); margin: 0 0 8px; color: #9a9aa4; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* every component is shown once per theme, side by side: a token that only works on the
+   theme you happened to be using is the single most common way this UI has broken */
+.themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.panel {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4);
+  overflow: hidden;
+}
+.panel > .label {
+  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-faint); margin-bottom: var(--space-3);
+}
+.row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.stack { display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* --- app controls, mirrored from global.css --- */
+.btn {
+  font-family: inherit; font-size: var(--fs-md);
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 5px 10px; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.btn:hover { background: var(--border); }
+.btn.primary { background: var(--accent-strong); color: var(--accent-text); border-color: transparent; }
+.btn.danger { background: var(--danger); color: var(--accent-text); border-color: transparent; }
+.btn.ghost { background: transparent; color: var(--text-muted); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.field {
+  font-family: inherit; font-size: var(--fs-md);
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 6px 9px; outline: none; width: 100%;
+}
+.field.focused { border-color: var(--accent); }
+.chip {
+  display: inline-flex; align-items: center; gap: var(--space-0);
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: var(--radius-pill); padding: 2px 10px; font-size: var(--fs-md);
+}
+.chip.active { background: var(--accent-strong); color: var(--accent-text); border-color: transparent; }
+.tab {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  background: var(--surface); border: 1px solid var(--border); border-bottom: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 5px 10px; font-size: var(--fs-lg); color: var(--text-muted);
+}
+.tab.active { background: var(--surface-3); color: var(--text); }
+.dot { width: 8px; height: 8px; border-radius: var(--radius-circle); background: var(--live); }
+.msg { padding: 3px 10px; line-height: 1.5; font-size: var(--fs-lg); }
+.msg.alt { background: var(--surface-2); }
+.msg.mention { background: var(--highlight-bg); box-shadow: inset 2px 0 0 var(--accent); }
+.nick { font-weight: 700; }
+.ts { color: var(--text-faint); font-size: var(--fs-sm); margin-right: var(--space-2);
+       font-variant-numeric: tabular-nums; }
+.sys { color: var(--system-text); font-size: var(--fs-md); }
+.badge { display: inline-block; width: 18px; height: 18px; border-radius: var(--radius-xs);
+          background: var(--accent-strong); margin-right: 3px; vertical-align: -3px; }
+a { color: var(--link); }
+
+</style>
+</head>
+<body>
+<h1>Type scale</h1>
+<p>Seven sizes cover 97 of the ~101 <code>font-size</code> declarations in the app. <code>--font-size</code> is separate: it is the user's own chat size and is set at runtime.</p>
+<div class="themes">
+      <div class="panel t-dark">
+        <div class="label">Dark</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-2xs)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-2xs · badge counters</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-xs)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-xs · dense labels</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-sm)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-sm · timestamps</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-md)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-md · controls</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-lg)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-lg · chat body</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-xl)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-xl · stream info</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-2xl)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-2xl · section heads</span></div>
+      </div>
+      <div class="panel t-light">
+        <div class="label">Light</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-2xs)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-2xs · badge counters</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-xs)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-xs · dense labels</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-sm)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-sm · timestamps</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-md)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-md · controls</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-lg)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-lg · chat body</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-xl)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-xl · stream info</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0"><span style="font-size:var(--fs-2xl)">Швидка коричнева лисиця</span><span style="color:var(--text-faint);font-size:var(--fs-2xs);white-space:nowrap">fs-2xl · section heads</span></div>
+      </div>
+</div>
+</body>
+</html>

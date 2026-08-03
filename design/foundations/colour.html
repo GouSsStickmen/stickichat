@@ -1,0 +1,462 @@
+<!-- @dsCard group="Foundations" name="Colour" subtitle="All 7 themes, 15 tokens each" width="1180" height="760" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StickiChat — Colour</title>
+<style>
+:root {
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+  --fs-2xs: 9px;
+  --fs-xs: 10px;
+  --fs-sm: 11px;
+  --fs-md: 12px;
+  --fs-lg: 13px;
+  --fs-xl: 14px;
+  --fs-2xl: 15px;
+  --fs-3xl: 34px;
+  --dur-fast: 90ms;
+  --dur-med: 160ms;
+  --dur-slow: 260ms;
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --font: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Every theme, generated from src/renderer/src/lib/themes.ts. Do not hand-edit. */
+.t-dark {
+  --bg: #0e0e10;
+  --surface: #18181b;
+  --surface-2: #1f1f23;
+  --surface-3: #26262c;
+  --border: #303036;
+  --text: #efeff1;
+  --text-muted: #adadb8;
+  --text-faint: #77777f;
+  --accent: #a970ff;
+  --accent-strong: #9147ff;
+  --accent-text: #ffffff;
+  --danger: #eb4c4c;
+  --live: #e91916;
+  --success: #45c26f;
+  --warning: #f5b83d;
+  --highlight-bg: rgba(255, 92, 92, 0.12);
+  --system-text: #adadb8;
+  --link: #8ab4f8;
+  --scrollbar: #3a3a41;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.42);
+  --checker-a: #33333b;
+  --checker-b: #1c1c20;
+}
+.t-light {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f2f2f3;
+  --surface-3: #e8e8ea;
+  --border: #d8d8dc;
+  --text: #0e0e10;
+  --text-muted: #53535f;
+  --text-faint: #6f6f7c;
+  --accent: #9147ff;
+  --accent-strong: #772ce8;
+  --accent-text: #ffffff;
+  --danger: #d43a3a;
+  --live: #e91916;
+  --success: #1a9648;
+  --warning: #c98a12;
+  --highlight-bg: rgba(255, 92, 92, 0.14);
+  --system-text: #53535f;
+  --link: #1a6dcc;
+  --scrollbar: #c5c5cc;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.12);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.2);
+  --scrim: rgba(0, 0, 0, 0.2);
+  --checker-a: #c9c9d2;
+  --checker-b: #eeeef2;
+}
+.t-amoled {
+  --bg: #000000;
+  --surface: #0a0a0c;
+  --surface-2: #121215;
+  --surface-3: #1a1a1f;
+  --border: #26262b;
+  --text: #f2f2f4;
+  --text-muted: #adadb8;
+  --text-faint: #77777f;
+  --accent: #a970ff;
+  --accent-strong: #9147ff;
+  --accent-text: #ffffff;
+  --danger: #eb4c4c;
+  --live: #e91916;
+  --success: #45c26f;
+  --warning: #f5b83d;
+  --highlight-bg: rgba(255, 92, 92, 0.12);
+  --system-text: #adadb8;
+  --link: #8ab4f8;
+  --scrollbar: #2e2e34;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.42);
+  --checker-a: #232329;
+  --checker-b: #0c0c0f;
+}
+.t-midnight {
+  --bg: #0d1117;
+  --surface: #141b24;
+  --surface-2: #1a2330;
+  --surface-3: #22303f;
+  --border: #2b3a4a;
+  --text: #e6edf3;
+  --text-muted: #9fb0c0;
+  --text-faint: #6b7d8e;
+  --accent: #58a6ff;
+  --accent-strong: #3b82f6;
+  --accent-text: #ffffff;
+  --danger: #f85149;
+  --live: #e91916;
+  --success: #3fb950;
+  --warning: #d29922;
+  --highlight-bg: rgba(255, 92, 92, 0.12);
+  --system-text: #adadb8;
+  --link: #79c0ff;
+  --scrollbar: #31404f;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.42);
+  --checker-a: #2a3b4e;
+  --checker-b: #161d27;
+}
+.t-nord {
+  --bg: #191d24;
+  --surface: #22272f;
+  --surface-2: #2e3440;
+  --surface-3: #3b4252;
+  --border: #434c5e;
+  --text: #f0f4fa;
+  --text-muted: #cdd6e3;
+  --text-faint: #94a2b5;
+  --accent: #8fd0e0;
+  --accent-strong: #5e81ac;
+  --accent-text: #161a20;
+  --danger: #bf616a;
+  --live: #e91916;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+  --highlight-bg: rgba(191, 97, 106, 0.16);
+  --system-text: #adadb8;
+  --link: #96c8c6;
+  --scrollbar: #434c5e;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(12, 15, 19, 0.42);
+  --checker-a: #3b4252;
+  --checker-b: #252a33;
+}
+.t-gruvbox {
+  --bg: #121414;
+  --surface: #1d2021;
+  --surface-2: #282828;
+  --surface-3: #32302f;
+  --border: #453f3b;
+  --text: #f6e8c8;
+  --text-muted: #cdbe9f;
+  --text-faint: #a3937f;
+  --accent: #fabd2f;
+  --accent-strong: #d79921;
+  --accent-text: #121414;
+  --danger: #fb4934;
+  --live: #e91916;
+  --success: #b8bb26;
+  --warning: #fe8019;
+  --highlight-bg: rgba(251, 73, 52, 0.14);
+  --system-text: #adadb8;
+  --link: #8ec07c;
+  --scrollbar: #453f3b;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(8, 9, 9, 0.42);
+  --checker-a: #3c3836;
+  --checker-b: #1f2122;
+}
+.t-rose {
+  --bg: #faf4ed;
+  --surface: #fffaf3;
+  --surface-2: #f2e9e1;
+  --surface-3: #e9ded4;
+  --border: #dfd4c8;
+  --text: #403a5e;
+  --text-muted: #5b567a;
+  --text-faint: #6b6683;
+  --accent: #a2506a;
+  --accent-strong: #8f4a5e;
+  --accent-text: #ffffff;
+  --danger: #b4637a;
+  --live: #e91916;
+  --success: #568f7c;
+  --warning: #ea9d34;
+  --highlight-bg: rgba(180, 99, 122, 0.14);
+  --system-text: #5b567a;
+  --link: #286983;
+  --scrollbar: #d7c9bb;
+  --shadow-sm: 0 1px 3px rgba(87, 82, 121, 0.12);
+  --shadow-md: 0 4px 14px rgba(87, 82, 121, 0.14);
+  --shadow: 0 8px 30px rgba(87, 82, 121, 0.18);
+  --shadow-lg: 0 12px 40px rgba(87, 82, 121, 0.2);
+  --scrim: rgba(87, 82, 121, 0.18);
+  --checker-a: #d3c2b4;
+  --checker-b: #f4ece5;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: #101013;
+  color: #efeff1;
+  font-size: var(--fs-lg);
+  padding: 24px;
+}
+h1 { font-size: 20px; margin: 0 0 4px; font-weight: 650; }
+h1 + p { margin: 0 0 20px; color: #9a9aa4; font-size: var(--fs-md); max-width: 70ch; line-height: 1.5; }
+h2 { font-size: var(--fs-md); margin: 0 0 8px; color: #9a9aa4; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* every component is shown once per theme, side by side: a token that only works on the
+   theme you happened to be using is the single most common way this UI has broken */
+.themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.panel {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4);
+  overflow: hidden;
+}
+.panel > .label {
+  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-faint); margin-bottom: var(--space-3);
+}
+.row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.stack { display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* --- app controls, mirrored from global.css --- */
+.btn {
+  font-family: inherit; font-size: var(--fs-md);
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 5px 10px; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.btn:hover { background: var(--border); }
+.btn.primary { background: var(--accent-strong); color: var(--accent-text); border-color: transparent; }
+.btn.danger { background: var(--danger); color: var(--accent-text); border-color: transparent; }
+.btn.ghost { background: transparent; color: var(--text-muted); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.field {
+  font-family: inherit; font-size: var(--fs-md);
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 6px 9px; outline: none; width: 100%;
+}
+.field.focused { border-color: var(--accent); }
+.chip {
+  display: inline-flex; align-items: center; gap: var(--space-0);
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: var(--radius-pill); padding: 2px 10px; font-size: var(--fs-md);
+}
+.chip.active { background: var(--accent-strong); color: var(--accent-text); border-color: transparent; }
+.tab {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  background: var(--surface); border: 1px solid var(--border); border-bottom: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 5px 10px; font-size: var(--fs-lg); color: var(--text-muted);
+}
+.tab.active { background: var(--surface-3); color: var(--text); }
+.dot { width: 8px; height: 8px; border-radius: var(--radius-circle); background: var(--live); }
+.msg { padding: 3px 10px; line-height: 1.5; font-size: var(--fs-lg); }
+.msg.alt { background: var(--surface-2); }
+.msg.mention { background: var(--highlight-bg); box-shadow: inset 2px 0 0 var(--accent); }
+.nick { font-weight: 700; }
+.ts { color: var(--text-faint); font-size: var(--fs-sm); margin-right: var(--space-2);
+       font-variant-numeric: tabular-nums; }
+.sys { color: var(--system-text); font-size: var(--fs-md); }
+.badge { display: inline-block; width: 18px; height: 18px; border-radius: var(--radius-xs);
+          background: var(--accent-strong); margin-right: 3px; vertical-align: -3px; }
+a { color: var(--link); }
+
+</style>
+</head>
+<body>
+<h1>Colour</h1>
+<p>Every palette side by side. A theme is a bag of token values in <code>lib/themes.ts</code> — nothing here is a CSS rule, which is why a user-made theme can reach the whole UI.</p>
+<div class="themes">
+      <div class="panel t-dark">
+        <div class="label">Dark</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#0e0e10;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">bg</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#18181b;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#1f1f23;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-2</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#26262c;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-3</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#303036;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">border</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#efeff1;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#adadb8;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-muted</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#77777f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-faint</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#a970ff;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#9147ff;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent-strong</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#8ab4f8;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">link</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#eb4c4c;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">danger</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#45c26f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">success</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f5b83d;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">warning</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e91916;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">live</span></div>
+        </div>
+      </div>
+      <div class="panel t-light">
+        <div class="label">Light</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f7f7f8;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">bg</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#ffffff;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f2f2f3;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-2</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e8e8ea;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-3</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#d8d8dc;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">border</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#0e0e10;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#53535f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-muted</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#6f6f7c;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-faint</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#9147ff;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#772ce8;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent-strong</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#1a6dcc;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">link</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#d43a3a;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">danger</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#1a9648;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">success</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#c98a12;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">warning</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e91916;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">live</span></div>
+        </div>
+      </div>
+      <div class="panel t-amoled">
+        <div class="label">AMOLED</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#000000;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">bg</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#0a0a0c;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#121215;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-2</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#1a1a1f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-3</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#26262b;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">border</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f2f2f4;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#adadb8;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-muted</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#77777f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-faint</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#a970ff;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#9147ff;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent-strong</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#8ab4f8;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">link</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#eb4c4c;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">danger</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#45c26f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">success</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f5b83d;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">warning</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e91916;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">live</span></div>
+        </div>
+      </div>
+      <div class="panel t-midnight">
+        <div class="label">Midnight</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#0d1117;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">bg</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#141b24;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#1a2330;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-2</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#22303f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-3</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#2b3a4a;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">border</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e6edf3;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#9fb0c0;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-muted</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#6b7d8e;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-faint</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#58a6ff;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#3b82f6;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent-strong</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#79c0ff;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">link</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f85149;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">danger</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#3fb950;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">success</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#d29922;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">warning</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e91916;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">live</span></div>
+        </div>
+      </div>
+      <div class="panel t-nord">
+        <div class="label">Nord</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#191d24;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">bg</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#22272f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#2e3440;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-2</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#3b4252;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-3</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#434c5e;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">border</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f0f4fa;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#cdd6e3;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-muted</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#94a2b5;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-faint</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#8fd0e0;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#5e81ac;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent-strong</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#96c8c6;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">link</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#bf616a;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">danger</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#a3be8c;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">success</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#ebcb8b;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">warning</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e91916;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">live</span></div>
+        </div>
+      </div>
+      <div class="panel t-gruvbox">
+        <div class="label">Gruvbox</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#121414;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">bg</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#1d2021;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#282828;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-2</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#32302f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-3</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#453f3b;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">border</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f6e8c8;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#cdbe9f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-muted</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#a3937f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-faint</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#fabd2f;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#d79921;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent-strong</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#8ec07c;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">link</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#fb4934;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">danger</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#b8bb26;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">success</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#fe8019;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">warning</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e91916;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">live</span></div>
+        </div>
+      </div>
+      <div class="panel t-rose">
+        <div class="label">Rosé</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#faf4ed;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">bg</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#fffaf3;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#f2e9e1;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-2</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e9ded4;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">surface-3</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#dfd4c8;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">border</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#403a5e;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#5b567a;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-muted</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#6b6683;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">text-faint</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#a2506a;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#8f4a5e;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">accent-strong</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#286983;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">link</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#b4637a;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">danger</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#568f7c;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">success</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#ea9d34;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">warning</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)"><i style="width:22px;height:22px;border-radius:var(--radius-sm);flex:none;background:#e91916;border:1px solid var(--border)"></i><span style="color:var(--text-muted)">live</span></div>
+        </div>
+      </div>
+</div>
+</body>
+</html>
