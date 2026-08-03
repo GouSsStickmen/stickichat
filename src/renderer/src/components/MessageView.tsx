@@ -732,254 +732,259 @@ function MessageViewInner({
   }
 
   return (
-    <div className="msg-outer">
-      {swipeAction && (
-        <div className="swipe-overlay" style={{ background: swipeAction.color }}>
-          {swipeAction.label}
-        </div>
-      )}
-      <div
-        className={classes.join(' ')}
-        style={
-          {
-            opacity: muted?.mode === 'dim' ? muted.opacity : undefined,
-            background: msg.announceColor ? undefined : customBg,
-            // PRIMARY announcements take the broadcaster's own color for this channel
-            '--announce-accent': msg.announceColor
-              ? msg.announceColor === 'primary'
-                ? (channelAccent ?? ANNOUNCE_COLORS.primary)
-                : ANNOUNCE_COLORS[msg.announceColor]
-              : undefined,
-            transform: dragX > 0 ? `translateX(${dragX}px)` : undefined
-          } as React.CSSProperties
-        }
-      >
-        {swipeEnabled && (
-          <span
-            className="swipe-grip"
-            title={t('swipe.hint')}
-            onPointerDown={startSwipe}
-          >
-            ⠿
-          </span>
+    // .msg-row is the unclipped frame; .msg-outer inside it is the clipped one. The hover
+    // buttons hang above the row's top edge and must not be cut off, but a swipe slides .msg
+    // sideways and must be. Two boxes is the only way to have both — and it also means the
+    // buttons are not inside the sliding row, so they stay put while you swipe.
+    <div className="msg-row">
+      <div className="msg-outer">
+        {swipeAction && (
+          <div className="swipe-overlay" style={{ background: swipeAction.color }}>
+            {swipeAction.label}
+          </div>
         )}
-        {/* redemptions are announced on their own line by PubSub (with the real reward name);
-            here we only tag bits, which come through IRC with the amount */}
-        {settings.showBits && !!msg.bits && !msg.system && (
-          <span className="event-header bits">{t('msg.bits', { count: msg.bits })}</span>
-        )}
-        {msg.system === 'usernotice' && msg.systemText && (
-          <span
-            className={`usernotice-tag ${msg.giftGroupId ? 'gift-toggle' : ''}`}
-            onClick={
-              msg.giftGroupId
-                ? () => useUiStore.getState().toggleGiftGroup(msg.giftGroupId!)
-                : undefined
-            }
-          >
-            {msg.announceColor ? '📢' : '★'} {msg.systemText}
-            {msg.giftGroupId && (
-              <span className="gift-toggle-arrow">
-                {useUiStore.getState().expandedGifts[msg.giftGroupId] ? ' ▲' : ` ▼ ${t('gift.showAll')}`}
-              </span>
-            )}
-            {/* incoming raid + mod rights → one-click shoutout for the raider */}
-            {msg.raidFrom && isMod && account && !msg.historical && (
-              <button
-                className={`raid-shoutout-btn ${soLeft > 0 ? 'cooling' : ''}`}
-                disabled={soLeft > 0}
-                title={
-                  soLeft > 0
-                    ? t('mod.shoutoutCooldown', { time: formatCooldown(soLeft) })
-                    : `${t('mod.shoutout')}: ${msg.raidFrom}`
-                }
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  const { resolveUserId } = await import('../services/modActions')
-                  const id = await resolveUserId(account, msg.raidFrom!)
-                  if (!id) {
-                    toast(t('mod.actionFail'), 'error')
-                    return
-                  }
-                  const { sendShoutout } = await import('../lib/helix')
-                  const res = await sendShoutout(account, channelId, id)
-                  if (res.ok) {
-                    toast(`📣 ${msg.raidFrom}`, 'ok')
-                    const { chatService } = await import('../services/chatService')
-                    chatService.localInfo(msg.channel, t('mod.shoutoutGiven', { user: msg.raidFrom! }))
-                  } else {
-                    toast((localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }), 'error')
-                  }
-                }}
-              >
-                📣 {soLeft > 0 ? formatCooldown(soLeft) : t('mod.shoutout')}
-              </button>
-            )}
-          </span>
-        )}
-        {msg.replyParent && (
-          <span
-            className={`reply-ref ${msg.replyParent.msgId ? 'clickable' : ''}`}
-            title={`${msg.replyParent.displayName}: ${msg.replyParent.text}\n${msg.replyParent.msgId ? t('reply.jump') : ''}`}
-            onClick={jumpToParent}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              const rp = msg.replyParent!
-              const rpName = rp.displayName && rp.displayName.toLowerCase() === rp.login ? rp.displayName : rp.login
-              window.dispatchEvent(
-                new CustomEvent<InsertEventDetail>('sticki:insert', {
-                  detail: { paneId, text: `@${rpName} ` }
-                })
-              )
-            }}
-          >
-            ↩ @{msg.replyParent.displayName}: {msg.replyParent.text}
-          </span>
-        )}
-        {settings.showTimestamps && (
-          <>
-            <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>{' '}
-          </>
-        )}
-        {msg.badges.map((b) => {
-          const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
-          if (!url) return null
-          const title = lookupBadgeTitle(msg.channel, b.setId, b.version) ?? b.setId
-          return (
-            <img
-              key={`${b.setId}/${b.version}`}
-              className="badge"
-              src={url}
-              alt=""
-              title={title}
-              draggable={false}
-              onMouseEnter={(e) =>
-                useUiStore.getState().setEmotePreview({
-                  url: lookupBadge4x(msg.channel, b.setId, b.version) ?? url,
-                  code: title,
-                  x: e.clientX,
-                  y: e.clientY
-                })
-              }
-              onMouseLeave={() => useUiStore.getState().setEmotePreview(null)}
-            />
-          )
-        })}
-        {/* third-party badges sit after the Twitch ones, same as on 7TV/BTTV/FFZ themselves,
-            and hover-preview exactly like a Twitch badge does */}
-        {settings.showThirdPartyBadges &&
-          thirdPartyBadges.map((b, i) => (
-            <img
-              key={`${b.title}-${i}`}
-              className="badge badge-3p"
-              style={b.color ? { background: b.color } : undefined}
-              src={b.url}
-              alt=""
-              draggable={false}
-              title={b.title}
-              onMouseEnter={(e) =>
-                useUiStore.getState().setEmotePreview({
-                  url: b.url,
-                  code: b.title,
-                  x: e.clientX,
-                  y: e.clientY
-                })
-              }
-              onMouseLeave={() => useUiStore.getState().setEmotePreview(null)}
-            />
-          ))}
-        <span
-          // remount when the paint changes: Chromium keeps the OLD text clip on a live
-          // element, which paints the gradient as a solid bar over the nick
-          key={stvCosmetic?.paint ?? 'plain'}
-          className="nick"
-          style={paintStyle ?? { color }}
-          title={stvCosmetic?.paintName}
-          onClick={openUserCard}
-          onContextMenu={insertNick}
+        <div
+          className={classes.join(' ')}
+          style={
+            {
+              opacity: muted?.mode === 'dim' ? muted.opacity : undefined,
+              background: msg.announceColor ? undefined : customBg,
+              // PRIMARY announcements take the broadcaster's own color for this channel
+              '--announce-accent': msg.announceColor
+                ? msg.announceColor === 'primary'
+                  ? (channelAccent ?? ANNOUNCE_COLORS.primary)
+                  : ANNOUNCE_COLORS[msg.announceColor]
+                : undefined,
+              transform: dragX > 0 ? `translateX(${dragX}px)` : undefined
+            } as React.CSSProperties
+          }
         >
-          {msg.displayName}
-          {msg.displayName.toLowerCase() !== msg.login ? ` (${msg.login})` : ''}
-        </span>
-        {/* raider tag: which streamer's raid they arrived with — lives exactly as long as
-            the raider highlight window */}
-        {msg.raider && msg.raiderFrom && (
-          <span className="raider-tag" title={`${t('raid.raidWord')}: ${msg.raiderFrom}`}>
-            🚨 {msg.raiderFrom}
-          </span>
-        )}
-        {msg.sourceRoomId && <SharedSourceTag roomId={msg.sourceRoomId} />}
-        {msg.isAction ? ' ' : ': '}
-        {brailleArt && !artLines && (
-          <span className="art-width-ctl" title={`${artCols}`}>
-            <input
-              type="range"
-              min={16}
-              max={60}
-              value={artCols}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10)
-                setArtCols(v)
-                lastArtCols = v
-              }}
-            />
-          </span>
-        )}
-        {artLines ? (
-          // original line structure recovered — render exactly as drawn
-          <span className="msg-text ascii-art" style={{ whiteSpace: 'pre' }}>
-            {artLines.join('\n')}
-          </span>
-        ) : (
-          <span
-            className={`msg-text ${brailleArt ? 'ascii-art' : ''}`}
-            style={{
-              ...(msg.isAction ? { color } : undefined),
-              ...(brailleArt ? { width: Math.ceil(getBrailleCellWidth() * artCols) } : undefined)
-            }}
-          >
-            {tokens.map((tk, i) => (
-              <TokenView key={i} token={tk} paneId={paneId} channel={msg.channel} hiRes={!!(settings.showBits && msg.gigantified)} />
-            ))}
-          </span>
-        )}
-        {!msg.deleted && <LinkPreviewCard text={msg.text} />}
-
-        {canAct && (
-          <span className="hover-actions">
-            <button
-              title={t('reply.action')}
-              onClick={() =>
-                onReply({ msgId: msg.id, login: msg.login, displayName: msg.displayName, text: msg.text })
+          {swipeEnabled && (
+            <span
+              className="swipe-grip"
+              title={t('swipe.hint')}
+              onPointerDown={startSwipe}
+            >
+              ⠿
+            </span>
+          )}
+          {/* redemptions are announced on their own line by PubSub (with the real reward name);
+              here we only tag bits, which come through IRC with the amount */}
+          {settings.showBits && !!msg.bits && !msg.system && (
+            <span className="event-header bits">{t('msg.bits', { count: msg.bits })}</span>
+          )}
+          {msg.system === 'usernotice' && msg.systemText && (
+            <span
+              className={`usernotice-tag ${msg.giftGroupId ? 'gift-toggle' : ''}`}
+              onClick={
+                msg.giftGroupId
+                  ? () => useUiStore.getState().toggleGiftGroup(msg.giftGroupId!)
+                  : undefined
               }
             >
-              ↩
-            </button>
-            {visibleButtons.map((btn) => (
-              <button
-                key={btn.id}
-                title={btn.label}
-                onClick={() =>
-                  runModButton(btn, {
-                    account: account!,
-                    channel: msg.channel,
-                    channelId,
-                    paneId,
-                    targetUserId: msg.userId,
-                    targetLogin: msg.login,
-                    targetMsgId: msg.id,
-            targetText: msg.text
+              {msg.announceColor ? '📢' : '★'} {msg.systemText}
+              {msg.giftGroupId && (
+                <span className="gift-toggle-arrow">
+                  {useUiStore.getState().expandedGifts[msg.giftGroupId] ? ' ▲' : ` ▼ ${t('gift.showAll')}`}
+                </span>
+              )}
+              {/* incoming raid + mod rights → one-click shoutout for the raider */}
+              {msg.raidFrom && isMod && account && !msg.historical && (
+                <button
+                  className={`raid-shoutout-btn ${soLeft > 0 ? 'cooling' : ''}`}
+                  disabled={soLeft > 0}
+                  title={
+                    soLeft > 0
+                      ? t('mod.shoutoutCooldown', { time: formatCooldown(soLeft) })
+                      : `${t('mod.shoutout')}: ${msg.raidFrom}`
+                  }
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    const { resolveUserId } = await import('../services/modActions')
+                    const id = await resolveUserId(account, msg.raidFrom!)
+                    if (!id) {
+                      toast(t('mod.actionFail'), 'error')
+                      return
+                    }
+                    const { sendShoutout } = await import('../lib/helix')
+                    const res = await sendShoutout(account, channelId, id)
+                    if (res.ok) {
+                      toast(`📣 ${msg.raidFrom}`, 'ok')
+                      const { chatService } = await import('../services/chatService')
+                      chatService.localInfo(msg.channel, t('mod.shoutoutGiven', { user: msg.raidFrom! }))
+                    } else {
+                      toast((localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }), 'error')
+                    }
+                  }}
+                >
+                  📣 {soLeft > 0 ? formatCooldown(soLeft) : t('mod.shoutout')}
+                </button>
+              )}
+            </span>
+          )}
+          {msg.replyParent && (
+            <span
+              className={`reply-ref ${msg.replyParent.msgId ? 'clickable' : ''}`}
+              title={`${msg.replyParent.displayName}: ${msg.replyParent.text}\n${msg.replyParent.msgId ? t('reply.jump') : ''}`}
+              onClick={jumpToParent}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                const rp = msg.replyParent!
+                const rpName = rp.displayName && rp.displayName.toLowerCase() === rp.login ? rp.displayName : rp.login
+                window.dispatchEvent(
+                  new CustomEvent<InsertEventDetail>('sticki:insert', {
+                    detail: { paneId, text: `@${rpName} ` }
+                  })
+                )
+              }}
+            >
+              ↩ @{msg.replyParent.displayName}: {msg.replyParent.text}
+            </span>
+          )}
+          {settings.showTimestamps && (
+            <>
+              <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>{' '}
+            </>
+          )}
+          {msg.badges.map((b) => {
+            const url = lookupBadgeUrl(msg.channel, b.setId, b.version)
+            if (!url) return null
+            const title = lookupBadgeTitle(msg.channel, b.setId, b.version) ?? b.setId
+            return (
+              <img
+                key={`${b.setId}/${b.version}`}
+                className="badge"
+                src={url}
+                alt=""
+                title={title}
+                draggable={false}
+                onMouseEnter={(e) =>
+                  useUiStore.getState().setEmotePreview({
+                    url: lookupBadge4x(msg.channel, b.setId, b.version) ?? url,
+                    code: title,
+                    x: e.clientX,
+                    y: e.clientY
                   })
                 }
-              >
-                <BtnIcon icon={btn.icon} />
-                {!btn.icon && btn.label}
-              </button>
+                onMouseLeave={() => useUiStore.getState().setEmotePreview(null)}
+              />
+            )
+          })}
+          {/* third-party badges sit after the Twitch ones, same as on 7TV/BTTV/FFZ themselves,
+              and hover-preview exactly like a Twitch badge does */}
+          {settings.showThirdPartyBadges &&
+            thirdPartyBadges.map((b, i) => (
+              <img
+                key={`${b.title}-${i}`}
+                className="badge badge-3p"
+                style={b.color ? { background: b.color } : undefined}
+                src={b.url}
+                alt=""
+                draggable={false}
+                title={b.title}
+                onMouseEnter={(e) =>
+                  useUiStore.getState().setEmotePreview({
+                    url: b.url,
+                    code: b.title,
+                    x: e.clientX,
+                    y: e.clientY
+                  })
+                }
+                onMouseLeave={() => useUiStore.getState().setEmotePreview(null)}
+              />
             ))}
+          <span
+            // remount when the paint changes: Chromium keeps the OLD text clip on a live
+            // element, which paints the gradient as a solid bar over the nick
+            key={stvCosmetic?.paint ?? 'plain'}
+            className="nick"
+            style={paintStyle ?? { color }}
+            title={stvCosmetic?.paintName}
+            onClick={openUserCard}
+            onContextMenu={insertNick}
+          >
+            {msg.displayName}
+            {msg.displayName.toLowerCase() !== msg.login ? ` (${msg.login})` : ''}
           </span>
-        )}
+          {/* raider tag: which streamer's raid they arrived with — lives exactly as long as
+              the raider highlight window */}
+          {msg.raider && msg.raiderFrom && (
+            <span className="raider-tag" title={`${t('raid.raidWord')}: ${msg.raiderFrom}`}>
+              🚨 {msg.raiderFrom}
+            </span>
+          )}
+          {msg.sourceRoomId && <SharedSourceTag roomId={msg.sourceRoomId} />}
+          {msg.isAction ? ' ' : ': '}
+          {brailleArt && !artLines && (
+            <span className="art-width-ctl" title={`${artCols}`}>
+              <input
+                type="range"
+                min={16}
+                max={60}
+                value={artCols}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10)
+                  setArtCols(v)
+                  lastArtCols = v
+                }}
+              />
+            </span>
+          )}
+          {artLines ? (
+            // original line structure recovered — render exactly as drawn
+            <span className="msg-text ascii-art" style={{ whiteSpace: 'pre' }}>
+              {artLines.join('\n')}
+            </span>
+          ) : (
+            <span
+              className={`msg-text ${brailleArt ? 'ascii-art' : ''}`}
+              style={{
+                ...(msg.isAction ? { color } : undefined),
+                ...(brailleArt ? { width: Math.ceil(getBrailleCellWidth() * artCols) } : undefined)
+              }}
+            >
+              {tokens.map((tk, i) => (
+                <TokenView key={i} token={tk} paneId={paneId} channel={msg.channel} hiRes={!!(settings.showBits && msg.gigantified)} />
+              ))}
+            </span>
+          )}
+          {!msg.deleted && <LinkPreviewCard text={msg.text} />}
+        </div>
       </div>
+      {canAct && (
+        <span className="hover-actions">
+          <button
+            title={t('reply.action')}
+            onClick={() =>
+              onReply({ msgId: msg.id, login: msg.login, displayName: msg.displayName, text: msg.text })
+            }
+          >
+            ↩
+          </button>
+          {visibleButtons.map((btn) => (
+            <button
+              key={btn.id}
+              title={btn.label}
+              onClick={() =>
+                runModButton(btn, {
+                  account: account!,
+                  channel: msg.channel,
+                  channelId,
+                  paneId,
+                  targetUserId: msg.userId,
+                  targetLogin: msg.login,
+                  targetMsgId: msg.id,
+                  targetText: msg.text
+                })
+              }
+            >
+              <BtnIcon icon={btn.icon} />
+              {!btn.icon && btn.label}
+            </button>
+          ))}
+        </span>
+      )}
     </div>
   )
 }

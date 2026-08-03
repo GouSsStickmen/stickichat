@@ -682,7 +682,7 @@ select:focus {
   opacity: 0.25;
   transition: opacity 0.15s;
 }
-.msg:hover .art-width-ctl {
+.msg-row:hover .art-width-ctl {
   opacity: 1;
 }
 .art-width-ctl input[type='range'] {
@@ -920,15 +920,15 @@ select:focus {
 }
 
 /* jump-to flash + swipe moderation */
+/* The unclipped frame. Only the hover buttons stick out of it, and they are positioned
+   against it — everything that could actually spill sideways lives in .msg-outer below, so
+   this box never widens the list and never produces a horizontal scrollbar. */
+.msg-row {
+  position: relative;
+}
+/* clipped: the row slides sideways during a swipe and must not smear over its neighbours */
 .msg-outer {
   position: relative;
-  /* Not clipped: the hover buttons now hang above the row's top edge and have to be allowed
-     out. The only thing that ever needs clipping is a swipe in progress, where the row slides
-     sideways and would otherwise smear over its neighbours — so the clip is put on for exactly
-     as long as that lasts. */
-  overflow: visible;
-}
-.msg-outer:has(.msg.swiping) {
   overflow: hidden;
 }
 .msg.flash {
@@ -958,8 +958,8 @@ select:focus {
   z-index: 0;
 }
 
-/* hover actions on messages */
-.msg .hover-actions {
+/* hover actions on messages — a sibling of .msg-outer, not a child of .msg */
+.hover-actions {
   display: none;
   position: absolute;
   right: 6px;
@@ -982,12 +982,12 @@ select:focus {
   justify-content: flex-end;
   max-width: calc(100% - 30px);
 }
-.msg:hover .hover-actions {
+.msg-row:hover .hover-actions {
   display: flex;
 }
 /* invisible safe-zone around the hover buttons: hovering it still counts as hovering THIS
-   message (it's a descendant), so brushing near the buttons doesn't flip to the row above */
-.msg .hover-actions::before {
+   row (it's a descendant), so brushing near the buttons doesn't flip to the row above */
+.hover-actions::before {
   content: '';
   position: absolute;
   left: -12px;
@@ -997,7 +997,7 @@ select:focus {
   z-index: -1;
 }
 /* lift the hovered row (and its buttons) above its neighbours */
-.msg:hover {
+.msg-row:hover {
   z-index: 5;
 }
 
@@ -1018,19 +1018,21 @@ select:focus {
   z-index: 4;
   touch-action: none;
 }
-.msg:hover .swipe-grip {
+/* .msg-row, not .msg: the hover buttons live outside .msg now, and reaching for them must
+   not make the grip vanish under the cursor */
+.msg-row:hover .swipe-grip {
   opacity: 1;
 }
 .swipe-grip:hover {
   color: var(--accent);
   background: var(--surface-3);
 }
-.msg .hover-actions button {
+.hover-actions button {
   padding: 2px 6px;
   font-size: var(--fs-sm);
   background: transparent;
 }
-.msg .hover-actions button:hover {
+.hover-actions button:hover {
   background: var(--border);
 }
 
@@ -3897,7 +3899,7 @@ button:has(> svg) {
    that lives inside .msg (swipe grip, toggles, inline buttons, sliders) is excluded from a
    drag-selection instead of pasting as stray glyphs like "⠿" or "▼ показати всі". */
 .msg .swipe-grip,
-.msg .hover-actions,
+.hover-actions,
 .msg .gift-toggle-arrow,
 .msg .raid-shoutout-btn,
 .msg .art-width-ctl,
