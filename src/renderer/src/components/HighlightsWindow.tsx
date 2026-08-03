@@ -48,10 +48,8 @@ export default function HighlightsWindow({ channel }: { channel: string }): Reac
       <div className="detached-bar">
         <span className="detached-title">★ {channel}</span>
         <div className="spacer" />
+        {/* no ✕ here: this is a real window and its title bar already has one */}
         <PinButton settingKey="highlightsPinned" />
-        <button className="ghost" title={t('misc.close')} onClick={() => window.close()}>
-          ✕
-        </button>
       </div>
       <HighlightSidebar channel={channel} standalone />
       <Toasts />

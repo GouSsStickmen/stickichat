@@ -293,7 +293,9 @@ select:focus {
   padding: 5px 9px;
   background: transparent;
   color: var(--text-muted);
-  font-size: var(--fs-2xl);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 /* action icons all the same width so they don't shift when the glyph changes (🟢/⚫/≡) */
 .tabbar-actions .icon-btn {
@@ -2911,14 +2913,43 @@ input[type='number']::-webkit-inner-spin-button {
   background: var(--surface-3);
 }
 
+/* ---------- Icon glyphs ---------- */
+
+/*
+ * An <svg> is an inline element, so it sits on the text baseline with a descender gap under
+ * it — which is why the glyphs looked a pixel or two high inside their buttons and drifted as
+ * the button's font-size changed. Making them block-level and centring the button removes the
+ * baseline from the equation entirely.
+ */
+button > svg,
+label > svg,
+span > svg {
+  display: block;
+  flex: none;
+}
+button:has(> svg:only-child) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+/* icon + text: keep them on one baseline-free row */
+button:has(> svg) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  line-height: 1;
+}
+
 /* ---------- Settings rhythm ---------- */
 
 /*
- * Separation by WHITESPACE and grouping, not by lines.
+ * Frames, not lines.
  *
- * A hairline between every row was the first attempt and it was wrong: at one rule per row
- * the lines stop reading as separators and become a texture — the page looked busier than the
- * wall it replaced. Rows are separated by space; only a real change of subject gets a line.
+ * The dependent rows used to hang off a left rail, and the rail met the card border at an
+ * angle that never quite joined — an L of hairlines beside every switch, which read as noise
+ * rather than structure. A nested group is now simply a smaller rounded frame: it closes on
+ * itself, so there is nothing to mis-join.
  */
 
 .set-row {
@@ -2926,10 +2957,9 @@ input[type='number']::-webkit-inner-spin-button {
   padding-bottom: 5px;
 }
 
-/* an alert (or any switch with options hanging off it) is one card, so "which rows belong to
-   which switch" is answered by the box rather than by counting indents */
+/* a switch and everything that only exists because it is on */
 .set-block {
-  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
   border-radius: var(--radius-lg);
   padding: var(--space-2) var(--space-4) var(--space-3);
   margin-bottom: var(--space-3);
@@ -2939,32 +2969,33 @@ input[type='number']::-webkit-inner-spin-button {
   font-size: var(--fs-sm);
   font-weight: 650;
   color: var(--text);
-  margin: var(--space-1) 0 var(--space-1);
+  margin: var(--space-1) 0;
 }
 .set-block .set-row:first-of-type {
   padding-top: 0;
 }
-.set-block .set-row:last-child {
-  padding-bottom: 0;
-}
 
-/* the rows that only exist because the switch above them is on — indented under it, no box of
-   their own so cards don't nest visually */
+/* the nested group: its own frame, indented, no rail */
 .set-sub {
-  margin: var(--space-1) 0 0 var(--space-4);
-  padding-left: var(--space-4);
-  border-left: 2px solid color-mix(in srgb, var(--border) 70%, transparent);
+  margin: var(--space-2) 0 var(--space-1) var(--space-4);
+  padding: var(--space-1) var(--space-3) var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-2) 35%, transparent);
 }
 .set-sub .set-row {
   padding-top: 3px;
   padding-bottom: 3px;
 }
 
-/* a group heading is the one place a rule earns its keep */
+/* group headings separate by space; the rule only appears where a card doesn't already
+   do the separating */
 .set-group-title:not(:first-child) {
   margin-top: var(--space-5);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border);
+}
+.set-group-title + .set-block,
+.set-block + .set-block {
+  margin-top: 0;
 }
 
 /* ---------- Theme picker ---------- */
@@ -3105,7 +3136,9 @@ input[type='number']::-webkit-inner-spin-button {
   display: flex;
   align-items: center;
   min-height: 26px;
-  gap: var(--space-2);
+  /* the picker is a swatch + an eyedropper; without a gap of its own the second one sat on
+     top of the first */
+  gap: var(--space-3);
   font-size: var(--fs-sm);
   color: var(--text-muted);
   min-width: 0;

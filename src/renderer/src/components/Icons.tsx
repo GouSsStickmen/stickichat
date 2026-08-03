@@ -97,11 +97,12 @@ export function PinIcon({ size }: { size?: number }): React.JSX.Element {
   )
 }
 
-export function GearIcon({ size }: { size?: number }): React.JSX.Element {
+export function GearIcon({ size = 17 }: { size?: number }): React.JSX.Element {
   return (
     <Glyph size={size}>
-      <circle cx="12" cy="12" r="3.1" />
-      <path d="M10.4 2.6 H13.6 L14 5.1 L15.9 6.2 L18.2 5.2 L19.8 8 L17.9 9.6 V11.8 L19.8 13.4 L18.2 16.2 L15.9 15.2 L14 16.3 L13.6 18.8 H10.4 L10 16.3 L8.1 15.2 L5.8 16.2 L4.2 13.4 L6.1 11.8 V9.6 L4.2 8 L5.8 5.2 L8.1 6.2 L10 5.1 Z" />
+      <circle cx="12" cy="12" r="3.4" />
+      <circle cx="12" cy="12" r="7.6" />
+      <path d="M12 1.6 V4.4 M12 19.6 V22.4 M1.6 12 H4.4 M19.6 12 H22.4 M4.7 4.7 L6.7 6.7 M17.3 17.3 L19.3 19.3 M19.3 4.7 L17.3 6.7 M6.7 17.3 L4.7 19.3" />
     </Glyph>
   )
 }
@@ -115,13 +116,13 @@ export function MailIcon({ size }: { size?: number }): React.JSX.Element {
   )
 }
 
-export function PaletteIcon({ size }: { size?: number }): React.JSX.Element {
+export function PaletteIcon({ size = 16 }: { size?: number }): React.JSX.Element {
   return (
     <Glyph size={size}>
-      <path d="M12 3.2 A8.8 8.8 0 1 0 12 20.8 Q14.5 20.8 14.5 18.9 Q14.5 17 16.2 17 H18.4 A2.4 2.4 0 0 0 20.8 14.6 Q20.8 8 12 3.2 Z" />
-      <circle cx="8" cy="9.5" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="7.5" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="7.2" cy="14" r="1.1" fill="currentColor" stroke="none" />
+      <path d="M12 3.5 A8.5 8.5 0 1 0 12 20.5 Q14.8 20.5 14.8 18.4 Q14.8 16.4 16.8 16.4 H18.6 A2.2 2.2 0 0 0 20.5 14.2 Q20.5 8.1 12 3.5 Z" />
+      <circle cx="8.6" cy="8.8" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="13.4" cy="7.3" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="6.9" cy="13.6" r="1.5" fill="currentColor" stroke="none" />
     </Glyph>
   )
 }

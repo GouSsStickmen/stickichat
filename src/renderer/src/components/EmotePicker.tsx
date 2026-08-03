@@ -436,14 +436,8 @@ export default function EmotePicker({
             {label}
           </button>
         ))}
-        {standalone && (
-          <>
-            <PinButton settingKey="emotePickerPinned" />
-            <button className="ghost picker-close-btn" title={t('misc.close')} onClick={() => window.close()}>
-              ✕
-            </button>
-          </>
-        )}
+        {/* no ✕ here: this is a real window and its title bar already has one */}
+        {standalone && <PinButton settingKey="emotePickerPinned" />}
       </div>
       <input
         // in popup mode the message input keeps focus (Enter sends the message);

@@ -144,9 +144,12 @@ export default function SettingsModal({
             ⧉
           </button>
         )}
-        <button className="ghost" onClick={close}>
-          ✕
-        </button>
+        {/* as a window it already has a title-bar close; as a modal it needs this one */}
+        {!standalone && (
+          <button className="ghost" onClick={close}>
+            <CloseIcon />
+          </button>
+        )}
       </div>
       <div className="settings-layout">
         <div className="settings-nav">
@@ -985,13 +988,6 @@ function AppearanceSection(): React.JSX.Element {
     <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
       <ThemeSection />
-      <div className="set-group-title">{t('set.group.performance')}</div>
-      <Toggle
-        label={t('set.pauseEmotesUnfocused')}
-        hint={t('hint.pauseEmotesUnfocused')}
-        value={settings.pauseEmotesUnfocused}
-        onChange={(v) => set({ pauseEmotesUnfocused: v })}
-      />
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
         <FontPicker value={settings.fontFamily} onChange={(v) => set({ fontFamily: v })} />
@@ -1091,13 +1087,18 @@ function ChatSection(): React.JSX.Element {
   const set = useSettingsStore((s) => s.setSettings)
   return (
     <Framed>
-      <div className="set-group-title">{t('set.group.general')}</div>
-      <Toggle label={t('set.timestamps')} value={settings.showTimestamps} onChange={(v) => set({ showTimestamps: v })} />
-      <Toggle label={t('set.timestampSeconds')} value={settings.timestampSeconds} onChange={(v) => set({ timestampSeconds: v })} />
+      <div className="set-group-title">{t('set.group.messageLine')}</div>
+      <Toggle label={t('set.timestamps')} hint={t('hint.timestamps')} value={settings.showTimestamps} onChange={(v) => set({ showTimestamps: v })} />
+      {settings.showTimestamps && (
+        <div className="set-sub">
+          <Toggle label={t('set.timestampSeconds')} value={settings.timestampSeconds} onChange={(v) => set({ timestampSeconds: v })} />
+        </div>
+      )}
       <Toggle label={t('set.altBg')} hint={t('hint.altBg')} value={settings.alternatingBackground} onChange={(v) => set({ alternatingBackground: v })} />
+      <div className="set-group-title">{t('set.group.chatPane')}</div>
       <Toggle label={t('set.streamInfo')} hint={t('hint.streamInfo')} value={settings.showStreamInfo} onChange={(v) => set({ showStreamInfo: v })} />
       <Toggle label={t('set.smoothChatScroll')} hint={t('hint.smoothChatScroll')} value={settings.smoothChatScroll} onChange={(v) => set({ smoothChatScroll: v })} />
-      <Toggle label={t('set.linkPreviews')} hint={t('hint.linkPreviews')} value={settings.linkPreviews} onChange={(v) => set({ linkPreviews: v })} />
+      <div className="set-group-title">{t('set.group.links')}</div>
       <div className="set-row" title={t('hint.linkDisplay')}>
         <label className="has-hint">{t('set.linkDisplay')}</label>
         <select value={settings.linkDisplay} onChange={(e) => set({ linkDisplay: e.target.value as Settings['linkDisplay'] })}>
@@ -1106,8 +1107,10 @@ function ChatSection(): React.JSX.Element {
           <option value="overlayShort">{t('set.linkDisplay.overlayShort')}</option>
         </select>
       </div>
+      <div className="set-block">
+      <Toggle label={t('set.linkPreviews')} hint={t('hint.linkPreviews')} value={settings.linkPreviews} onChange={(v) => set({ linkPreviews: v })} />
       {settings.linkPreviews && (
-        <>
+        <div className="set-sub">
           <Toggle
             label={t('set.linkPreviewsClipsOnly')}
             hint={t('hint.linkPreviewsClipsOnly')}
@@ -1144,8 +1147,13 @@ function ChatSection(): React.JSX.Element {
             <label className="has-hint">{t('set.linkPreviewScale')}</label>
             <NumberField value={settings.linkPreviewScale} min={50} max={150} step={5} width={80} onChange={(n) => set({ linkPreviewScale: n })} />
           </div>
-        </>
+        </div>
       )}
+      </div>
+      <div className="set-group-title">{t('set.group.events')}</div>
+      <Toggle label={t('set.showBits')} hint={t('hint.showBits')} value={settings.showBits} onChange={(v) => set({ showBits: v })} />
+      <Toggle label={t('set.showRedeems')} hint={t('hint.showRedeems')} value={settings.showRedeems} onChange={(v) => set({ showRedeems: v })} />
+      <div className="set-group-title">{t('set.group.input')}</div>
       <div className="set-row" title={t('hint.inputAccountDisplay')}>
         <label className="has-hint">{t('set.inputAccountDisplay')}</label>
         <select
@@ -1156,8 +1164,7 @@ function ChatSection(): React.JSX.Element {
           <option value="avatar">{t('set.inputAccountDisplay.avatar')}</option>
         </select>
       </div>
-      <Toggle label={t('set.showBits')} hint={t('hint.showBits')} value={settings.showBits} onChange={(v) => set({ showBits: v })} />
-      <Toggle label={t('set.showRedeems')} hint={t('hint.showRedeems')} value={settings.showRedeems} onChange={(v) => set({ showRedeems: v })} />
+      <div className="set-group-title">{t('set.group.density')}</div>
       <Toggle label={t('set.history')} hint={t('hint.history')} value={settings.loadHistory} onChange={(v) => set({ loadHistory: v })} />
       <div className="set-row" title={t('hint.lineSpacing')}>
         <label>{t('set.lineSpacing')}</label>
@@ -2213,7 +2220,7 @@ function HighlightsSection(): React.JSX.Element {
           )}
           {r.adaptColor ? (
             <span className="hl-adapt-tag" title={t('hl.adapt.hint')}>
-              <PaletteIcon size={12} /> {t('hl.adaptShort')}
+              <PaletteIcon size={13} /> {t('hl.adaptShort')}
             </span>
           ) : (
             <ColorField value={r.color} defaultValue="#9147ff" onChange={(v) => update(r.id, { color: v })} />
@@ -2223,7 +2230,7 @@ function HighlightsSection(): React.JSX.Element {
             title={t('hl.adapt.hint')}
             onClick={() => update(r.id, { adaptColor: !r.adaptColor })}
           >
-            <PaletteIcon size={13} />
+            <PaletteIcon size={15} />
           </button>
           <input
             type="range"
@@ -2778,6 +2785,13 @@ function AdvancedSection(): React.JSX.Element {
 
   return (
     <Framed>
+      <div className="set-group-title">{t('set.group.performance')}</div>
+      <Toggle
+        label={t('set.pauseEmotesUnfocused')}
+        hint={t('hint.pauseEmotesUnfocused')}
+        value={settings.pauseEmotesUnfocused}
+        onChange={(v) => set({ pauseEmotesUnfocused: v })}
+      />
       <div className="set-row" title={t('hint.msgLimit')}>
         <label>{t('set.msgLimit')}</label>
         <NumberField value={settings.messageLimit} min={100} max={5000} onChange={(n) => set({ messageLimit: n })} />
