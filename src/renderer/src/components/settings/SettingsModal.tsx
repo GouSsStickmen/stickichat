@@ -2800,8 +2800,12 @@ function AdvancedSection(): React.JSX.Element {
         <label className="has-hint">{t('set.io')}</label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
           <span style={{ display: 'inline-flex', gap: 8 }}>
-            <button onClick={doExport}>⭳ {t('set.io.export')}</button>
-            <button onClick={() => importRef.current?.click()}>⭱ {t('set.io.import')}</button>
+            <button onClick={doExport}>
+              <TrayArrowIcon dir="out" /> {t('set.io.export')}
+            </button>
+            <button onClick={() => importRef.current?.click()}>
+              <TrayArrowIcon dir="in" /> {t('set.io.import')}
+            </button>
             <input
               ref={importRef}
               type="file"
