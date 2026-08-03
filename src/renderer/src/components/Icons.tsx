@@ -100,8 +100,8 @@ export function PinIcon({ size }: { size?: number }): React.JSX.Element {
 export function GearIcon({ size }: { size?: number }): React.JSX.Element {
   return (
     <Glyph size={size}>
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 2.5 V5 M12 19 V21.5 M2.5 12 H5 M19 12 H21.5 M5.2 5.2 L7 7 M17 17 L18.8 18.8 M18.8 5.2 L17 7 M7 17 L5.2 18.8" />
+      <circle cx="12" cy="12" r="3.1" />
+      <path d="M10.4 2.6 H13.6 L14 5.1 L15.9 6.2 L18.2 5.2 L19.8 8 L17.9 9.6 V11.8 L19.8 13.4 L18.2 16.2 L15.9 15.2 L14 16.3 L13.6 18.8 H10.4 L10 16.3 L8.1 15.2 L5.8 16.2 L4.2 13.4 L6.1 11.8 V9.6 L4.2 8 L5.8 5.2 L8.1 6.2 L10 5.1 Z" />
     </Glyph>
   )
 }

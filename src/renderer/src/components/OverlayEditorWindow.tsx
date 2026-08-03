@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settings'
 import { useLayoutStore } from '../store/layout'
 import { useT } from '../i18n'
+import { PlayIcon, CloseIcon } from './Icons'
 import { ChatOverlayConfig, DEFAULT_CHAT_OVERLAY, OverlayDecor, OverlayFill, OverlayTrigger } from '../types'
 import { OVERLAY_PRESETS, randomizeOverlay } from '../lib/overlayPresets'
 import { ColorField, FontPicker, NickListArea, Toggle } from './settings/SettingsModal'
@@ -1602,9 +1603,11 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                           au.play().catch(() => {})
                         }}
                       >
-                        ▶
+                        <PlayIcon />
                       </button>
-                      <button className="danger" onClick={() => update({ msgSoundData: '' })}>✕</button>
+                      <button className="danger" onClick={() => update({ msgSoundData: '' })}>
+                        <CloseIcon />
+                      </button>
                     </>
                   )}
                 </div>

@@ -19,7 +19,7 @@ import { useSevenTvColors, ensureSevenTvCosmetic, paintStyleOf } from '../lib/se
 import { isDarkTheme } from '../lib/themes'
 import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
 import { useFfzBadges, ensureFfzBadges } from '../lib/ffzCosmetics'
-import { ZoomIcon } from './Icons'
+import { ZoomIcon, SpeakerIcon, TrashIcon } from './Icons'
 
 const TIMEOUTS = [60, 600, 3600, 86400]
 
@@ -352,7 +352,7 @@ export default function UserCard({
           className={mutedEntry ? 'primary' : ''}
           onClick={toggleMuted}
         >
-          {mutedEntry ? `🔊 ${t('user.unmute')}` : `🚫 ${t('user.mute')}`}
+          <SpeakerIcon muted={!mutedEntry} size={13} /> {mutedEntry ? t('user.unmute') : t('user.mute')}
         </button>
         {!standalone && (
           <button
@@ -436,7 +436,11 @@ export default function UserCard({
                 {target.displayName}
               </span>
               {': '}
-              {full.deleted && <span className="uc-deleted-tag">🗑 {t('misc.deletedMessage')} </span>}
+              {full.deleted && (
+                <span className="uc-deleted-tag">
+                  <TrashIcon size={12} /> {t('misc.deletedMessage')}{' '}
+                </span>
+              )}
               <RichText msg={{ text: m.text ?? '', emotesTag: full.emotesTag, channel: target.channel }} />
 
             </div>

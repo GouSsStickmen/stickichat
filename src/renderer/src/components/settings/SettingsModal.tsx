@@ -824,7 +824,9 @@ function ThemeEditor({
                   defaultValue={DEFAULT_TOKENS[tk] ?? '#000000'}
                   onChange={(v) => setTokens((prev) => ({ ...prev, [tk]: v }))}
                 />
-                <span>{tk.replace('--', '')}</span>
+                {/* the token name is developer vocabulary; show what it PAINTS, and keep the
+                    raw name on hover for anyone matching it against the design kit */}
+                <span title={tk}>{t(TOKEN_LABELS[tk])}</span>
               </div>
             ))}
           </div>
@@ -851,6 +853,29 @@ function ThemeEditor({
       </div>
     </div>
   )
+}
+
+/** token -> i18n key. Typed lookups rather than template strings so a missing label is a
+ *  compile error instead of a raw "--surface-2" leaking into the UI */
+const TOKEN_LABELS: Record<string, TranslationKey> = {
+  '--bg': 'token.bg',
+  '--surface': 'token.surface',
+  '--surface-2': 'token.surface2',
+  '--surface-3': 'token.surface3',
+  '--border': 'token.border',
+  '--text': 'token.text',
+  '--text-muted': 'token.textMuted',
+  '--text-faint': 'token.textFaint',
+  '--system-text': 'token.systemText',
+  '--accent': 'token.accent',
+  '--accent-strong': 'token.accentStrong',
+  '--accent-text': 'token.accentText',
+  '--link': 'token.link',
+  '--danger': 'token.danger',
+  '--success': 'token.success',
+  '--warning': 'token.warning',
+  '--live': 'token.live',
+  '--scrollbar': 'token.scrollbar'
 }
 
 /** group id -> i18n key, so the lookup stays typed instead of a template string */

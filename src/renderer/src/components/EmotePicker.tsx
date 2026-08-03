@@ -140,6 +140,7 @@ export function PinButton({
 }: {
   settingKey: 'emotePickerPinned' | 'settingsPinned' | 'usercardPinned' | 'whispersPinned' | 'highlightsPinned'
 }): React.JSX.Element {
+  const t = useT()
   const remember = useSettingsStore((s) => s.settings.rememberPinState)
   const saved = useSettingsStore((s) => s.settings[settingKey])
   const set = useSettingsStore((s) => s.setSettings)
@@ -154,7 +155,7 @@ export function PinButton({
   return (
     <button
       className={`picker-pin-btn ${pinned ? 'active' : ''}`}
-      title="Always on top"
+      title={t('set.alwaysOnTop')}
       onClick={() => {
         const next = !pinned
         setPinned(next)
@@ -162,7 +163,7 @@ export function PinButton({
         if (remember) set({ [settingKey]: next } as Partial<Settings>)
       }}
     >
-      📌
+      <PinIcon size={13} />
     </button>
   )
 }

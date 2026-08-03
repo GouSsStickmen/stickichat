@@ -27,6 +27,7 @@ import { hexToRgba } from './lib/tokenize'
 import { hotkeyFor, matchHotkey } from './lib/hotkeys'
 import { applyTheme, applyRadius } from './lib/themes'
 import { useT } from './i18n'
+import { PinIcon } from './components/Icons'
 
 /** biggest chat text size (Ctrl+wheel and the settings field share this ceiling) */
 export const CHAT_FONT_MAX = 40
@@ -415,7 +416,7 @@ export default function App(): React.JSX.Element | null {
             }}
             title={t('set.alwaysOnTop')}
           >
-            📌
+            <PinIcon />
           </button>
           <button onClick={returnToMain} title={t('detach.return')}>
             ⇱ {t('detach.return')}

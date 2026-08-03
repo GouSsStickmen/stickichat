@@ -462,7 +462,7 @@ function swipeActionFor(
 ): SwipeAction | null {
   if (dx < SWIPE_DELETE_START) return null
   if (deleteOnly || dx < SWIPE_TIMEOUT_START)
-    return { kind: 'delete', label: `🗑 ${labels.delete}`, color: 'var(--warning)' }
+    return { kind: 'delete', label: labels.delete, color: 'var(--warning)' }
   if (dx < banStartFor(tiers)) {
     const tier = Math.min(tiers.length - 1, Math.floor((dx - SWIPE_TIMEOUT_START) / SWIPE_TIER_WIDTH))
     const secs = tiers[tier]

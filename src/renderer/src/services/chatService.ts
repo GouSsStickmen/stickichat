@@ -7,7 +7,7 @@ import { formatDuration } from '../lib/tokenize'
 import { fetchRecentMessages } from '../lib/recentMessages'
 import { loadChannelBadges, loadChannelEmotes, loadCheermotes, loadGlobalBadges, loadGlobalEmotes } from './emoteService'
 import { ensureFreshToken } from '../lib/twitchAuth'
-import { translate } from '../i18n'
+import { translate, TranslationKey } from '../i18n'
 import { useAccountsStore, getAccount } from '../store/accounts'
 import { useUiStore } from '../store/ui'
 import { useWhispersStore, getOpenWhisperThread } from '../store/whispers'
@@ -934,11 +934,27 @@ class ChatService {
       }
       case 'NOTICE': {
         if (m.channel && m.trailing) {
-          this.queue(m.channel, this.systemMessage(m.channel, m.trailing, true))
+          this.queue(m.channel, this.systemMessage(m.channel, this.noticeText(m), true))
         }
         break
       }
     }
+  }
+
+  /**
+   * Twitch sends NOTICE bodies in English regardless of anything we ask for, so "Your message
+   * was not sent because you are sending messages too quickly." showed up verbatim in a
+   * Ukrainian UI. The `msg-id` tag is a stable machine identifier, so translate off that and
+   * fall back to Twitch's own text for ids we don't have a string for — an untranslated
+   * notice is still better than a swallowed one.
+   */
+  private noticeText(m: IrcMessage): string {
+    const id = m.tags['msg-id']
+    if (!id) return m.trailing ?? ''
+    const key = `notice.${id}` as TranslationKey
+    const lang = useSettingsStore.getState().settings.language
+    const translated = translate(lang, key)
+    return translated === key ? (m.trailing ?? '') : translated
   }
 
   /**
