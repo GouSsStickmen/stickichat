@@ -907,6 +907,8 @@ export interface Settings {
   customThemes: CustomTheme[]
   /** freeze animated emotes while this window isn't focused — the first frame stays visible */
   pauseEmotesUnfocused: boolean
+  /** interface scale for the settings and utility windows, percent (70..180) */
+  uiScale: number
   fontSize: number // px
   emoteScale: number // 1 = 100%
   showTimestamps: boolean
@@ -1152,6 +1154,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   customThemes: [],
   pauseEmotesUnfocused: false,
+  uiScale: 100,
   fontSize: 13,
   emoteScale: 1,
   showTimestamps: true,

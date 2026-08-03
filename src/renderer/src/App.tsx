@@ -32,6 +32,13 @@ import { PinIcon } from './components/Icons'
 /** biggest chat text size (Ctrl+wheel and the settings field share this ceiling) */
 export const CHAT_FONT_MAX = 40
 
+/** interface scale bounds for the utility windows — below 70 controls stop being hittable,
+ *  above 180 the grids push their own content out of frame */
+export const UI_SCALE_MIN = 70
+export const UI_SCALE_MAX = 180
+export const clampUiScale = (v: number): number =>
+  Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, Math.round(v / 10) * 10))
+
 interface DetachedPayload {
   name?: string
   panes: { channel: string; accountId: string | null }[]
@@ -145,11 +152,35 @@ export default function App(): React.JSX.Element | null {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /**
+   * Ctrl+wheel scales the settings and utility windows. The chat's own Ctrl+wheel drives the
+   * message font; these windows have no chat, so the same gesture is free here and is what
+   * anyone will reach for first. Bounded, because past either end the layout stops working.
+   */
+  useEffect(() => {
+    const utility =
+      special?.kind === 'settings' ||
+      special?.kind === 'usercard' ||
+      special?.kind === 'whispers' ||
+      special?.kind === 'highlights' ||
+      special?.kind === 'emotepicker'
+    if (!utility) return
+    const onWheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const cur = useSettingsStore.getState().settings.uiScale ?? 100
+      useSettingsStore.getState().setSettings({ uiScale: clampUiScale(cur + (e.deltaY < 0 ? 10 : -10)) })
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
+    return () => window.removeEventListener('wheel', onWheel)
+  }, [special])
+
   useEffect(() => {
     const root = document.documentElement
     // the theme goes on first; everything below is the user's own overrides and must win
     applyTheme(settings.theme)
     root.style.setProperty('--font-size', `${settings.fontSize}px`)
+    root.style.setProperty('--ui-scale', String(clampUiScale(settings.uiScale) / 100))
     root.style.setProperty('--emote-scale', String(settings.emoteScale))
     root.style.setProperty('--msg-spacing', `${settings.messageSpacing}px`)
     root.style.setProperty('--line-spacing', `${settings.lineSpacing}px`)
@@ -166,6 +197,7 @@ export default function App(): React.JSX.Element | null {
   }, [
     settings.theme,
     settings.fontSize,
+    settings.uiScale,
     settings.emoteScale,
     settings.messageSpacing,
     settings.badgeSize,
@@ -387,7 +419,7 @@ export default function App(): React.JSX.Element | null {
 
   if (special?.kind === 'settings') {
     return (
-      <div className="app settings-window">
+      <div className="app ui-scaled">
         <SettingsModal standalone initialSection={special.section} />
         {addAccountOpen && <DeviceAuthModal onClose={() => useUiStore.getState().setAddAccountOpen(false)} />}
         <Toasts />

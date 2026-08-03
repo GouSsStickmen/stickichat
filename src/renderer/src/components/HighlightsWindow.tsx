@@ -44,7 +44,7 @@ export default function HighlightsWindow({ channel }: { channel: string }): Reac
   }, [channel])
 
   return (
-    <div className="app">
+    <div className="app ui-scaled">
       <div className="detached-bar">
         <span className="detached-title">★ {channel}</span>
         <div className="spacer" />

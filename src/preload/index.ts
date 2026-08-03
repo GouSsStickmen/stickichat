@@ -30,6 +30,11 @@ const api = {
   setAlwaysOnTop: (flag: boolean): Promise<void> => ipcRenderer.invoke('window:setAlwaysOnTop', flag),
   setImageAnimation: (enabled: boolean): Promise<void> =>
     ipcRenderer.invoke('window:setImageAnimation', enabled),
+  diagReport: (): Promise<string> => ipcRenderer.invoke('diag:report'),
+  diagTail: (lines?: number): Promise<string> => ipcRenderer.invoke('diag:tail', lines),
+  diagOpenFolder: (): Promise<string> => ipcRenderer.invoke('diag:openFolder'),
+  diagLog: (level: 'info' | 'warn' | 'error', source: string, message: string): Promise<void> =>
+    ipcRenderer.invoke('diag:log', level, source, message),
   suspendAlwaysOnTop: (): Promise<void> => ipcRenderer.invoke('window:suspendAlwaysOnTop'),
   resumeAlwaysOnTop: (): Promise<void> => ipcRenderer.invoke('window:resumeAlwaysOnTop'),
   focusSelf: (): Promise<void> => ipcRenderer.invoke('window:focusSelf'),

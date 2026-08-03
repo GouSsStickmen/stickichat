@@ -43,10 +43,10 @@ export default function EmotePickerWindow({
     if (payload.channelId) loadTwitchChannelEmotes(account, payload.channelId)
   }, [account])
 
-  if (closed) return <div className="app" />
+  if (closed) return <div className="app ui-scaled" />
 
   return (
-    <div className="app">
+    <div className="app ui-scaled">
       <EmotePicker
         channel={payload.channel}
         channelId={payload.channelId}

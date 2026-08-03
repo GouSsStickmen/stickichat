@@ -2,6 +2,7 @@ import { ipcMain, safeStorage, shell, app, BrowserWindow, desktopCapturer, scree
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
 import { overlayConfigure, overlayDelete, overlayPush, overlayRestart, OverlayDelete, OverlayStyle, OverlayLine } from './overlayServer'
+import { buildReport, log, logDir, tailLog, watchWindow } from './diagnostics'
 
 function rememberEnabled(): boolean {
   const cfg = readConfig() as { settings?: { rememberWindowSize?: boolean } } | null
@@ -60,6 +61,7 @@ function createChildWindow(
     win.on('resize', save)
     win.on('move', save)
   }
+  watchWindow(win)
   return win
 }
 
@@ -196,6 +198,17 @@ export function registerIpc(): void {
    * header, unlike 7TV and FFZ. 'noAnimation' leaves the first frame on screen, so chat stays
    * readable while it costs nothing to paint.
    */
+  /** the whole diagnostics block as one pasteable string */
+  ipcMain.handle('diag:report', () => buildReport())
+  /** just the tail, for showing in the app */
+  ipcMain.handle('diag:tail', (_e, lines?: number) => tailLog(lines ?? 400))
+  /** open the folder so the user can attach the raw files */
+  ipcMain.handle('diag:openFolder', () => shell.openPath(logDir()))
+  /** the renderer reporting its own uncaught errors into the same file */
+  ipcMain.handle('diag:log', (_e, level: 'info' | 'warn' | 'error', source: string, message: string) => {
+    log(level, source, message)
+  })
+
   ipcMain.handle('window:setImageAnimation', (e, enabled: boolean) => {
     e.sender.setImageAnimationPolicy(enabled ? 'animate' : 'noAnimation')
   })

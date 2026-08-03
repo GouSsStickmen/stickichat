@@ -19,6 +19,10 @@ export interface StickiApi {
   onEmotePicked(cb: (payload: string) => void): () => void
   setAlwaysOnTop(flag: boolean): Promise<void>
   setImageAnimation(enabled: boolean): Promise<void>
+  diagReport(): Promise<string>
+  diagTail(lines?: number): Promise<string>
+  diagOpenFolder(): Promise<string>
+  diagLog(level: 'info' | 'warn' | 'error', source: string, message: string): Promise<void>
   suspendAlwaysOnTop(): Promise<void>
   resumeAlwaysOnTop(): Promise<void>
   focusSelf(): Promise<void>

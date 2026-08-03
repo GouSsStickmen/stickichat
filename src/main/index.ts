@@ -3,6 +3,7 @@ import { join } from 'path'
 import { registerIpc } from './ipc'
 import { initAutoUpdater } from './updater'
 import { readConfig, readWindowState, writeWindowState } from './storage'
+import { startDiagnostics, watchWindow } from './diagnostics'
 
 // The dev build and the installed app resolve to the SAME userData dir (Windows paths are
 // case-insensitive), and two Electron instances fight over Chromium's cache locks — the loser
@@ -11,6 +12,8 @@ import { readConfig, readWindowState, writeWindowState } from './storage'
 if (!app.isPackaged) {
   app.setPath('sessionData', join(app.getPath('userData'), 'dev-session'))
 }
+
+startDiagnostics()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -64,6 +67,8 @@ function createWindow(): void {
       backgroundThrottling: false
     }
   })
+
+  watchWindow(mainWindow)
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
 

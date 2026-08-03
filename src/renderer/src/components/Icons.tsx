@@ -255,3 +255,23 @@ export function PlusIcon({ size }: { size?: number }): React.JSX.Element {
     </Glyph>
   )
 }
+
+export function AlertIcon({ size }: { size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <path d="M12 3.4 L21.6 20 H2.4 Z" />
+      <path d="M12 9.6 V14.2" />
+      <circle cx="12" cy="17.2" r="0.6" fill="currentColor" stroke="none" />
+    </Glyph>
+  )
+}
+
+export function InfoIcon({ size }: { size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <circle cx="12" cy="12" r="8.8" />
+      <path d="M12 11 V16.4" />
+      <circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none" />
+    </Glyph>
+  )
+}

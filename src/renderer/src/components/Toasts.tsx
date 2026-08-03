@@ -1,6 +1,7 @@
 import { useUiStore } from '../store/ui'
 import { useSettingsStore } from '../store/settings'
 import { useT } from '../i18n'
+import { AlertIcon, InfoIcon, CloseIcon } from './Icons'
 
 export default function Toasts(): React.JSX.Element {
   const t = useT()
@@ -10,9 +11,14 @@ export default function Toasts(): React.JSX.Element {
     <div className="toasts">
       {toasts.map((toast) => (
         <div key={toast.id} className={`toast ${toast.kind === 'error' ? 'error' : ''}`}>
-          {/* actions sit in a header row above the text. Trailing the message they shifted
-              around with every wording change, so the ✕ had to be hunted for each time. */}
+          {/* The header row exists so the ✕ has a fixed home — trailing the message it moved
+              with every wording change. But with nothing beside it the row was a ✕ floating
+              in empty space, so it carries the kind of message it is: an icon and a word. */}
           <div className="toast-actions">
+            <span className="toast-kind">
+              {toast.kind === 'error' ? <AlertIcon size={14} /> : <InfoIcon size={14} />}
+              {toast.kind === 'error' ? t('toast.kind.error') : t('toast.kind.info')}
+            </span>
             {toast.muteKey && (
               <button
                 className="toast-mute"
@@ -27,7 +33,7 @@ export default function Toasts(): React.JSX.Element {
               </button>
             )}
             <button className="toast-close" title={t('toast.close')} onClick={() => dismiss(toast.id)}>
-              ✕
+              <CloseIcon size={12} />
             </button>
           </div>
           <div className="toast-text">{toast.text}</div>

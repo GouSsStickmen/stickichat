@@ -32,7 +32,7 @@ export default function UserCardWindow({ payload }: { payload: UserCardWindowPay
   }, [])
 
   return (
-    <div className="app">
+    <div className="app ui-scaled">
       <UserCard target={payload.target} standalone presetMessages={payload.messages} />
       <Toasts />
     </div>

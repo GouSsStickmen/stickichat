@@ -1,4 +1,4 @@
-import { AppConfig, DEFAULT_MOD_BUTTONS, DEFAULT_SETTINGS } from '../types'
+import { AppConfig, DEFAULT_MOD_BUTTONS, DEFAULT_SETTINGS, Settings } from '../types'
 import { useAccountsStore } from '../store/accounts'
 import { useLayoutStore } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
@@ -99,22 +99,115 @@ const EXPORT_VERSION = 1
  * Serialize the user's full configuration (everything except accounts/tokens, which are
  * device-bound secrets) to a portable JSON string for backup or transfer between machines.
  */
-export function exportConfigJson(): string {
+/**
+ * What an export can be split into.
+ *
+ * Whole-config export is the wrong unit most of the time: someone wants to hand a friend their
+ * mod buttons, or move one machine's highlight rules, not overwrite everything the other side
+ * has. Each part is independent, and an import applies only the parts the file actually holds.
+ */
+export type ConfigPart =
+  | 'appearance'
+  | 'chat'
+  | 'notifications'
+  | 'highlightRules'
+  | 'modButtons'
+  | 'favoriteEmotes'
+  | 'overlays'
+  | 'hotkeys'
+  | 'other'
+
+export const CONFIG_PARTS: ConfigPart[] = [
+  'appearance',
+  'chat',
+  'notifications',
+  'highlightRules',
+  'modButtons',
+  'favoriteEmotes',
+  'overlays',
+  'hotkeys',
+  'other'
+]
+
+/** settings keys that belong to each part; anything unlisted rides along with 'other' */
+const PART_KEYS: Record<Exclude<ConfigPart, 'highlightRules' | 'modButtons' | 'favoriteEmotes'>, (keyof Settings)[]> = {
+  appearance: [
+    'theme', 'customThemes', 'fontFamily', 'fontSize', 'uiScale', 'emoteScale', 'badgeSize',
+    'messageSpacing', 'lineSpacing', 'savedColors', 'recentColors'
+  ],
+  chat: [
+    'showTimestamps', 'timestampSeconds', 'alternatingBackground', 'showStreamInfo',
+    'smoothChatScroll', 'linkPreviews', 'linkDisplay', 'linkPreviewsClipsOnly',
+    'linkPreviewsExpanded', 'linkHoverPreview', 'linkHoverImagesOnly', 'linkHoverSize',
+    'linkPreviewScale', 'inputAccountDisplay', 'showBits', 'showRedeems', 'loadHistory',
+    'emoteSuggestions', 'showCharCounter', 'caseSensitiveNicks', 'sevenTvNickColors',
+    'colorBareNicks', 'showThirdPartyBadges', 'announceEmoteChanges', 'bypassDuplicateLimit',
+    'botCommands', 'translitExcludeWords'
+  ],
+  notifications: [
+    'mentionSound', 'mentionSoundType', 'mentionSoundVolume', 'mentionSoundOnActive',
+    'alertSoundCooldown', 'firstMessageSound', 'firstMessageSoundType', 'firstMessageSoundVolume',
+    'keywordSound', 'keywordAlerts', 'keywordSoundType', 'keywordSoundVolume',
+    'keywordSoundOnActive', 'nickAlertSound', 'nickAlerts', 'nickAlertSoundType',
+    'nickAlertSoundVolume', 'nickAlertSoundOnActive', 'whisperSound', 'whisperSoundType',
+    'whisperSoundVolume', 'streamUpNotify', 'streamUpSound', 'streamUpSoundType',
+    'streamUpSoundVolume', 'raidPrompt', 'raidSound', 'raidSoundType', 'raidSoundVolume',
+    'errorSound', 'mutedErrors', 'customSounds'
+  ],
+  overlays: ['chatOverlays', 'overlayEnabled', 'overlayPort'],
+  hotkeys: ['hotkeys'],
+  other: []
+}
+
+function pickSettings(settings: Settings, parts: ConfigPart[]): Partial<Settings> {
+  const named = new Set<string>()
+  for (const list of Object.values(PART_KEYS)) for (const k of list) named.add(k as string)
+  const out: Partial<Settings> = {}
+  for (const part of parts) {
+    const keys = PART_KEYS[part as keyof typeof PART_KEYS]
+    if (keys) {
+      for (const k of keys) {
+        if (k in settings) (out as Record<string, unknown>)[k as string] = settings[k]
+      }
+    }
+    // "other" is everything the named groups don't claim, so a new setting can never quietly
+    // fall out of exports just because nobody added it to a list
+    if (part === 'other') {
+      for (const k of Object.keys(settings)) {
+        if (!named.has(k)) (out as Record<string, unknown>)[k] = (settings as unknown as Record<string, unknown>)[k]
+      }
+    }
+  }
+  return out
+}
+
+/** export the whole config, or only the named parts */
+export function exportConfigJson(parts: ConfigPart[] = CONFIG_PARTS): string {
   const s = useSettingsStore.getState()
-  return JSON.stringify(
-    {
-      _app: 'stickichat',
-      _version: EXPORT_VERSION,
-      exportedAt: new Date().toISOString(),
-      settings: s.settings,
-      modButtons: s.modButtons,
-      raidFavorites: s.raidFavorites,
-      highlightRules: s.highlightRules,
-      favoriteEmotes: s.favoriteEmotes
-    },
-    null,
-    2
-  )
+  const body: Record<string, unknown> = {
+    _app: 'stickichat',
+    _version: EXPORT_VERSION,
+    _parts: parts,
+    exportedAt: new Date().toISOString()
+  }
+  const settings = pickSettings(s.settings, parts)
+  if (Object.keys(settings).length) body.settings = settings
+  if (parts.includes('modButtons')) body.modButtons = s.modButtons
+  if (parts.includes('highlightRules')) body.highlightRules = s.highlightRules
+  if (parts.includes('favoriteEmotes')) body.favoriteEmotes = s.favoriteEmotes
+  if (parts.includes('other')) body.raidFavorites = s.raidFavorites
+  return JSON.stringify(body, null, 2)
+}
+
+/** which parts a file actually carries — shown before an import overwrites anything */
+export function describeImport(text: string): ConfigPart[] | null {
+  try {
+    const d = JSON.parse(text) as { _app?: string; _parts?: ConfigPart[] }
+    if (!d || d._app !== 'stickichat') return null
+    return Array.isArray(d._parts) ? d._parts : CONFIG_PARTS
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -130,7 +223,9 @@ export function importConfigJson(text: string): boolean {
   }
   if (!data || data._app !== 'stickichat') return false
   const s = useSettingsStore.getState()
-  if (data.settings) s.setSettings({ ...DEFAULT_SETTINGS, ...data.settings })
+  // merge, never reset: a partial file must leave everything it doesn't mention alone, and a
+  // whole-config file still lands on top of the current values the same way
+  if (data.settings) s.setSettings({ ...data.settings })
   if (Array.isArray(data.modButtons)) s.setModButtons(data.modButtons.length ? data.modButtons : DEFAULT_MOD_BUTTONS)
   if (Array.isArray(data.raidFavorites)) s.setRaidFavorites(data.raidFavorites)
   if (Array.isArray(data.highlightRules)) s.setHighlightRules(data.highlightRules)

@@ -38,10 +38,16 @@ import {
   playErrorSound
 } from '../../lib/sound'
 import { CHANGELOG } from '../../changelog'
-import { exportConfigJson, importConfigJson } from '../../services/config'
+import {
+  exportConfigJson,
+  importConfigJson,
+  describeImport,
+  CONFIG_PARTS,
+  ConfigPart
+} from '../../services/config'
 import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
-import { CHAT_FONT_MAX } from '../../App'
+import { CHAT_FONT_MAX, UI_SCALE_MIN, UI_SCALE_MAX, clampUiScale } from '../../App'
 import {
   TranslitIcon,
   PlayIcon,
@@ -925,6 +931,19 @@ const TAB_COLOR_FIELDS: [keyof TabColors, TranslationKey, string][] = [
   ['activeBorder', 'tab.color.activeBorder', '--border']
 ]
 
+/** export part -> its label */
+const CONFIG_PART_LABELS: Record<ConfigPart, TranslationKey> = {
+  appearance: 'io.part.appearance',
+  chat: 'io.part.chat',
+  notifications: 'io.part.notifications',
+  highlightRules: 'io.part.highlightRules',
+  modButtons: 'io.part.modButtons',
+  favoriteEmotes: 'io.part.favoriteEmotes',
+  overlays: 'io.part.overlays',
+  hotkeys: 'io.part.hotkeys',
+  other: 'io.part.other'
+}
+
 /** token -> i18n key. Typed lookups rather than template strings so a missing label is a
  *  compile error instead of a raw "--surface-2" leaking into the UI */
 const TOKEN_LABELS: Record<string, TranslationKey> = {
@@ -988,6 +1007,23 @@ function AppearanceSection(): React.JSX.Element {
     <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
       <ThemeSection />
+      <div className="set-row">
+        <label className="has-hint" title={t('hint.uiScale')}>{t('set.uiScale')}</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="range"
+            min={UI_SCALE_MIN}
+            max={UI_SCALE_MAX}
+            step={10}
+            value={settings.uiScale ?? 100}
+            onChange={(e) => set({ uiScale: clampUiScale(Number(e.target.value)) })}
+            style={{ width: 150 }}
+          />
+          <span className="hint" style={{ minWidth: 38, textAlign: 'right' }}>
+            {settings.uiScale ?? 100}%
+          </span>
+        </div>
+      </div>
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
         <FontPicker value={settings.fontFamily} onChange={(v) => set({ fontFamily: v })} />
@@ -2754,15 +2790,81 @@ function OverlaySection(): React.JSX.Element {
   )
 }
 
+/**
+ * Local diagnostics. Everything the app knows about its own failures, in a form a person can
+ * paste into an issue: environment, then the tail of the rolling log. Nothing is uploaded —
+ * the crash reporter is deliberately started without an upload URL, so dumps stay on disk.
+ */
+function DiagnosticsBlock(): React.JSX.Element {
+  const t = useT()
+  const [text, setText] = useState('')
+  const [msg, setMsg] = useState('')
+
+  const load = (): void => {
+    void window.sticki.diagTail(300).then((v) => setText(v || t('diag.empty')))
+  }
+
+  return (
+    <div className="set-block">
+      <p className="hint" style={{ color: 'var(--text-faint)', margin: '0 0 8px' }}>
+        {t('diag.hint')}
+      </p>
+      <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        <button onClick={load}>{t('diag.show')}</button>
+        <button
+          className="primary"
+          onClick={() => {
+            void window.sticki.diagReport().then((r) => {
+              void navigator.clipboard.writeText(r)
+              setMsg(t('diag.copied'))
+            })
+          }}
+        >
+          {t('diag.copy')}
+        </button>
+        <button
+          onClick={() => {
+            void window.sticki.diagReport().then((r) => {
+              const url = URL.createObjectURL(new Blob([r], { type: 'text/plain' }))
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `stickichat-report-${new Date().toISOString().slice(0, 10)}.txt`
+              a.click()
+              setTimeout(() => URL.revokeObjectURL(url), 1000)
+            })
+          }}
+        >
+          <TrayArrowIcon dir="out" /> {t('diag.save')}
+        </button>
+        <button className="ghost" onClick={() => void window.sticki.diagOpenFolder()}>
+          {t('diag.openFolder')}
+        </button>
+        {msg && <span className="hint" style={{ color: 'var(--text-faint)' }}>{msg}</span>}
+      </div>
+      {text && (
+        <textarea
+          className="diag-log"
+          readOnly
+          value={text}
+          spellCheck={false}
+          onFocus={(e) => e.currentTarget.select()}
+        />
+      )}
+    </div>
+  )
+}
+
 function AdvancedSection(): React.JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
   const set = useSettingsStore((s) => s.setSettings)
   const importRef = useRef<HTMLInputElement>(null)
   const [ioMsg, setIoMsg] = useState('')
+  // everything selected is the old behaviour; unticking is the new part
+  const [parts, setParts] = useState<ConfigPart[]>(CONFIG_PARTS)
 
   const doExport = (): void => {
-    const blob = new Blob([exportConfigJson()], { type: 'application/json' })
+    const blob = new Blob([exportConfigJson(parts)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     const stamp = new Date().toISOString().slice(0, 10)
@@ -2773,12 +2875,23 @@ function AdvancedSection(): React.JSX.Element {
     setIoMsg(t('set.io.exported'))
   }
 
+  /** name the parts a file carries, so an import isn't a leap of faith */
+  const describe = (text: string): string => {
+    const found = describeImport(text)
+    if (!found) return ''
+    return found.map((p) => t(CONFIG_PART_LABELS[p])).join(', ')
+  }
+
   const doImport = (file: File | undefined): void => {
     if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
-      const ok = importConfigJson(String(reader.result))
-      setIoMsg(ok ? t('set.io.imported') : t('set.io.importErr'))
+      const text = String(reader.result)
+      const what = describe(text)
+      const ok = importConfigJson(text)
+      // name what actually landed — a partial file only touches the parts it carries, and
+      // silently applying "something" is how people lose settings they meant to keep
+      setIoMsg(ok ? `${t('set.io.imported')} — ${what}` : t('set.io.importErr'))
     }
     reader.readAsText(file)
   }
@@ -2796,14 +2909,34 @@ function AdvancedSection(): React.JSX.Element {
         <label>{t('set.msgLimit')}</label>
         <NumberField value={settings.messageLimit} min={100} max={5000} onChange={(n) => set({ messageLimit: n })} />
       </div>
+      <div className="set-group-title">{t('set.group.diag')}</div>
+      <DiagnosticsBlock />
       {/* a backup is not a performance setting; it was only next to one because both ended
           up in the same catch-all section */}
       <div className="set-group-title">{t('set.group.backup')}</div>
       <div className="set-row" title={t('hint.io')} style={{ alignItems: 'flex-start' }}>
         <label className="has-hint">{t('set.io')}</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+          {/* a whole-config export is the wrong unit most of the time: people want to hand
+              over their mod buttons or their highlight rules, not overwrite the other side */}
+          <div className="io-parts">
+            {CONFIG_PARTS.map((part) => (
+              <label key={part} className="io-part">
+                <input
+                  type="checkbox"
+                  checked={parts.includes(part)}
+                  onChange={(e) =>
+                    setParts((prev) =>
+                      e.target.checked ? [...prev, part] : prev.filter((p) => p !== part)
+                    )
+                  }
+                />
+                {t(CONFIG_PART_LABELS[part])}
+              </label>
+            ))}
+          </div>
           <span style={{ display: 'inline-flex', gap: 8 }}>
-            <button onClick={doExport}>
+            <button disabled={!parts.length} onClick={doExport}>
               <TrayArrowIcon dir="out" /> {t('set.io.export')}
             </button>
             <button onClick={() => importRef.current?.click()}>

@@ -1377,8 +1377,14 @@ select:focus {
 .modal {
   /* Chrome is chrome. body inherits the user's CHAT size (Ctrl+wheel drives it up to 40px),
      and the settings window was inheriting it too — which is why its sidebar and labels grew
-     until they overflowed while the group titles, on fixed tokens, stayed put. */
+     until they overflowed while the group titles, on fixed tokens, stayed put.
+     --ui-scale is the separate, bounded knob for making this chrome bigger on purpose. */
   font-size: var(--fs-lg);
+  zoom: var(--ui-scale, 1);
+}
+/* …but not when it is already inside a scaled window, or the two would multiply */
+.ui-scaled .modal {
+  zoom: 1;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -2921,6 +2927,12 @@ input[type='number']::-webkit-inner-spin-button {
   background: var(--surface-3);
 }
 
+/* every utility window scales with the same knob; the main chat window keeps its own
+   chat-font and tab-scale controls */
+.app.ui-scaled {
+  zoom: var(--ui-scale, 1);
+}
+
 /* ---------- Icon glyphs ---------- */
 
 /*
@@ -3015,6 +3027,35 @@ button:has(> svg) {
 .set-group-title + .set-block,
 .set-block + .set-block {
   margin-top: 0;
+}
+
+/* the log view: monospace so stack traces line up, and tall enough to be worth opening */
+.diag-log {
+  width: 100%;
+  height: 220px;
+  margin-top: var(--space-3);
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+  user-select: text;
+}
+
+.io-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: var(--space-1) var(--space-4);
+  width: 100%;
+}
+.io-part {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-md);
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 /* ---------- Theme picker ---------- */
@@ -4152,6 +4193,17 @@ button:has(> svg) {
   align-items: center;
   gap: 8px;
   margin-bottom: 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+.toast-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
 }
 .toast-mute {
   margin: 0;
