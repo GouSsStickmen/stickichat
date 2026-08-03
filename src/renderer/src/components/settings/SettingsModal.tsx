@@ -826,9 +826,11 @@ function ThemeEditor({
                   defaultValue={DEFAULT_TOKENS[tk] ?? '#000000'}
                   onChange={(v) => setTokens((prev) => ({ ...prev, [tk]: v }))}
                 />
-                {/* the token name is developer vocabulary; show what it PAINTS, and keep the
-                    raw name on hover for anyone matching it against the design kit */}
-                <span title={tk}>{t(TOKEN_LABELS[tk])}</span>
+                {/* the token name is developer vocabulary; the label says what it PAINTS and
+                    the hover says where you will actually see it change */}
+                <span title={`${t(TOKEN_HINTS[tk])}
+
+${tk}`}>{t(TOKEN_LABELS[tk])}</span>
               </div>
             ))}
           </div>
@@ -878,6 +880,29 @@ const TOKEN_LABELS: Record<string, TranslationKey> = {
   '--warning': 'token.warning',
   '--live': 'token.live',
   '--scrollbar': 'token.scrollbar'
+}
+
+/** one line per token saying where in the app it shows up — a colour picker with no idea
+ *  what it repaints is a guessing game */
+const TOKEN_HINTS: Record<string, TranslationKey> = {
+  '--bg': 'token.bg.hint',
+  '--surface': 'token.surface.hint',
+  '--surface-2': 'token.surface2.hint',
+  '--surface-3': 'token.surface3.hint',
+  '--border': 'token.border.hint',
+  '--text': 'token.text.hint',
+  '--text-muted': 'token.textMuted.hint',
+  '--text-faint': 'token.textFaint.hint',
+  '--system-text': 'token.systemText.hint',
+  '--accent': 'token.accent.hint',
+  '--accent-strong': 'token.accentStrong.hint',
+  '--accent-text': 'token.accentText.hint',
+  '--link': 'token.link.hint',
+  '--danger': 'token.danger.hint',
+  '--success': 'token.success.hint',
+  '--warning': 'token.warning.hint',
+  '--live': 'token.live.hint',
+  '--scrollbar': 'token.scrollbar.hint'
 }
 
 /** group id -> i18n key, so the lookup stays typed instead of a template string */
