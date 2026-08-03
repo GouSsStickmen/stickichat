@@ -2931,6 +2931,20 @@ input[type='number']::-webkit-inner-spin-button {
    chat-font and tab-scale controls */
 .app.ui-scaled {
   zoom: var(--ui-scale, 1);
+  /* `zoom` scales the contents, but a 100vh INSIDE still resolves against the unscaled
+     viewport — so at 130% the panel came out a third taller than its own window and the top
+     was cut off. Dividing the root by the same factor makes the painted result exactly one
+     window again, whatever the scale. */
+  width: calc(100vw / var(--ui-scale, 1));
+  height: calc(100vh / var(--ui-scale, 1));
+  overflow: hidden;
+}
+/* inside a scaled root the panels fill the root, not the viewport */
+.ui-scaled .standalone-settings,
+.ui-scaled .usercard.usercard-standalone,
+.ui-scaled .emote-picker-standalone,
+.ui-scaled .whisper-panel-standalone {
+  height: 100%;
 }
 
 /* ---------- Icon glyphs ---------- */
