@@ -3166,8 +3166,29 @@ button:has(> svg) {
 
 /* ---------- Theme editor ---------- */
 
+/* The theme editor is a MODE, not a row. Opening it inside the "General" card left its colour
+   fields flowing straight into the app scale / font / text size rows underneath, with nothing
+   to say where the theme ended — so it gets its own frame, in the accent, plus a title. */
 .theme-editor {
   gap: var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xl);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-3) var(--space-4) 0;
+  margin: var(--space-4) 0;
+  /* it supplies its own frame; the row underline would draw a second edge inside it */
+  border-bottom: 1px solid var(--accent);
+}
+.theme-editor-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
 }
 .theme-editor-head {
   display: flex;
@@ -3230,10 +3251,25 @@ button:has(> svg) {
   line-height: 1.25;
   cursor: help;
 }
+/* Sticky to the bottom of the scroll area: the palette is long enough that the way out was
+   scrolled off screen, and "how do I get out of here" should never need a scroll to answer.
+   It carries the panel's own background so the colour fields pass behind it cleanly. */
 .theme-editor-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  margin: var(--space-3) calc(-1 * var(--space-4)) 0;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  background: var(--surface-2);
+}
+/* discarding every colour you just picked is not a sibling of Save — keep it out of reach */
+.theme-editor-reset {
+  margin-left: auto;
 }
 
 /* ---------- Chat modes popover ---------- */

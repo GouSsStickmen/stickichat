@@ -809,6 +809,13 @@ function ThemeEditor({
 
   return (
     <div className="set-row set-row-block theme-editor">
+      {/* The editor used to open as one more row inside the "General" card, so its colour
+          fields ran straight on into the app scale, font and text size below it and there was
+          no telling where the theme stopped. It is its own titled panel now. */}
+      <div className="theme-editor-title">
+        <PencilIcon size={14} />
+        {t('theme.editing')}
+      </div>
       <div className="theme-editor-head">
         <input
           value={name}
@@ -891,6 +898,9 @@ ${tk}`}>{t(TOKEN_LABELS[tk])}</span>
           ))}
         </div>
       </div>
+      {/* Sticky, so on a palette this long the way out is never scrolled off screen. Save and
+          cancel sit together on the left; "reset colours" throws away everything you just did,
+          so it is pushed to the far right where it cannot be hit by accident. */}
       <div className="theme-editor-foot">
         <button
           className="primary"
@@ -909,7 +919,8 @@ ${tk}`}>{t(TOKEN_LABELS[tk])}</span>
         </button>
         <button onClick={onCancel}>{t('theme.cancel')}</button>
         <button
-          className="ghost"
+          className="ghost theme-editor-reset"
+          title={t('hint.themeReset')}
           onClick={() => {
             setTokens({ ...DEFAULT_TOKENS })
             setRadius(100)
