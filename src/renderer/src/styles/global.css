@@ -1818,8 +1818,11 @@ select:focus {
 .modbtn-line .spacer {
   flex: 1;
 }
-.modbtn-line input,
-.modbtn-line select {
+/* DIRECT children only. Written as a descendant selector this also caught the checkboxes in
+   the channel dropdown that hangs off this line, gave each one a 130px flex basis, and left
+   their glyphs sitting at a different x on every row. */
+.modbtn-line > input,
+.modbtn-line > select {
   padding: 5px 7px;
   font-size: var(--fs-md);
   min-width: 0;
@@ -2062,6 +2065,7 @@ select:focus {
  * first line, HOW it looks on the second. Alignment across rows survives because every rule
  * carries the same controls in the same order.
  */
+
 @container setpane (max-width: 640px) {
   .hl-row,
   .muted-row {
@@ -3140,9 +3144,13 @@ button:has(> svg) {
 
 .io-parts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: var(--space-1) var(--space-4);
-  width: 100%;
+  /* `width: 100%` measured the ROW, not the space left after the label, so at a narrow width
+     the part names ran off the panel and were clipped. As a flex item it takes a line of its
+     own when it no longer fits beside the label. */
+  flex: 1 1 100%;
+  min-width: 0;
 }
 .io-part {
   display: flex;
@@ -4398,4 +4406,92 @@ button:has(> svg) {
   flex: 1;
   height: 1px;
   background: var(--border);
+}
+
+/* ---------- Narrow settings panel (must stay last: it overrides the rules above) ----------*/
+
+/**
+ * Narrow panel, every tab.
+ *
+ * A settings row is "label on the left, control on the right", and at a narrow width the
+ * control simply ran past the edge of a column that clips. Letting the row wrap fixes all of
+ * them at once: a small control (a checkbox, a stepper) still fits beside its label, and one
+ * that needs room — a text field, a select, a font picker, a list of export parts — drops to
+ * a line of its own and takes the full width there. Nothing has to be truncated and no tab
+ * needs its own special case.
+ */
+@container setpane (max-width: 640px) {
+  .set-row {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+  .set-row > label {
+    min-width: 0;
+  }
+  /* `!important` earns its keep here: several of these carry an inline `flex: 1`, which is a
+     basis of ZERO — and a zero-basis item never wraps, it just gets squeezed to a sliver. An
+     inline style cannot be beaten any other way, and this only applies while the panel is too
+     narrow to hold a row anyway. */
+  .set-row > input:not([type='checkbox']):not([type='radio']),
+  .set-row > select,
+  .set-row > textarea,
+  .set-row > .ta-wrap,
+  .set-row > div {
+    flex: 1 1 200px !important;
+    min-width: 0;
+    max-width: 100%;
+  }
+  /* …and again one level in: most controls are wrapped in a plain flex div, and a select is
+     as wide as its longest option unless told otherwise — the sound presets alone are wider
+     than the whole panel */
+  .set-row > div > select,
+  .set-row > div > input,
+  .set-row > div > .ta-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* a file input reports a very wide intrinsic size (button + "no file chosen") */
+  .set-row input[type='file'] {
+    max-width: 100%;
+  }
+  .set-row input[type='range'] {
+    min-width: 0;
+  }
+  /* Frames give back their padding, and a nested block gives back its indent. Three levels of
+     "label, then its switch, then that switch's options" was costing most of the column to
+     margins alone, which is why a sound picker ended up narrower than its own chevron. The
+     frame itself still says what belongs to what. */
+  .set-block,
+  .set-sub {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+  }
+  .set-sub {
+    margin-left: 0;
+  }
+  /* the font field is a fixed 180px, which is wider than the row has to give and pushed the
+     chevron and the upload button off the edge */
+  .font-combo > input {
+    flex: 1 1 90px;
+    min-width: 0;
+    width: auto;
+  }
+  /* the dropdown is wider than the panel it hangs in */
+  .font-combo-list,
+  .chan-menu {
+    width: auto;
+    min-width: 100%;
+    max-width: 100%;
+  }
+  /* an overlay card keeps its buttons at full size and squeezes the name and URL to nothing;
+     past a point the buttons take a line of their own instead */
+  .ov-card {
+    flex-wrap: wrap;
+  }
+  .ov-card-main {
+    flex: 1 1 100%;
+  }
+  .ov-card-actions {
+    margin-left: auto;
+  }
 }

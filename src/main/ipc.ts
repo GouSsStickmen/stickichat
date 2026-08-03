@@ -11,7 +11,14 @@ function rememberEnabled(): boolean {
 
 function createChildWindow(
   hash: string,
-  opts: { width: number; height: number; title?: string; parent?: BrowserWindow | null; stateKey?: string }
+  opts: {
+    width: number
+    height: number
+    title?: string
+    parent?: BrowserWindow | null
+    stateKey?: string
+    minWidth?: number
+  }
 ): BrowserWindow {
   const saved = opts.stateKey && rememberEnabled() ? readWindowState(opts.stateKey) : null
   const win = new BrowserWindow({
@@ -21,7 +28,7 @@ function createChildWindow(
     y: saved?.y,
     // below this the settings grids and the mod-button cards start pushing content out of
     // their own frames; there is nothing useful to see at 320px anyway
-    minWidth: 420,
+    minWidth: opts.minWidth ?? 420,
     minHeight: 240,
     autoHideMenuBar: true,
     backgroundColor: '#0e0e10',
@@ -153,6 +160,10 @@ export function registerIpc(): void {
       height: 680,
       title: 'StickiChat — Settings',
       stateKey: 'settings',
+      // Settings has a fixed sidebar plus rows of label + control. It reflows down to one
+      // column and stays usable, but under this there is not enough room left of the sidebar
+      // for a control and its label to coexist on any terms, so the window simply stops.
+      minWidth: 560,
       parent: BrowserWindow.fromWebContents(e.sender)
     })
   })
