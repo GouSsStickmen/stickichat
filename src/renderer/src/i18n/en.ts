@@ -451,6 +451,7 @@ export const en = {
   'set.group.input': 'INPUT BOX',
   'set.group.density': 'DENSITY',
   'hint.timestamps': 'The time shown to the left of each message.',
+  'set.group.backup': 'BACKUP',
   'set.theme': 'Theme',
   'set.theme.dark': 'Dark',
   'set.theme.light': 'Light',

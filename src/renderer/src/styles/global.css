@@ -467,7 +467,9 @@ select:focus {
   background: var(--danger);
 }
 .pane-header .stream-info .si-icon {
-  font-size: var(--fs-xl);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.18em;
 }
 .pane-header .stream-info {
   font-size: var(--fs-sm);
@@ -498,7 +500,9 @@ select:focus {
   flex-shrink: 0;
 }
 .pane-subheader .si-icon {
-  font-size: var(--fs-lg);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.18em;
 }
 .pane-header .icon-btn {
   background: transparent;
@@ -1371,6 +1375,10 @@ select:focus {
   z-index: 100;
 }
 .modal {
+  /* Chrome is chrome. body inherits the user's CHAT size (Ctrl+wheel drives it up to 40px),
+     and the settings window was inheriting it too — which is why its sidebar and labels grew
+     until they overflowed while the group titles, on fixed tokens, stayed put. */
+  font-size: var(--fs-lg);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -2922,9 +2930,14 @@ input[type='number']::-webkit-inner-spin-button {
  * baseline from the equation entirely.
  */
 button > svg,
-label > svg,
-span > svg {
+label > svg {
   display: block;
+  flex: none;
+}
+/* inside a run of text an svg has to stay inline, or it breaks the line box — this is what
+   knocked the viewer and uptime glyphs out of the stream-info strip */
+span > svg {
+  vertical-align: -0.18em;
   flex: none;
 }
 button:has(> svg:only-child) {
@@ -2962,8 +2975,14 @@ button:has(> svg) {
   border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
   border-radius: var(--radius-lg);
   padding: var(--space-2) var(--space-4) var(--space-3);
-  margin-bottom: var(--space-3);
+  /* a frame needs air on BOTH sides — butted against the row above it, the border read as
+     one more horizontal line rather than as the edge of a box */
+  margin: var(--space-3) 0;
   background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+}
+.set-block + .set-row,
+.set-row + .set-block {
+  margin-top: var(--space-3);
 }
 .set-block > .set-block-title {
   font-size: var(--fs-sm);
@@ -3047,12 +3066,16 @@ button:has(> svg) {
 }
 /* edit / export / delete appear on the card itself, so a custom theme is managed where it is
    seen rather than in a separate list */
+/* bottom-right, not top-right: up there they sat directly on the colour dots, which are the
+   one thing the card exists to show */
 .theme-card-actions {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  bottom: 2px;
+  right: 3px;
   display: none;
   gap: 1px;
+  background: inherit;
+  border-radius: var(--radius-sm);
 }
 .theme-card {
   position: relative;
@@ -3070,6 +3093,9 @@ button:has(> svg) {
 .theme-card-actions button:hover {
   background: transparent;
   filter: brightness(1.6);
+}
+.theme-card {
+  padding-bottom: var(--space-3);
 }
 .theme-card-new {
   justify-content: center;

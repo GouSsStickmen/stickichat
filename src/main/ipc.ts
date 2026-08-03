@@ -18,7 +18,9 @@ function createChildWindow(
     height: saved?.height ?? opts.height,
     x: saved?.x,
     y: saved?.y,
-    minWidth: 320,
+    // below this the settings grids and the mod-button cards start pushing content out of
+    // their own frames; there is nothing useful to see at 320px anyway
+    minWidth: 420,
     minHeight: 240,
     autoHideMenuBar: true,
     backgroundColor: '#0e0e10',

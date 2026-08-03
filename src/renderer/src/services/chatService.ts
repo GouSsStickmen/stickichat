@@ -1002,7 +1002,7 @@ class ChatService {
       case 'viewermilestone': {
         // watch-streak milestone
         const val = m.tags['msg-param-value'] || '?'
-        return `🔥 ${name} дивиться стрім ${val}-й раз поспіль! Оце стрик!`
+        return `🔥 ${name} дивиться стрим ${val}-й раз поспіль! Оце стрик!`
       }
       case 'midnightsquid':
       case 'cheer':

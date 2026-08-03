@@ -318,7 +318,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     name: 'mod',
     perm: 'broadcaster',
     usage: '/mod <нік>',
-    desc: 'Видати модерку (лише стрімер)',
+    desc: 'Видати модерку (лише стример)',
     run: async (args, _r, ctx) => {
       const id = await userId(ctx, args[0])
       if (!id) return
@@ -329,7 +329,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     name: 'unmod',
     perm: 'broadcaster',
     usage: '/unmod <нік>',
-    desc: 'Забрати модерку (лише стрімер)',
+    desc: 'Забрати модерку (лише стример)',
     run: async (args, _r, ctx) => {
       const id = await userId(ctx, args[0])
       if (!id) return
@@ -340,7 +340,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     name: 'vip',
     perm: 'broadcaster',
     usage: '/vip <нік>',
-    desc: 'Видати VIP (лише стрімер)',
+    desc: 'Видати VIP (лише стример)',
     run: async (args, _r, ctx) => {
       const id = await userId(ctx, args[0])
       if (!id) return
@@ -351,7 +351,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     name: 'unvip',
     perm: 'broadcaster',
     usage: '/unvip <нік>',
-    desc: 'Забрати VIP (лише стрімер)',
+    desc: 'Забрати VIP (лише стример)',
     run: async (args, _r, ctx) => {
       const id = await userId(ctx, args[0])
       if (!id) return

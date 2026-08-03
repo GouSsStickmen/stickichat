@@ -2796,6 +2796,9 @@ function AdvancedSection(): React.JSX.Element {
         <label>{t('set.msgLimit')}</label>
         <NumberField value={settings.messageLimit} min={100} max={5000} onChange={(n) => set({ messageLimit: n })} />
       </div>
+      {/* a backup is not a performance setting; it was only next to one because both ended
+          up in the same catch-all section */}
+      <div className="set-group-title">{t('set.group.backup')}</div>
       <div className="set-row" title={t('hint.io')} style={{ alignItems: 'flex-start' }}>
         <label className="has-hint">{t('set.io')}</label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>

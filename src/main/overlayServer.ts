@@ -1779,7 +1779,7 @@ const OVERLAY_HTML = `<!doctype html>
       { nick: 'Meme_gavgav', color: '#7cff5c', badges: [BADGE_VIP], body: 'гав гав гав <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f436.png">', av: 'M' },
       { nick: 'I_Love_Vladyslav', color: '#ffd75c', badges: [], body: 'Їжте щедрі ґрона! Quick brown fox 0123', av: 'I' },
       { nick: 'Ivan_In_My_Ass', color: '#ff8a5c', badges: [], body: 'хто тут головний по мемах?', av: 'I' },
-      { nick: 'n1cole_cat', color: '#5cffd7', badges: [BADGE_VIP], body: 'мур-мур <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f63a.png"> клас стрім', av: 'N' },
+      { nick: 'n1cole_cat', color: '#5cffd7', badges: [BADGE_VIP], body: 'мур-мур <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f63a.png"> клас стрим', av: 'N' },
       { nick: 'Mira_Cat', color: '#c95cff', badges: [BADGE_MOD, BADGE_VIP], body: 'дуже класний оверлей вийшов <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f431.png">', av: 'M' }
     ]
   }
