@@ -1449,7 +1449,7 @@ function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
   }
 
   return (
-    <>
+    <div className="set-sub">
       <div className="set-row">
         <label>{t('set.sound.type')}</label>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -1504,7 +1504,7 @@ function SoundSettings({ kind }: { kind: SoundKind }): React.JSX.Element {
           style={{ maxWidth: 240 }}
         />
       </div>
-    </>
+    </div>
   )
 }
 
