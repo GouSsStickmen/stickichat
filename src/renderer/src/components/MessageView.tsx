@@ -8,6 +8,7 @@ import { useAccountsStore } from '../store/accounts'
 import { highlightRuleMatches } from '../lib/highlight'
 import { openUserCard as openCard } from '../lib/openUserCard'
 import { useSettingsStore, favKey } from '../store/settings'
+import { isDarkTheme } from '../lib/themes'
 import { useUiStore } from '../store/ui'
 import { runModButton } from '../services/modActions'
 import { banUser, deleteChatMessage } from '../lib/helix'
@@ -496,7 +497,7 @@ function MessageViewInner({
       msg,
       lookupEmote(msg.channel),
       (login) => lookupUserColor(msg.channel, login),
-      settings.theme === 'dark',
+      isDarkTheme(settings.theme),
       msg.bits ? lookupCheermote(msg.channel) : undefined,
       settings.colorBareNicks ? (login) => isKnownChatter(msg.channel, login) : undefined
     )
@@ -571,7 +572,7 @@ function MessageViewInner({
     // channel-point redemption: real points icon + colored nick + reward name + cost,
     // instead of an emoji and a generic "redeems" label
     if (msg.redeemed && msg.rewardTitle) {
-      const rdark = settings.theme === 'dark'
+      const rdark = isDarkTheme(settings.theme)
       // prefer the user's CURRENT chat color from the live buffer (the redeem's stored color
       // is a snapshot and is often just a fallback hash if they hadn't spoken yet)
       const nickColor = ensureReadable(
@@ -607,7 +608,7 @@ function MessageViewInner({
     )
   }
 
-  const dark = settings.theme === 'dark'
+  const dark = isDarkTheme(settings.theme)
   const color = ensureReadable(
     stvCosmetic?.color || stvCosmetic?.paintColor || msg.color || fallbackColor(msg.login),
     dark

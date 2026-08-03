@@ -25,6 +25,7 @@ import ReauthBanner from './components/ReauthBanner'
 import { buildChannelSeed, injectChannelSeed } from './lib/detachSeed'
 import { hexToRgba } from './lib/tokenize'
 import { hotkeyFor, matchHotkey } from './lib/hotkeys'
+import { applyTheme } from './lib/themes'
 import { useT } from './i18n'
 
 /** biggest chat text size (Ctrl+wheel and the settings field share this ceiling) */
@@ -145,7 +146,8 @@ export default function App(): React.JSX.Element | null {
 
   useEffect(() => {
     const root = document.documentElement
-    root.dataset.theme = settings.theme
+    // the theme goes on first; everything below is the user's own overrides and must win
+    applyTheme(settings.theme)
     root.style.setProperty('--font-size', `${settings.fontSize}px`)
     root.style.setProperty('--emote-scale', String(settings.emoteScale))
     root.style.setProperty('--msg-spacing', `${settings.messageSpacing}px`)

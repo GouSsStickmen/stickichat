@@ -870,7 +870,8 @@ export interface Tab {
 
 export interface Settings {
   language: 'uk' | 'en'
-  theme: 'dark' | 'light'
+  /** a theme id from lib/themes.ts — deliberately a plain string so themes stay data */
+  theme: string
   fontSize: number // px
   emoteScale: number // 1 = 100%
   showTimestamps: boolean

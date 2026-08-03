@@ -6,6 +6,7 @@ import { sendWhisper, getUsers, getUserChatColors } from '../lib/helix'
 import EmotePicker from './EmotePicker'
 import { fallbackColor, ensureReadable } from '../lib/tokenize'
 import { useSettingsStore } from '../store/settings'
+import { isDarkTheme } from '../lib/themes'
 import { localizeApiError } from '../lib/apiErrors'
 import RichText from './RichText'
 import { PinButton, emoteInsertText } from './EmotePicker'
@@ -47,7 +48,7 @@ export default function WhisperPanel({
   const t = useT()
   const whispers = useWhispersStore((s) => s.whispers)
   const accounts = useAccountsStore((s) => s.accounts)
-  const dark = useSettingsStore((s) => s.settings.theme === 'dark')
+  const dark = useSettingsStore((s) => isDarkTheme(s.settings.theme))
   const favorites = useSettingsStore((s) => s.settings.whisperFavorites)
   const set = useSettingsStore((s) => s.setSettings)
   const [selected, setSelected] = useState<string | null>(null) // otherLogin

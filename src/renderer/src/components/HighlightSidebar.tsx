@@ -11,6 +11,7 @@ import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 import { ZoomIcon } from './Icons'
 import { useSevenTvColors, ensureSevenTvCosmetic, paintStyleOf } from '../lib/seventvCosmetics'
+import { isDarkTheme } from '../lib/themes'
 
 type Mode = 'highlights' | 'mentions' | 'redeems' | 'subs'
 type Order = 'newest-top' | 'newest-bottom'
@@ -78,7 +79,7 @@ export default function HighlightSidebar({
   const caseSensitiveNicks = useSettingsStore((s) => s.settings.caseSensitiveNicks)
   const stvOn = useSettingsStore((s) => s.settings.sevenTvNickColors)
   const fontSize = useSettingsStore((s) => s.settings.highlightsFontSize)
-  const dark = useSettingsStore((s) => s.settings.theme === 'dark')
+  const dark = useSettingsStore((s) => isDarkTheme(s.settings.theme))
   const set = useSettingsStore((s) => s.setSettings)
   const [mode, setMode] = useState<Mode>(
     () => useSettingsStore.getState().settings.highlightSidebarDefault

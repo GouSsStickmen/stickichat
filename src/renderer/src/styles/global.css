@@ -8,13 +8,71 @@
   font-display: swap;
 }
 
+/* ---------------------------------------------------------------------------------------
+   Design tokens.
+
+   Theme-independent shape lives here; colour lives in the per-theme blocks below and is
+   also written at runtime from lib/themes.ts, so a theme is a set of values rather than a
+   set of CSS rules. Anything a theme should be able to restyle MUST go through a token —
+   a literal colour in a rule is a spot the theme can't reach.
+   --------------------------------------------------------------------------------------- */
 :root {
   --font: var(--app-font, 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif);
   --font-size: 13px;
   --emote-scale: 1;
+
+  /* corner radii — the UI used to hold twelve different values, which is the main reason
+     controls that sit side by side never looked like the same family */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  /* spacing scale (4px base, with a 2px step for dense chat rows) */
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+
+  /* type scale. --font-size is the user's chat size and is set at runtime; these are the
+     fixed sizes chrome uses around it */
+  --fs-2xs: 9px;
+  --fs-xs: 10px;
+  --fs-sm: 11px;
+  --fs-md: 12px;
+  --fs-lg: 13px;
+  --fs-xl: 14px;
+  --fs-2xl: 15px;
+  --fs-3xl: 34px;
+
+  /* motion — one place to slow everything down or turn it off */
+  --dur-fast: 90ms;
+  --dur-med: 160ms;
+  --dur-slow: 260ms;
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
 }
 
-:root[data-theme='dark'] {
+/* accessibility: honour the OS "reduce motion" preference across the whole app */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-med: 0ms;
+    --dur-slow: 0ms;
+  }
+}
+
+/* Boot palette — the built-in dark theme, duplicated here ONLY so the first paint isn't a
+   white flash before React mounts. Every theme, dark included, is then written over these
+   from lib/themes.ts, which is the single source of truth. Do not add per-theme CSS blocks:
+   a theme that exists as a rule instead of as data can't be user-created or exported. */
+:root {
   --bg: #0e0e10;
   --surface: #18181b;
   --surface-2: #1f1f23;
@@ -25,8 +83,11 @@
   --text-faint: #77777f;
   --accent: #a970ff;
   --accent-strong: #9147ff;
+  /* text and icons sitting on ANY saturated fill — accent, danger, success, the live dot */
   --accent-text: #ffffff;
   --danger: #eb4c4c;
+  /* the "live" red; a token so a theme can tune it rather than a literal in two places */
+  --live: #e91916;
   --success: #45c26f;
   --warning: #f5b83d;
   --mention-bg: rgba(169, 112, 255, 0.18);
@@ -34,30 +95,17 @@
   --system-text: #adadb8;
   --link: #8ab4f8;
   --scrollbar: #3a3a41;
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
-}
 
-:root[data-theme='light'] {
-  --bg: #f7f7f8;
-  --surface: #ffffff;
-  --surface-2: #f2f2f3;
-  --surface-3: #e8e8ea;
-  --border: #d8d8dc;
-  --text: #0e0e10;
-  --text-muted: #53535f;
-  --text-faint: #8a8a94;
-  --accent: #9147ff;
-  --accent-strong: #772ce8;
-  --accent-text: #ffffff;
-  --danger: #d43a3a;
-  --success: #1a9648;
-  --warning: #c98a12;
-  --mention-bg: rgba(145, 71, 255, 0.14);
-  --highlight-bg: rgba(255, 92, 92, 0.14);
-  --system-text: #53535f;
-  --link: #1a6dcc;
-  --scrollbar: #c5c5cc;
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  /* elevation — themes set their own, so a light theme stops wearing dark-theme shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  /* dim behind modals and popovers */
+  --scrim: rgba(0, 0, 0, 0.55);
+  /* transparency checkerboard behind images with alpha */
+  --checker-a: #2a2a30;
+  --checker-b: #202024;
 }
 
 * {
@@ -86,7 +134,7 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -96,7 +144,7 @@ button {
   font-family: var(--font), 'StickiEmoji';
   font-size: inherit;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   background: var(--surface-3);
   color: var(--text);
@@ -118,7 +166,7 @@ button.primary:hover {
 }
 button.danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-text);
 }
 button.ghost {
   background: transparent;
@@ -141,7 +189,7 @@ select {
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 6px 9px;
   outline: none;
 }
@@ -162,7 +210,7 @@ select:focus {
 .tabbar {
   /* the tab bar is CHROME, not chat: pin it to the UI base size so Ctrl+wheel over the chat
      (which drives --font-size) can't grow the tabs. Deliberate tab scaling = tabScale zoom. */
-  font-size: 13px;
+  font-size: var(--fs-lg);
   /* block flow: the floated actions sit top-right and tab rows wrap AROUND them,
      filling the space beneath instead of leaving a dead column */
   display: block;
@@ -192,7 +240,7 @@ select:focus {
   gap: 6px;
   padding: 6px 10px;
   background: var(--surface);
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   color: var(--text-muted);
   cursor: pointer;
   border: 1px solid transparent;
@@ -215,7 +263,7 @@ select:focus {
 }
 .tabbar .tab .close {
   opacity: 0.4;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   padding: 0 2px;
 }
 .tabbar .tab .close:hover {
@@ -238,7 +286,7 @@ select:focus {
   padding: 5px 9px;
   background: transparent;
   color: var(--text-muted);
-  font-size: 15px;
+  font-size: var(--fs-2xl);
 }
 /* action icons all the same width so they don't shift when the glyph changes (🟢/⚫/≡) */
 .tabbar-actions .icon-btn {
@@ -257,15 +305,15 @@ select:focus {
 .conn-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   margin-right: 6px;
   flex-shrink: 0;
 }
 .live-dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  background: #e91916;
+  border-radius: var(--radius-circle);
+  background: var(--live);
   flex-shrink: 0;
   animation: live-pulse 2s ease infinite;
 }
@@ -289,16 +337,16 @@ select:focus {
 .unread-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--text-muted);
   flex-shrink: 0;
 }
 .live-badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 2px 6px;
-  border-radius: 4px;
-  background: #e91916;
-  color: #fff;
+  border-radius: var(--radius-sm);
+  background: var(--live);
+  color: var(--accent-text);
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -329,7 +377,7 @@ select:focus {
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   min-height: 0;
   min-width: 0;
@@ -361,8 +409,8 @@ select:focus {
   padding: 8px 10px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-md);
 }
 .uc-rules-title {
   font-weight: 600;
@@ -373,7 +421,7 @@ select:focus {
   gap: 6px;
 }
 .uc-rules-toggle {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   padding: 1px 8px;
 }
 .uc-rules-body {
@@ -395,11 +443,11 @@ select:focus {
   overflow-wrap: anywhere;
 }
 .pane-header .mod-badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--success);
-  color: #fff;
+  color: var(--accent-text);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -407,10 +455,10 @@ select:focus {
   background: var(--danger);
 }
 .pane-header .stream-info .si-icon {
-  font-size: 14px;
+  font-size: var(--fs-xl);
 }
 .pane-header .stream-info {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -428,7 +476,7 @@ select:focus {
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
@@ -438,13 +486,13 @@ select:focus {
   flex-shrink: 0;
 }
 .pane-subheader .si-icon {
-  font-size: 13px;
+  font-size: var(--fs-lg);
 }
 .pane-header .icon-btn {
   background: transparent;
   color: var(--text-muted);
   padding: 3px 7px;
-  font-size: 13px;
+  font-size: var(--fs-lg);
 }
 .pane-header .icon-btn:hover {
   background: var(--surface-3);
@@ -452,7 +500,7 @@ select:focus {
 }
 .icon-btn.active {
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
 }
 
 /* ---------- Mod toolbar ---------- */
@@ -468,7 +516,7 @@ select:focus {
   flex-shrink: 0;
 }
 .mod-toolbar button {
-  font-size: 12px;
+  font-size: var(--fs-md);
   padding: 3px 9px;
   background: var(--surface-3);
 }
@@ -520,7 +568,7 @@ select:focus {
   text-align: left;
   background: transparent;
   padding: 5px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   gap: 1px;
 }
 .highlight-item:hover {
@@ -541,14 +589,14 @@ select:focus {
   height: 1.1em;
   vertical-align: -0.18em;
   margin-right: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 .highlight-item .hl-redeem-icon {
   height: 1.2em;
   width: 1.2em;
   vertical-align: -0.22em;
   margin-right: 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 .highlight-item .hl-emote {
   height: 1.5em;
@@ -604,7 +652,7 @@ select:focus {
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1;
-  font-size: 13px;
+  font-size: var(--fs-lg);
 }
 /* width slider shown on braille-art messages — subtle until hovered */
 .art-width-ctl {
@@ -649,7 +697,7 @@ select:focus {
   object-fit: contain;
   vertical-align: calc(var(--badge-size, 18px) / -4.5);
   margin-right: 3px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 .msg .nick {
   font-weight: 700;
@@ -720,7 +768,7 @@ select:focus {
    covers every effect id; a couple of the named ones get their own gradient. */
 .msg.msg-effect {
   position: relative;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding-top: 3px;
   padding-bottom: 3px;
   background: linear-gradient(90deg,
@@ -731,6 +779,7 @@ select:focus {
   animation: msg-effect-shimmer 3s linear infinite;
 }
 .msg.effect-rainbow-eclipse {
+  /* NOT tokens: Twitch defines these bits-effect colours, they must match Twitch exactly */
   background: linear-gradient(90deg, #ff2400, #e81d1d, #e8b71d, #1de840, #1ddde8, #2b1de8, #dd00f3);
   background-size: 400% 100%;
   animation: msg-effect-shimmer 5s linear infinite;
@@ -777,7 +826,7 @@ select:focus {
   font-size: 0.78em;
   font-weight: 700;
   padding: 1px 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin-left: 4px;
   background: color-mix(in srgb, var(--danger) 22%, transparent);
   color: var(--danger);
@@ -815,7 +864,7 @@ select:focus {
   width: 1.2em;
   vertical-align: -0.22em;
   margin-right: 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 .redeem-icon-emoji {
   margin-right: 4px;
@@ -876,7 +925,7 @@ select:focus {
   align-items: center;
   padding-left: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--accent-text);
   z-index: 0;
 }
 
@@ -891,11 +940,11 @@ select:focus {
   gap: 3px;
   background: var(--surface-3);
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   padding: 3px 5px;
   z-index: 5;
   /* small, tight shadow — the full drop shadow spilled below and got clipped by the next row */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-sm);
   flex-wrap: wrap;
   justify-content: flex-end;
   max-width: calc(100% - 30px);
@@ -930,7 +979,7 @@ select:focus {
   align-items: center;
   justify-content: center;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   opacity: 0;
   cursor: grab;
   z-index: 4;
@@ -945,7 +994,7 @@ select:focus {
 }
 .msg .hover-actions button {
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   background: transparent;
 }
 .msg .hover-actions button:hover {
@@ -961,7 +1010,7 @@ select:focus {
   background: var(--surface-3);
   border: 1px solid var(--border);
   padding: 4px 8px;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   opacity: 0.55;
   box-shadow: var(--shadow);
 }
@@ -980,11 +1029,11 @@ select:focus {
   left: 50%;
   transform: translateX(-50%);
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
   padding: 4px 14px;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-md);
   z-index: 6;
   box-shadow: var(--shadow);
 }
@@ -1002,7 +1051,7 @@ select:focus {
   gap: 6px;
   padding: 5px 10px 0 10px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-md);
 }
 .reply-bar-text {
   flex: 1;
@@ -1079,7 +1128,7 @@ select:focus {
   pointer-events: none;
   color: var(--text);
   background: var(--surface-2);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 .ta-highlight .over-limit {
   color: var(--danger);
@@ -1089,12 +1138,12 @@ select:focus {
   position: absolute;
   right: 6px;
   bottom: 3px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   pointer-events: none;
   background: var(--surface-2);
   padding: 0 3px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   z-index: 2;
 }
 .char-counter.over {
@@ -1108,11 +1157,11 @@ select:focus {
 .btn-icon {
   height: 1.35em;
   vertical-align: -0.3em;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 .account-select {
   max-width: 130px;
-  font-size: 12px;
+  font-size: var(--fs-md);
 }
 /* narrow-pane replacement for the account select: just the avatar */
 .account-compact {
@@ -1127,7 +1176,7 @@ select:focus {
 .account-compact img {
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
 }
 .account-pop {
   bottom: 100%;
@@ -1141,12 +1190,12 @@ select:focus {
 .account-pop img {
   width: 18px;
   height: 18px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   vertical-align: -4px;
 }
 .fav-edit-btn {
   margin-bottom: 4px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .emote-cell.fav-editing {
   cursor: grab;
@@ -1169,7 +1218,7 @@ select:focus {
 /* dropdown chevron — reopen the list without blur+refocus */
 .font-combo-caret {
   padding: 4px 7px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   line-height: 1;
 }
 /* upload as a small icon button */
@@ -1177,9 +1226,9 @@ select:focus {
   cursor: pointer;
   padding: 4px 7px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface-3);
-  font-size: 13px;
+  font-size: var(--fs-lg);
   line-height: 1;
 }
 .font-upload-icon:hover {
@@ -1188,7 +1237,7 @@ select:focus {
 /* uploaded-vs-system separation in the dropdown */
 .font-combo-group {
   padding: 4px 10px 2px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1227,7 +1276,7 @@ select:focus {
   overflow-y: auto;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow);
 }
 .font-combo-item {
@@ -1258,10 +1307,10 @@ select:focus {
 /* one-click shoutout on an incoming raid line (mods only) */
 .raid-shoutout-btn {
   margin-left: 8px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   padding: 2px 8px;
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
 }
 .autocomplete {
   position: absolute;
@@ -1270,7 +1319,7 @@ select:focus {
   right: 8px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin-bottom: 4px;
   max-height: 240px;
   overflow-y: auto;
@@ -1294,7 +1343,7 @@ select:focus {
 .autocomplete .item .provider {
   margin-left: auto;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
 }
 
@@ -1303,7 +1352,7 @@ select:focus {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1312,7 +1361,7 @@ select:focus {
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   width: min(680px, 92vw);
   max-height: 88vh;
@@ -1349,7 +1398,7 @@ select:focus {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   font-weight: 600;
-  font-size: 15px;
+  font-size: var(--fs-2xl);
 }
 .modal-header .spacer {
   flex: 1;
@@ -1370,7 +1419,7 @@ select:focus {
   position: absolute;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   padding: 10px;
   z-index: 50;
@@ -1390,7 +1439,7 @@ select:focus {
   width: 320px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   z-index: 80;
   overflow: hidden;
@@ -1405,15 +1454,15 @@ select:focus {
 .usercard .uc-head img {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
 }
 .usercard .uc-name {
   font-weight: 700;
-  font-size: 15px;
+  font-size: var(--fs-2xl);
 }
 .usercard .uc-sub {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 /* full-window user card: fills the window; text size set by the A−/A+ controls */
 .usercard.usercard-standalone {
@@ -1450,7 +1499,7 @@ select:focus {
   width: 36px;
   flex: 0 0 auto;
   padding: 4px 0;
-  font-size: 12px; /* fixed — must not scale with the card's text zoom */
+  font-size: var(--fs-md); /* fixed — must not scale with the card's text zoom */
 }
 .usercard .uc-emote {
   /* em-based: grows together with the A+/A− text size */
@@ -1481,14 +1530,14 @@ select:focus {
   padding: 8px 12px;
 }
 .usercard .uc-actions button {
-  font-size: 12px;
+  font-size: var(--fs-md);
   padding: 3px 8px;
 }
 .usercard .uc-msgs {
   max-height: 180px;
   overflow-y: auto;
   padding: 4px 12px 10px 12px;
-  font-size: 12px;
+  font-size: var(--fs-md);
   color: var(--text-muted);
 }
 .usercard .uc-msgs .m {
@@ -1517,7 +1566,7 @@ select:focus {
   max-width: none;
   vertical-align: -0.18em;
   margin-right: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 /* ---------- Onboarding ---------- */
@@ -1527,13 +1576,13 @@ select:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(1200px 600px at 50% -10%, rgba(145, 71, 255, 0.25), transparent), var(--bg);
+  background: radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb, var(--accent) 25%, transparent)), var(--bg);
 }
 .onboarding .card {
   width: min(560px, 94vw);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-2xl);
   padding: 28px;
   box-shadow: var(--shadow);
 }
@@ -1560,13 +1609,13 @@ select:focus {
 }
 
 .device-code {
-  font-size: 34px;
+  font-size: var(--fs-3xl);
   font-weight: 800;
   letter-spacing: 6px;
   text-align: center;
   padding: 14px;
   background: var(--surface-3);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   margin: 14px 0;
   user-select: text;
 }
@@ -1579,7 +1628,7 @@ select:focus {
 }
 /* visual grouping inside a settings section */
 .set-group-title {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1596,7 +1645,7 @@ select:focus {
 .set-card {
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 6px 14px;
   margin-bottom: 14px;
 }
@@ -1654,7 +1703,7 @@ select:focus {
 .set-row .hint {
   display: block;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .account-row {
   display: flex;
@@ -1666,14 +1715,14 @@ select:focus {
 .account-row img {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
 }
 .account-row .grow {
   flex: 1;
 }
 .modbtn-card {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 10px 12px;
   margin-bottom: 10px;
   background: var(--surface-2);
@@ -1681,7 +1730,7 @@ select:focus {
 }
 .modbtn-card:hover {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-sm);
 }
 /* the moving card itself is the drag indicator (native ghost is suppressed) */
 .modbtn-card.dragging {
@@ -1692,15 +1741,15 @@ select:focus {
   flex-wrap: wrap;
 }
 .modbtn-channel-chips .chip {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--surface-3);
   border: 1px solid var(--border);
 }
 .modbtn-channel-chips .chip.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   border-color: var(--accent);
 }
 .modbtn-line {
@@ -1719,7 +1768,7 @@ select:focus {
 .modbtn-line input,
 .modbtn-line select {
   padding: 5px 7px;
-  font-size: 12px;
+  font-size: var(--fs-md);
   min-width: 0;
   flex-shrink: 1;
 }
@@ -1741,7 +1790,7 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-md);
   background: var(--surface);
   border: 1px solid var(--border);
   text-align: left;
@@ -1765,7 +1814,7 @@ select:focus {
   z-index: 70;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   padding: 4px;
   max-height: 220px;
@@ -1778,7 +1827,7 @@ select:focus {
   width: 100%;
   text-align: left;
   background: transparent;
-  font-size: 12px;
+  font-size: var(--fs-md);
   padding: 5px 8px;
 }
 .chan-opt:hover {
@@ -1794,7 +1843,7 @@ select:focus {
 }
 .chan-add input {
   width: 100%;
-  font-size: 12px;
+  font-size: var(--fs-md);
 }
 .modbtn-card {
   cursor: default;
@@ -1803,8 +1852,8 @@ select:focus {
   max-width: 110px;
   padding: 4px 8px;
   background: var(--surface-3);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-md);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1825,25 +1874,25 @@ select:focus {
   gap: 2px;
   background: var(--surface-3);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   padding: 2px 4px 2px 10px;
-  font-size: 12px;
+  font-size: var(--fs-md);
 }
 .chip button {
   padding: 0 5px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .hl-preview {
   padding: 3px 10px;
-  border-radius: 5px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-md);
   border: 1px solid var(--border);
 }
 /* "adapt to nick color" tag shown in place of the color swatch when adaptColor is on */
 .hl-adapt-tag {
   padding: 3px 8px;
-  border-radius: 5px;
-  font-size: 11px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
   white-space: nowrap;
   color: var(--text-muted);
   background: var(--surface-3);
@@ -1869,7 +1918,7 @@ select:focus {
 .hl-row input[type='text'],
 .hl-row input:not([type]) {
   padding: 5px 7px;
-  font-size: 12px;
+  font-size: var(--fs-md);
   min-width: 0;
   flex-shrink: 1;
 }
@@ -1891,7 +1940,7 @@ select:focus {
   z-index: 70;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   padding: 8px;
   min-width: 190px;
@@ -1899,7 +1948,7 @@ select:focus {
 .color-swatch-main {
   width: 34px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   cursor: pointer;
   padding: 0;
@@ -1911,7 +1960,7 @@ select:focus {
   position: relative;
   width: 100%;
   height: 110px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: crosshair;
   touch-action: none;
   margin-bottom: 8px;
@@ -1920,7 +1969,9 @@ select:focus {
   position: absolute;
   width: 12px;
   height: 12px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
+  /* NOT tokens: this marker sits on top of an arbitrary hue, so it needs a fixed
+     white-on-black ring to stay visible against any colour the user lands on */
   border: 2px solid #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
   transform: translate(-50%, -50%);
@@ -1931,14 +1982,15 @@ input[type='range'].color-hue {
   appearance: none;
   width: 100%;
   height: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin: 0 0 8px;
+  /* NOT a token: this IS the hue spectrum — the slider would lie about its own value */
   background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
   outline: none;
 }
 input[type='range'].color-hue::-webkit-slider-runnable-track {
   height: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
 }
 input[type='range'].color-hue::-webkit-slider-thumb {
@@ -1946,7 +1998,7 @@ input[type='range'].color-hue::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   margin-top: -1px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: #fff;
   border: 2px solid rgba(0, 0, 0, 0.5);
   cursor: pointer;
@@ -1956,10 +2008,10 @@ input[type='range'].color-hue::-webkit-slider-thumb {
   box-sizing: border-box;
   margin-bottom: 6px;
   font-family: monospace;
-  font-size: 12px;
+  font-size: var(--fs-md);
 }
 .color-pal-title {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1975,7 +2027,7 @@ input[type='range'].color-hue::-webkit-slider-thumb {
   width: 20px;
   height: 20px;
   padding: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   cursor: pointer;
   flex-shrink: 0;
@@ -1986,7 +2038,7 @@ input[type='range'].color-hue::-webkit-slider-thumb {
 .color-swatch-add {
   background: var(--surface-3);
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-lg);
   line-height: 1;
 }
 
@@ -1994,7 +2046,7 @@ input[type='range'].color-hue::-webkit-slider-thumb {
 .hotkey-btn {
   min-width: 120px;
   font-family: Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--fs-md);
   background: var(--surface-3);
   border: 1px solid var(--border);
 }
@@ -2004,11 +2056,11 @@ input[type='range'].color-hue::-webkit-slider-thumb {
 }
 .hotkey-fixed {
   font-family: Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--fs-md);
   color: var(--text-muted);
   background: var(--surface-3);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 3px 8px;
 }
 
@@ -2025,7 +2077,7 @@ input[type='range'].color-hue::-webkit-slider-thumb {
 }
 .overlay-profile-chips .chip.active {
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
   border-color: var(--accent-strong);
 }
 /* checkerboard behind the preview so transparency is obvious (like image editors) */
@@ -2047,14 +2099,14 @@ input[type='range'].color-hue::-webkit-slider-thumb {
 /* pinned tab: outlined instead of an icon */
 .tab.pinned {
   box-shadow: inset 0 0 0 1px var(--accent-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 .keyword-tag {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
   max-width: 90px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2075,14 +2127,14 @@ input[type='range'] {
 }
 input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--surface-3);
 }
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px;
   height: 14px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--accent-strong);
   margin-top: -5px;
   border: none;
@@ -2108,7 +2160,7 @@ input[type='number']::-webkit-inner-spin-button {
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--surface-2);
   margin-bottom: 8px;
 }
@@ -2120,20 +2172,20 @@ input[type='number']::-webkit-inner-spin-button {
   flex: 1;
 }
 .ov-type {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
   flex-shrink: 0;
 }
 .ov-chan {
   max-width: 140px;
-  font-size: 12px;
+  font-size: var(--fs-md);
   padding: 2px 6px;
 }
 .ov-url {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2149,7 +2201,7 @@ input[type='number']::-webkit-inner-spin-button {
   margin-top: 10px;
   padding: 12px;
   border: 1px dashed var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
 }
 .ov-type-btn {
   display: flex;
@@ -2188,7 +2240,7 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .oe-sec {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   margin-bottom: 8px;
   background: var(--surface-2);
 }
@@ -2196,7 +2248,7 @@ input[type='number']::-webkit-inner-spin-button {
   cursor: pointer;
   padding: 9px 12px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-lg);
   user-select: none;
   list-style: none;
 }
@@ -2237,7 +2289,7 @@ input[type='number']::-webkit-inner-spin-button {
 }
 /* full-width block label (fill editors and other wide controls sit under it) */
 .oe-block-label {
-  font-size: 12px;
+  font-size: var(--fs-md);
   color: var(--text-muted);
   margin: 8px 0 4px;
 }
@@ -2245,7 +2297,7 @@ input[type='number']::-webkit-inner-spin-button {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 8px;
   box-sizing: border-box;
   margin-bottom: 6px;
@@ -2261,18 +2313,18 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .oe-fill-row button.active {
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
 }
 .oe-fill-swatch {
   width: 34px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   flex-shrink: 0;
 }
 .oe-angles button {
   padding: 3px 6px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .oe-user-preset {
   display: inline-flex;
@@ -2289,7 +2341,7 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .oe-random {
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
 }
 .oe-fill {
   flex: 1;
@@ -2300,7 +2352,7 @@ input[type='number']::-webkit-inner-spin-button {
   gap: 8px;
   align-items: flex-start;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 6px;
   margin-bottom: 6px;
 }
@@ -2308,8 +2360,8 @@ input[type='number']::-webkit-inner-spin-button {
   width: 40px;
   height: 40px;
   object-fit: contain;
-  background: repeating-conic-gradient(#2a2a30 0% 25%, #202024 0% 50%) 0 0 / 10px 10px;
-  border-radius: 6px;
+  background: repeating-conic-gradient(var(--checker-a) 0% 25%, var(--checker-b) 0% 50%) 0 0 / 10px 10px;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 .oe-decor-ctl {
@@ -2322,7 +2374,7 @@ input[type='number']::-webkit-inner-spin-button {
   width: 100%;
   resize: vertical;
   font-family: Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--fs-md);
   box-sizing: border-box;
 }
 .oe-main {
@@ -2348,17 +2400,17 @@ input[type='number']::-webkit-inner-spin-button {
 .oe-toolbar button.active,
 .oe-toolbar label.active {
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
 }
 .oe-preview {
   flex: 1;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   position: relative;
 }
 .oe-preview.checker {
-  background: repeating-conic-gradient(#2a2a30 0% 25%, #202024 0% 50%) 0 0 / 18px 18px;
+  background: repeating-conic-gradient(var(--checker-a) 0% 25%, var(--checker-b) 0% 50%) 0 0 / 18px 18px;
 }
 .oe-preview iframe {
   position: absolute;
@@ -2371,7 +2423,7 @@ input[type='number']::-webkit-inner-spin-button {
 .oe-note {
   color: var(--text-faint);
   margin: 8px 0 0;
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .overlay-preview-chat {
   display: flex;
@@ -2388,15 +2440,15 @@ input[type='number']::-webkit-inner-spin-button {
   max-height: 62vh;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 12px 16px;
   background: var(--surface-2);
   user-select: text;
-  font-size: 14px;
+  font-size: var(--fs-xl);
 }
 .changelog-version {
   font-weight: 700;
-  font-size: 15px;
+  font-size: var(--fs-2xl);
   margin-top: 14px;
 }
 .changelog-entry:first-child .changelog-version {
@@ -2419,7 +2471,7 @@ input[type='number']::-webkit-inner-spin-button {
   width: min(380px, 90%);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   margin-bottom: 6px;
   padding: 8px;
@@ -2438,7 +2490,7 @@ input[type='number']::-webkit-inner-spin-button {
   max-height: 300px;
 }
 .picker-section {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--text-faint);
   text-transform: uppercase;
@@ -2502,10 +2554,10 @@ input[type='number']::-webkit-inner-spin-button {
   width: 30px;
   height: 30px;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   overflow: hidden;
   background: var(--surface-3);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2529,7 +2581,7 @@ input[type='number']::-webkit-inner-spin-button {
   position: absolute;
   right: -4px;
   top: -4px;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   pointer-events: none;
 }
 .picker-twitch-groups {
@@ -2586,7 +2638,7 @@ input[type='number']::-webkit-inner-spin-button {
 .kaomoji-cell {
   background: transparent;
   padding: 6px 4px;
-  font-size: 13px;
+  font-size: var(--fs-lg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2601,7 +2653,7 @@ input[type='number']::-webkit-inner-spin-button {
   position: absolute;
   top: -2px;
   right: -2px;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   pointer-events: none;
 }
 /* kaomoji inside the favorites grid: span several columns so they actually fit */
@@ -2610,14 +2662,14 @@ input[type='number']::-webkit-inner-spin-button {
   min-width: 0;
 }
 .kaomoji-fav-text {
-  font-size: 12px;
+  font-size: var(--fs-md);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
 .picker-hint {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .picker-tabs {
@@ -2682,7 +2734,7 @@ input[type='number']::-webkit-inner-spin-button {
   position: absolute;
   top: -2px;
   right: -2px;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   pointer-events: none;
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
 }
@@ -2716,7 +2768,7 @@ input[type='number']::-webkit-inner-spin-button {
   filter: brightness(1.25);
 }
 .picker-preview-name {
-  font-size: 12px;
+  font-size: var(--fs-md);
   color: var(--text-muted);
   text-align: center;
   word-break: break-word;
@@ -2726,7 +2778,7 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .picker-tab-btn {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--fs-md);
   padding: 4px 6px;
   background: transparent;
   color: var(--text-muted);
@@ -2738,12 +2790,12 @@ input[type='number']::-webkit-inner-spin-button {
 .picker-pin-btn,
 .picker-close-btn {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: var(--fs-md);
   padding: 4px 7px;
 }
 .picker-pin-btn.active {
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
 }
 
 /* ---------- Chatters popover ---------- */
@@ -2756,7 +2808,7 @@ input[type='number']::-webkit-inner-spin-button {
   width: 260px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   padding: 8px;
   z-index: 60;
@@ -2775,7 +2827,7 @@ input[type='number']::-webkit-inner-spin-button {
   text-align: left;
   background: transparent;
   padding: 4px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2786,6 +2838,54 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .chatter-row:hover {
   background: var(--surface-3);
+}
+
+/* ---------- Theme picker ---------- */
+
+/* a setting whose control is too tall to sit on the label's line */
+.set-row-block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: var(--space-2);
+}
+/* each card is painted in its OWN theme's tokens, so the swatch is the theme itself
+   rather than a description of it */
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.theme-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.theme-card.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.theme-dots {
+  display: flex;
+  gap: var(--space-0);
+}
+.theme-dots i {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-circle);
+}
+.theme-name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
 }
 
 /* ---------- Chat modes popover ---------- */
@@ -2815,15 +2915,15 @@ input[type='number']::-webkit-inner-spin-button {
   gap: 10px;
   padding: 6px 12px;
   background: var(--accent-strong);
-  color: #fff;
-  font-size: 12px;
+  color: var(--accent-text);
+  font-size: var(--fs-md);
   flex-shrink: 0;
 }
 .update-notes {
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
   padding: 8px 14px;
-  font-size: 12px;
+  font-size: var(--fs-md);
   white-space: pre-wrap;
   max-height: 180px;
   overflow-y: auto;
@@ -2833,15 +2933,15 @@ input[type='number']::-webkit-inner-spin-button {
   flex: 1;
 }
 .update-banner button.primary {
-  background: #fff;
+  background: var(--accent-text);
   color: var(--accent-strong);
   font-weight: 700;
 }
 .update-banner button.ghost {
-  color: #fff;
+  color: var(--accent-text);
 }
 .update-banner button.ghost:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--accent-text) 20%, transparent);
 }
 
 /* ---------- Re-auth banner (token died — visible, blocking-looking warning) ---------- */
@@ -2851,9 +2951,9 @@ input[type='number']::-webkit-inner-spin-button {
   align-items: center;
   gap: 10px;
   padding: 7px 12px;
-  background: var(--danger, #c0392b);
-  color: #fff;
-  font-size: 12px;
+  background: var(--danger);
+  color: var(--accent-text);
+  font-size: var(--fs-md);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -2866,15 +2966,15 @@ input[type='number']::-webkit-inner-spin-button {
   gap: 6px;
 }
 .reauth-banner button.primary {
-  background: #fff;
-  color: var(--danger, #c0392b);
+  background: var(--accent-text);
+  color: var(--danger);
   font-weight: 700;
 }
 .reauth-banner button.ghost {
-  color: #fff;
+  color: var(--accent-text);
 }
 .reauth-banner button.ghost:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--accent-text) 20%, transparent);
 }
 
 /* ---------- Detached window bar ---------- */
@@ -2903,7 +3003,7 @@ input[type='number']::-webkit-inner-spin-button {
   pointer-events: none;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   padding: 8px;
   display: flex;
@@ -2918,12 +3018,12 @@ input[type='number']::-webkit-inner-spin-button {
   max-height: 85vh;
 }
 .emote-hover-sub {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   line-height: 1.35;
 }
 .emote-hover-name {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -2939,10 +3039,10 @@ input[type='number']::-webkit-inner-spin-button {
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--danger);
-  color: #fff;
-  font-size: 9px;
+  color: var(--accent-text);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   line-height: 14px;
   text-align: center;
@@ -2956,7 +3056,7 @@ input[type='number']::-webkit-inner-spin-button {
   max-width: calc(100vw - 16px);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   z-index: 95;
   display: flex;
@@ -2988,7 +3088,7 @@ input[type='number']::-webkit-inner-spin-button {
   text-align: left;
   background: transparent;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 .whisper-conv:hover {
@@ -2996,10 +3096,10 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .whisper-conv-nick {
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--fs-md);
 }
 .whisper-conv-text {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -3016,9 +3116,9 @@ input[type='number']::-webkit-inner-spin-button {
   user-select: text;
 }
 .whisper-msg {
-  font-size: 12px;
+  font-size: var(--fs-md);
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--surface-3);
   align-self: flex-start;
   max-width: 90%;
@@ -3027,10 +3127,10 @@ input[type='number']::-webkit-inner-spin-button {
 .whisper-msg.out {
   align-self: flex-end;
   background: var(--accent-strong);
-  color: #fff;
+  color: var(--accent-text);
 }
 .whisper-msg .whisper-ts {
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   opacity: 0.6;
 }
 .whisper-input {
@@ -3105,7 +3205,7 @@ input[type='number']::-webkit-inner-spin-button {
   padding: 12px 14px;
   background: var(--surface-3);
   border: 1px solid var(--accent-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   z-index: 200;
   animation: toast-in 0.15s ease;
@@ -3139,7 +3239,7 @@ input[type='number']::-webkit-inner-spin-button {
   border: 1px solid var(--border);
   border-left: 3px solid var(--success);
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   animation: toast-in 0.15s ease;
   max-width: 340px;
@@ -3169,8 +3269,8 @@ input[type='number']::-webkit-inner-spin-button {
   padding: 8px 10px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accent, #9147ff);
-  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   overflow: hidden;
 }
@@ -3182,20 +3282,20 @@ input[type='number']::-webkit-inner-spin-button {
   width: 120px;
   max-height: 68px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   flex: 0 0 auto;
 }
 .lp-body {
   min-width: 0;
 }
 .lp-site {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
   margin-bottom: 2px;
 }
 .lp-title {
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-lg);
   line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -3203,7 +3303,7 @@ input[type='number']::-webkit-inner-spin-button {
   overflow: hidden;
 }
 .lp-desc {
-  font-size: 12px;
+  font-size: var(--fs-md);
   color: var(--text-faint);
   margin-top: 2px;
   display: -webkit-box;
@@ -3215,7 +3315,7 @@ input[type='number']::-webkit-inner-spin-button {
   display: block;
   max-width: 320px;
   max-height: 180px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin: 4px 0 2px;
   cursor: pointer;
 }
@@ -3224,9 +3324,9 @@ input[type='number']::-webkit-inner-spin-button {
 .streak-chip {
   align-self: center;
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: var(--fs-md);
   padding: 3px 7px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-faint);
@@ -3241,8 +3341,8 @@ input[type='number']::-webkit-inner-spin-button {
   opacity: 0.65;
 }
 .streak-chip.claimed {
-  color: #4ade80;
-  border-color: rgba(74, 222, 128, 0.45);
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
 }
 
 /* overlay import/export row */
@@ -3266,7 +3366,7 @@ input[type='number']::-webkit-inner-spin-button {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 15px;
+  font-size: var(--fs-2xl);
   color: var(--text-faint);
 }
 
@@ -3274,14 +3374,14 @@ input[type='number']::-webkit-inner-spin-button {
 /* the tint itself is a normal highlight rule ("Спільний чат" category) so it lives in the
    same list as every other user highlight; this only keeps the edge marker */
 .msg.shared-msg {
-  box-shadow: inset 2px 0 0 rgba(145, 71, 255, 0.45);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .shared-src-tag {
   display: inline-block;
   margin-left: 6px;
   padding: 0 6px;
-  border-radius: 8px;
-  background: rgba(145, 71, 255, 0.18);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--text-muted);
   font-size: 0.78em;
   vertical-align: middle;
@@ -3296,7 +3396,7 @@ input[type='number']::-webkit-inner-spin-button {
 .shared-src-tag .shared-src-av {
   width: 1.1em;
   height: 1.1em;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   vertical-align: -0.2em;
   margin-right: 2px;
 }
@@ -3337,8 +3437,8 @@ input[type='number']::-webkit-inner-spin-button {
 .oe-pv-zoom button {
   min-width: 30px;
   padding: 2px 8px;
-  font-size: 12px;
-  background: rgba(20, 20, 26, 0.85);
+  font-size: var(--fs-md);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
   border: 1px solid var(--border);
 }
 
@@ -3352,7 +3452,7 @@ input[type='number']::-webkit-inner-spin-button {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 12px;
+  font-size: var(--fs-md);
   color: var(--text-muted);
 }
 .oe-user-badge {
@@ -3365,7 +3465,7 @@ input[type='number']::-webkit-inner-spin-button {
   width: 22px;
   height: 22px;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .oe-user-badge input {
   flex: 1;
@@ -3377,8 +3477,8 @@ input[type='number']::-webkit-inner-spin-button {
   padding-right: 44px;
 }
 .char-counter {
-  background: var(--surface-1, rgba(14, 14, 16, 0.8));
-  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  border-radius: var(--radius-sm);
   padding: 0 3px;
 }
 
@@ -3404,14 +3504,15 @@ input[type='number']::-webkit-inner-spin-button {
   position: absolute;
   z-index: 4;
   background: var(--accent-strong);
+  /* NOT a token: drawn over the user's own overlay content, which can be any colour */
   border: 1px solid #fff;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 /* corners: small squares */
 .oe-pv-handle.h-se, .oe-pv-handle.h-nw, .oe-pv-handle.h-ne, .oe-pv-handle.h-sw {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 .oe-pv-handle.h-se { right: -6px; bottom: -6px; }
 .oe-pv-handle.h-nw { left: -6px; top: -6px; }
@@ -3423,7 +3524,7 @@ input[type='number']::-webkit-inner-spin-button {
 .oe-pv-handle.h-s { bottom: -4px; left: 12px; right: 12px; height: 8px; }
 .oe-pv-handle.h-n { top: -4px; left: 12px; right: 12px; height: 8px; }
 .oe-pv-handle.h-e, .oe-pv-handle.h-w, .oe-pv-handle.h-s, .oe-pv-handle.h-n {
-  background: rgba(145, 71, 255, 0.55);
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
   border: none;
 }
 .oe-canvas-ctl {
@@ -3486,7 +3587,7 @@ input[type='number']::-webkit-inner-spin-button {
   max-width: 100%;
   margin-left: 6px;
   padding: 0 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--surface-3);
   color: var(--text-dim);
   font-size: 0.85em;
@@ -3540,11 +3641,11 @@ input[type='number']::-webkit-inner-spin-button {
 .emote-cell.zero-width {
   outline: 1px dashed var(--accent);
   outline-offset: -2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .emote-cell.is-combo {
   box-shadow: inset 0 0 0 1px var(--accent-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .emote-cell-stack {
   position: relative;
@@ -3575,12 +3676,12 @@ input[type='number']::-webkit-inner-spin-button {
 .emote-wrap.is-combo {
   outline: 1px solid var(--accent-strong);
   outline-offset: 1px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .emote-wrap.is-layer {
   outline: 1px dashed var(--accent);
   outline-offset: 1px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 /* the codes behind a rendered emote, so a copied selection contains real text with real
    spaces instead of a run of glued-together alt attributes */
@@ -3609,21 +3710,21 @@ input[type='number']::-webkit-inner-spin-button {
   padding: 0;
   background: none;
   border: none;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-lg);
   line-height: 0;
 }
 .emote-hover-preview.wide img {
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 /* text-instead-of-image badge, as listed in the overlay editor */
 .oe-badge-text-chip {
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--surface-3);
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--fs-md);
   white-space: nowrap;
 }
 
@@ -3651,9 +3752,10 @@ input[type='number']::-webkit-inner-spin-button {
   position: absolute;
   right: 1px;
   bottom: 0;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   line-height: 1;
   pointer-events: none;
+  /* NOT a token: sits on top of arbitrary emote art */
   text-shadow: 0 1px 2px #000;
 }
 /* a wide emote spans two grid columns so it isn't squeezed into a square */
@@ -3671,7 +3773,7 @@ input[type='number']::-webkit-inner-spin-button {
 .picker-preview-owner {
   display: flex;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 .picker-preview-owner a {
@@ -3732,10 +3834,10 @@ input[type='number']::-webkit-inner-spin-button {
   margin-left: 10px;
   padding: 1px 7px;
   border: 1px solid currentColor;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   color: inherit;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   opacity: 0.75;
   cursor: pointer;
 }
@@ -3747,7 +3849,7 @@ input[type='number']::-webkit-inner-spin-button {
 .oe-decor.previewing {
   outline: 1px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 
@@ -3764,10 +3866,10 @@ input[type='number']::-webkit-inner-spin-button {
   margin: 0;
   padding: 2px 9px;
   border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   color: inherit;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   opacity: 0.8;
   cursor: pointer;
@@ -3787,10 +3889,10 @@ input[type='number']::-webkit-inner-spin-button {
   justify-content: center;
   padding: 0;
   border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: inherit;
-  font-size: 12px;
+  font-size: var(--fs-md);
   line-height: 1;
   opacity: 0.8;
   cursor: pointer;
@@ -3812,7 +3914,7 @@ input[type='number']::-webkit-inner-spin-button {
   gap: 8px;
   margin: 10px 0 6px;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }

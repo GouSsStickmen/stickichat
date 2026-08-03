@@ -41,6 +41,7 @@ import BtnIcon from '../BtnIcon'
 import EmotePicker, { PinButton } from '../EmotePicker'
 import { CHAT_FONT_MAX } from '../../App'
 import { TranslitIcon } from '../Icons'
+import { THEMES, getTheme } from '../../lib/themes'
 
 type Section =
   | 'accounts'
@@ -574,12 +575,37 @@ function AppearanceSection(): React.JSX.Element {
   return (
     <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
-      <div className="set-row">
+      <div className="set-row set-row-block">
         <label>{t('set.theme')}</label>
-        <select value={settings.theme} onChange={(e) => set({ theme: e.target.value as 'dark' | 'light' })}>
-          <option value="dark">{t('set.theme.dark')}</option>
-          <option value="light">{t('set.theme.light')}</option>
-        </select>
+        {/* swatches rather than a dropdown: a theme is a set of colours, and picking one by
+            name alone means switching back and forth to find out what it looks like */}
+        <div className="theme-grid">
+          {THEMES.map((th) => {
+            const tk = { ...getTheme('dark').tokens, ...th.tokens }
+            return (
+              <button
+                key={th.id}
+                className={`theme-card ${settings.theme === th.id ? 'active' : ''}`}
+                onClick={() => set({ theme: th.id })}
+                style={{ background: tk['--bg'], borderColor: tk['--border'] }}
+              >
+                <span className="theme-dots">
+                  <i style={{ background: tk['--surface-2'] }} />
+                  <i style={{ background: tk['--accent'] }} />
+                  <i style={{ background: tk['--text'] }} />
+                </span>
+                {/* only "dark"/"light" are words; the rest are proper names and stay as-is */}
+                <span className="theme-name" style={{ color: tk['--text'] }}>
+                  {th.id === 'dark'
+                    ? t('set.theme.dark')
+                    : th.id === 'light'
+                      ? t('set.theme.light')
+                      : th.name}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
