@@ -29,11 +29,17 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
   const start = { x: opts.e.clientX, y: opts.e.clientY }
   const threshold = opts.threshold ?? 5
   let active = false
-  let current = opts.index
   let lastSwapAt: { x: number; y: number } | null = null
 
   const items = (): HTMLElement[] =>
     Array.from(opts.container.querySelectorAll<HTMLElement>(opts.itemSelector))
+
+  // The element being dragged, not its index. React re-renders asynchronously, so after a
+  // swap the next pointermove could still see the OLD dom order while a locally-tracked index
+  // had already moved on — the two disagreed and the drag started shuffling rows it was never
+  // touching. The node itself survives reordering (React moves it, keyed by id), so asking
+  // the dom where it is right now can't desync.
+  let dragEl: HTMLElement | null = null
 
   const onMove = (ev: PointerEvent): void => {
     const dx = ev.clientX - start.x
@@ -41,41 +47,28 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
     if (!active) {
       if (Math.hypot(dx, dy) < threshold) return
       active = true
+      dragEl = items()[opts.index] ?? null
       opts.onDragState(true)
       document.getSelection()?.removeAllRanges()
     }
     const list = items()
-    if (!list.length) return
-    // Nearest centre, not "inside the rect". Testing containment meant the drag simply stopped
-    // responding whenever the pointer sat in the gap BETWEEN two items or wandered outside the
-    // list — and cards with margins are mostly gap. Distance to a centre is always defined, so
-    // the drag can't get lost, and for a vertical list only the y axis is meaningful.
-    let target = 0
-    let best = Infinity
-    list.forEach((el, i) => {
+    if (!dragEl) return
+    const current = list.indexOf(dragEl)
+    if (current === -1) return
+    const target = list.findIndex((el) => {
       const r = el.getBoundingClientRect()
-      const d =
-        opts.axis === 'y'
-          ? Math.abs(ev.clientY - (r.top + r.height / 2))
-          : opts.axis === 'x'
-            ? Math.abs(ev.clientX - (r.left + r.width / 2))
-            : Math.hypot(ev.clientX - (r.left + r.width / 2), ev.clientY - (r.top + r.height / 2))
-      if (d < best) {
-        best = d
-        target = i
-      }
+      return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom
     })
-    if (target === current) return
+    if (target === -1 || target === current) return
     // a swap reflows the whole list — if the pointer hasn't moved since the last one,
     // whatever is under it now is a layout artifact, not user intent (kills A↔B loops
     // when tabs of different widths shuffle between wrapped rows)
     if (lastSwapAt && Math.hypot(ev.clientX - lastSwapAt.x, ev.clientY - lastSwapAt.y) < 8) return
     const r = list[target].getBoundingClientRect()
-    const curRect = list[current]?.getBoundingClientRect()
+    const curRect = list[current].getBoundingClientRect()
     // in a wrapping horizontal list the target may sit on ANOTHER row — being inside it
     // is unambiguous there, and comparing x-middles across rows is meaningless
-    const sameRow =
-      opts.axis !== 'x' || !curRect || Math.abs(r.top - curRect.top) < r.height / 2
+    const sameRow = opts.axis !== 'x' || Math.abs(r.top - curRect.top) < r.height / 2
     // only reorder after the pointer crosses the target's middle — no boundary flicker
     const pastMiddle =
       opts.axis === 'y'
@@ -85,7 +78,6 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
       !sameRow || (current < target && pastMiddle) || (current > target && !pastMiddle)
     if (!shouldMove) return
     opts.onMove(current, target)
-    current = target
     lastSwapAt = { x: ev.clientX, y: ev.clientY }
   }
 
