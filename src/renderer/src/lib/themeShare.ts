@@ -65,7 +65,11 @@ export function parseThemeImport(text: string, existing: CustomTheme[]): CustomT
       id: freshId(pool),
       name: freshName(String(src.name || 'Theme').slice(0, 40), names),
       dark,
-      tokens: deriveTokens(tokens, dark)
+      tokens: deriveTokens(tokens, dark),
+      // shape travels with the theme; an older file simply has neither and gets the defaults
+      radius: typeof src.radius === 'number' ? Math.min(200, Math.max(0, src.radius)) : undefined,
+      tabColors:
+        src.tabColors && typeof src.tabColors === 'object' ? { ...src.tabColors } : undefined
     }
     pool.push(theme)
     names.add(theme.name)

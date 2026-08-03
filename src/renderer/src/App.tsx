@@ -25,7 +25,7 @@ import ReauthBanner from './components/ReauthBanner'
 import { buildChannelSeed, injectChannelSeed } from './lib/detachSeed'
 import { hexToRgba } from './lib/tokenize'
 import { hotkeyFor, matchHotkey } from './lib/hotkeys'
-import { applyTheme, applyRadius } from './lib/themes'
+import { applyTheme } from './lib/themes'
 import { useT } from './i18n'
 import { PinIcon } from './components/Icons'
 
@@ -149,21 +149,6 @@ export default function App(): React.JSX.Element | null {
     const root = document.documentElement
     // the theme goes on first; everything below is the user's own overrides and must win
     applyTheme(settings.theme)
-    applyRadius(settings.uiRadius ?? 100)
-    // tabs: only written while the override is on, so by default a theme still owns them
-    const tc = settings.tabColors
-    for (const [prop, value] of [
-      ['--tab-bg', tc?.bg],
-      ['--tab-text', tc?.text],
-      ['--tab-border', tc?.border],
-      ['--tab-hover-bg', tc?.hoverBg],
-      ['--tab-active-bg', tc?.activeBg],
-      ['--tab-active-text', tc?.activeText],
-      ['--tab-active-border', tc?.activeBorder]
-    ] as [string, string | undefined][]) {
-      if (settings.tabColorsCustom && value) root.style.setProperty(prop, value)
-      else root.style.removeProperty(prop)
-    }
     root.style.setProperty('--font-size', `${settings.fontSize}px`)
     root.style.setProperty('--emote-scale', String(settings.emoteScale))
     root.style.setProperty('--msg-spacing', `${settings.messageSpacing}px`)
@@ -180,9 +165,6 @@ export default function App(): React.JSX.Element | null {
     }
   }, [
     settings.theme,
-    settings.uiRadius,
-    settings.tabColorsCustom,
-    settings.tabColors,
     settings.fontSize,
     settings.emoteScale,
     settings.messageSpacing,

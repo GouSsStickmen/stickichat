@@ -11,6 +11,7 @@
  */
 
 import { useSettingsStore } from '../store/settings'
+import type { TabColors } from '../types'
 
 export interface Theme {
   id: string
@@ -22,6 +23,14 @@ export interface Theme {
    */
   dark: boolean
   tokens: Record<string, string>
+  /**
+   * Corner roundness as a percentage of the design scale. Part of the THEME, not a global
+   * setting: roundness is as much a theme's identity as its palette, and a global one would
+   * mean a soft theme and a sharp theme could never coexist.
+   */
+  radius?: number
+  /** the tab strip's own palette; anything omitted falls back to the theme's surfaces */
+  tabColors?: Partial<TabColors>
 }
 
 /** every token a theme may set; also the fallback layer for partial themes */
@@ -318,7 +327,17 @@ export function deriveTokens(tokens: Record<string, string>, dark: boolean): Rec
 /** built-ins plus the user's own, which behave identically everywhere */
 export function allThemes(): Theme[] {
   const custom = useSettingsStore.getState().settings.customThemes ?? []
-  return [...THEMES, ...custom.map((c) => ({ id: c.id, name: c.name, dark: c.dark, tokens: c.tokens }))]
+  return [
+    ...THEMES,
+    ...custom.map((c) => ({
+      id: c.id,
+      name: c.name,
+      dark: c.dark,
+      tokens: c.tokens,
+      radius: c.radius,
+      tabColors: c.tabColors
+    }))
+  ]
 }
 
 export function getTheme(id: string): Theme {
@@ -331,10 +350,21 @@ export function isDarkTheme(id: string): boolean {
 }
 
 /** paint an arbitrary token set onto :root — used for the editor's live preview */
-export function applyTokens(tokens: Record<string, string>, dark: boolean): void {
+export function applyTokens(
+  tokens: Record<string, string>,
+  dark: boolean,
+  radius = 100,
+  tabColors?: Partial<TabColors>
+): void {
   const root = document.documentElement
   for (const [name, value] of Object.entries({ ...DARK, ...tokens })) {
     root.style.setProperty(name, value)
+  }
+  applyRadius(radius)
+  for (const [key, prop] of TAB_PROPS) {
+    const value = tabColors?.[key]
+    if (value) root.style.setProperty(prop, value)
+    else root.style.removeProperty(prop)
   }
   root.dataset.theme = dark ? 'dark' : 'light'
 }
@@ -344,11 +374,30 @@ export function applyTokens(tokens: Record<string, string>, dark: boolean): void
  * is always set to something — otherwise switching from a rich theme to a sparse one would
  * leave the previous theme's values behind.
  */
+/** css custom property per TabColors field */
+const TAB_PROPS: [keyof TabColors, string][] = [
+  ['bg', '--tab-bg'],
+  ['text', '--tab-text'],
+  ['border', '--tab-border'],
+  ['hoverBg', '--tab-hover-bg'],
+  ['activeBg', '--tab-active-bg'],
+  ['activeText', '--tab-active-text'],
+  ['activeBorder', '--tab-active-border']
+]
+
 export function applyTheme(id: string): void {
   const theme = getTheme(id)
   const root = document.documentElement
   const tokens = { ...DARK, ...theme.tokens }
   for (const [name, value] of Object.entries(tokens)) root.style.setProperty(name, value)
+  // shape and tabs travel with the theme; anything the theme doesn't state is cleared so the
+  // previous theme's values can't linger
+  applyRadius(theme.radius ?? 100)
+  for (const [key, prop] of TAB_PROPS) {
+    const value = theme.tabColors?.[key]
+    if (value) root.style.setProperty(prop, value)
+    else root.style.removeProperty(prop)
+  }
   // some CSS still keys off light/dark, and so do native controls (scrollbars, form widgets)
   root.dataset.theme = theme.dark ? 'dark' : 'light'
   // NOTE: deliberately no `color-scheme` here. Declaring one makes the root canvas opaque,

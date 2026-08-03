@@ -783,10 +783,12 @@ function ThemeEditor({
   const [name, setName] = useState(draft.name)
   const [dark, setDark] = useState(draft.dark)
   const [tokens, setTokens] = useState<Record<string, string>>(draft.tokens)
+  const [radius, setRadius] = useState(draft.radius ?? 100)
+  const [tabColors, setTabColors] = useState<Partial<TabColors>>(draft.tabColors ?? {})
 
   useEffect(() => {
-    applyTokens(deriveTokens(tokens, dark), dark)
-  }, [tokens, dark])
+    applyTokens(deriveTokens(tokens, dark), dark, radius, tabColors)
+  }, [tokens, dark, radius, tabColors])
 
   const ratio = contrast(tokens['--text'] ?? '#ffffff', tokens['--bg'] ?? '#000000')
   const faint = contrast(tokens['--text-faint'] ?? '#888888', tokens['--bg'] ?? '#000000')
@@ -837,6 +839,44 @@ ${tk}`}>{t(TOKEN_LABELS[tk])}</span>
           </div>
         </div>
       ))}
+      <div className="theme-token-group">
+        <div className="set-group-title">{t('theme.group.shape')}</div>
+        <div className="set-row">
+          <label className="has-hint" title={t('hint.uiRadius')}>{t('set.uiRadius')}</label>
+          {/* one slider drives the whole radius scale — a control that reached only some of
+              the corners would look worse than not having one */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="range"
+              min={0}
+              max={200}
+              step={10}
+              value={radius}
+              onChange={(e) => setRadius(Number(e.target.value))}
+              style={{ width: 150 }}
+            />
+            <span className="hint" style={{ minWidth: 38, textAlign: 'right' }}>{radius}%</span>
+          </div>
+        </div>
+      </div>
+      <div className="theme-token-group">
+        <div className="set-group-title">{t('set.group.tabs')}</div>
+        <p className="hint" style={{ color: 'var(--text-faint)', margin: '0 0 6px' }}>
+          {t('hint.tabColors')}
+        </p>
+        <div className="theme-token-grid">
+          {TAB_COLOR_FIELDS.map(([key, label, def]) => (
+            <div key={String(key)} className="theme-token">
+              <ColorField
+                value={tabColors[key] ?? tokens[def] ?? DEFAULT_TOKENS[def]}
+                defaultValue={tokens[def] ?? DEFAULT_TOKENS[def]}
+                onChange={(v) => setTabColors((prev) => ({ ...prev, [key]: v }))}
+              />
+              <span>{t(label)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
       <div className="theme-editor-foot">
         <button
           className="primary"
@@ -845,14 +885,23 @@ ${tk}`}>{t(TOKEN_LABELS[tk])}</span>
               id: draft.id,
               name: name.trim() || draft.name,
               dark,
-              tokens: deriveTokens(tokens, dark)
+              tokens: deriveTokens(tokens, dark),
+              radius,
+              tabColors
             })
           }
         >
           {t('theme.save')}
         </button>
         <button onClick={onCancel}>{t('theme.cancel')}</button>
-        <button className="ghost" onClick={() => setTokens({ ...DEFAULT_TOKENS })}>
+        <button
+          className="ghost"
+          onClick={() => {
+            setTokens({ ...DEFAULT_TOKENS })
+            setRadius(100)
+            setTabColors({})
+          }}
+        >
           {t('theme.reset')}
         </button>
       </div>
@@ -860,16 +909,17 @@ ${tk}`}>{t(TOKEN_LABELS[tk])}</span>
   )
 }
 
-/** the tab strip's editable colours: settings key, label, and the dark-theme default the
- *  reset arrow returns to */
+/** tab colour field -> label, and the THEME token it falls back to when the theme says
+ *  nothing about tabs. Seeding from the theme's own surfaces is why an untouched theme's
+ *  tabs look right before the user has picked anything. */
 const TAB_COLOR_FIELDS: [keyof TabColors, TranslationKey, string][] = [
-  ['bg', 'tab.color.bg', '#18181b'],
-  ['text', 'tab.color.text', '#adadb8'],
-  ['border', 'tab.color.border', '#303036'],
-  ['hoverBg', 'tab.color.hoverBg', '#26262c'],
-  ['activeBg', 'tab.color.activeBg', '#1f1f23'],
-  ['activeText', 'tab.color.activeText', '#efeff1'],
-  ['activeBorder', 'tab.color.activeBorder', '#303036']
+  ['bg', 'tab.color.bg', '--surface'],
+  ['text', 'tab.color.text', '--text-muted'],
+  ['border', 'tab.color.border', '--border'],
+  ['hoverBg', 'tab.color.hoverBg', '--surface-3'],
+  ['activeBg', 'tab.color.activeBg', '--surface-2'],
+  ['activeText', 'tab.color.activeText', '--text'],
+  ['activeBorder', 'tab.color.activeBorder', '--border']
 ]
 
 /** token -> i18n key. Typed lookups rather than template strings so a missing label is a
@@ -935,57 +985,6 @@ function AppearanceSection(): React.JSX.Element {
     <Framed>
       <div className="set-group-title">{t('set.group.general')}</div>
       <ThemeSection />
-      <div className="set-group-title">{t('set.group.tabs')}</div>
-      <div className="set-block">
-        <Toggle
-          label={t('set.tabColorsCustom')}
-          hint={t('hint.tabColorsCustom')}
-          value={settings.tabColorsCustom}
-          onChange={(v) => set({ tabColorsCustom: v })}
-        />
-        {settings.tabColorsCustom && (
-          <div className="set-sub">
-            <div className="theme-token-grid">
-              {TAB_COLOR_FIELDS.map(([key, label, def]) => (
-                <div key={String(key)} className="theme-token">
-                  <ColorField
-                    value={settings.tabColors?.[key] ?? def}
-                    defaultValue={def}
-                    onChange={(v) =>
-                      set({
-                        tabColors: {
-                          ...useSettingsStore.getState().settings.tabColors,
-                          [key]: v
-                        }
-                      })
-                    }
-                  />
-                  <span>{t(label)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="set-row">
-        <label className="has-hint" title={t('hint.uiRadius')}>{t('set.uiRadius')}</label>
-        {/* one slider drives the whole radius scale — a control that only reached some of the
-            corners would look worse than having none */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="range"
-            min={0}
-            max={200}
-            step={10}
-            value={settings.uiRadius ?? 100}
-            onChange={(e) => set({ uiRadius: Number(e.target.value) })}
-            style={{ width: 150 }}
-          />
-          <span className="hint" style={{ minWidth: 38, textAlign: 'right' }}>
-            {settings.uiRadius ?? 100}%
-          </span>
-        </div>
-      </div>
       <div className="set-row">
         <label>{t('set.fontFamily')}</label>
         <FontPicker value={settings.fontFamily} onChange={(v) => set({ fontFamily: v })} />
@@ -2040,7 +2039,10 @@ const BADGE_OPTIONS: { id: string; labelKey: string }[] = [
   { id: 'premium', labelKey: 'badge.premium' }
 ]
 
-const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat']
+/* 'raider' is deliberately absent: the category never actually matched anything, so offering
+   it was offering a rule that silently does nothing. The kind stays in the type so old saved
+   rules still parse — they're dropped on load below. */
+const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat']
 
 function HighlightsSection(): React.JSX.Element {
   const t = useT()
@@ -2058,6 +2060,13 @@ function HighlightsSection(): React.JSX.Element {
   }
 
   /** rules are evaluated top-down and the first match wins, so their order IS the priority */
+  // one-time cleanup: a saved 'raider' rule can only sit in the list looking functional
+  useEffect(() => {
+    const live = useSettingsStore.getState().highlightRules
+    if (live.some((r) => r.kind === 'raider')) setRules(live.filter((r) => r.kind !== 'raider'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const reorderRules = (from: number, to: number): void => {
     const next = [...useSettingsStore.getState().highlightRules]
     if (from < 0 || to < 0 || from >= next.length || to >= next.length) return
@@ -2245,17 +2254,6 @@ function HighlightsSection(): React.JSX.Element {
       >
         + {t('hl.add')}
       </button>
-      <div className="set-row" style={{ marginTop: 10 }} title={t('hint.raiderMinutes')}>
-        <label className="has-hint">{t('set.raiderMinutes')}</label>
-        <input
-          type="number"
-          min={0}
-          max={180}
-          style={{ width: 70 }}
-          value={settings.raiderHighlightMinutes}
-          onChange={(e) => set({ raiderHighlightMinutes: parseInt(e.target.value, 10) || 0 })}
-        />
-      </div>
 
       <div className="set-group-title" style={{ marginTop: 24 }}>
         {t('muted.title')}

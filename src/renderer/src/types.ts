@@ -882,6 +882,10 @@ export interface CustomTheme {
   name: string
   dark: boolean
   tokens: Record<string, string>
+  /** corner roundness, percent of the design scale — a theme's shape, not a global setting */
+  radius?: number
+  /** the tab strip's own palette; omitted fields fall back to the theme's surfaces */
+  tabColors?: Partial<TabColors>
 }
 
 /** the tab strip's own palette — see the --tab-* custom properties in global.css */
@@ -901,11 +905,6 @@ export interface Settings {
   theme: string
   /** themes the user built or imported; they live alongside the built-ins everywhere */
   customThemes: CustomTheme[]
-  /** corner roundness as a percentage of the design scale: 0 = square, 100 = default */
-  uiRadius: number
-  /** tab colours override the theme when on; each empty value falls back to the theme */
-  tabColorsCustom: boolean
-  tabColors: TabColors
   fontSize: number // px
   emoteScale: number // 1 = 100%
   showTimestamps: boolean
@@ -1150,17 +1149,6 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'uk',
   theme: 'dark',
   customThemes: [],
-  uiRadius: 100,
-  tabColorsCustom: false,
-  tabColors: {
-    bg: '#18181b',
-    text: '#adadb8',
-    border: '#303036',
-    hoverBg: '#26262c',
-    activeBg: '#1f1f23',
-    activeText: '#efeff1',
-    activeBorder: '#303036'
-  },
   fontSize: 13,
   emoteScale: 1,
   showTimestamps: true,

@@ -234,21 +234,28 @@ select:focus {
   margin-left: 8px;
   flex-shrink: 0;
 }
+/* Tabs read their OWN tokens rather than the generic surface ones, so a theme can recolour
+   them independently. Each falls back to what the theme would have given, which is why a
+   theme that says nothing about tabs looks exactly as it did. */
 .tabbar .tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: var(--surface);
+  background: var(--tab-bg, var(--surface));
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  color: var(--text-muted);
+  color: var(--tab-text, var(--text-muted));
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid var(--tab-border, transparent);
   border-bottom: none;
   max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
   user-select: none;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.tabbar .tab:hover {
+  background: var(--tab-hover-bg, var(--surface-3));
 }
 /* the moving tab itself is the drag indicator (native ghost is suppressed) */
 .tabbar .tab.dragging {
@@ -257,9 +264,9 @@ select:focus {
   color: var(--text);
 }
 .tabbar .tab.active {
-  background: var(--surface-2);
-  color: var(--text);
-  border-color: var(--border);
+  background: var(--tab-active-bg, var(--surface-2));
+  color: var(--tab-active-text, var(--text));
+  border-color: var(--tab-active-border, var(--border));
 }
 .tabbar .tab .close {
   opacity: 0.4;
