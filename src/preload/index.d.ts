@@ -19,6 +19,7 @@ export interface StickiApi {
   onEmotePicked(cb: (payload: string) => void): () => void
   setAlwaysOnTop(flag: boolean): Promise<void>
   setImageAnimation(enabled: boolean): Promise<void>
+  setZoom(factor: number): Promise<void>
   diagReport(): Promise<string>
   diagTail(lines?: number): Promise<string>
   diagOpenFolder(): Promise<string>

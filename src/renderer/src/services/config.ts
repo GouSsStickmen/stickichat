@@ -132,7 +132,7 @@ export const CONFIG_PARTS: ConfigPart[] = [
 /** settings keys that belong to each part; anything unlisted rides along with 'other' */
 const PART_KEYS: Record<Exclude<ConfigPart, 'highlightRules' | 'modButtons' | 'favoriteEmotes'>, (keyof Settings)[]> = {
   appearance: [
-    'theme', 'customThemes', 'fontFamily', 'fontSize', 'uiScale', 'emoteScale', 'badgeSize',
+    'theme', 'customThemes', 'fontFamily', 'fontSize', 'windowScales', 'emoteScale', 'badgeSize',
     'messageSpacing', 'lineSpacing', 'savedColors', 'recentColors'
   ],
   chat: [

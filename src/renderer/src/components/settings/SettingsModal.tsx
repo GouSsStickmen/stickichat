@@ -1015,12 +1015,19 @@ function AppearanceSection(): React.JSX.Element {
             min={UI_SCALE_MIN}
             max={UI_SCALE_MAX}
             step={10}
-            value={settings.uiScale ?? 100}
-            onChange={(e) => set({ uiScale: clampUiScale(Number(e.target.value)) })}
+            value={settings.windowScales?.settings ?? 100}
+            onChange={(e) =>
+              set({
+                windowScales: {
+                  ...useSettingsStore.getState().settings.windowScales,
+                  settings: clampUiScale(Number(e.target.value))
+                }
+              })
+            }
             style={{ width: 150 }}
           />
           <span className="hint" style={{ minWidth: 38, textAlign: 'right' }}>
-            {settings.uiScale ?? 100}%
+            {settings.windowScales?.settings ?? 100}%
           </span>
         </div>
       </div>

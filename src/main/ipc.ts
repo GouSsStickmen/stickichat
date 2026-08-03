@@ -198,6 +198,19 @@ export function registerIpc(): void {
    * header, unlike 7TV and FFZ. 'noAnimation' leaves the first frame on screen, so chat stays
    * readable while it costs nothing to paint.
    */
+  /**
+   * Real page zoom for THIS window.
+   *
+   * CSS `zoom` was the wrong tool: it scales the contents but leaves viewport units resolving
+   * against the unscaled window, so the panel laid itself out taller than the window it lives
+   * in. setZoomFactor is the browser's own page zoom — the viewport scales with it, so the
+   * content still ends exactly at the window edges. It is also per-webContents, which is what
+   * makes each window's scale independent.
+   */
+  ipcMain.handle('window:setZoom', (e, factor: number) => {
+    e.sender.setZoomFactor(Math.min(1.8, Math.max(0.7, factor)))
+  })
+
   /** the whole diagnostics block as one pasteable string */
   ipcMain.handle('diag:report', () => buildReport())
   /** just the tail, for showing in the app */

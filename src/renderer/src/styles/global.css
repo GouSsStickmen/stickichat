@@ -1,9 +1,15 @@
-/* Unicode 16 emoji: the Windows emoji font shows tofu boxes in raw-text surfaces
-   (the input!). This COLR font covers ONLY that block and downloads lazily the first
-   time such a char is actually rendered. */
+/*
+ * Unicode 16 emoji: the Windows emoji font shows tofu boxes in raw-text surfaces (the input!),
+ * so this COLR font covers that block and nothing else.
+ *
+ * It is BUNDLED, not fetched. It used to be pulled from a CDN and had therefore never once
+ * loaded: the app's own CSP declares no `font-src`, so fonts fell back to `default-src 'self'`
+ * and Chromium refused every request. Shipping it locally fixes that without loosening the
+ * policy, and works offline. Subset from Noto-COLRv1 to U+1FA80..U+1FAFF: 5 MB -> 97 KB.
+ */
 @font-face {
   font-family: 'StickiEmoji';
-  src: url('https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/Noto-COLRv1.ttf') format('truetype');
+  src: url('../assets/noto-emoji-ext.woff2') format('woff2');
   unicode-range: U+1FA80-1FAFF;
   font-display: swap;
 }
@@ -1380,11 +1386,6 @@ select:focus {
      until they overflowed while the group titles, on fixed tokens, stayed put.
      --ui-scale is the separate, bounded knob for making this chrome bigger on purpose. */
   font-size: var(--fs-lg);
-  zoom: var(--ui-scale, 1);
-}
-/* …but not when it is already inside a scaled window, or the two would multiply */
-.ui-scaled .modal {
-  zoom: 1;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -2925,26 +2926,6 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .chatter-row:hover {
   background: var(--surface-3);
-}
-
-/* every utility window scales with the same knob; the main chat window keeps its own
-   chat-font and tab-scale controls */
-.app.ui-scaled {
-  zoom: var(--ui-scale, 1);
-  /* `zoom` scales the contents, but a 100vh INSIDE still resolves against the unscaled
-     viewport — so at 130% the panel came out a third taller than its own window and the top
-     was cut off. Dividing the root by the same factor makes the painted result exactly one
-     window again, whatever the scale. */
-  width: calc(100vw / var(--ui-scale, 1));
-  height: calc(100vh / var(--ui-scale, 1));
-  overflow: hidden;
-}
-/* inside a scaled root the panels fill the root, not the viewport */
-.ui-scaled .standalone-settings,
-.ui-scaled .usercard.usercard-standalone,
-.ui-scaled .emote-picker-standalone,
-.ui-scaled .whisper-panel-standalone {
-  height: 100%;
 }
 
 /* ---------- Icon glyphs ---------- */

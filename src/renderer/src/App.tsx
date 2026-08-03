@@ -39,6 +39,9 @@ export const UI_SCALE_MAX = 180
 export const clampUiScale = (v: number): number =>
   Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, Math.round(v / 10) * 10))
 
+/** windows that carry no chat of their own, so Ctrl+wheel is free to mean "scale me" */
+export const SCALABLE_WINDOWS = new Set(['settings', 'usercard', 'whispers', 'highlights', 'emotepicker'])
+
 interface DetachedPayload {
   name?: string
   panes: { channel: string; accountId: string | null }[]
@@ -153,34 +156,48 @@ export default function App(): React.JSX.Element | null {
   }, [])
 
   /**
-   * Ctrl+wheel scales the settings and utility windows. The chat's own Ctrl+wheel drives the
-   * message font; these windows have no chat, so the same gesture is free here and is what
-   * anyone will reach for first. Bounded, because past either end the layout stops working.
+   * Per-window interface scale. Ctrl+wheel is the gesture everyone reaches for; in the chat
+   * window it already means "message font size", so it only means "scale this window" in the
+   * windows that have no chat of their own.
    */
+  const windowKind = special?.kind ?? ''
+  const scalable = SCALABLE_WINDOWS.has(windowKind)
+  const winScale = settings.windowScales?.[windowKind]
+
   useEffect(() => {
-    const utility =
-      special?.kind === 'settings' ||
-      special?.kind === 'usercard' ||
-      special?.kind === 'whispers' ||
-      special?.kind === 'highlights' ||
-      special?.kind === 'emotepicker'
-    if (!utility) return
+    // Reset Chromium's own page zoom on every window, once. setZoomFactor looked like the
+    // right tool and is not: the zoom LEVEL is stored per ORIGIN, so zooming the settings
+    // window zoomed the chat window with it — every window here shares one origin.
+    void window.sticki.setZoom(1)
+  }, [])
+
+  useEffect(() => {
+    // `zoom` on the ROOT element instead. Unlike zoom on a child, this scales the layout
+    // viewport too, so `100vh` inside still means "this window" and the panels end exactly at
+    // its edges. And it is a DOM property, so it belongs to this window and nothing else.
+    document.documentElement.style.zoom = scalable ? String(clampUiScale(winScale ?? 100) / 100) : ''
+  }, [scalable, winScale])
+
+  useEffect(() => {
+    if (!scalable) return
     const onWheel = (e: WheelEvent): void => {
       if (!e.ctrlKey) return
       e.preventDefault()
-      const cur = useSettingsStore.getState().settings.uiScale ?? 100
-      useSettingsStore.getState().setSettings({ uiScale: clampUiScale(cur + (e.deltaY < 0 ? 10 : -10)) })
+      const st = useSettingsStore.getState()
+      const cur = st.settings.windowScales?.[windowKind] ?? 100
+      st.setSettings({
+        windowScales: { ...st.settings.windowScales, [windowKind]: clampUiScale(cur + (e.deltaY < 0 ? 10 : -10)) }
+      })
     }
     window.addEventListener('wheel', onWheel, { passive: false })
     return () => window.removeEventListener('wheel', onWheel)
-  }, [special])
+  }, [scalable, windowKind])
 
   useEffect(() => {
     const root = document.documentElement
     // the theme goes on first; everything below is the user's own overrides and must win
     applyTheme(settings.theme)
     root.style.setProperty('--font-size', `${settings.fontSize}px`)
-    root.style.setProperty('--ui-scale', String(clampUiScale(settings.uiScale) / 100))
     root.style.setProperty('--emote-scale', String(settings.emoteScale))
     root.style.setProperty('--msg-spacing', `${settings.messageSpacing}px`)
     root.style.setProperty('--line-spacing', `${settings.lineSpacing}px`)
@@ -197,7 +214,6 @@ export default function App(): React.JSX.Element | null {
   }, [
     settings.theme,
     settings.fontSize,
-    settings.uiScale,
     settings.emoteScale,
     settings.messageSpacing,
     settings.badgeSize,
@@ -419,7 +435,7 @@ export default function App(): React.JSX.Element | null {
 
   if (special?.kind === 'settings') {
     return (
-      <div className="app ui-scaled">
+      <div className="app">
         <SettingsModal standalone initialSection={special.section} />
         {addAccountOpen && <DeviceAuthModal onClose={() => useUiStore.getState().setAddAccountOpen(false)} />}
         <Toasts />

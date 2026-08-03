@@ -907,8 +907,11 @@ export interface Settings {
   customThemes: CustomTheme[]
   /** freeze animated emotes while this window isn't focused — the first frame stays visible */
   pauseEmotesUnfocused: boolean
-  /** interface scale for the settings and utility windows, percent (70..180) */
-  uiScale: number
+  /**
+   * Interface scale per utility window, keyed by window kind, percent (70..180). Per window
+   * on purpose: one shared number meant scaling the usercard also grew the settings window.
+   */
+  windowScales: Record<string, number>
   fontSize: number // px
   emoteScale: number // 1 = 100%
   showTimestamps: boolean
@@ -1154,7 +1157,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   customThemes: [],
   pauseEmotesUnfocused: false,
-  uiScale: 100,
+  windowScales: {},
   fontSize: 13,
   emoteScale: 1,
   showTimestamps: true,

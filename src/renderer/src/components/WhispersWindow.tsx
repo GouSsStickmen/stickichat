@@ -16,7 +16,7 @@ export default function WhispersWindow(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="app ui-scaled">
+    <div className="app">
       <WhisperPanel standalone onClose={() => window.close()} />
       <Toasts />
     </div>

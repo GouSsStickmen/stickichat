@@ -30,6 +30,7 @@ const api = {
   setAlwaysOnTop: (flag: boolean): Promise<void> => ipcRenderer.invoke('window:setAlwaysOnTop', flag),
   setImageAnimation: (enabled: boolean): Promise<void> =>
     ipcRenderer.invoke('window:setImageAnimation', enabled),
+  setZoom: (factor: number): Promise<void> => ipcRenderer.invoke('window:setZoom', factor),
   diagReport: (): Promise<string> => ipcRenderer.invoke('diag:report'),
   diagTail: (lines?: number): Promise<string> => ipcRenderer.invoke('diag:tail', lines),
   diagOpenFolder: (): Promise<string> => ipcRenderer.invoke('diag:openFolder'),
