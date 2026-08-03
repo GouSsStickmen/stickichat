@@ -1,5 +1,6 @@
 import { ChatMessage } from '../types'
 import { isHighlightedMessage } from '../lib/highlight'
+import { findTerm } from '../lib/keywordMatch'
 import { useSettingsStore } from '../store/settings'
 
 /**
@@ -63,11 +64,8 @@ export function persistSaved(channel: string): void {
   )
 }
 
-function matchesKeywords(text: string, words: string[]): boolean {
-  if (!words.length || !text) return false
-  const tl = text.toLowerCase()
-  return words.some((w) => w && tl.includes(w.toLowerCase()))
-}
+const matchesKeywords = (text: string, words: string[], wholeWord: boolean): boolean =>
+  !!words.length && !!text && findTerm(text, words, wholeWord) !== undefined
 
 /** classify + record one incoming message (call unconditionally; cheap early-outs) */
 export function hlIngest(channel: string, msg: ChatMessage): void {
@@ -79,8 +77,8 @@ export function hlIngest(channel: string, msg: ChatMessage): void {
   // and would make the tab depend on ingest ordering.
   const kwHit =
     !msg.system &&
-    (matchesKeywords(msg.text, st.settings.keywordAlerts) ||
-      matchesKeywords(msg.text, st.settings.nickAlerts))
+    (matchesKeywords(msg.text, st.settings.keywordAlerts, st.settings.keywordWholeWord) ||
+      matchesKeywords(msg.text, st.settings.nickAlerts, st.settings.nickAlertWholeWord))
   const men = !!(msg.isMention || msg.replyToMe || kwHit)
   const red = !!msg.redeemed
   const sub = !!msg.subEvent

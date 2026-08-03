@@ -4,6 +4,7 @@ import { useChatStore, lookupUserColor } from '../store/chat'
 import { useLayoutStore, allOpenChannels } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
 import { formatDuration } from '../lib/tokenize'
+import { findTerm } from '../lib/keywordMatch'
 import { fetchRecentMessages } from '../lib/recentMessages'
 import { loadChannelBadges, loadChannelEmotes, loadCheermotes, loadGlobalBadges, loadGlobalEmotes } from './emoteService'
 import { ensureFreshToken } from '../lib/twitchAuth'
@@ -1135,17 +1136,18 @@ class ChatService {
     // own messages never trigger keyword alerts
     if (useAccountsStore.getState().accounts.some((a) => a.id === msg.userId)) return
     const settings = useSettingsStore.getState().settings
-    const lower = msg.text.toLowerCase()
-    const match = (list: string[]): string | undefined =>
-      list.find((w) => {
-        const needle = w.trim().toLowerCase()
-        return needle.length > 0 && lower.includes(needle)
-      })
 
     // nickname spellings come first and get their OWN sound: being called by name is a
-    // different kind of ping than a topic word, even though the matching is identical
-    const nickHit = settings.nickAlertSound ? match(settings.nickAlerts) : undefined
-    const hit = nickHit ?? (settings.keywordSound ? match(settings.keywordAlerts) : undefined)
+    // different kind of ping than a topic word. Each list carries its own whole-word switch,
+    // because a handle usually wants the strict reading and a topic word usually does not.
+    const nickHit = settings.nickAlertSound
+      ? findTerm(msg.text, settings.nickAlerts, settings.nickAlertWholeWord)
+      : undefined
+    const hit =
+      nickHit ??
+      (settings.keywordSound
+        ? findTerm(msg.text, settings.keywordAlerts, settings.keywordWholeWord)
+        : undefined)
     if (!hit) return
     msg.isMention = true // highlight it like a mention so it's visible in chat/sidebar
     const { tabs, activeTabId } = useLayoutStore.getState()

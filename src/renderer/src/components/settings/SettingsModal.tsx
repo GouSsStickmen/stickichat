@@ -387,7 +387,12 @@ export function ColorField({
     const left = Math.max(8, Math.min(anchor.left, vw - pop.width - 8))
     let top = anchor.bottom + 4
     if (top + pop.height > vh - 8) top = Math.max(8, anchor.top - pop.height - 4)
-    setPalStyle({ position: 'fixed', left, top, right: 'auto' })
+    // Undo the window scale. getBoundingClientRect() already reports where things really
+    // are on screen, but this popup lives inside the zoomed root, so a length written into
+    // its `left`/`top` gets multiplied by the zoom on the way back out — at 180% the palette
+    // landed most of a window away from its swatch and off the edge.
+    const zoom = Number(getComputedStyle(document.documentElement).zoom) || 1
+    setPalStyle({ position: 'fixed', left: left / zoom, top: top / zoom, right: 'auto' })
   }, [palOpen])
 
   // adopt external changes (reset, palette pick in another field…) unless the user is mid-drag
@@ -1381,6 +1386,12 @@ function NotificationsSection(): React.JSX.Element {
               />
             </div>
             <Toggle
+              label={t('set.wholeWord')}
+              hint={t('hint.wholeWord')}
+              value={settings.keywordWholeWord}
+              onChange={(v) => set({ keywordWholeWord: v })}
+            />
+            <Toggle
               label={t('set.soundOnActive')}
               hint={t('hint.soundOnActive')}
               value={settings.keywordSoundOnActive}
@@ -1409,6 +1420,12 @@ function NotificationsSection(): React.JSX.Element {
               }
             />
           </div>
+          <Toggle
+            label={t('set.wholeWord')}
+            hint={t('hint.wholeWord')}
+            value={settings.nickAlertWholeWord}
+            onChange={(v) => set({ nickAlertWholeWord: v })}
+          />
           <Toggle
             label={t('set.soundOnActive')}
             hint={t('hint.soundOnActive')}

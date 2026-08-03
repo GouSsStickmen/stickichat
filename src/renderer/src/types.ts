@@ -988,12 +988,21 @@ export interface Settings {
    *  Functionally the same match as a keyword, but with its own sound so a personal call-out
    *  is audibly different from a topic word. */
   nickAlerts: string[]
+  /**
+   * Match a nick spelling as a WHOLE word rather than anywhere inside another one.
+   * Off, "стікмен" also fires on "стікменсва"; on, only on the word itself. Kept as a
+   * switch and not a rule because both readings are legitimate: a short handle needs the
+   * strict one, while a stem you want to catch in any inflection needs the loose one.
+   */
+  nickAlertWholeWord: boolean
   nickAlertSound: boolean
   nickAlertSoundOnActive: boolean
   nickAlertSoundType: SoundChoice
   nickAlertSoundVolume: number
   nickAlertSoundCustomId?: string
   keywordSound: boolean
+  /** whole-word matching for the keyword list — see [nickAlertWholeWord] */
+  keywordWholeWord: boolean
   keywordSoundOnActive: boolean
   keywordSoundType: SoundChoice
   keywordSoundVolume: number
@@ -1205,11 +1214,16 @@ export const DEFAULT_SETTINGS: Settings = {
   keywordAlerts: [],
   mutedErrors: [],
   nickAlerts: [],
+  // off by default: turning it on for everyone would silently stop firing alerts people
+  // already rely on, and a stem entered on purpose ("стікмен" to catch every inflection) is
+  // a legitimate way to use the list
+  nickAlertWholeWord: false,
   nickAlertSound: true,
   nickAlertSoundOnActive: true,
   nickAlertSoundType: 'ping',
   nickAlertSoundVolume: 0.5,
   keywordSound: true,
+  keywordWholeWord: false,
   keywordSoundOnActive: true,
   keywordSoundType: 'ping',
   keywordSoundVolume: 0.5,

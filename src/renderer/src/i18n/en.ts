@@ -157,6 +157,9 @@ export const en = {
   'picker.openEmotePage': 'Open the emote page',
   'set.alertSoundCooldown': '2s gap between repeated alerts',
   'hint.alertSoundCooldown': 'Stops a flood turning into a machine-gun. Turn off to hear EVERY mention, reply, keyword and nick spelling.',
+  'set.wholeWord': '↳ whole word or phrase only',
+  'hint.wholeWord':
+    'Off, it fires anywhere inside a word: "stickmen" also catches "stickmensva". On, only the word or phrase on its own, with no letters glued to it. Turn it on for short handles; leave it off for a stem you want to catch in every inflection.',
   'set.soundOnActive': '↳ play even on the active tab',
   'hint.soundOnActive': 'By default the sound stays quiet when you are already looking at that chat. Turn it on if a busy chat scrolls the mention away before you notice.',
   'set.nickAlertSound': 'Sound for spellings of my nick',
