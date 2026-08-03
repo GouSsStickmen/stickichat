@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { create } from 'zustand'
 
 /**
@@ -7,7 +8,7 @@ import { create } from 'zustand'
  * up on 7TV). We fetch once per user, cache in localStorage, and dedupe in-flight + negative
  * lookups. Only used when the "7TV nick colors" setting is on.
  */
-interface Cosmetic {
+export interface Cosmetic {
   /** solid nick color "#rrggbb" (present when the user has no paint) */
   color?: string
   /** a CSS `background` value for a gradient/image paint, clipped to the text */
@@ -24,6 +25,26 @@ interface Cosmetic {
   /** 7TV badge image + tooltip, shown next to the Twitch badges */
   badgeUrl?: string
   badgeTooltip?: string
+}
+
+/**
+ * A 7TV paint is a background clipped to the glyphs, so the text itself must be transparent.
+ * Chromium does NOT re-clip when the background of a live element changes — the paint then
+ * fills the whole box and you get a coloured bar where the nick should be. Callers therefore
+ * give the element a `key` derived from the paint so it remounts on change.
+ */
+export function paintStyleOf(c?: Cosmetic): CSSProperties | undefined {
+  if (!c?.paint) return undefined
+  return {
+    background: c.paint,
+    backgroundSize: c.paintSize,
+    backgroundRepeat: c.paintRepeat,
+    backgroundClip: 'text',
+    WebkitBackgroundClip: 'text',
+    color: 'transparent',
+    WebkitTextFillColor: 'transparent',
+    filter: c.paintShadow
+  }
 }
 
 interface SevenTvState {
@@ -71,6 +92,32 @@ export const useSevenTvColors = create<SevenTvState>()((set) => ({
 // `await` variant hook onto the same request (the overlay needs to await before it pushes)
 const inFlight = new Map<string, Promise<Cosmetic | undefined>>()
 const negative = new Set<string>()
+
+/**
+ * A global gate on how many cosmetic requests may be in flight at once.
+ *
+ * Every fetch here fans out into a REST call plus a GQL call, so an unbounded burst saturates
+ * the network, gets rate-limited (which used to wipe cached colours) and pegs the CPU hard
+ * enough to stutter audio in other apps. Chat drips users in one at a time, but a list that
+ * mounts hundreds of rows at once — the highlights panel restoring saved history — does not,
+ * so the limit lives on the fetch itself rather than on any one caller.
+ */
+const MAX_PARALLEL = 4
+let running = 0
+const waiting: (() => void)[] = []
+
+function acquire(): Promise<void> {
+  if (running < MAX_PARALLEL) {
+    running++
+    return Promise.resolve()
+  }
+  return new Promise((r) => waiting.push(r))
+}
+function release(): void {
+  const next = waiting.shift()
+  if (next) next()
+  else running--
+}
 
 /** 7TV colors are signed 32-bit RGBA ints (0xRRGGBBAA) */
 function intToRgba(c: number): string {
@@ -219,8 +266,8 @@ function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | unde
   const existing = inFlight.get(twitchId)
   if (existing) return existing
   // through the main process — a raw renderer fetch to 7tv.io is blocked by the app CSP
-  const p = window.sticki
-    .fetchJson(`https://7tv.io/v3/users/twitch/${twitchId}`)
+  const p = acquire()
+    .then(() => window.sticki.fetchJson(`https://7tv.io/v3/users/twitch/${twitchId}`))
     .then(async (res) => {
       // A failed/rate-limited request has no body. Treating that as "this user has no
       // cosmetic" is what erased real colours during a refresh burst — bail out and keep
@@ -275,7 +322,10 @@ function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | unde
       /* offline / rate-limited — try again next session */
       return undefined
     })
-    .finally(() => inFlight.delete(twitchId))
+    .finally(() => {
+      inFlight.delete(twitchId)
+      release()
+    })
   inFlight.set(twitchId, p)
   return p
 }

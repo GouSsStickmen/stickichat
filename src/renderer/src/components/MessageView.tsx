@@ -17,7 +17,7 @@ import { ReplyTarget, InsertEventDetail } from './InputBox'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 import { localizeApiError } from '../lib/apiErrors'
-import { useSevenTvColors, ensureSevenTvCosmetic } from '../lib/seventvCosmetics'
+import { useSevenTvColors, ensureSevenTvCosmetic, paintStyleOf } from '../lib/seventvCosmetics'
 import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
 import { useFfzBadges, ensureFfzBadges } from '../lib/ffzCosmetics'
 import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
@@ -61,31 +61,6 @@ function tokenContextHandler(paneId: string, text: string) {
         detail: { paneId, text }
       })
     )
-  }
-}
-
-/**
- * A 7TV paint is a background clipped to the glyphs, so the text itself must be transparent.
- * Chromium does NOT re-clip when the background of a live element changes — the paint then
- * fills the whole box and you get a coloured bar where the nick should be. Callers therefore
- * give the element a `key` derived from the paint so it remounts on change.
- */
-function paintStyleOf(c?: {
-  paint?: string
-  paintSize?: string
-  paintRepeat?: string
-  paintShadow?: string
-}): React.CSSProperties | undefined {
-  if (!c?.paint) return undefined
-  return {
-    background: c.paint,
-    backgroundSize: c.paintSize,
-    backgroundRepeat: c.paintRepeat,
-    backgroundClip: 'text',
-    WebkitBackgroundClip: 'text',
-    color: 'transparent',
-    WebkitTextFillColor: 'transparent',
-    filter: c.paintShadow
   }
 }
 

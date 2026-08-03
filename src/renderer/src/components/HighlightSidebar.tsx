@@ -10,6 +10,7 @@ import RichText from './RichText'
 import { JumpEventDetail } from './MessageList'
 import { useT } from '../i18n'
 import { ZoomIcon } from './Icons'
+import { useSevenTvColors, ensureSevenTvCosmetic, paintStyleOf } from '../lib/seventvCosmetics'
 
 type Mode = 'highlights' | 'mentions' | 'redeems' | 'subs'
 type Order = 'newest-top' | 'newest-bottom'
@@ -26,6 +27,43 @@ function ItemText({ msg }: { msg: ChatMessage }): React.JSX.Element {
   return <RichText msg={msg} />
 }
 
+/**
+ * A nick with its 7TV paint. This is a component and not an inline span on purpose: the list
+ * renders up to 150 rows, and `ensureSevenTvCosmetic` writes to the store for every new chatter
+ * in chat. Subscribing to the whole `cosmetics` map here would repaint the entire list several
+ * times a second in a busy channel — one selector per row means only the row that changed
+ * re-renders.
+ */
+function HlNick({
+  userId,
+  color,
+  enabled,
+  children
+}: {
+  userId?: string
+  color?: string
+  enabled: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  const cos = useSevenTvColors((s) => (enabled && userId ? s.cosmetics[userId] : undefined))
+  useEffect(() => {
+    // saved highlights outlive the chat buffer, so the author may not have been fetched yet
+    if (enabled && userId) ensureSevenTvCosmetic(userId)
+  }, [enabled, userId])
+  const paint = paintStyleOf(cos)
+  return (
+    // key: Chromium keeps the old text clip when a live element's background changes
+    <span
+      key={cos?.paint ?? 'plain'}
+      className="highlight-item-nick"
+      style={paint ?? { color: cos?.color || color }}
+      title={cos?.paintName}
+    >
+      {children}
+    </span>
+  )
+}
+
 export default function HighlightSidebar({
   channel,
   standalone
@@ -38,6 +76,7 @@ export default function HighlightSidebar({
   const lastReadAt = useChatStore((s) => s.lastReadAt[channel] ?? Number.MAX_SAFE_INTEGER)
   const highlightRules = useSettingsStore((s) => s.highlightRules)
   const caseSensitiveNicks = useSettingsStore((s) => s.settings.caseSensitiveNicks)
+  const stvOn = useSettingsStore((s) => s.settings.sevenTvNickColors)
   const fontSize = useSettingsStore((s) => s.settings.highlightsFontSize)
   const dark = useSettingsStore((s) => s.settings.theme === 'dark')
   const set = useSettingsStore((s) => s.setSettings)
@@ -203,14 +242,14 @@ export default function HighlightSidebar({
                 className={`highlight-item ${m.timestamp > lastReadAt ? 'unread' : ''}`}
                 onClick={() => jumpTo(m.id)}
               >
-                <span className="highlight-item-nick" style={{ color }}>
+                <HlNick userId={m.userId} color={color} enabled={stvOn}>
                   {m.rewardIcon ? (
                     <img className="hl-redeem-icon" src={m.rewardIcon} alt="" />
                   ) : (
                     '🔴 '
                   )}
                   {m.displayName}
-                </span>
+                </HlNick>
                 <span className="highlight-item-text">
                   <span className="redeem-reward">{m.rewardTitle}</span>
                   {m.rewardCost != null && <span className="redeem-cost"> · {m.rewardCost.toLocaleString('uk-UA')}</span>}
@@ -225,7 +264,7 @@ export default function HighlightSidebar({
               className={`highlight-item ${m.timestamp > lastReadAt ? 'unread' : ''}`}
               onClick={() => jumpTo(m.id)}
             >
-              <span className="highlight-item-nick" style={{ color }}>
+              <HlNick userId={m.userId} color={color} enabled={stvOn}>
                 {m.redeemed && '🔴 '}
                 {!m.system &&
                   m.badges.map((b) => {
@@ -235,7 +274,7 @@ export default function HighlightSidebar({
                     ) : null
                   })}
                 {m.displayName || (m.redeemed ? t('highlights.redeems') : '')}
-              </span>
+              </HlNick>
               <span className="highlight-item-text">
                 <ItemText msg={m} />
               </span>
