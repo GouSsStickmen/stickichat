@@ -19,6 +19,8 @@ interface Cosmetic {
   paintShadow?: string
   /** a representative flat color for the paint (used where gradient text can't render) */
   paintColor?: string
+  /** the paint's name on 7TV ("Emerald Doppler"), shown on hover like 7TV does */
+  paintName?: string
   /** 7TV badge image + tooltip, shown next to the Twitch badges */
   badgeUrl?: string
   badgeTooltip?: string
@@ -87,6 +89,7 @@ function intToHex(c: number): string {
 }
 
 interface Paint {
+  name?: string
   function?: string // LINEAR_GRADIENT | RADIAL_GRADIENT | URL
   color?: number | null
   angle?: number
@@ -164,7 +167,7 @@ async function fetchStyle(sevenTvUserId: string): Promise<{ paint: Paint | null;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query:
-          'query($id:ObjectID!){user(id:$id){style{paint{function color angle shape image_url repeat stops{at color} shadows{x_offset y_offset radius color}} badge{id name tooltip host{url files{name}}}}}}',
+          'query($id:ObjectID!){user(id:$id){style{paint{name function color angle shape image_url repeat stops{at color} shadows{x_offset y_offset radius color}} badge{id name tooltip host{url files{name}}}}}}',
         variables: { id: sevenTvUserId }
       })
     })
@@ -241,6 +244,7 @@ function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | unde
             paintRepeat: css?.repeat,
             paintShadow: css?.shadow,
             paintColor: paint?.color ? intToHex(paint.color) : (color ?? undefined),
+            paintName: paint?.name,
             badgeUrl,
             badgeTooltip: badge?.tooltip ?? badge?.name ?? undefined
           }
@@ -340,7 +344,7 @@ export function ensureSevenTvColor(twitchId?: string): string | undefined {
 // ---------------------------------------------------------------------------
 
 /** cosmetic id -> its rendered form, remembered until a grant references it */
-const paintDefs = new Map<string, PaintCss & { color?: string }>()
+const paintDefs = new Map<string, PaintCss & { color?: string; name?: string }>()
 const badgeDefs = new Map<string, { url: string; tooltip: string }>()
 
 /** feed one EventAPI cosmetic message into the store */
@@ -355,7 +359,7 @@ export function applyLiveCosmetic(e: {
     if (e.type === 'PAINT') {
       const paint = e.data as unknown as Paint
       const css = paintToCss(paint)
-      if (css) paintDefs.set(e.id, { ...css, color: paint.color ? intToHex(paint.color) : undefined })
+      if (css) paintDefs.set(e.id, { ...css, color: paint.color ? intToHex(paint.color) : undefined, name: paint.name })
     } else {
       const b = e.data as unknown as StvBadge
       const url = badgeImage(b)
@@ -397,7 +401,8 @@ export function applyLiveCosmetic(e: {
         paintSize: withImage ? def.size : undefined,
         paintRepeat: withImage ? def.repeat : undefined,
         paintShadow: withImage ? def.shadow : undefined,
-        paintColor: def.color ?? cur.paintColor
+        paintColor: def.color ?? cur.paintColor,
+        paintName: def.name ?? cur.paintName
       })
     // same guard as the fetch path: never make the nick transparent for an image that
     // hasn't loaded, or the user sees an empty rectangle where their name should be

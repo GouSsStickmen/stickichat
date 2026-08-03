@@ -96,6 +96,17 @@ export function isKnownChatter(channel: string, login: string): boolean {
   return false
 }
 
+/** twitch user id for a login seen in this channel's buffer (for cosmetic lookups) */
+export function lookupUserId(channel: string, login: string): string | undefined {
+  const msgs = useChatStore.getState().messages[channel]
+  if (!msgs) return undefined
+  const lower = login.toLowerCase()
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].login === lower && msgs[i].userId) return msgs[i].userId
+  }
+  return undefined
+}
+
 /** most recent known badges for a login in a channel (best-effort, from the local buffer) */
 export function lookupUserBadges(channel: string, login: string): BadgeRef[] | undefined {
   const msgs = useChatStore.getState().messages[channel]

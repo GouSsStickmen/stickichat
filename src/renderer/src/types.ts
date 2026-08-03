@@ -1122,7 +1122,7 @@ export const DEFAULT_SETTINGS: Settings = {
   loadHistory: true,
   highlightMentions: true,
   mentionSound: true,
-  alertSoundCooldown: true,
+  alertSoundCooldown: false,
   mentionSoundOnActive: false,
   mentionSoundType: 'ping',
   mentionSoundVolume: 0.5,

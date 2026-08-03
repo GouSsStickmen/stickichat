@@ -3825,3 +3825,22 @@ input[type='number']::-webkit-inner-spin-button {
   /* long error wording must wrap instead of stretching the toast off-screen */
   overflow-wrap: anywhere;
 }
+
+/* whisper thread: a day separator, so a conversation spanning weeks is readable */
+.whisper-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.whisper-day::before,
+.whisper-day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

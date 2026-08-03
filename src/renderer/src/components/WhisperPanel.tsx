@@ -22,6 +22,21 @@ function WhisperText({ text }: { text: string }): React.JSX.Element {
 }
 
 /** whisper conversations: popover under ✉ or a standalone window (standalone prop) */
+/** "Today" / "Yesterday" / a full date, in the app's language */
+function fmtDay(ts: number): string {
+  const lang = useSettingsStore.getState().settings.language
+  const d = new Date(ts)
+  const today = new Date()
+  const yesterday = new Date(today.getTime() - 86400000)
+  if (d.toDateString() === today.toDateString()) return lang === 'uk' ? 'Сьогодні' : 'Today'
+  if (d.toDateString() === yesterday.toDateString()) return lang === 'uk' ? 'Вчора' : 'Yesterday'
+  return d.toLocaleDateString(lang === 'uk' ? 'uk-UA' : undefined, {
+    day: 'numeric',
+    month: 'long',
+    year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric'
+  })
+}
+
 export default function WhisperPanel({
   onClose,
   standalone
@@ -337,11 +352,21 @@ export default function WhisperPanel({
       ) : (
         <>
           <div className="whisper-thread" ref={listRef}>
-            {thread.map((w) => (
-              <div key={w.id} className={`whisper-msg ${w.incoming ? '' : 'out'}`}>
-                <span className="whisper-ts">{fmtTime(w.timestamp)}</span> <WhisperText text={w.text} />
-              </div>
-            ))}
+            {thread.map((w, i) => {
+              // a whisper thread can span weeks and only shows a time, so "00:12" told you
+              // nothing about WHICH day — start every new day with a divider
+              const prev = i > 0 ? thread[i - 1] : undefined
+              const newDay =
+                !prev || new Date(prev.timestamp).toDateString() !== new Date(w.timestamp).toDateString()
+              return (
+                <div key={w.id}>
+                  {newDay && <div className="whisper-day">{fmtDay(w.timestamp)}</div>}
+                  <div className={`whisper-msg ${w.incoming ? '' : 'out'}`}>
+                    <span className="whisper-ts">{fmtTime(w.timestamp)}</span> <WhisperText text={w.text} />
+                  </div>
+                </div>
+              )
+            })}
           </div>
           <div className="whisper-input">
             {pickerOpen && (

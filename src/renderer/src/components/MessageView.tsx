@@ -3,7 +3,7 @@ import { Account, ChatMessage, FavoriteEmote, MOD_ONLY_TYPES, Settings } from '.
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration, hiResEmoteUrl } from '../lib/tokenize'
 import { emotePageUrl } from '../lib/emoteProviders'
 import { lookupBadgeUrl, lookupBadgeTitle, lookupBadge4x, lookupEmote, lookupCheermote, lookupTwitchEmoteOwner } from '../store/emotes'
-import { lookupUserColor, isKnownChatter, useChatStore } from '../store/chat'
+import { lookupUserColor, isKnownChatter, lookupUserId, useChatStore } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { highlightRuleMatches } from '../lib/highlight'
 import { openUserCard as openCard } from '../lib/openUserCard'
@@ -64,9 +64,50 @@ function tokenContextHandler(paneId: string, text: string) {
   }
 }
 
-function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiRes?: boolean }): React.JSX.Element {
+/**
+ * A 7TV paint is a background clipped to the glyphs, so the text itself must be transparent.
+ * Chromium does NOT re-clip when the background of a live element changes — the paint then
+ * fills the whole box and you get a coloured bar where the nick should be. Callers therefore
+ * give the element a `key` derived from the paint so it remounts on change.
+ */
+function paintStyleOf(c?: {
+  paint?: string
+  paintSize?: string
+  paintRepeat?: string
+  paintShadow?: string
+}): React.CSSProperties | undefined {
+  if (!c?.paint) return undefined
+  return {
+    background: c.paint,
+    backgroundSize: c.paintSize,
+    backgroundRepeat: c.paintRepeat,
+    backgroundClip: 'text',
+    WebkitBackgroundClip: 'text',
+    color: 'transparent',
+    WebkitTextFillColor: 'transparent',
+    filter: c.paintShadow
+  }
+}
+
+function TokenView({
+  token,
+  paneId,
+  channel,
+  hiRes
+}: {
+  token: Token
+  paneId: string
+  channel: string
+  hiRes?: boolean
+}): React.JSX.Element {
   const linkDisplay = useSettingsStore((s) => s.settings.linkDisplay)
   const t = useT()
+  // resolved up here because hooks can't live inside the switch; subscribing (rather than
+  // reading getState) is what makes a mention follow a live paint change
+  const mentionLogin =
+    token.kind === 'mention' ? token.name.replace(/^@/, '').replace(/[^\w]+$/, '') : ''
+  const mentionUid = mentionLogin ? lookupUserId(channel, mentionLogin) : undefined
+  const mentionCos = useSevenTvColors((s) => (mentionUid ? s.cosmetics[mentionUid] : undefined))
   switch (token.kind) {
     case 'text':
       return <>{token.text}</>
@@ -92,12 +133,17 @@ function TokenView({ token, paneId, hiRes }: { token: Token; paneId: string; hiR
         </a>
       )
     case 'mention': {
-      const login = token.name.replace(/^@/, '').replace(/[^\w]+$/, '')
+      const login = mentionLogin
+      // a mention should look like the person it names — same 7TV paint/colour as their nick
+      const cos = mentionCos
+      const mPaint = paintStyleOf(cos)
+      const mColor = cos?.color ?? cos?.paintColor ?? token.color
       return (
         <span
+          key={cos?.paint ?? 'plain'}
           className="mention-token"
-          style={{ color: token.color }}
-          title={`${login} — ${t('msg.nickHint')}`}
+          style={mPaint ?? { color: mColor }}
+          title={`${login}${cos?.paintName ? ` · ${cos.paintName}` : ''} — ${t('msg.nickHint')}`}
           onClick={(e) => {
             window.dispatchEvent(
               new CustomEvent('sticki:opencard', {
@@ -594,19 +640,7 @@ function MessageViewInner({
   // a 7TV gradient/image paint renders as the nick's own text fill (clipped background).
   // size/repeat matter for URL paints (a bare tile covered a corner of the nick) and the
   // shadow chain is a big part of how a paint actually looks on 7TV.
-  const paintStyle: React.CSSProperties | undefined =
-    settings.sevenTvNickColors && stvCosmetic?.paint
-    ? {
-        background: stvCosmetic.paint,
-        backgroundSize: stvCosmetic.paintSize,
-        backgroundRepeat: stvCosmetic.paintRepeat,
-        backgroundClip: 'text',
-        WebkitBackgroundClip: 'text',
-        color: 'transparent',
-        WebkitTextFillColor: 'transparent',
-        filter: stvCosmetic.paintShadow
-      }
-    : undefined
+  const paintStyle = settings.sevenTvNickColors ? paintStyleOf(stvCosmetic) : undefined
   const classes = ['msg']
   // shared chat: visitors from the partner channel get a subtle tint + origin tag
   if (msg.sourceRoomId) classes.push('shared-msg')
@@ -880,8 +914,12 @@ function MessageViewInner({
             />
           ))}
         <span
+          // remount when the paint changes: Chromium keeps the OLD text clip on a live
+          // element, which paints the gradient as a solid bar over the nick
+          key={stvCosmetic?.paint ?? 'plain'}
           className="nick"
           style={paintStyle ?? { color }}
+          title={stvCosmetic?.paintName}
           onClick={openUserCard}
           onContextMenu={insertNick}
         >
@@ -926,7 +964,7 @@ function MessageViewInner({
             }}
           >
             {tokens.map((tk, i) => (
-              <TokenView key={i} token={tk} paneId={paneId} hiRes={!!(settings.showBits && msg.gigantified)} />
+              <TokenView key={i} token={tk} paneId={paneId} channel={msg.channel} hiRes={!!(settings.showBits && msg.gigantified)} />
             ))}
           </span>
         )}
