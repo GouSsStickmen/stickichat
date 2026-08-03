@@ -52,7 +52,6 @@ export default function UserCard({
     ensureFfzBadges()
   }, [target.userId])
   const stvBadge = stvCos?.badgeUrl ? { url: stvCos.badgeUrl, title: stvCos.badgeTooltip ?? '7TV' } : undefined
-  const [globalsOpen, setGlobalsOpen] = useState(false)
   // the user's public badge collection (GQL) — Helix can't tell us which badges someone owns
   const [allBadges, setAllBadges] = useState<GqlBadge[]>([])
   useEffect(() => {
@@ -222,9 +221,9 @@ export default function UserCard({
               </>
             )}
           </div>
-          {/* every badge the user is wearing here, right next to the nick like the viewers
-              list — plus a toggle that reveals their whole public badge collection (Twitch
-              GQL; Helix never exposes which badges a given user owns). */}
+          {/* every badge in ONE wrapping row next to the nick: worn first, then the rest of
+              the user's public collection and their 7TV/BTTV/FFZ badges. A collapsed
+              "all badges" section just hid them behind an extra click. */}
           {(() => {
             const worn = target.badges.length
               ? target.badges
@@ -235,34 +234,33 @@ export default function UserCard({
               const title = lookupBadgeTitle(target.channel, b.setId, b.version) ?? b.setId
               return <img key={`${b.setId}/${b.version}`} src={url} alt="" title={title} />
             }
-            // anything GQL knows about that isn't already on the worn row
+            // anything GQL knows about that the worn row doesn't already show
             const wornKeys = new Set(worn.map((b) => `${b.setId}/${b.version}`))
             const extra = allBadges.filter((b) => !wornKeys.has(`${b.setId}/${b.version}`))
-            const extraCount = extra.length + (stvBadge ? 1 : 0) + (bttvBadge ? 1 : 0) + (ffzBadgeList?.length ?? 0)
-            if (!worn.length && !extraCount) return null
+            const any =
+              worn.length || extra.length || stvBadge || bttvBadge || (ffzBadgeList?.length ?? 0)
+            if (!any) return null
             return (
-              <>
-                {worn.length > 0 && <div className="uc-badges">{worn.map(img)}</div>}
-                {extraCount > 0 && (
-                  <div className="uc-badges uc-badges-all">
-                    <button className="uc-badges-toggle" onClick={() => setGlobalsOpen((v) => !v)}>
-                      {globalsOpen ? '▾' : '▸'} {t('user.badgesAll')} ({extraCount})
-                    </button>
-                    {globalsOpen && (
-                      <div className="uc-badges-grid">
-                        {extra.map((b) => (
-                          <img key={`${b.setId}/${b.version}`} src={b.url} alt="" title={b.title} />
-                        ))}
-                        {stvBadge && <img src={stvBadge.url} alt="" title={stvBadge.title} className="badge-3p" />}
-                        {bttvBadge && <img src={bttvBadge.url} alt="" title={bttvBadge.description} className="badge-3p" />}
-                        {(ffzBadgeList ?? []).map((b, i) => (
-                          <img key={i} src={b.url} alt="" title={b.title} className="badge-3p" style={b.color ? { background: b.color } : undefined} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+              <div className="uc-badges">
+                {worn.map(img)}
+                {extra.map((b) => (
+                  <img key={`x-${b.setId}/${b.version}`} src={b.url} alt="" title={b.title} />
+                ))}
+                {stvBadge && <img src={stvBadge.url} alt="" title={stvBadge.title} className="badge-3p" />}
+                {bttvBadge && (
+                  <img src={bttvBadge.url} alt="" title={bttvBadge.description} className="badge-3p" />
                 )}
-              </>
+                {(ffzBadgeList ?? []).map((b, i) => (
+                  <img
+                    key={`ffz-${i}`}
+                    src={b.url}
+                    alt=""
+                    title={b.title}
+                    className="badge-3p"
+                    style={b.color ? { background: b.color } : undefined}
+                  />
+                ))}
+              </div>
             )
           })()}
           <div className="uc-sub">

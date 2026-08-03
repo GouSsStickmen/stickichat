@@ -111,5 +111,11 @@ function everywhereEmote(code: string): ReturnType<ReturnType<typeof lookupEmote
     const e = map.get(code)
     if (e) return e
   }
+  // …and the account's own Twitch emotes. A whisper carries no `emotes` IRC tag, so Twitch
+  // emotes are only ever plain words here — without this they stayed as text.
+  for (const list of Object.values(st.twitchByAccount)) {
+    const e = list.find((x) => x.code === code)
+    if (e) return { code: e.code, url: e.url, provider: 'twitch' }
+  }
   return undefined
 }

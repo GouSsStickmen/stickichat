@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useWhispersStore, setOpenWhisperThread, Whisper } from '../store/whispers'
 import { useAccountsStore } from '../store/accounts'
 import { useUiStore } from '../store/ui'
@@ -358,13 +358,16 @@ export default function WhisperPanel({
               const prev = i > 0 ? thread[i - 1] : undefined
               const newDay =
                 !prev || new Date(prev.timestamp).toDateString() !== new Date(w.timestamp).toDateString()
+              // a Fragment, NOT a wrapper div: the thread is a flex column and the bubbles
+              // align themselves left/right — a wrapper would become the flex child and
+              // every message would fall back to the left
               return (
-                <div key={w.id}>
+                <Fragment key={w.id}>
                   {newDay && <div className="whisper-day">{fmtDay(w.timestamp)}</div>}
                   <div className={`whisper-msg ${w.incoming ? '' : 'out'}`}>
                     <span className="whisper-ts">{fmtTime(w.timestamp)}</span> <WhisperText text={w.text} />
                   </div>
-                </div>
+                </Fragment>
               )
             })}
           </div>

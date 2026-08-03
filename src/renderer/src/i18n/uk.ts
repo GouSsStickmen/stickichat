@@ -111,9 +111,6 @@ export const uk: Record<TranslationKey, string> = {
   'mod.notMod': 'Цей акаунт тут не модератор',
 
   // User card
-  'user.badgesChannel': 'На каналі:',
-  'user.badgesAll': 'Усі бейджі',
-  'user.badgesGlobal': 'Глобальні:',
   'user.created': 'Створений',
   'user.channelRules': 'Правила чату',
   'user.channelAbout': 'Про канал',

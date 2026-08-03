@@ -109,9 +109,6 @@ export const en = {
   'mod.notMod': 'This account is not a moderator here',
 
   // User card
-  'user.badgesChannel': 'In channel:',
-  'user.badgesAll': 'All badges',
-  'user.badgesGlobal': 'Global:',
   'user.created': 'Created',
   'user.channelRules': 'Chat rules',
   'user.channelAbout': 'About channel',

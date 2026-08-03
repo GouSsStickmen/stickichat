@@ -3513,11 +3513,6 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 /* user card: badges split into channel vs global rows, each with a small caption */
-.uc-badges-label {
-  margin-right: 4px;
-  color: var(--text-faint);
-  font-size: 11px;
-}
 .uc-badges .badge-3p {
   width: auto;
   object-fit: contain;
@@ -3633,25 +3628,9 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 /* usercard: the full badge collection opens as a wrapping grid, like Twitch's own card */
-.uc-badges-all {
-  display: block;
-}
-.uc-badges-toggle {
-  padding: 1px 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-faint);
-  font-size: 11px;
-  cursor: pointer;
-}
-.uc-badges-toggle:hover {
-  color: var(--text);
-}
-.uc-badges-grid {
-  display: flex;
+/* one wrapping row of badges — worn ones first, then the rest of the collection */
+.uc-badges {
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 3px;
   max-width: 260px;
 }
 /* the shoutout button while its cooldown runs */
