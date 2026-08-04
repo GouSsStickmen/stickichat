@@ -38,6 +38,8 @@ export class EventSubClient {
   private ws: WebSocket | null = null
   private sessionId: string | null = null
   private closed = false
+  /** deliberately off the wire because there is nothing to subscribe to */
+  private idle = false
   private backoff = 1000
   private reconnectTimer: number | null = null
   private keepaliveTimer: number | null = null
@@ -64,11 +66,21 @@ export class EventSubClient {
     this.connect()
   }
 
+  /** is there anything to subscribe to at all? */
+  private hasWork(): boolean {
+    try {
+      return this.getDesired().length > 0
+    } catch {
+      return false
+    }
+  }
+
   private connect(): void {
     if (this.closed) return
     const url = this.pendingUrl ?? EVENTSUB_URL
     this.pendingUrl = null
     const old = this.ws
+    this.ws = null
     if (old) {
       old.onopen = old.onmessage = old.onclose = old.onerror = null
       try {
@@ -77,6 +89,16 @@ export class EventSubClient {
         /* noop */
       }
     }
+    // Twitch closes a session that subscribes to nothing within ten seconds (4003, "connection
+    // unused"). Opening one with an empty desired set — which is every launch before accounts
+    // and channels have loaded, and every session with no valid token — bought exactly that,
+    // over and over. Stay off the wire until there is something to ask for; resync() connects.
+    if (!this.hasWork()) {
+      if (!this.idle) diagSocket('eventsub', 'idle', 'nothing to subscribe to — staying offline')
+      this.idle = true
+      return
+    }
+    this.idle = false
     let ws: WebSocket
     try {
       ws = new WebSocket(url)
@@ -116,7 +138,11 @@ export class EventSubClient {
       case 'session_welcome': {
         this.sessionId = msg.payload?.session?.id ?? null
         this.keepaliveSec = msg.payload?.session?.keepalive_timeout_seconds ?? 30
-        this.backoff = 1000
+        // NOTE: the backoff is NOT reset here. Getting a welcome frame proves the socket
+        // opened, not that the session is any use — and a session that subscribes to nothing
+        // is closed again ten seconds later. Resetting on welcome meant the delay was back to
+        // one second every single time, so the retry never backed off and the app reconnected
+        // roughly every thirteen seconds, forever. It resets when a subscription succeeds.
         this.created.clear()
         this.subscribeAll()
         break
@@ -155,12 +181,20 @@ export class EventSubClient {
           // 409 = already exists for this session; both mean "it's active now"
           if (res.ok || res.status === 409) {
             this.created.add(d.key)
+            // THIS is what makes a session worth having — only now is the retry delay safe
+            // to reset (see the note in session_welcome)
+            this.backoff = 1000
             this.onSubOk?.(d)
           } else {
             console.warn('[eventsub] subscribe failed', d.type, res.status, res.json ?? res.text)
             // a 4xx won't fix itself on retry (bad scope / bad condition) — stop hammering it
-            // every reconnect; only 5xx / network errors are worth retrying
-            if (res.status >= 400 && res.status < 500) this.created.add(d.key)
+            // every reconnect; only 5xx / network errors are worth retrying.
+            //
+            // 429 is the exception, and it was being treated as fatal: "too many requests" is
+            // precisely the one that DOES fix itself, and the reconnect loop above was earning
+            // it regularly. Marking it done meant a rate limit could silently disable raid
+            // detection for the rest of the session.
+            if (res.status >= 400 && res.status < 500 && res.status !== 429) this.created.add(d.key)
             this.onSubError?.(d, res.status)
           }
         } catch (e) {
@@ -174,6 +208,12 @@ export class EventSubClient {
 
   /** desired set changed (accounts/channels) — add anything new to the live session */
   resync(): void {
+    // this is also how we come back from idle: the first channel or account to appear is what
+    // gives the socket a reason to exist
+    if (this.idle || !this.ws || this.ws.readyState > WebSocket.OPEN) {
+      if (this.reconnectTimer === null) this.connect()
+      return
+    }
     this.subscribeAll()
   }
 

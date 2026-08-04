@@ -46,6 +46,8 @@ export interface PollEvent {
 export class PubSubClient {
   private ws: WebSocket | null = null
   private closed = false
+  /** deliberately off the wire because there are no topics to listen to */
+  private idle = false
   private backoff = 1000
   private reconnectTimer: number | null = null
   private pingTimer: number | null = null
@@ -73,9 +75,19 @@ export class PubSubClient {
     this.connect()
   }
 
+  /** is there an account and at least one channel id to LISTEN for? */
+  private hasWork(): boolean {
+    try {
+      return !!this.getAccount() && this.getChannelIds().some((id) => !!id)
+    } catch {
+      return false
+    }
+  }
+
   private connect(): void {
     if (this.closed) return
     const old = this.ws
+    this.ws = null
     if (old) {
       old.onopen = old.onmessage = old.onclose = old.onerror = null
       try {
@@ -84,6 +96,16 @@ export class PubSubClient {
         /* noop */
       }
     }
+    // Twitch hangs up on a session that never LISTENs (4110, "session unused"). At launch the
+    // account and the channel ids are not known yet, so the socket was being opened with
+    // nothing to say and dropped seconds later — endlessly. Wait for a reason; resync() calls
+    // back in as soon as there is one.
+    if (!this.hasWork()) {
+      if (!this.idle) diagSocket('pubsub', 'idle', 'no topics to listen to — staying offline')
+      this.idle = true
+      return
+    }
+    this.idle = false
     let ws: WebSocket
     try {
       ws = new WebSocket(PUBSUB_URL)
@@ -95,7 +117,8 @@ export class PubSubClient {
     this.listened.clear()
     ws.onopen = () => {
       if (this.ws !== ws) return
-      this.backoff = 1000
+      // the backoff is NOT reset here — see listenAll(). An open socket that listens to
+      // nothing gets closed again, and resetting on open kept the retry pinned at one second.
       this.listenAll()
       // Twitch drops the socket if it doesn't see a PING at least every 5 minutes
       if (this.pingTimer !== null) clearInterval(this.pingTimer)
@@ -103,7 +126,7 @@ export class PubSubClient {
     }
     ws.onmessage = (ev) => {
       if (this.ws !== ws) return
-      let msg: { type: string; data?: { topic?: string; message?: string } }
+      let msg: { type: string; error?: string; data?: { topic?: string; message?: string } }
       try {
         msg = JSON.parse(String(ev.data))
       } catch {
@@ -120,6 +143,12 @@ export class PubSubClient {
       }
       if (msg.type === 'MESSAGE' && msg.data?.topic?.startsWith('predictions-channel-v1.')) {
         this.handlePredictionMessage(msg.data.topic, msg.data.message ?? '')
+      }
+      // a rejected LISTEN used to vanish without trace: the topic simply never delivered
+      // anything and the session was later dropped as unused. ERR_BADAUTH here is the single
+      // clearest sign that the token is stale, and it belongs in the report.
+      if (msg.type === 'RESPONSE' && msg.error) {
+        diagSocket('pubsub', 'LISTEN rejected', msg.error)
       }
       // RECONNECT: Twitch asks us to reconnect soon; closing triggers our backoff reconnect
       if (msg.type === 'RECONNECT') {
@@ -269,6 +298,8 @@ export class PubSubClient {
     }
     // the socket may have been replaced while awaiting the token
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    // a session that actually listens to something has earned a fresh retry delay
+    this.backoff = 1000
     for (const id of ids) {
       this.listened.add(id)
       this.send({
@@ -289,6 +320,11 @@ export class PubSubClient {
 
   /** channels opened/closed or their ids became known — pick up any new topics */
   resync(): void {
+    // also the way back from idle: the first known channel id is the reason to dial at all
+    if (this.idle || !this.ws || this.ws.readyState > WebSocket.OPEN) {
+      if (this.reconnectTimer === null) this.connect()
+      return
+    }
     this.listenAll()
   }
 
