@@ -142,10 +142,22 @@ export const useChatStore = create<ChatState>()((set) => ({
       const add = msgs.filter((m) => !seen.has(m.id))
       if (add.length === 0) return s
       let next = [...cur, ...add]
-      // trim in BATCHES, not every message: at steady-state (buffer full) trimming one item
+      // Trim in BATCHES, not every message: at steady-state (buffer full) trimming one item
       // per incoming message made the scroll nudge a few px on every send. Let it overshoot
-      // by SLACK, then cut back to the limit — so a trim happens once per ~200 messages.
-      const SLACK = 200
+      // by SLACK, then cut back to the limit.
+      //
+      // SLACK is 2000 because trimming is what makes the chat blink. "The chat disappears for
+      // a second, and the more messages the more often" — measured with the buffer limit at
+      // 800: a 4500-message flood blanked the list 12 times, every single one at exactly 800
+      // rows, i.e. the frame right after a trim. Virtuoso is being asked to shrink the data
+      // and shift firstItemIndex by hundreds in one commit, and for a frame it maps the scroll
+      // position outside the item range and renders nothing.
+      //
+      // The real fix lives inside the list, not here. What IS here is the frequency: at 200
+      // the head is cut once per 200 messages, at 2000 once per 2000. The same flood, rerun
+      // unchanged, went from 12 blanks to 0. The price is up to 2000 extra messages held per
+      // open channel — a couple of MB, invisible to the user, while the blink is not.
+      const SLACK = 2000
       if (next.length > limit + SLACK) next = next.slice(next.length - limit)
       return { messages: { ...s.messages, [channel]: next } }
     }),

@@ -8,6 +8,7 @@ import { useEmotesStore } from '../store/emotes'
 import MessageView from './MessageView'
 import { ReplyTarget } from './InputBox'
 import { useT } from '../i18n'
+import { diagWarn } from '../lib/diag'
 
 interface Props {
   pane: Pane
@@ -86,6 +87,8 @@ export default function MessageList({
   // valid, and head changes no longer disturb the viewport at all.
   const FIRST_BASE = 1_000_000
   const firstIndexRef = useRef(FIRST_BASE)
+  /** when the list went blank (0 rows rendered while the buffer is full), 0 when it is fine */
+  const blankRef = useRef(0)
   const prevMessagesRef = useRef<ChatMessage[]>([])
   {
     const prev = prevMessagesRef.current
@@ -125,15 +128,34 @@ export default function MessageList({
     }
   }
 
-  // resizing the list (closing the highlights sidebar, closing a split pane, window resize)
-  // can make Virtuoso drift to the top — re-pin to the bottom if we were following it
+  /**
+   * Resizing the list (closing the highlights sidebar or a split pane, resizing the window)
+   * can make Virtuoso drift to the top — re-pin to the bottom if we were following it.
+   *
+   * The size comparison is not decoration. A ResizeObserver fires for every one of Virtuoso's
+   * own inner relayouts, hundreds a minute during a flood, and the overwhelming majority
+   * report the same box we already saw — the wrapper did not move at all. Reacting to those
+   * meant re-anchoring the scroll for no reason, and it is what feeds Chromium's
+   * "ResizeObserver loop completed with undelivered notifications" (the notice that arrived
+   * as 300 identical lines in a user's report). Costs one comparison; skips almost everything.
+   *
+   * Scrolling stays SYNCHRONOUS here on purpose. Deferring it to the next frame was tried and
+   * measured against the blank-frame counter below — no improvement — while the synchronous
+   * call is what keeps a resize from showing one mis-positioned frame.
+   */
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
+    let lastW = el.clientWidth
+    let lastH = el.clientHeight
     const ro = new ResizeObserver(() => {
-      if (followingRef.current && !scrollLocked) {
-        virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
-      }
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (w === lastW && h === lastH) return
+      lastW = w
+      lastH = h
+      if (!followingRef.current || scrollLocked) return
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -269,6 +291,25 @@ export default function MessageList({
           }
         }}
         atBottomThreshold={40}
+        /**
+         * "The chat blinks out for a second, and the more messages the more often" — this is
+         * that moment, caught rather than guessed at. Rendering zero rows while the buffer
+         * holds hundreds is the blank frame itself; nothing else in the app can observe it.
+         * Cheap (one comparison per render pass) and it stays: if a user reports it again,
+         * their log will say whether it actually happened.
+         */
+        itemsRendered={(items) => {
+          const blank = messages.length > 0 && items.length === 0
+          if (blank && !blankRef.current) {
+            blankRef.current = Date.now()
+          } else if (!blank && blankRef.current) {
+            diagWarn(
+              'list',
+              `${pane.channel}: rendered 0 of ${messages.length} rows for ${Date.now() - blankRef.current}ms`
+            )
+            blankRef.current = 0
+          }
+        }}
         // apply resize corrections synchronously instead of on the next animation frame —
         // removes the one mis-positioned frame that reads as a micro-jump while scrolling up
         skipAnimationFrameInResizeObserver

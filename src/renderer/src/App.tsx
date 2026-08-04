@@ -172,6 +172,38 @@ export default function App(): React.JSX.Element | null {
     void window.sticki.setZoom(1)
   }, [])
 
+  /**
+   * DEV ONLY — a local flood, for reproducing the "chat blinks out for a second" report.
+   *
+   * The symptom scales with message rate — it happens when the ring buffer cuts its head —
+   * so it needs real volume to show up at all. These are LOCAL system lines:
+   * they go through exactly the same queue, store, trim and virtual list as real chat, and
+   * nothing is sent to Twitch — which is what makes this safe to run on any channel.
+   *
+   * Ctrl+Alt+Shift+F floods the active channel. The dev server is the only thing served over
+   * http — a packaged build loads from file:, so the listener is never even registered there.
+   */
+  useEffect(() => {
+    if (location.protocol !== 'http:' || window.location.hash) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyF')) return
+      e.preventDefault()
+      const st = useLayoutStore.getState()
+      const channel = st.tabs.find((t) => t.id === st.activeTabId)?.panes[0]?.channel
+      if (!channel) return
+      let n = 0
+      const total = 1500
+      const timer = window.setInterval(() => {
+        for (let i = 0; i < 25 && n < total; i++, n++) {
+          chatService.localInfo(channel, `flood ${n} — ${'x'.repeat(10 + (n % 60))}`)
+        }
+        if (n >= total) window.clearInterval(timer)
+      }, 60)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Whether the machine thinks it has a network at all. Without this a report cannot tell
   // "the socket died on its own" from "the whole box went offline for ten seconds", and those
   // want completely different answers.
