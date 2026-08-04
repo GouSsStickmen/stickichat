@@ -106,8 +106,8 @@ class ChatService {
     this.reader = new IrcClient({
       nick: 'anon',
       onMessage: (m) => this.handleReaderMessage(m),
-      onOpen: () => useChatStore.getState().setConnState('open'),
-      onClose: () => useChatStore.getState().setConnState('closed')
+      onOpen: () => this.announceConnection(true),
+      onClose: () => this.announceConnection(false)
     })
 
     // keep reader joins in sync with open panes
@@ -1317,6 +1317,27 @@ class ChatService {
   }
 
   /**
+   * Losing the connection used to be completely silent: the chat simply stopped moving, with
+   * no line, no indicator and nothing in the log. A user described it as "messages disappear
+   * into nowhere" and had no way to tell a dead socket from a quiet channel. Now every open
+   * chat says so, and says when it is back.
+   */
+  private connDown = false
+
+  private announceConnection(open: boolean): void {
+    useChatStore.getState().setConnState(open ? 'open' : 'connecting')
+    // don't announce "restored" for the very first connect of the session
+    if (open && !this.connDown) return
+    if (!open && this.connDown) return // already announced; a retry loop must not spam
+    this.connDown = !open
+    // the standalone windows share this service — only the main window writes chat lines
+    if (window.location.hash) return
+    const lang = useSettingsStore.getState().settings.language
+    const text = translate(lang, open ? 'info.connRestored' : 'info.connLost')
+    for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.localInfo(ch, text)
+  }
+
+  /**
    * Re-ingest persisted redeems for a channel. Redeems arrive via PubSub in the MAIN window
    * only and are written to localStorage; a standalone highlights window listens for the
    * storage event and calls this so newly-redeemed lines (with the user's color) appear live
@@ -1452,8 +1473,8 @@ class ChatService {
     this.reader = new IrcClient({
       nick: 'anon',
       onMessage: (m) => this.handleReaderMessage(m),
-      onOpen: () => useChatStore.getState().setConnState('open'),
-      onClose: () => useChatStore.getState().setConnState('closed')
+      onOpen: () => this.announceConnection(true),
+      onClose: () => this.announceConnection(false)
     })
     for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.reader.join(ch)
     // F5 is the "something's stuck" button — refresh emotes/badges too, and re-establish

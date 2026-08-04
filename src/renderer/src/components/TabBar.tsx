@@ -181,10 +181,25 @@ export default function TabBar(): React.JSX.Element {
       >
         <GearIcon />
       </button>
+      {/* three states, not two: "reconnecting" is the one the user actually needs to see, and
+          it used to be indistinguishable from "dead". It pulses so a glance is enough. */}
       <span
-        className="conn-dot"
-        title={connState === 'open' ? t('misc.connected') : t('misc.disconnected')}
-        style={{ background: connState === 'open' ? 'var(--success)' : 'var(--danger)' }}
+        className={`conn-dot ${connState === 'connecting' ? 'reconnecting' : ''}`}
+        title={
+          connState === 'open'
+            ? t('misc.connected')
+            : connState === 'connecting'
+              ? t('misc.reconnecting')
+              : t('misc.disconnected')
+        }
+        style={{
+          background:
+            connState === 'open'
+              ? 'var(--success)'
+              : connState === 'connecting'
+                ? 'var(--warning)'
+                : 'var(--danger)'
+        }}
       />
       </div>
       <div className="tabbar-tabs" ref={tabsRef} style={{ zoom: tabScale }}>

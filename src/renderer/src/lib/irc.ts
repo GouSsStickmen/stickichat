@@ -1,3 +1,5 @@
+import { diagSocket } from './diag'
+
 export interface IrcMessage {
   raw: string
   tags: Record<string, string>
@@ -103,9 +105,21 @@ export class IrcClient {
   // consecutive login rejections; after a couple we stop looping and ask for re-auth
   private authFailures = 0
   private authStopped = false
-  // keepalive watchdog: long-idle sockets die silently behind NAT — readyState still says
-  // OPEN, so the first message after idle went into the void. We ping after idle and
-  // force-reconnect when the pong never comes back.
+  /**
+   * Keepalive watchdog. A long-idle socket dies silently behind NAT — `readyState` still says
+   * OPEN, so everything sent after that goes into the void and nothing arrives.
+   *
+   * The old numbers were 240s idle / 30s poll / 15s grace, i.e. up to FOUR AND THREE QUARTER
+   * MINUTES before a dead socket was noticed. A user on a flaky line reported the chat going
+   * blank "for about five minutes" at a time, and their log has a 4m31s hole in exactly the
+   * window they named: the network blip lasted seconds, the rest was us sitting on a corpse.
+   * Chatterino survives the same line because it probes far more often.
+   *
+   * 45/10/10 detects it in about a minute. The cost is one PING a minute on a silent channel.
+   */
+  private static readonly IDLE_BEFORE_PING = 45_000
+  private static readonly PONG_GRACE = 10_000
+  private static readonly WATCHDOG_TICK = 10_000
   private lastActivity = Date.now()
   private pingSentAt: number | null = null
   private watchdog: number
@@ -117,18 +131,19 @@ export class IrcClient {
     this.watchdog = window.setInterval(() => {
       if (this.closed || this.authStopped) return
       const now = Date.now()
-      if (this.pingSentAt !== null && now - this.pingSentAt > 15000) {
+      if (this.pingSentAt !== null && now - this.pingSentAt > IrcClient.PONG_GRACE) {
         // pinged and heard nothing — the socket is dead, rebuild it now
+        diagSocket('irc', 'watchdog timeout', `no PONG in ${IrcClient.PONG_GRACE / 1000}s — reconnecting`)
         this.pingSentAt = null
         this.ready = false
         this.connect()
         return
       }
-      if (this.ready && this.pingSentAt === null && now - this.lastActivity > 240000) {
+      if (this.ready && this.pingSentAt === null && now - this.lastActivity > IrcClient.IDLE_BEFORE_PING) {
         this.pingSentAt = now
         this.rawSend('PING :keepalive')
       }
-    }, 30000)
+    }, IrcClient.WATCHDOG_TICK)
   }
 
   private connect(): void {
@@ -150,8 +165,10 @@ export class IrcClient {
     }
     let ws: WebSocket
     try {
+      diagSocket('irc', 'connecting', `${this.opts.nick} · ${this.channels.size} channel(s)`)
       ws = new WebSocket(IRC_URL)
-    } catch {
+    } catch (e) {
+      diagSocket('irc', 'connect threw', String(e))
       this.scheduleReconnect()
       return
     }
@@ -171,6 +188,7 @@ export class IrcClient {
         if (this.ws !== ws) return // socket was replaced while awaiting the token
         if (!token) {
           // no token could be produced — refresh itself failed; stop hammering and surface it
+          diagSocket('irc', 'auth stopped', 'no token could be produced — re-authorization needed')
           this.authStopped = true
           this.opts.onAuthFailed?.()
           try {
@@ -205,6 +223,11 @@ export class IrcClient {
         if (msg.command === '001') {
           this.ready = true
           this.authFailures = 0 // a successful login clears the failure streak
+          diagSocket(
+            'irc',
+            'logged in',
+            `as ${msg.params[0] ?? '?'} · joining ${this.channels.size} · ${this.sendQueue.length} queued`
+          )
           for (const ch of this.channels) this.rawSend(`JOIN #${ch}`)
           for (const q of this.sendQueue) this.rawSend(q)
           this.sendQueue = []
@@ -222,6 +245,7 @@ export class IrcClient {
           )
         ) {
           this.authFailures++
+          diagSocket('irc', 'login rejected', `${msg.trailing ?? ''} (attempt ${this.authFailures})`)
           if (this.opts.getToken && this.authFailures >= 3) {
             this.authStopped = true
             this.opts.onAuthFailed?.()
@@ -231,8 +255,17 @@ export class IrcClient {
         this.opts.onMessage(msg)
       }
     }
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       if (this.ws !== ws) return
+      // the close CODE is the one thing that separates "Twitch asked us to go away" from
+      // "the line dropped underneath us", and it never used to be recorded anywhere
+      diagSocket(
+        'irc',
+        'closed',
+        `code=${ev.code} clean=${ev.wasClean} reason="${ev.reason || '-'}" idle=${Math.round(
+          (Date.now() - this.lastActivity) / 1000
+        )}s`
+      )
       this.ready = false
       this.opts.onClose?.()
       this.scheduleReconnect()
@@ -253,6 +286,7 @@ export class IrcClient {
     if (this.reconnectTimer !== null) return // only ever one pending reconnect
     const delay = this.backoff
     this.backoff = Math.min(this.backoff * 2, 30000)
+    diagSocket('irc', 'reconnect scheduled', `in ${delay}ms`)
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null
       this.connect()

@@ -967,6 +967,8 @@ export const en = {
   'set.raidSound': 'Sound when a raid prompt appears',
 
   // Info lines
+  'info.connLost': '⚠ Lost the chat connection — reconnecting…',
+  'info.connRestored': '✓ Chat connection restored',
   'info.raidStart': '🚨 Raiding {target} ({count} viewers)',
   'info.pollStart': '📊 Poll started: “{title}” — {choices}',
   'info.predictionStart': '🔮 Prediction started: “{title}” — {choices}',

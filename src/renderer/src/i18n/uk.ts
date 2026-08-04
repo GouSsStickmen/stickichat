@@ -969,6 +969,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.raidSound': 'Звук при сповіщенні про рейд',
 
   // Info lines
+  'info.connLost': '⚠ Звʼязок із чатом втрачено — перепідключення…',
+  'info.connRestored': '✓ Звʼязок із чатом відновлено',
   'info.raidStart': '🚨 Рейд на {target} ({count} глядачів)',
   'info.pollStart': '📊 Почалося голосування: «{title}» — {choices}',
   'info.predictionStart': '🔮 Почався предікт: «{title}» — {choices}',

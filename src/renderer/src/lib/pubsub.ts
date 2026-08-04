@@ -1,6 +1,7 @@
 import { Account } from '../types'
 import { ensureFreshToken } from './twitchAuth'
 import { useSettingsStore } from '../store/settings'
+import { diagSocket } from './diag'
 
 /**
  * Twitch PubSub — two viewer-token topics EventSub can't fully replace:
@@ -129,8 +130,9 @@ export class PubSubClient {
         }
       }
     }
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       if (this.ws !== ws) return
+      diagSocket('pubsub', 'closed', `code=${ev.code} clean=${ev.wasClean} reason="${ev.reason || '-'}"`)
       this.scheduleReconnect()
     }
     ws.onerror = () => {

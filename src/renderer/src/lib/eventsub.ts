@@ -1,5 +1,6 @@
 import { Account } from '../types'
 import { createEventSubSubscription } from './helix'
+import { diagSocket } from './diag'
 
 /**
  * Twitch EventSub over WebSocket. Used for things IRC no longer delivers — whispers
@@ -95,8 +96,9 @@ export class EventSubClient {
       }
       this.handle(msg)
     }
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       if (this.ws !== ws) return
+      diagSocket('eventsub', 'closed', `code=${ev.code} clean=${ev.wasClean} reason="${ev.reason || '-'}"`)
       this.scheduleReconnect()
     }
     ws.onerror = () => {

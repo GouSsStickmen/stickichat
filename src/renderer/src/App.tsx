@@ -26,6 +26,7 @@ import { buildChannelSeed, injectChannelSeed } from './lib/detachSeed'
 import { hexToRgba } from './lib/tokenize'
 import { hotkeyFor, matchHotkey } from './lib/hotkeys'
 import { applyTheme } from './lib/themes'
+import { diagInfo, diagWarn } from './lib/diag'
 import { useT } from './i18n'
 import { PinIcon } from './components/Icons'
 
@@ -169,6 +170,21 @@ export default function App(): React.JSX.Element | null {
     // right tool and is not: the zoom LEVEL is stored per ORIGIN, so zooming the settings
     // window zoomed the chat window with it — every window here shares one origin.
     void window.sticki.setZoom(1)
+  }, [])
+
+  // Whether the machine thinks it has a network at all. Without this a report cannot tell
+  // "the socket died on its own" from "the whole box went offline for ten seconds", and those
+  // want completely different answers.
+  useEffect(() => {
+    const on = (): void => diagInfo('net', 'browser reports ONLINE')
+    const off = (): void => diagWarn('net', 'browser reports OFFLINE')
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    if (!navigator.onLine) off()
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
   }, [])
 
   useEffect(() => {

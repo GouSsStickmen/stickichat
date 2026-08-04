@@ -1,5 +1,6 @@
 import { Emote } from '../types'
 import { SevenTvEmote, sevenTvToEmote } from './emoteProviders'
+import { diagSocket } from './diag'
 
 /**
  * 7TV EventAPI (wss://events.7tv.io/v3): live emote-set updates, so an emote a broadcaster
@@ -137,8 +138,9 @@ export class SevenTvEvents {
         }
       }
     }
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       if (this.ws !== ws) return
+      diagSocket('7tv', 'closed', `code=${ev.code} clean=${ev.wasClean} reason="${ev.reason || '-'}"`)
       this.scheduleReconnect()
     }
     ws.onerror = () => {
