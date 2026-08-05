@@ -464,6 +464,7 @@ export const en = {
   'set.group.diag': 'DIAGNOSTICS',
   'diag.hint': 'The app keeps a local error log and collects dumps if a window crashes. Nothing is uploaded — the files stay on your disk. If something breaks, copy the report and attach it to your description of the problem.',
   'diag.show': 'Show log',
+  'diag.hide': 'Hide log',
   'diag.copy': 'Copy report',
   'diag.save': 'Save to file',
   'diag.openFolder': 'Open folder',

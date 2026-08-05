@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import { Account, ChatMessage, Pane } from '../types'
 import { useChatStore } from '../store/chat'
@@ -70,9 +70,6 @@ export default function MessageList({
   // loads, and a fast upward fling is never yanked back down.
   const followingRef = useRef(true)
   const [following, setFollowing] = useState(true)
-  // smooth mode falls back to instant jumps during floods (glide can't keep up)
-  const smoothOkRef = useRef(true)
-  const msgTimes = useRef<number[]>([])
   const [flashId, setFlashId] = useState<string | null>(null)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
@@ -89,6 +86,51 @@ export default function MessageList({
   const firstIndexRef = useRef(FIRST_BASE)
   /** when the list went blank (0 rows rendered while the buffer is full), 0 when it is fine */
   const blankRef = useRef(0)
+  /** did a frame actually get painted while the list was empty? */
+  const blankPaintedRef = useRef(false)
+  const blankSeqRef = useRef(0)
+
+  /**
+   * The thing the user actually sees.
+   *
+   * The empty-render events turned out to last 1-6ms and never survive to a paint, so they
+   * are not the reported "chat disappears". This is: while the user is pinned to the bottom,
+   * the scroller drifting a whole viewport or more away from it — the view jumping off to
+   * somewhere in the backlog and coming back. Sampled once a frame, reported only when it
+   * lasts long enough to be drawn.
+   */
+  useEffect(() => {
+    let raf = 0
+    let driftSince = 0
+    let worst = 0
+    const sample = (): void => {
+      raf = requestAnimationFrame(sample)
+      if (!followingRef.current || scrollLocked) {
+        driftSince = 0
+        return
+      }
+      const sc = wrapRef.current?.querySelector('[data-virtuoso-scroller="true"]') as HTMLElement | null
+      if (!sc || sc.clientHeight === 0) return
+      const away = sc.scrollHeight - sc.scrollTop - sc.clientHeight
+      if (away > sc.clientHeight) {
+        if (!driftSince) {
+          driftSince = performance.now()
+          worst = away
+        } else if (away > worst) worst = away
+      } else if (driftSince) {
+        const ms = Math.round(performance.now() - driftSince)
+        driftSince = 0
+        if (ms >= 16) {
+          diagWarn(
+            'list',
+            `${pane.channel}: view drifted ${Math.round(worst)}px off the bottom for ${ms}ms while following`
+          )
+        }
+      }
+    }
+    raf = requestAnimationFrame(sample)
+    return () => cancelAnimationFrame(raf)
+  }, [pane.channel, scrollLocked])
   const prevMessagesRef = useRef<ChatMessage[]>([])
   {
     const prev = prevMessagesRef.current
@@ -127,6 +169,33 @@ export default function MessageList({
       prevMessagesRef.current = messages
     }
   }
+
+  /**
+   * Put the scroll back where it belongs the instant the head is cut — before anything is drawn.
+   *
+   * Measured, with the scroller captured at the exact frame the list rendered zero rows: the
+   * position was not past the end, it sat ten to twenty-four THOUSAND pixels above the bottom,
+   * in the middle of the content, with nothing rendered there. Roughly the height of the rows
+   * that had just been removed, subtracted a second time. Virtuoso's `firstItemIndex` shift is
+   * meant to keep the viewport still across a head change and it lands in the wrong place;
+   * splitting the trim into its own commit was tried and changed nothing, so the shift itself
+   * is what misfires.
+   *
+   * Rather than fight its internals, correct the result. A layout effect runs after the DOM is
+   * updated and BEFORE the browser paints, so re-pinning here means the bad position never
+   * reaches the screen — the blank frame stops existing rather than getting shorter.
+   *
+   * Only when the user is following the bottom, and only for head REMOVAL: a decreasing index
+   * is history being prepended, where the whole point is that the view must not move.
+   */
+  const shiftSeenRef = useRef(firstIndexRef.current)
+  useLayoutEffect(() => {
+    const now = firstIndexRef.current
+    const removed = now > shiftSeenRef.current
+    shiftSeenRef.current = now
+    if (!removed || !followingRef.current || scrollLocked) return
+    virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
+  })
 
   /**
    * Resizing the list (closing the highlights sidebar or a split pane, resizing the window)
@@ -219,15 +288,53 @@ export default function MessageList({
     }
   }, [scrollLocked, pane.id])
 
-  // estimate the message rate: >3 msgs/sec means gliding cannot keep up — fall back to
-  // instant jumps until the flood calms down
+  /**
+   * Smooth scrolling, driven here instead of by the list — the Chatterino model.
+   *
+   * What was here before: `followOutput: 'smooth'`, plus a rule that gave up above three
+   * messages a second and reverted to instant jumps. That rule IS the "with smooth scrolling
+   * on, a busy chat stops scrolling smoothly" report — it was working as designed, and the
+   * design was wrong. It existed because each new message started a FRESH browser smooth-scroll
+   * to a new target, cancelling the one in flight; at speed that is a stutter, not a glide.
+   *
+   * A single animation that never restarts has no such limit. Every frame it moves a fraction
+   * of whatever distance remains, so a faster chat simply moves it faster and it stays smooth
+   * at any rate. The speed floor stops the last pixels from crawling.
+   *
+   * The snap threshold is the other half of the "chat disappears for a second" bug. Measured:
+   * after the ring buffer cuts its head the scroll can land eight thousand pixels adrift, and
+   * gliding back over that distance took ~500ms — half a second of showing the wrong part of
+   * the backlog, which is exactly what people were describing. More than about a screen and a
+   * half is not a glide, it is a correction: go there at once.
+   */
   useEffect(() => {
-    const now = Date.now()
-    const t = msgTimes.current
-    t.push(now)
-    while (t.length && now - t[0] > 2000) t.shift()
-    smoothOkRef.current = t.length <= 6
-  }, [messages.length])
+    if (!smoothScroll || scrollLocked) return
+    const el = wrapRef.current
+    if (!el) return
+    let raf = 0
+    const tick = (): void => {
+      raf = requestAnimationFrame(tick)
+      if (!followingRef.current) return
+      const sc = el.querySelector('[data-virtuoso-scroller="true"]') as HTMLElement | null
+      if (!sc) return
+      // the exact maximum, not an overshoot left to the browser to clamp: while the list is
+      // virtualized, a scrollTop past the end can land outside the measured range for a frame
+      // and that frame renders nothing
+      const bottom = sc.scrollHeight - sc.clientHeight
+      const dist = bottom - sc.scrollTop
+      if (dist < 0.5) return
+      if (dist > sc.clientHeight * 1.5) {
+        // a correction, not a glide — and go through the list rather than writing scrollTop
+        // by hand: only it knows which rows it has measured, and a raw jump to a position it
+        // has not prepared renders an empty frame
+        virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
+        return
+      }
+      sc.scrollTop += Math.max(1.5, dist * 0.28)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [smoothScroll, scrollLocked])
 
   // history often arrives AFTER the empty list mounted — snap to the bottom on first fill,
   // otherwise the view stays parked at the top of the freshly-prepended scrollback
@@ -282,7 +389,11 @@ export default function MessageList({
         // — invisible. (Safe now: with stable firstItemIndex the measurement cache survives
         // buffer trims, which is what used to make a big overscan thrash.)
         increaseViewportBy={{ top: 800, bottom: 320 }}
-        followOutput={(isAtBottom) => (scrollLocked ? false : isAtBottom ? (smoothScroll && smoothOkRef.current ? 'smooth' : 'auto') : false)}
+        // in smooth mode the animation above owns the scroller — letting Virtuoso pin it too
+        // means two things driving the same scrollTop, and they fight
+        followOutput={(isAtBottom) =>
+          scrollLocked || smoothScroll ? false : isAtBottom ? 'auto' : false
+        }
         atBottomStateChange={(b) => {
           setAtBottom(b)
           if (b) {
@@ -302,10 +413,21 @@ export default function MessageList({
           const blank = messages.length > 0 && items.length === 0
           if (blank && !blankRef.current) {
             blankRef.current = Date.now()
+            blankPaintedRef.current = false
+            // A blank that is repaired inside the same frame is never drawn — the browser
+            // paints once per frame, not once per render. So ask the browser: this callback
+            // runs just before the next paint, and if the list is STILL empty then, the user
+            // is about to actually see an empty chat. That is the number that matters; the
+            // rest is internal churn.
+            const seq = ++blankSeqRef.current
+            requestAnimationFrame(() => {
+              if (blankRef.current && blankSeqRef.current === seq) blankPaintedRef.current = true
+            })
           } else if (!blank && blankRef.current) {
+            const painted = blankPaintedRef.current
             diagWarn(
               'list',
-              `${pane.channel}: rendered 0 of ${messages.length} rows for ${Date.now() - blankRef.current}ms`
+              `${pane.channel}: rendered 0 of ${messages.length} rows for ${Date.now() - blankRef.current}ms — ${painted ? 'PAINTED' : 'not painted'}`
             )
             blankRef.current = 0
           }

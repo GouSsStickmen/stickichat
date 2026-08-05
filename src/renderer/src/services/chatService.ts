@@ -32,6 +32,7 @@ const SUB_EVENT_IDS = new Set([
   'giftpaidupgrade', 'anongiftpaidupgrade', 'primepaidupgrade'
 ])
 import { PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
+import { diagInfo } from '../lib/diag'
 
 /**
  * Invisible U+E0000 (a Unicode TAG character): appended to a repeated message so Twitch
@@ -753,41 +754,88 @@ class ChatService {
     }
   }
 
+  /**
+   * Pull the channel's recent-messages scrollback and turn it into chat messages.
+   *
+   * `historical` controls whether they are painted as scrollback (dimmed, no sounds) or as
+   * ordinary chat: true when filling the view on open, false when filling a gap the user
+   * lived through — those are real messages that merely arrived late, and dimming them would
+   * say "old" about something that happened thirty seconds ago.
+   */
+  private async fetchHistoryMessages(channel: string, historical: boolean): Promise<ChatMessage[]> {
+    const lines = await fetchRecentMessages(channel)
+    const msgs: ChatMessage[] = []
+    for (const line of lines) {
+      const parsed = parseIrcLine(line)
+      if (!parsed) continue
+      if (parsed.command === 'PRIVMSG') {
+        const m = this.privmsgToChatMessage(parsed)
+        if (m) {
+          m.historical = historical
+          // mentions/keywords must be flagged for history too, or the "mentions" tab of
+          // the highlights panel starts empty after every launch (no sounds: historical)
+          const myLogins = useAccountsStore.getState().accounts.map((a) => a.login.toLowerCase())
+          if (m.replyParent && myLogins.includes(m.replyParent.login.toLowerCase())) {
+            m.replyToMe = true
+            m.isMention = true
+          }
+          this.detectMention(m)
+          msgs.push(m)
+        }
+      } else if (parsed.command === 'USERNOTICE') {
+        // scrollback should show subs/resubs/raids too, not just plain chat
+        const m = this.usernoticeToHistorical(parsed)
+        if (m) msgs.push(m)
+      }
+    }
+    return msgs
+  }
+
   private onChannelOpened(channel: string): void {
     const { settings, } = useSettingsStore.getState()
     if (settings.loadHistory && !this.historyLoaded.has(channel)) {
       this.historyLoaded.add(channel)
-      fetchRecentMessages(channel).then((lines) => {
-        const msgs: ChatMessage[] = []
-        for (const line of lines) {
-          const parsed = parseIrcLine(line)
-          if (!parsed) continue
-          if (parsed.command === 'PRIVMSG') {
-            const m = this.privmsgToChatMessage(parsed)
-            if (m) {
-              m.historical = true
-              // mentions/keywords must be flagged for history too, or the "mentions" tab of
-              // the highlights panel starts empty after every launch (no sounds: historical)
-              const myLogins = useAccountsStore.getState().accounts.map((a) => a.login.toLowerCase())
-              if (m.replyParent && myLogins.includes(m.replyParent.login.toLowerCase())) {
-                m.replyToMe = true
-                m.isMention = true
-              }
-              this.detectMention(m)
-              msgs.push(m)
-            }
-          } else if (parsed.command === 'USERNOTICE') {
-            // scrollback should show subs/resubs/raids too, not just plain chat
-            const m = this.usernoticeToHistorical(parsed)
-            if (m) msgs.push(m)
-          }
-        }
+      void this.fetchHistoryMessages(channel, true).then((msgs) => {
         // replay recent redemptions + mod actions (they never come from IRC history)
         const redeems = this.loadPersistedRedeems(channel)
         const modacts = this.loadPersistedModActions(channel)
         const all = [...msgs, ...redeems, ...modacts].sort((a, b) => a.timestamp - b.timestamp)
         if (all.length) useChatStore.getState().prependMessages(channel, all)
       })
+    }
+  }
+
+  /**
+   * Refill what the chat missed while the socket was down.
+   *
+   * Reconnecting to IRC gets you the live stream and nothing else — Twitch does not replay
+   * what happened while you were away. Until now that gap was simply lost: "the chat stops
+   * loading and the messages disappear into nowhere" was literally true, and the only reason
+   * anything ever came back was that the user restarted the app. The recent-messages
+   * scrollback covers exactly that window, and seedMessages merges it by id and sorts by
+   * time, so the recovered lines slot into their real place instead of piling up at the end.
+   *
+   * Gated on the history setting: it is the same third-party source, and someone who turned
+   * that off has said they do not want us asking it for their channels.
+   */
+  private backfillAfterOutage(downSince: number): void {
+    if (!useSettingsStore.getState().settings.loadHistory) return
+    const gapSec = Math.round((Date.now() - downSince) / 1000)
+    for (const channel of allOpenChannels(useLayoutStore.getState().tabs)) {
+      void this.fetchHistoryMessages(channel, false)
+        .then((msgs) => {
+          // only what arrived during the outage — the rest is already in the buffer, and
+          // seedMessages would dedupe it anyway, but there is no point handing it a thousand
+          // rows to compare. A little slack either side of the gap covers clock skew.
+          const since = downSince - 5000
+          const missed = msgs.filter((m) => m.timestamp >= since)
+          if (!missed.length) return
+          useChatStore.getState().seedMessages(channel, missed)
+          diagInfo('chat', `${channel}: backfilled ${missed.length} message(s) missed during a ${gapSec}s outage`)
+        })
+        .catch(() => {
+          /* the scrollback service is best-effort; a failed refill must not break reconnect */
+        })
     }
   }
 
@@ -1323,6 +1371,8 @@ class ChatService {
    * chat says so, and says when it is back.
    */
   private connDown = false
+  /** when the line went down, so the refill knows how far back to reach */
+  private downSince = 0
 
   private announceConnection(open: boolean): void {
     useChatStore.getState().setConnState(open ? 'open' : 'connecting')
@@ -1332,6 +1382,14 @@ class ChatService {
     this.connDown = !open
     // the standalone windows share this service — only the main window writes chat lines
     if (window.location.hash) return
+    if (!open) {
+      this.downSince = Date.now()
+    } else if (this.downSince) {
+      // saying "connection restored" while the minute we missed stays a hole is only half the
+      // job — go and fetch what happened in it
+      this.backfillAfterOutage(this.downSince)
+      this.downSince = 0
+    }
     const lang = useSettingsStore.getState().settings.language
     const text = translate(lang, open ? 'info.connRestored' : 'info.connLost')
     for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.localInfo(ch, text)

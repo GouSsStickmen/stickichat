@@ -2867,7 +2867,13 @@ function DiagnosticsBlock(): React.JSX.Element {
   const [text, setText] = useState('')
   const [msg, setMsg] = useState('')
 
-  const load = (): void => {
+  // one button, two directions: opening the log was a dead end — there was no way back and
+  // the wall of text stayed under everything else for the rest of the visit
+  const toggle = (): void => {
+    if (text) {
+      setText('')
+      return
+    }
     void window.sticki.diagTail(300).then((v) => setText(v || t('diag.empty')))
   }
 
@@ -2877,7 +2883,7 @@ function DiagnosticsBlock(): React.JSX.Element {
         {t('diag.hint')}
       </p>
       <div className="row" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-        <button onClick={load}>{t('diag.show')}</button>
+        <button onClick={toggle}>{text ? t('diag.hide') : t('diag.show')}</button>
         <button
           className="primary"
           onClick={() => {
@@ -2976,8 +2982,9 @@ function AdvancedSection(): React.JSX.Element {
         <label>{t('set.msgLimit')}</label>
         <NumberField value={settings.messageLimit} min={100} max={5000} onChange={(n) => set({ messageLimit: n })} />
       </div>
-      <div className="set-group-title">{t('set.group.diag')}</div>
-      <DiagnosticsBlock />
+      {/* Diagnostics moved to "About": a person looking for it is on their way to filing a
+          bug, and that is where the GitHub link lives. Burying it under Advanced meant the
+          report and the place to send it were two tabs apart. */}
       {/* a backup is not a performance setting; it was only next to one because both ended
           up in the same catch-all section */}
       <div className="set-group-title">{t('set.group.backup')}</div>
@@ -3058,6 +3065,10 @@ function AboutSection(): React.JSX.Element {
         <label>{t('about.feedbackHint')}</label>
         <button onClick={() => window.sticki.openExternal(GITHUB_ISSUES)}>🐞 {t('about.github')}</button>
       </div>
+      {/* directly under the GitHub button on purpose: filing a useful bug report means
+          attaching this, and the two used to live in different tabs */}
+      <div className="set-group-title" style={{ marginTop: 20 }}>{t('set.group.diag')}</div>
+      <DiagnosticsBlock />
       <div className="set-group-title" style={{ marginTop: 20 }}>
         {t('about.changelog')}
       </div>
