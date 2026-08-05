@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Account, Emote, Pane } from '../types'
 import { useAccountsStore } from '../store/accounts'
 import { useLayoutStore } from '../store/layout'
@@ -194,9 +194,13 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
   }
 
-  // grow on EVERY text change, not only typing: external inserts (emotes, mod-button fill,
-  // history recall) bypass onChange and used to leave the box at its old height
-  useEffect(() => {
+  // Grow on EVERY text change, not only typing: external inserts (emotes, mod-button fill,
+  // history recall) bypass onChange and used to leave the box at its old height.
+  //
+  // BEFORE paint, not after: as a plain effect this ran once the frame with the new text was
+  // already on screen, so a character that added a line was painted at the old height first and
+  // the correction landed a frame later — visible as the chat twitching under the input.
+  useLayoutEffect(() => {
     autoGrow()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text])

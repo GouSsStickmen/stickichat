@@ -758,8 +758,13 @@ select:focus {
    in the user card they came out letterboxed to a sliver. Height is what has to match; the
    width follows the art, with the square size kept as a floor so nothing jumps while loading. */
 .usercard .uc-badges img {
+  /* The card is a compact popup and shows the WHOLE collection, not the two or three worn in
+     chat — at a large in-chat badge size that row turned into a wall of icons. Capped here, and
+     the width follows the art with a ceiling of its own so a 5:1 badge can't eat the row. */
+  height: min(var(--badge-size, 18px), 20px);
+  min-width: 0;
   width: auto;
-  max-width: none;
+  max-width: calc(min(var(--badge-size, 18px), 20px) * 2.5);
 }
 .msg .nick {
   font-weight: 700;
@@ -3836,7 +3841,7 @@ button:has(> svg) {
 
 .channel-prompt {
   position: fixed;
-  top: 46px;
+  top: calc(var(--tabbar-h, 46px) + 8px);
   right: 16px;
   display: flex;
   flex-direction: column;
@@ -3860,12 +3865,29 @@ button:has(> svg) {
   justify-content: flex-end;
 }
 
+/* a train running in another tab — the popup stays with the active chat */
+.hype-tab-dot {
+  font-size: var(--fs-sm);
+  line-height: 1;
+  animation: hype-tab-bob 0.6s ease-in-out infinite alternate;
+}
+@keyframes hype-tab-bob {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-2px);
+  }
+}
+
 /* ---------- Hype train ---------- */
 
 .hype-train {
   position: fixed;
-  bottom: 16px;
-  right: 16px;
+  /* under the tab bar, on the left: the same strip the toasts use, but the opposite end, so a
+     train and a raid prompt at the same moment do not sit on top of each other */
+  top: calc(var(--tabbar-h, 46px) + 8px);
+  left: 16px;
   width: min(320px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
@@ -4070,7 +4092,8 @@ button:has(> svg) {
 /* top-right, under the tab bar: the old bottom-right spot covered the send button */
 .toasts {
   position: fixed;
-  top: 46px;
+  /* measured, not assumed: with four rows of tabs a fixed 46px landed ON the tabs */
+  top: calc(var(--tabbar-h, 46px) + 8px);
   right: 16px;
   display: flex;
   flex-direction: column;

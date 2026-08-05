@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useLayoutStore } from '../store/layout'
 import { useChatStore } from '../store/chat'
 import { useSettingsStore } from '../store/settings'
@@ -30,8 +30,10 @@ export default function TabBar(): React.JSX.Element {
   const [nameInput, setNameInput] = useState('')
   const [draggingTab, setDraggingTab] = useState<string | null>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
   const unreadWhispers = useWhispersStore((s) => s.unread)
   const whispersOpen = useUiStore((s) => s.whispersOpen)
+  const hypeChannel = useUiStore((s) => (s.hypeTrain?.ended ? null : (s.hypeTrain?.channel ?? null)))
   const scrollSync = useUiStore((s) => s.scrollSync)
 
   const activeTab = tabs.find((x) => x.id === activeTabId)
@@ -39,6 +41,24 @@ export default function TabBar(): React.JSX.Element {
   // FLIP: when the order changes (drag reorder, close, add), every tab glides from its
   // previous position to the new one — the Chrome-tabs feel
   useFlip(tabsRef, '.tab', !!draggingTab)
+
+  /**
+   * Publish how tall the bar actually is, as `--tabbar-h` on the root.
+   *
+   * Toasts and prompts used to sit at a hardcoded `top: 46px` — the height of ONE row of tabs.
+   * With four rows they landed on top of the tabs and covered them. Everything that floats
+   * below the bar now measures it instead of assuming.
+   */
+  useLayoutEffect(() => {
+    const el = barRef.current
+    if (!el) return
+    const publish = (): void =>
+      document.documentElement.style.setProperty('--tabbar-h', `${Math.round(el.offsetHeight)}px`)
+    publish()
+    const ro = new ResizeObserver(publish)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const tabLabel = (id: string): string => {
     const tab = tabs.find((x) => x.id === id)
@@ -96,7 +116,7 @@ export default function TabBar(): React.JSX.Element {
     )
 
   return (
-    <div className="tabbar">
+    <div className="tabbar" ref={barRef}>
       {/* floated right — must precede the tab flow so rows wrap around it */}
       <div className="tabbar-actions">
       <button className="icon-btn" title={t(`tab.filter.${tabFilter}`)} onClick={cycleFilter}>
@@ -269,6 +289,13 @@ export default function TabBar(): React.JSX.Element {
             )}
             {/* fixed-width slot so the tab doesn't change size when an indicator appears */}
             <span className="tab-indicator-slot">
+              {/* a train running in a chat you are not looking at: the popup belongs to the
+                  active tab only, so this is the whole signal that one is happening elsewhere */}
+              {hypeChannel && !isActive && tab.panes.some((p) => p.channel === hypeChannel) && (
+                <span className="hype-tab-dot" title={t('hype.title')}>
+                  🚂
+                </span>
+              )}
               {keywordTag && !isActive && <span className="keyword-tag" title={keywordTag}>{keywordTag}</span>}
               {hasMention && <span className="mention-dot">@</span>}
               {!hasMention && hasUnread && <span className="unread-dot" title={t('tab.newMessage')} />}

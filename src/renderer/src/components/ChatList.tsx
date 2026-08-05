@@ -357,15 +357,31 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     const el = scRef.current
     if (!el) return
     let lastW = el.clientWidth
+    let lastH = el.clientHeight
     const ro = new ResizeObserver(() => {
       viewRef.current = el.clientHeight
+      // The viewport got shorter — the input grew a line, a banner appeared. scrollTop is
+      // measured from the TOP, so it survives untouched and the newest message slides below
+      // the fold: from the reader's side the whole chat lurches downward. If we were glued to
+      // the bottom we must still be glued to it after the resize.
+      if (el.clientHeight !== lastH) {
+        lastH = el.clientHeight
+        if (following.current && !locked) {
+          const bottom = el.scrollHeight - el.clientHeight
+          if (Math.abs(el.scrollTop - bottom) > 0.5) {
+            el.scrollTop = bottom
+            scrollTopRef.current = bottom
+            ourScrollTop.current = bottom
+          }
+        }
+      }
       if (el.clientWidth === lastW) return
       lastW = el.clientWidth
       rerender()
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [rerender])
+  }, [rerender, following, locked])
 
   const onScroll = useCallback((): void => {
     const el = scRef.current
