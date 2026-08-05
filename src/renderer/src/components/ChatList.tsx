@@ -186,7 +186,9 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   // following it, or the anchor's new position if we are not.
   const view = viewRef.current || 1
   if (headMoved.current) {
-    if (following.current && !locked) {
+    // the same rule the layout effect uses, so the slice and the scroll agree
+    const glued = following.current && !locked && !smooth
+    if (glued) {
       scrollTopRef.current = Math.max(0, total - view)
     } else if (anchor.current) {
       const a = anchor.current
@@ -292,9 +294,17 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     const moved = headMoved.current || changed
     headMoved.current = false
 
-    if (following.current && !locked) {
-      // smooth mode has its own animation driving the scroll; pinning here would fight it
-      if (!smooth) pin(el, el.scrollHeight)
+    // Instant mode pins to the newest message and that is the whole behaviour.
+    //
+    // Smooth mode goes through the anchor even while following, and that is what makes it
+    // smooth at all. Once the buffer is full, an arriving message does not make the document
+    // taller — thirty pixels appear at the bottom and thirty vanish off the top, so the view
+    // is still exactly at the end and a distance-based glide has nothing to travel. Holding
+    // the anchor instead leaves the same text on screen, which CREATES that thirty pixels of
+    // distance, and the animation below then eats it. That is the difference between a chat
+    // that crawls and one that steps a line at a time.
+    if (following.current && !locked && !smooth) {
+      pin(el, el.scrollHeight)
     } else if (moved) {
       const a = anchor.current
       if (a) {
