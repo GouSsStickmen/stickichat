@@ -174,7 +174,26 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   }
 
   // ---- which rows to actually render ----
+  //
+  // When the head has just been cut, `scrollTopRef` still holds the position from BEFORE the
+  // cut, and every offset below has moved up by the height of what went. Slicing with the old
+  // number picks rows for a place in the document that no longer exists — one frame drawn from
+  // the wrong part of the list, which is the micro-blink that shows up as soon as the buffer
+  // is small enough to be trimmed often. The layout effect repairs the scroll a moment later,
+  // but by then the frame has been painted.
+  //
+  // So slice from where the scroll is ABOUT to be, which is known: the bottom if we are
+  // following it, or the anchor's new position if we are not.
   const view = viewRef.current || 1
+  if (headMoved.current) {
+    if (following.current && !locked) {
+      scrollTopRef.current = Math.max(0, total - view)
+    } else if (anchor.current) {
+      const a = anchor.current
+      const i = messages.findIndex((m) => m.id === a.id)
+      if (i >= 0) scrollTopRef.current = Math.max(0, offsets[i] - a.gap)
+    }
+  }
   const from = lowerBound(offsets, scrollTopRef.current - OVERSCAN)
   const to = upperBound(offsets, scrollTopRef.current + view + OVERSCAN)
 

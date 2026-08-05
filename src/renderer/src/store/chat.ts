@@ -119,26 +119,19 @@ export function lookupUserBadges(channel: string, login: string): BadgeRef[] | u
 }
 
 /**
- * How far the buffer may overshoot its limit before the head is cut.
+ * How far the buffer may overshoot its limit before the head is cut. Zero: cut it as soon as
+ * it is over, so only what actually overflowed goes.
  *
- * SMALL BITES. This is the "chat goes blank for a moment" bug, and the surprise is that the
- * answer was the opposite of the obvious one. Measured on kaicenat at 130k viewers, buffer
- * limit 800: four minutes produced twenty-six frames that rendered ZERO rows, three of them
- * lasting long enough to be painted — 13ms, 69ms and 188ms. Every single one happened at a
- * buffer size between 799 and 819, which is the instant the head is cut. Never anywhere else.
+ * Batching was a workaround for the old virtualized list, where trimming on every message
+ * nudged the scroll a few pixels on every send. That list is gone, and batching turned out to
+ * cost more than it saved: cutting twenty rows at once moves everything below them by six
+ * hundred pixels in a single commit, and any imprecision in that step is a visible flicker,
+ * while cutting one row moves thirty and nothing is noticeable even if it is imperfect.
  *
- * The tempting fix is to cut less OFTEN, and it does nothing: the problem is how MUCH goes in
- * one commit. Removing two hundred rows shifts `firstItemIndex` by two hundred, and the list
- * cannot produce a frame out of a reshuffle that big — on light rows it recovers in 2ms and
- * nobody sees it, on rows full of emotes and badges it takes a fifth of a second. Removing
- * twenty is small enough that it never fails: same channel, same conditions, zero.
- *
- * It is also cheaper in every direction — fewer rows held, and Chromium's ResizeObserver
- * churn dropped from ~3900 notices a minute to ~2300, because a small head change is a small
- * relayout. The original reason for batching at all (trimming on every single message nudged
- * the scroll on every send) is satisfied just as well at twenty as at two hundred.
+ * It is also simply how Chatterino behaves — old messages disappearing one at a time rather
+ * than in blocks — and that is not a coincidence, it is the same reasoning.
  */
-const SLACK = 20
+const SLACK = 0
 
 export const useChatStore = create<ChatState>()((set) => ({
   messages: {},
