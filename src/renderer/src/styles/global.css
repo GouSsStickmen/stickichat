@@ -89,6 +89,10 @@
   --text-faint: #77777f;
   --accent: #a970ff;
   --accent-strong: #9147ff;
+  /* where everything that floats over the chat starts: under the tab bar AND under the pane
+     header, so a toast never covers the pane's own buttons. Both parts are measured at runtime
+     (TabBar and ChatPane publish them) — the fallbacks are just the one-row sizes. */
+  --notif-top: calc(var(--tabbar-h, 46px) + var(--panehead-h, 34px) + 8px);
   /* text and icons sitting on ANY saturated fill — accent, danger, success, the live dot */
   --accent-text: #ffffff;
   --danger: #eb4c4c;
@@ -761,10 +765,10 @@ select:focus {
   /* The card is a compact popup and shows the WHOLE collection, not the two or three worn in
      chat — at a large in-chat badge size that row turned into a wall of icons. Capped here, and
      the width follows the art with a ceiling of its own so a 5:1 badge can't eat the row. */
-  height: min(var(--badge-size, 18px), 20px);
+  height: min(var(--badge-size, 18px), 16px);
   min-width: 0;
   width: auto;
-  max-width: calc(min(var(--badge-size, 18px), 20px) * 2.5);
+  max-width: calc(min(var(--badge-size, 18px), 16px) * 2.5);
 }
 .msg .nick {
   font-weight: 700;
@@ -3841,7 +3845,7 @@ button:has(> svg) {
 
 .channel-prompt {
   position: fixed;
-  top: calc(var(--tabbar-h, 46px) + 8px);
+  top: calc(var(--notif-top) + var(--hype-h, 0px));
   right: 16px;
   display: flex;
   flex-direction: column;
@@ -3884,10 +3888,9 @@ button:has(> svg) {
 
 .hype-train {
   position: fixed;
-  /* under the tab bar, on the left: the same strip the toasts use, but the opposite end, so a
-     train and a raid prompt at the same moment do not sit on top of each other */
-  top: calc(var(--tabbar-h, 46px) + 8px);
-  left: 16px;
+  /* below the tab bar AND the pane header, so it never sits on the pane's own buttons */
+  top: var(--notif-top);
+  right: 16px;
   width: min(320px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
@@ -4092,8 +4095,9 @@ button:has(> svg) {
 /* top-right, under the tab bar: the old bottom-right spot covered the send button */
 .toasts {
   position: fixed;
-  /* measured, not assumed: with four rows of tabs a fixed 46px landed ON the tabs */
-  top: calc(var(--tabbar-h, 46px) + 8px);
+  /* measured, not assumed (see --notif-top). --hype-h is the height of the train popup while
+     one is on screen, so messages queue UNDER it instead of landing on top of it. */
+  top: calc(var(--notif-top) + var(--hype-h, 0px));
   right: 16px;
   display: flex;
   flex-direction: column;

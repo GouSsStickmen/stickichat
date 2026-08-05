@@ -114,8 +114,12 @@ export default function WhisperPanel({
     if (!el) return
     el.style.height = 'auto'
     const max = Math.max(80, Math.round((rootRef.current?.clientHeight ?? 420) / 3))
-    el.style.height = `${Math.min(el.scrollHeight, max)}px`
-    el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden'
+    // + the border: scrollHeight excludes it, the box is border-box, and being two pixels
+    // short leaves the field permanently scrollable (see the same note in InputBox)
+    const cs = getComputedStyle(el)
+    const border = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0)
+    el.style.height = `${Math.min(el.scrollHeight + border, max)}px`
+    el.style.overflowY = el.scrollHeight + border > max ? 'auto' : 'hidden'
   }, [text, selected])
 
   /**

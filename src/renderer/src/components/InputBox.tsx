@@ -191,7 +191,14 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
       return
     }
     ta.style.height = 'auto'
-    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
+    // scrollHeight is content + padding and does NOT include the border, but the box is
+    // border-box — so `height = scrollHeight` left the text two pixels taller than the box it
+    // sits in. The field was therefore ALWAYS scrollable by a hair: the browser nudged it to
+    // keep the caret in view on every keystroke, and past one line that nudge showed up as the
+    // chat above twitching. Add the border back and the content fits exactly.
+    const cs = getComputedStyle(ta)
+    const border = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0)
+    ta.style.height = `${Math.min(ta.scrollHeight + border, 120)}px`
   }
 
   // Grow on EVERY text change, not only typing: external inserts (emotes, mod-button fill,

@@ -34,6 +34,23 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const channelName = useChatStore((s) => s.channelNames[pane.channel])
   const streamInfo = useChatStore((s) => s.streamInfo[pane.channel])
   const showStreamInfo = useSettingsStore((s) => s.settings.showStreamInfo)
+  /**
+   * Publish the header's height as `--panehead-h`, the second half of where floating things
+   * start (see --notif-top). A toast pinned only below the TAB bar still landed on the pane's
+   * own buttons — the header sits between them and the chat.
+   */
+  const headRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = headRef.current
+    if (!el) return
+    const publish = (): void =>
+      document.documentElement.style.setProperty('--panehead-h', `${Math.round(el.offsetHeight)}px`)
+    publish()
+    const ro = new ResizeObserver(publish)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   // re-render every minute so the uptime counter ticks
   const [, forceTick] = useState(0)
   useEffect(() => {
@@ -138,7 +155,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
 
   return (
     <div className="pane" onMouseEnter={bindHotkeys} onMouseLeave={unbindHotkeys}>
-      <div className="pane-header">
+      <div className="pane-header" ref={headRef}>
         <span
           className="channel-name clickable"
           title={t('pane.openStreamerCard')}
