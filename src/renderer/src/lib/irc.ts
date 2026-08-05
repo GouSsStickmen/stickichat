@@ -328,6 +328,21 @@ export class IrcClient {
     return this.channels.has(channel.toLowerCase())
   }
 
+  /**
+   * Is this connection actually working right now?
+   *
+   * Not just `readyState === OPEN` — that is the very thing that lies when a socket dies
+   * behind NAT, which is why the watchdog exists at all. A live connection is one that is
+   * open, logged in, and has heard something from Twitch recently; the server sends at
+   * minimum a PING every few minutes, so silence past the watchdog's own idle threshold
+   * means it is not to be trusted.
+   */
+  isHealthy(): boolean {
+    if (this.closed || !this.ready) return false
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false
+    return Date.now() - this.lastActivity < IrcClient.IDLE_BEFORE_PING + IrcClient.PONG_GRACE
+  }
+
   say(channel: string, text: string, replyParentMsgId?: string): void {
     const tag = replyParentMsgId ? `@reply-parent-msg-id=${replyParentMsgId} ` : ''
     this.sendOrQueue(`${tag}PRIVMSG #${channel.toLowerCase()} :${text}`)

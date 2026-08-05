@@ -15,19 +15,32 @@ export function useFlip(
   dragging: boolean
 ): void {
   const prevRects = useRef(new Map<string, { left: number; top: number }>())
+  const prevSize = useRef({ w: 0, h: 0 })
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) return
-    // positions are recorded relative to the CONTAINER, not the viewport: scrolling doesn't
-    // re-render, so viewport-based rects went stale and the next update animated a fake
-    // "jump" equal to however far the user had scrolled
-    const base = container.getBoundingClientRect()
+    // A RESIZE is not a reorder. Tabs move because the row rewrapped, and gliding them from
+    // where they used to be is wrong by intent — nothing was reordered, the box changed.
+    //
+    // Honest note: this was written to explain "tabs jump and cannot settle while resizing a
+    // window with a busy chat", and it did NOT reproduce. A window resize does not re-render
+    // the tab bar at all — flex-wrap rewraps the row in CSS, so this effect never runs and no
+    // glide is ever started; measured, zero in both directions. Kept because animating a
+    // reflow would still be wrong the moment something else does trigger a render mid-resize,
+    // but it is not a confirmed fix for that report.
+    const w = container.clientWidth
+    const h = container.clientHeight
+    const resized = w !== prevSize.current.w || h !== prevSize.current.h
+    prevSize.current = { w, h }
+    // offsetLeft/offsetTop, NOT getBoundingClientRect: rects include transforms, so measuring
+    // an element mid-glide returns where it currently APPEARS, and storing that as its
+    // "previous" position makes the next pass animate from a place it was never laid out in.
+    // Offsets are pure layout and ignore the animation entirely.
     for (const el of Array.from(container.querySelectorAll<HTMLElement>(itemSelector))) {
       const id = el.dataset.flipid
       if (!id) continue
-      const r = el.getBoundingClientRect()
-      const rect = { left: r.left - base.left, top: r.top - base.top }
-      if (dragging) {
+      const rect = { left: el.offsetLeft, top: el.offsetTop }
+      if (dragging || resized) {
         prevRects.current.set(id, rect)
         continue
       }

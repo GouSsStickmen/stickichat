@@ -1524,17 +1524,30 @@ class ChatService {
     this.pubSub?.resync()
   }
 
-  /** force-reconnects the reader connection (F5 / manual "reconnect") */
+  /**
+   * F5 / manual "reconnect".
+   *
+   * It used to tear the chat connection down unconditionally, which is wrong when nothing was
+   * broken: on a busy channel that is a real gap in the stream, a "connection lost" line, a
+   * "restored" line, and every channel rejoining — for a keypress people press to refresh
+   * their EMOTES. If the reader is genuinely alive, leave it alone; the rest of what F5 does
+   * (emotes, badges, subscriptions) does not need the socket rebuilt.
+   */
   reconnect(): void {
-    this.reader?.close()
-    useChatStore.getState().setConnState('connecting')
-    this.reader = new IrcClient({
-      nick: 'anon',
-      onMessage: (m) => this.handleReaderMessage(m),
-      onOpen: () => this.announceConnection(true),
-      onClose: () => this.announceConnection(false)
-    })
-    for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.reader.join(ch)
+    if (this.reader?.isHealthy()) {
+      diagInfo('irc', 'refresh requested, connection is healthy — leaving the socket alone')
+    } else {
+      diagInfo('irc', 'refresh requested, connection is not healthy — rebuilding the socket')
+      this.reader?.close()
+      useChatStore.getState().setConnState('connecting')
+      this.reader = new IrcClient({
+        nick: 'anon',
+        onMessage: (m) => this.handleReaderMessage(m),
+        onOpen: () => this.announceConnection(true),
+        onClose: () => this.announceConnection(false)
+      })
+      for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.reader.join(ch)
+    }
     // F5 is the "something's stuck" button — refresh emotes/badges too, and re-establish
     // the EventSub/PubSub subscriptions in case those sockets silently died
     import('./emoteService').then(({ reloadAllEmotes }) => reloadAllEmotes())
