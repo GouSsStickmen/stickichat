@@ -1,7 +1,8 @@
-import { HttpResponse, httpGet, httpJson } from './http'
+import { HttpResponse, httpGet, httpJson, retryAfterMs } from './http'
 import { Account, Cheermote } from '../types'
 import { useSettingsStore } from '../store/settings'
 import { ensureFreshToken, refreshAccountToken } from './twitchAuth'
+import { diagWarn } from './diag'
 
 const BASE = 'https://api.twitch.tv/helix'
 
@@ -42,7 +43,45 @@ async function helixRequest(
       console.warn('[helix] token refresh failed, keeping original 401', e)
     }
   }
+  noteRateLimit(path, res)
   return res
+}
+
+/** Twitch puts the real reason in a `message` field; the status alone rarely explains anything */
+export function describeHelixError(res: HttpResponse): string {
+  const msg = (res.json as { message?: string } | null)?.message
+  if (msg) return String(msg)
+  return res.text ? res.text.slice(0, 120) : ''
+}
+
+/**
+ * One line when the Helix budget is actually running out, and one when a 429 lands.
+ *
+ * Both are throttled per endpoint: a burst of a hundred rejected calls is one situation, not a
+ * hundred, and a log that repeats it a hundred times is how the interesting lines get lost.
+ */
+const rateNoted = new Map<string, number>()
+function noteRateLimit(path: string, res: HttpResponse): void {
+  const remaining = Number(res.headers?.['ratelimit-remaining'])
+  const now = Date.now()
+  const key = `${res.status === 429 ? '429' : 'low'}:${path}`
+  const last = rateNoted.get(key) ?? 0
+  if (res.status === 429) {
+    if (now - last < 30_000) return
+    rateNoted.set(key, now)
+    const wait = retryAfterMs(res, now)
+    diagWarn(
+      'helix',
+      `429 on ${path}${wait ? ` — clears in ${Math.round(wait / 1000)}s` : ''}: ${describeHelixError(res)}`
+    )
+    return
+  }
+  // 800 points/min is the bucket; under a tenth left means something is looping
+  if (Number.isFinite(remaining) && remaining < 80) {
+    if (now - last < 60_000) return
+    rateNoted.set(key, now)
+    diagWarn('helix', `rate budget low: ${remaining} left after ${path}`)
+  }
 }
 
 export interface HelixUser {

@@ -3,7 +3,7 @@ import { loadConfig, startPersistence, startSettingsPersistence, startConfigSync
 import { chatService } from './services/chatService'
 import { useSettingsStore } from './store/settings'
 import { useAccountsStore } from './store/accounts'
-import { useLayoutStore, nextId } from './store/layout'
+import { useLayoutStore, nextId, allOpenChannels } from './store/layout'
 import { useUiStore } from './store/ui'
 import { DEFAULT_CLIENT_ID } from './config/defaultClientId'
 import Onboarding from './components/Onboarding'
@@ -204,6 +204,28 @@ export default function App(): React.JSX.Element | null {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  /**
+   * One line at the top of every session saying what this build is and what it is carrying.
+   *
+   * Almost every report starts with questions this answers: which version, how many channels
+   * and accounts, is history on, is the buffer tiny. Without it the log opens mid-conversation
+   * and the first ten exchanges are spent establishing the setup.
+   */
+  useEffect(() => {
+    if (!booted) return
+    const s = useSettingsStore.getState().settings
+    const channels = allOpenChannels(useLayoutStore.getState().tabs)
+    const accounts = useAccountsStore.getState().accounts
+    void window.sticki?.getVersion?.().then((version) => {
+      diagInfo(
+        'app',
+        `v${version} started — ${accounts.length} account(s), ${channels.length} channel(s) in ` +
+          `${useLayoutStore.getState().tabs.length} tab(s), buffer ${s.messageLimit}, ` +
+          `history ${s.loadHistory ? 'on' : 'off'}, smooth scroll ${s.smoothChatScroll ? 'on' : 'off'}`
+      )
+    })
+  }, [booted])
 
   // Whether the machine thinks it has a network at all. Without this a report cannot tell
   // "the socket died on its own" from "the whole box went offline for ten seconds", and those

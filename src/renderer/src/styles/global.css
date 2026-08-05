@@ -753,6 +753,14 @@ select:focus {
   margin-right: 3px;
   border-radius: var(--radius-xs);
 }
+/* Not every badge is square. Twitch's are, but 7TV/BTTV/FFZ ship wide ones, and the rule above
+   squeezed them into a square box — `.badge-3p` tried to undo that but lost on specificity, so
+   in the user card they came out letterboxed to a sliver. Height is what has to match; the
+   width follows the art, with the square size kept as a floor so nothing jumps while loading. */
+.usercard .uc-badges img {
+  width: auto;
+  max-width: none;
+}
 .msg .nick {
   font-weight: 700;
   cursor: pointer;
@@ -1602,6 +1610,9 @@ select:focus {
 }
 .usercard .uc-badges {
   display: flex;
+  /* a bot like StreamElements wears a dozen badges; without wrapping the row ran off the card
+     and the last ones were simply clipped in half */
+  flex-wrap: wrap;
   gap: 3px;
   margin-top: 3px;
 }

@@ -475,10 +475,19 @@ export function registerIpc(): void {
           body: options?.body
         })
         const contentType = res.headers.get('content-type') ?? ''
+        // rate-limit headers only. A 429 with no idea WHEN it clears can only be answered by
+        // retrying blindly, which is how a rate limit turns into a rate-limit storm; these three
+        // let the caller wait exactly as long as the server asked. Nothing else is forwarded —
+        // response headers can carry cookies and tokens the renderer has no business seeing.
+        const headers: Record<string, string> = {}
+        for (const k of ['ratelimit-remaining', 'ratelimit-reset', 'retry-after']) {
+          const v = res.headers.get(k)
+          if (v) headers[k] = v
+        }
         // binary payloads (an image behind an extension-less URL, say) have nothing useful to
         // read as text — hand back the type alone so the caller can react to it
         if (/^(image|video|audio|application\/(octet-stream|pdf|zip))/i.test(contentType)) {
-          return { ok: res.ok, status: res.status, json: null, text: '', contentType }
+          return { ok: res.ok, status: res.status, json: null, text: '', contentType, headers }
         }
         const text = await res.text()
         let json: unknown = null
@@ -487,9 +496,9 @@ export function registerIpc(): void {
         } catch {
           /* not json */
         }
-        return { ok: res.ok, status: res.status, json, text, contentType }
+        return { ok: res.ok, status: res.status, json, text, contentType, headers }
       } catch (err) {
-        return { ok: false, status: 0, json: null, text: String(err), contentType: '' }
+        return { ok: false, status: 0, json: null, text: String(err), contentType: '', headers: {} }
       }
     }
   )

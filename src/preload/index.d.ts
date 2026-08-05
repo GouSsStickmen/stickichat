@@ -45,7 +45,15 @@ export interface StickiApi {
   fetchJson(
     url: string,
     options?: { method?: string; headers?: Record<string, string>; body?: string }
-  ): Promise<{ ok: boolean; status: number; json: unknown; text: string; contentType: string }>
+  ): Promise<{
+    ok: boolean
+    status: number
+    json: unknown
+    text: string
+    contentType: string
+    /** rate-limit headers only (ratelimit-remaining/reset, retry-after) */
+    headers: Record<string, string>
+  }>
 }
 
 declare global {

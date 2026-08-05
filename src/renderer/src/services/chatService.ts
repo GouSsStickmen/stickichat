@@ -309,6 +309,9 @@ class ChatService {
 
   /** pass the event to the other windows, then handle it here */
   private relayHypeTrain(e: HypeTrainEvent): void {
+    // the highlights window runs a PubSub client too; if it relayed as well, every detached
+    // window would get each event twice
+    if (window.location.hash) return this.handleHypeTrain(e)
     try {
       // the value has to differ every time or the storage event does not fire twice in a row
       localStorage.setItem(ChatService.HYPE_RELAY, JSON.stringify({ ...e, at: Date.now() }))

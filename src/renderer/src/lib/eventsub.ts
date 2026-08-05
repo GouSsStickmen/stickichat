@@ -1,5 +1,6 @@
 import { Account } from '../types'
-import { createEventSubSubscription } from './helix'
+import { createEventSubSubscription, describeHelixError } from './helix'
+import { retryAfterMs } from './http'
 import { diagInfo, diagSocket, diagWarn } from './diag'
 
 /**
@@ -47,6 +48,21 @@ export class EventSubClient {
   private pendingUrl: string | null = null
   /** subscription keys already created for the CURRENT session */
   private created = new Set<string>()
+  /**
+   * Keys that failed with something retryable, and the earliest time to try them again.
+   *
+   * Without this, a rejected subscription was retried on EVERY resync — and a resync happens
+   * each time a channel id becomes known, so opening thirty channels meant thirty passes over
+   * every pending subscription. Against Twitch's rate limit that is self-feeding: the 429s
+   * caused the retries that caused the 429s, and the log filled with the same warning.
+   */
+  private retryAt = new Map<string, number>()
+  private retryStep = new Map<string, number>()
+  /** last status logged per key, so a stuck subscription warns once instead of once per pass */
+  private lastWarned = new Map<string, number>()
+  private retryTimer: number | null = null
+  /** coalesces the burst of resync() calls that arrives when many channels open at once */
+  private resyncTimer: number | null = null
   private getDesired: () => EventSubDesired[]
   private onEvent: EventHandler
   private onSubError?: SubErrorHandler
@@ -174,19 +190,51 @@ export class EventSubClient {
     }
   }
 
+  /** put a key on the naughty step; one timer serves whichever cooldown ends first */
+  private scheduleRetry(key: string, waitMs: number): void {
+    this.retryAt.set(key, Date.now() + waitMs)
+    this.armRetryTimer()
+  }
+
+  private armRetryTimer(): void {
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
+    if (this.closed || this.retryAt.size === 0) return
+    const delay = Math.max(1000, Math.min(...this.retryAt.values()) - Date.now())
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = null
+      void this.subscribeAll().finally(() => this.armRetryTimer())
+    }, delay)
+  }
+
   /** (re)create every desired subscription not yet made for this session */
   private async subscribeAll(): Promise<void> {
     if (!this.sessionId || this.subscribing) return
     this.subscribing = true
+    let held = 0
     try {
       for (const d of this.getDesired()) {
         if (this.created.has(d.key)) continue
         if (!this.sessionId) break
+        // still serving its cooldown — do not spend a request (or a log line) on it
+        const wait = (this.retryAt.get(d.key) ?? 0) - Date.now()
+        if (wait > 0) {
+          held++
+          continue
+        }
         try {
           const res = await createEventSubSubscription(d.account, d.type, d.version, d.condition, this.sessionId)
           // 409 = already exists for this session; both mean "it's active now"
           if (res.ok || res.status === 409) {
+            if (this.retryStep.has(d.key)) {
+              diagInfo('eventsub', `${d.type} for ${d.account.login} succeeded after backing off`)
+            }
             this.created.add(d.key)
+            this.retryAt.delete(d.key)
+            this.retryStep.delete(d.key)
+            this.lastWarned.delete(d.key)
             // THIS is what makes a session worth having — only now is the retry delay safe
             // to reset (see the note in session_welcome)
             this.backoff = 1000
@@ -194,20 +242,51 @@ export class EventSubClient {
           } else {
             console.warn('[eventsub] subscribe failed', d.type, res.status, res.json ?? res.text)
             // a 4xx won't fix itself on retry (bad scope / bad condition) — stop hammering it
-            // every reconnect; only 5xx / network errors are worth retrying.
+            // every reconnect; only 5xx / network errors / 429 are worth retrying.
             //
-            // 429 is the exception, and it was being treated as fatal: "too many requests" is
-            // precisely the one that DOES fix itself, and the reconnect loop above was earning
-            // it regularly. Marking it done meant a rate limit could silently disable raid
-            // detection for the rest of the session.
-            if (res.status >= 400 && res.status < 500 && res.status !== 429) this.created.add(d.key)
+            // 429 is the exception, and it was once treated as fatal: "too many requests" is
+            // precisely the one that DOES fix itself, and marking it done meant a rate limit
+            // could silently disable raid detection for the rest of the session.
+            const retryable = res.status === 429 || res.status >= 500 || res.status === 0
+            if (!retryable) {
+              this.created.add(d.key)
+            } else {
+              // wait as long as the server asked, and only invent a delay when it stayed silent
+              const step = Math.min((this.retryStep.get(d.key) ?? 0) + 1, 6)
+              this.retryStep.set(d.key, step)
+              const wanted = retryAfterMs(res)
+              const backoff = wanted || Math.min(5000 * 2 ** (step - 1), 5 * 60_000)
+              this.scheduleRetry(d.key, backoff)
+              // one line per NEW situation, not one per attempt
+              if (this.lastWarned.get(d.key) !== res.status) {
+                this.lastWarned.set(d.key, res.status)
+                const why = describeHelixError(res)
+                diagWarn(
+                  'eventsub',
+                  `${d.type} for ${d.account.login}: HTTP ${res.status}${why ? ` (${why})` : ''}` +
+                    ` — retry in ${Math.round(backoff / 1000)}s${wanted ? ' (asked by Twitch)' : ''}`
+                )
+              }
+            }
             this.onSubError?.(d, res.status)
           }
         } catch (e) {
           console.warn('[eventsub] subscribe error', d.type, e)
           // a network failure here is indistinguishable from "the feature is broken" from the
           // outside, and it used to leave nothing behind at all
-          diagWarn('eventsub', `${d.type} for ${d.account.login} threw: ${String(e)}`)
+          this.scheduleRetry(d.key, 15000)
+          diagWarn('eventsub', `${d.type} for ${d.account.login} threw: ${String(e)} — retry in 15s`)
+        }
+      }
+      if (held) diagInfo('eventsub', `${held} subscription(s) waiting out a backoff, not retried this pass`)
+      // a channel that was closed (or a subscription that finally landed) must not keep the
+      // retry timer alive for the rest of the session
+      const wanted = new Set(this.getDesired().map((d) => d.key))
+      for (const key of [...this.retryAt.keys()]) {
+        if (!wanted.has(key) || this.created.has(key)) {
+          this.retryAt.delete(key)
+          this.retryStep.delete(key)
+          this.lastWarned.delete(key)
         }
       }
     } finally {
@@ -215,15 +294,27 @@ export class EventSubClient {
     }
   }
 
-  /** desired set changed (accounts/channels) — add anything new to the live session */
+  /**
+   * The desired set changed (accounts/channels) — add anything new to the live session.
+   *
+   * Coalesced, because the trigger is per channel: opening thirty chats means thirty ROOMSTATE
+   * frames arriving within a second, and each one used to start its own pass over every pending
+   * subscription. That burst is what earned the rate limit in the first place; waiting a beat
+   * turns thirty passes into one.
+   */
   resync(): void {
-    // this is also how we come back from idle: the first channel or account to appear is what
-    // gives the socket a reason to exist
-    if (this.idle || !this.ws || this.ws.readyState > WebSocket.OPEN) {
-      if (this.reconnectTimer === null) this.connect()
-      return
-    }
-    this.subscribeAll()
+    if (this.closed) return
+    if (this.resyncTimer !== null) return
+    this.resyncTimer = window.setTimeout(() => {
+      this.resyncTimer = null
+      // this is also how we come back from idle: the first channel or account to appear is what
+      // gives the socket a reason to exist
+      if (this.idle || !this.ws || this.ws.readyState > WebSocket.OPEN) {
+        if (this.reconnectTimer === null) this.connect()
+        return
+      }
+      void this.subscribeAll()
+    }, 400)
   }
 
   private resetKeepalive(): void {
@@ -253,6 +344,8 @@ export class EventSubClient {
     this.closed = true
     if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer)
     if (this.keepaliveTimer !== null) clearTimeout(this.keepaliveTimer)
+    if (this.retryTimer !== null) clearTimeout(this.retryTimer)
+    if (this.resyncTimer !== null) clearTimeout(this.resyncTimer)
     try {
       this.ws?.close()
     } catch {
