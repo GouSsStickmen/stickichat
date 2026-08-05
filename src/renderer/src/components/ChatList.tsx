@@ -366,7 +366,9 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       // the bottom we must still be glued to it after the resize.
       if (el.clientHeight !== lastH) {
         lastH = el.clientHeight
-        if (following.current && !locked) {
+        // atBottom as well as following: with smooth scroll the glide can be a few pixels short
+        // of the end when the resize lands, and that is still "the reader is at the bottom"
+        if ((following.current || atBottomRef.current) && !locked) {
           const bottom = el.scrollHeight - el.clientHeight
           if (Math.abs(el.scrollTop - bottom) > 0.5) {
             el.scrollTop = bottom

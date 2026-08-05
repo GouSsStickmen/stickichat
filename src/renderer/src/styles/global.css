@@ -769,6 +769,11 @@ select:focus {
   min-width: 0;
   width: auto;
   max-width: calc(min(var(--badge-size, 18px), 16px) * 2.5);
+  /* no rounding here: in chat a badge is a tiny square where a 3px radius softens the corner,
+     but the card is where you go to LOOK at the art — a rounded box cuts the corners off
+     shapes that are not square to begin with */
+  border-radius: 0;
+  object-fit: contain;
 }
 .msg .nick {
   font-weight: 700;

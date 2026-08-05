@@ -198,7 +198,14 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     // chat above twitching. Add the border back and the content fits exactly.
     const cs = getComputedStyle(ta)
     const border = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0)
-    ta.style.height = `${Math.min(ta.scrollHeight + border, 120)}px`
+    const want = ta.scrollHeight + border
+    ta.style.height = `${Math.min(want, 120)}px`
+    // scrollHeight is an INTEGER while the real layout is fractional (any zoom, any line-height
+    // that lands on a half pixel), so the box can still end up a sliver short of its content —
+    // and a textarea that is a sliver scrollable gets nudged by the browser on every keystroke
+    // to keep the caret in view. Below the cap, take one extra pixel: invisible, and it ends
+    // the nudging for good.
+    if (want < 120 && ta.scrollHeight > ta.clientHeight) ta.style.height = `${want + 1}px`
   }
 
   // Grow on EVERY text change, not only typing: external inserts (emotes, mod-button fill,
