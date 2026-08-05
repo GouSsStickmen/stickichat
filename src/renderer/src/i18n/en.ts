@@ -415,6 +415,7 @@ export const en = {
   'notice.msg_rejected_mandatory': 'Message held by AutoMod.',
   'hk.editable': 'Editable',
   'hint.whisperSound': 'Sound for a new private message.',
+  'hint.whisperNotify': 'Also show a card with the sender and the start of the message. A sound alone is easy to miss with the app behind a game.',
   'token.bg.hint': 'The darkest surface: the canvas behind the message list and the tab strip.',
   'token.surface.hint': 'Panels above the background: windows, modals, popovers, sidebars.',
   'token.surface2.hint': 'Input fields, dropdowns, and every other chat row when alternating is on.',
@@ -622,6 +623,10 @@ export const en = {
   'whisper.nick': 'Nickname…',
   'whisper.noUser': 'User not found',
   'whisper.favorite': 'Favorite contact',
+  'whisper.reply': 'Reply to this message',
+  'whisper.you': 'You',
+  'whisper.replyCancel': 'Cancel the reply',
+  'whisper.width': 'Drag to resize the panel',
   'set.whispersAsWindow': 'Open whispers in a separate window',
   'set.highlightsAsWindow': 'Open the events panel in a separate window',
   'highlights.redeems': 'Redeems',
@@ -966,6 +971,7 @@ export const en = {
   'set.raidActiveOnly': 'Only for raids on the active tab',
   'hint.raidActiveOnly': 'Off: prompt for a raid on any open channel. On: only when the raid happens on the channel you are currently watching.',
   'set.whisperSound': 'Sound on a new whisper',
+  'set.whisperNotify': 'Toast for a new whisper',
   'set.raidSound': 'Sound when a raid prompt appears',
 
   // Info lines

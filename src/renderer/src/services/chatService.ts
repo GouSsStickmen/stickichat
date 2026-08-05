@@ -488,6 +488,13 @@ class ChatService {
           : `from ${from} → silent (${!this.ownsSound ? 'not the sound-owning window' : !settings.whisperSound ? 'whisper sound is off in settings' : `thread "${openThread}" is open and focused`})`
       )
       if (ping) playWhisperSound(settings)
+      // a toast as well as the sound: with the app behind a game, a "pop" three windows away
+      // is the whole notification, and it is easy to miss or to not attribute to anything
+      if (ping && settings.whisperNotify) {
+        const who = event.from_user_name || event.from_user_login || '?'
+        const body = String(event.whisper?.text ?? '')
+        useUiStore.getState().toast(`✉ ${who}: ${body.length > 80 ? `${body.slice(0, 80)}…` : body}`, 'ok')
+      }
     } else if (type === 'channel.raid') {
       const fromLogin = (event.from_broadcaster_user_login ?? '').toLowerCase()
       const toLogin = (event.to_broadcaster_user_login ?? '').toLowerCase()

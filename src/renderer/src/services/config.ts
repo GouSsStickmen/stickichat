@@ -133,7 +133,7 @@ export const CONFIG_PARTS: ConfigPart[] = [
 const PART_KEYS: Record<Exclude<ConfigPart, 'highlightRules' | 'modButtons' | 'favoriteEmotes'>, (keyof Settings)[]> = {
   appearance: [
     'theme', 'customThemes', 'fontFamily', 'fontSize', 'windowScales', 'emoteScale', 'badgeSize',
-    'messageSpacing', 'lineSpacing', 'savedColors', 'recentColors'
+    'messageSpacing', 'lineSpacing', 'savedColors', 'recentColors', 'whisperScale', 'whisperWidth'
   ],
   chat: [
     'showTimestamps', 'timestampSeconds', 'alternatingBackground', 'messageSeparators', 'showStreamInfo',
@@ -151,7 +151,7 @@ const PART_KEYS: Record<Exclude<ConfigPart, 'highlightRules' | 'modButtons' | 'f
     'keywordSoundOnActive', 'keywordWholeWord', 'nickAlertSound', 'nickAlerts',
     'nickAlertSoundType', 'nickAlertWholeWord',
     'nickAlertSoundVolume', 'nickAlertSoundOnActive', 'whisperSound', 'whisperSoundType',
-    'whisperSoundVolume', 'streamUpNotify', 'streamUpSound', 'streamUpSoundType',
+    'whisperSoundVolume', 'whisperNotify', 'streamUpNotify', 'streamUpSound', 'streamUpSoundType',
     'streamUpSoundVolume', 'raidPrompt', 'raidSound', 'raidSoundType', 'raidSoundVolume',
     'errorSound', 'mutedErrors', 'customSounds'
   ],

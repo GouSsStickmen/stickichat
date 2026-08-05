@@ -1020,6 +1020,8 @@ export interface Settings {
   whisperSoundType: SoundChoice
   whisperSoundVolume: number
   whisperSoundCustomId?: string
+  /** also show a toast for an incoming whisper — a sound alone is missed with the app in back */
+  whisperNotify: boolean
   /** sound when a raid prompt appears */
   raidSound: boolean
   raidSoundType: SoundChoice
@@ -1088,6 +1090,10 @@ export interface Settings {
   whispersPinned: boolean
   /** favorite whisper contacts (logins), pinned to the top of the list */
   whisperFavorites: string[]
+  /** zoom of the whispers panel — Ctrl+wheel over it, 1 = default */
+  whisperScale: number
+  /** width of the whispers popover in px (drag its left edge) */
+  whisperWidth: number
   /** open the highlights panel in a separate window instead of the sidebar */
   highlightsAsWindow: boolean
   highlightsPinned: boolean
@@ -1237,6 +1243,7 @@ export const DEFAULT_SETTINGS: Settings = {
   whisperSound: true,
   whisperSoundType: 'pop',
   whisperSoundVolume: 0.5,
+  whisperNotify: true,
   raidSound: true,
   raidSoundType: 'bell',
   raidSoundVolume: 0.5,
@@ -1283,6 +1290,8 @@ export const DEFAULT_SETTINGS: Settings = {
   whispersAsWindow: false,
   whispersPinned: false,
   whisperFavorites: [],
+  whisperScale: 1,
+  whisperWidth: 320,
   highlightsAsWindow: false,
   highlightsPinned: false,
   highlightsFontSize: 12,

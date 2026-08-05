@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { useWhispersStore, setOpenWhisperThread, Whisper } from '../store/whispers'
+import { useWhispersStore, setOpenWhisperThread, loadWhisperUi, saveWhisperUi, Whisper } from '../store/whispers'
 import { useAccountsStore } from '../store/accounts'
+import { loadTwitchUserEmotes } from '../services/emoteService'
 import { useUiStore } from '../store/ui'
 import { sendWhisper, getUsers, getUserChatColors } from '../lib/helix'
 import EmotePicker from './EmotePicker'
@@ -20,6 +21,28 @@ function fmtTime(ts: number): string {
 /** whisper text: emotes from every set (no channel context), links + RMB copy */
 function WhisperText({ text }: { text: string }): React.JSX.Element {
   return <RichText msg={{ text, emotesTag: undefined, channel: '' }} />
+}
+
+/**
+ * Replies, carried inside the message text.
+ *
+ * Twitch whispers have no reply metadata — no parent id, no thread, nothing the API will keep
+ * for us. So the quote travels as text: the person on the other end reads a plain
+ * `↩ «...» answer` even in the Twitch web client, and StickiChat lifts it back out into a
+ * proper quote block. « » are rare enough in chat that a false positive is a curiosity, and
+ * the worst it can do is style one line differently.
+ */
+const REPLY_RE = /^↩\s*«([^»]*)»\s*([\s\S]*)$/
+
+function splitReply(text: string): { quote?: string; body: string } {
+  const m = REPLY_RE.exec(text)
+  return m ? { quote: m[1], body: m[2] } : { body: text }
+}
+
+/** one line, short, and stripped of the guillemets that delimit it */
+function quoteOf(text: string): string {
+  const flat = splitReply(text).body.replace(/[«»]/g, '"').replace(/\s+/g, ' ').trim()
+  return flat.length > 60 ? `${flat.slice(0, 60)}…` : flat
 }
 
 /** whisper conversations: popover under ✉ or a standalone window (standalone prop) */
@@ -50,19 +73,26 @@ export default function WhisperPanel({
   const accounts = useAccountsStore((s) => s.accounts)
   const dark = useSettingsStore((s) => isDarkTheme(s.settings.theme))
   const favorites = useSettingsStore((s) => s.settings.whisperFavorites)
+  const scale = useSettingsStore((s) => s.settings.whisperScale)
+  const width = useSettingsStore((s) => s.settings.whisperWidth)
   const set = useSettingsStore((s) => s.setSettings)
-  const [selected, setSelected] = useState<string | null>(null) // otherLogin
-  const [text, setText] = useState('')
-  const [composing, setComposing] = useState(false)
-  const [composeNick, setComposeNick] = useState('')
-  const [composeText, setComposeText] = useState('')
+  // restored from disk: a stray click outside the popover used to throw away a half-written
+  // message and forget which conversation was open
+  const ui0 = useRef(loadWhisperUi()).current
+  const [selected, setSelected] = useState<string | null>(ui0.selected) // otherLogin
+  const [text, setText] = useState(ui0.selected ? (ui0.drafts[ui0.selected] ?? '') : '')
+  const [composing, setComposing] = useState(ui0.composing)
+  const [composeNick, setComposeNick] = useState(ui0.composeNick)
+  const [composeText, setComposeText] = useState(ui0.composeText)
   const [sending, setSending] = useState(false)
+  const [replyTo, setReplyTo] = useState<Whisper | null>(null)
   // sent-message history for ↑/↓ recall, like the chat input
   const [history, setHistory] = useState<string[]>([])
   const [histIdx, setHistIdx] = useState(-1)
   const draftRef = useRef('')
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   // real Twitch chat colors for contacts (EventSub whispers don't carry a color)
   const [colors, setColors] = useState<Record<string, string>>({})
@@ -70,6 +100,98 @@ export default function WhisperPanel({
   useEffect(() => {
     useWhispersStore.getState().markRead()
   }, [whispers.length])
+
+  /**
+   * Grow the box to the text, up to a ceiling.
+   *
+   * Reset to `auto` first, otherwise scrollHeight only ever reports the height we already set
+   * and the box can grow but never shrink back. The cap is a third of the panel: past that the
+   * thing you are replying to would be off screen, which is worse than scrolling the draft.
+   */
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const max = Math.max(80, Math.round((rootRef.current?.clientHeight ?? 420) / 3))
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`
+    el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden'
+  }, [text, selected])
+
+  /**
+   * Ctrl+wheel zooms the panel, the same gesture that zooms the chat and the tab bar.
+   *
+   * Listened on the panel and stopped there: the app-wide handler lives on `window`, so
+   * without stopPropagation one scroll would zoom the whispers AND the chat text behind them.
+   * A native listener because React's onWheel is passive and cannot preventDefault the
+   * browser's own page zoom.
+   */
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      e.stopPropagation()
+      const cur = useSettingsStore.getState().settings.whisperScale
+      const next = Math.max(0.8, Math.min(2, Math.round((cur + (e.deltaY < 0 ? 0.1 : -0.1)) * 10) / 10))
+      if (next !== cur) set({ whisperScale: next })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [set])
+
+  /** drag the left edge: the popover hangs off the right, so it grows leftwards into the app */
+  const onGripDown = (e: React.PointerEvent): void => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = useSettingsStore.getState().settings.whisperWidth
+    const move = (ev: PointerEvent): void => {
+      const next = Math.round(Math.max(280, Math.min(760, startW + (startX - ev.clientX) / scale)))
+      set({ whisperWidth: next })
+    }
+    const up = (): void => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  // an answer belongs to the conversation it was written in
+  useEffect(() => {
+    setReplyTo(null)
+  }, [selected])
+
+  // keep the disk copy current — cheap, and it is what makes closing the panel harmless
+  useEffect(() => {
+    saveWhisperUi({ selected, composing, composeNick, composeText })
+  }, [selected, composing, composeNick, composeText])
+  useEffect(() => {
+    if (!selected) return
+    const t = window.setTimeout(() => {
+      saveWhisperUi({ drafts: { ...loadWhisperUi().drafts, [selected]: text } })
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [text, selected])
+  // switching conversations shows that conversation's own unsent text
+  const prevSelRef = useRef(selected)
+  useEffect(() => {
+    if (prevSelRef.current === selected) return
+    prevSelRef.current = selected
+    setText(selected ? (loadWhisperUi().drafts[selected] ?? '') : '')
+  }, [selected])
+
+  /**
+   * The account's Twitch emotes, so whisper text renders them instead of printing their names.
+   *
+   * The chat pane loads these, which is why they were there in panel mode and gone the moment
+   * the whispers were popped into their own window: a new window is a new renderer with empty
+   * stores and nobody in it had ever asked for the list. Loading it here covers both modes,
+   * and the list is cached in localStorage for an hour, so the panel case costs nothing.
+   */
+  useEffect(() => {
+    for (const a of accounts) if (a._accessToken) void loadTwitchUserEmotes(a)
+  }, [accounts])
 
   useEffect(() => {
     const account = accounts[0]
@@ -169,12 +291,15 @@ export default function WhisperPanel({
   }
 
   const send = async (msgOverride?: string): Promise<void> => {
-    const msg = (msgOverride ?? text).trim()
+    let msg = (msgOverride ?? text).trim()
     if (!msg || !selected || sending) return
     const account = accounts.find((a) => a.id === threadLast?.accountId) ?? accounts[0]
     if (!account || !threadLast?.otherId) return
+    // the quote goes on the wire, not just in our own copy — see REPLY_RE
+    if (replyTo && !msgOverride) msg = `↩ «${quoteOf(replyTo.text)}» ${msg}`
     if (!msgOverride) {
       setText('')
+      setReplyTo(null)
       setHistory((h) => [msg, ...h.slice(0, 49)])
       setHistIdx(-1)
     }
@@ -204,6 +329,13 @@ export default function WhisperPanel({
   }
 
   const onInputKeyDown = (e: React.KeyboardEvent): void => {
+    // Escape drops the reply first; only an already-plain input closes the panel
+    if (e.key === 'Escape' && replyTo) {
+      e.preventDefault()
+      e.stopPropagation()
+      setReplyTo(null)
+      return
+    }
     // Ctrl+Enter — send the previous message again
     if (e.key === 'Enter' && e.ctrlKey) {
       e.preventDefault()
@@ -280,7 +412,15 @@ export default function WhisperPanel({
   const threadColor = threadLast ? colorFor(threadLast) : undefined
 
   return (
-    <div className={`whisper-panel ${standalone ? 'whisper-panel-standalone' : ''}`} ref={rootRef}>
+    <div
+      className={`whisper-panel ${standalone ? 'whisper-panel-standalone' : ''}`}
+      ref={rootRef}
+      // zoom, not font-size: the bubbles, emotes, avatars and paddings all scale together, and
+      // the popover's own width scales with them, so a zoomed panel is not a narrow column of
+      // giant text. `--whisper-zoom` lets max-width undo the zoom when clamping to the viewport.
+      style={{ zoom: scale, ['--whisper-zoom' as string]: scale, ...(standalone ? {} : { width }) }}
+    >
+      {!standalone && <div className="whisper-grip" title={t('whisper.width')} onPointerDown={onGripDown} />}
       <div className="whisper-head">
         {selected || composing ? (
           <button className="ghost" onClick={() => (composing ? setComposing(false) : setSelected(null))}>
@@ -305,9 +445,10 @@ export default function WhisperPanel({
           </button>
         )}
         <div className="spacer" />
+        {/* "+" rather than a pencil: this starts a NEW conversation, it does not edit one */}
         {!selected && !composing && (
           <button className="ghost" title={t('whisper.new')} onClick={() => setComposing(true)}>
-            ✎
+            ＋
           </button>
         )}
         {standalone && <PinButton settingKey="whispersPinned" />}
@@ -383,16 +524,39 @@ export default function WhisperPanel({
               // a Fragment, NOT a wrapper div: the thread is a flex column and the bubbles
               // align themselves left/right — a wrapper would become the flex child and
               // every message would fall back to the left
+              const { quote, body } = splitReply(w.text)
               return (
                 <Fragment key={w.id}>
                   {newDay && <div className="whisper-day">{fmtDay(w.timestamp)}</div>}
                   <div className={`whisper-msg ${w.incoming ? '' : 'out'}`}>
-                    <span className="whisper-ts">{fmtTime(w.timestamp)}</span> <WhisperText text={w.text} />
+                    {quote && <div className="whisper-quote">↩ {quote}</div>}
+                    <span className="whisper-ts">{fmtTime(w.timestamp)}</span> <WhisperText text={body} />
+                    <button
+                      className="whisper-reply-btn"
+                      title={t('whisper.reply')}
+                      onClick={() => {
+                        setReplyTo(w)
+                        inputRef.current?.focus()
+                      }}
+                    >
+                      ↩
+                    </button>
                   </div>
                 </Fragment>
               )
             })}
           </div>
+          {replyTo && (
+            <div className="whisper-reply-bar">
+              <span className="whisper-reply-nick" style={{ color: threadColor }}>
+                {replyTo.incoming ? replyTo.otherDisplay : t('whisper.you')}
+              </span>
+              <span className="whisper-reply-text">{quoteOf(replyTo.text)}</span>
+              <button className="ghost" title={t('whisper.replyCancel')} onClick={() => setReplyTo(null)}>
+                ✕
+              </button>
+            </div>
+          )}
           <div className="whisper-input">
             {pickerOpen && (
               <EmotePicker
@@ -409,8 +573,14 @@ export default function WhisperPanel({
                 onClose={() => setPickerOpen(false)}
               />
             )}
-            <input
+            {/* a textarea, not an input: a long message used to scroll away inside a one-line
+                box with no way to see what you had written. It grows with the text and stops
+                at a third of the panel, so it can never eat the conversation it belongs to. */}
+            <textarea
+              ref={inputRef}
               autoFocus
+              rows={1}
+              className="whisper-textarea"
               placeholder={t('whisper.placeholder')}
               value={text}
               onChange={(e) => {

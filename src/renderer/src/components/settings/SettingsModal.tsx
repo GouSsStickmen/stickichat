@@ -1467,6 +1467,7 @@ function NotificationsSection(): React.JSX.Element {
             <SoundSettings kind="whisper" />
           </div>
         )}
+        <Toggle label={t('set.whisperNotify')} hint={t('hint.whisperNotify')} value={settings.whisperNotify} onChange={(v) => set({ whisperNotify: v })} />
       </div>
       <div className="set-group-title">{t('set.group.streamUp')}</div>
       <div className="set-block">

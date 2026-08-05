@@ -417,6 +417,7 @@ export const uk: Record<TranslationKey, string> = {
   'notice.msg_rejected_mandatory': 'Повідомлення відхилено автомодератором.',
   'hk.editable': 'Налаштовувані',
   'hint.whisperSound': 'Звук на нове приватне повідомлення.',
+  'hint.whisperNotify': 'Показувати ще й плашку з ніком і початком тексту. Звук легко пропустити, коли застосунок за грою.',
   'token.bg.hint': 'Найтемніша поверхня застосунку: полотно за списком повідомлень і смуга вкладок.',
   'token.surface.hint': 'Панелі поверх фону: вікна, модалки, спливні меню, бічні панелі.',
   'token.surface2.hint': 'Поля вводу, випадайки та кожен другий рядок чату при чергуванні фону.',
@@ -624,6 +625,10 @@ export const uk: Record<TranslationKey, string> = {
   'whisper.nick': 'Нікнейм…',
   'whisper.noUser': 'Користувача не знайдено',
   'whisper.favorite': 'Обраний контакт',
+  'whisper.reply': 'Відповісти на це повідомлення',
+  'whisper.you': 'Ти',
+  'whisper.replyCancel': 'Скасувати відповідь',
+  'whisper.width': 'Потягни, щоб змінити ширину панелі',
   'set.whispersAsWindow': 'Відкривати приватні окремим вікном',
   'set.highlightsAsWindow': 'Відкривати панель подій окремим вікном',
   'highlights.redeems': 'Редімки',
@@ -968,6 +973,7 @@ export const uk: Record<TranslationKey, string> = {
   'set.raidActiveOnly': 'Тільки для рейдів на активній вкладці',
   'hint.raidActiveOnly': 'Вимкнено: пропонувати для рейду на будь-якому відкритому каналі. Увімкнено: лише коли рейд відбувається на каналі, який ти зараз дивишся.',
   'set.whisperSound': 'Звук на нове приватне повідомлення',
+  'set.whisperNotify': 'Спливаюче сповіщення про приватне',
   'set.raidSound': 'Звук при сповіщенні про рейд',
 
   // Info lines

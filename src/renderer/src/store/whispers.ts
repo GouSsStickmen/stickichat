@@ -104,6 +104,53 @@ window.addEventListener('storage', (e) => {
  */
 const OPEN_THREAD_TTL = 10_000
 
+/**
+ * What the panel was in the middle of: which conversation was open, and what had been typed
+ * and not yet sent.
+ *
+ * The panel is a popover, so a click anywhere else closes it and unmounts it — and a
+ * half-written message lived in component state, which meant it was simply gone. Losing text
+ * someone typed is the one thing an app must never do casually, and here it took one stray
+ * click. It goes to disk, keyed per conversation, and comes back when the panel reopens.
+ */
+const LS_UI = 'sticki:whisperUi'
+
+export interface WhisperUiState {
+  selected: string | null
+  /** otherLogin -> unsent text */
+  drafts: Record<string, string>
+  composing: boolean
+  composeNick: string
+  composeText: string
+}
+
+const EMPTY_UI: WhisperUiState = { selected: null, drafts: {}, composing: false, composeNick: '', composeText: '' }
+
+export function loadWhisperUi(): WhisperUiState {
+  try {
+    const raw = localStorage.getItem(LS_UI)
+    if (!raw) return EMPTY_UI
+    const v = JSON.parse(raw) as Partial<WhisperUiState>
+    return {
+      selected: typeof v.selected === 'string' ? v.selected : null,
+      drafts: v.drafts && typeof v.drafts === 'object' ? v.drafts : {},
+      composing: !!v.composing,
+      composeNick: typeof v.composeNick === 'string' ? v.composeNick : '',
+      composeText: typeof v.composeText === 'string' ? v.composeText : ''
+    }
+  } catch {
+    return EMPTY_UI
+  }
+}
+
+export function saveWhisperUi(patch: Partial<WhisperUiState>): void {
+  try {
+    localStorage.setItem(LS_UI, JSON.stringify({ ...loadWhisperUi(), ...patch }))
+  } catch {
+    /* best-effort */
+  }
+}
+
 export function getOpenWhisperThread(): string | null {
   try {
     const raw = localStorage.getItem(LS_OPEN_THREAD)
