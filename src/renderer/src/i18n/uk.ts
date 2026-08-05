@@ -630,6 +630,7 @@ export const uk: Record<TranslationKey, string> = {
   'whisper.favorite': 'Обраний контакт',
   'whisper.reply': 'Відповісти на це повідомлення',
   'whisper.you': 'Ти',
+  'whisper.why': 'Чому тут немає старих повідомлень?',
   'whisper.offlineGap':
     'ⓘ Приватні, надіслані поки застосунок був закритий, підтягнути неможливо: Twitch дає API лише на надсилання шепоту, не на читання. Тут видно тільки те, що прийшло за увімкненого StickiChat.',
   'whisper.replyCancel': 'Скасувати відповідь',

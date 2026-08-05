@@ -86,6 +86,7 @@ export default function WhisperPanel({
   const [composeText, setComposeText] = useState(ui0.composeText)
   const [sending, setSending] = useState(false)
   const [replyTo, setReplyTo] = useState<Whisper | null>(null)
+  const [noteOpen, setNoteOpen] = useState(false)
   // sent-message history for ↑/↓ recall, like the chat input
   const [history, setHistory] = useState<string[]>([])
   const [histIdx, setHistIdx] = useState(-1)
@@ -445,6 +446,17 @@ export default function WhisperPanel({
           </button>
         )}
         <div className="spacer" />
+        {/* the offline-history caveat is worth saying once and then getting out of the way — it
+            lives behind this "!" and is not a permanent banner over every conversation */}
+        {!selected && !composing && (
+          <button
+            className={`ghost whisper-info-btn ${noteOpen ? 'active' : ''}`}
+            title={t('whisper.why')}
+            onClick={() => setNoteOpen((v) => !v)}
+          >
+            !
+          </button>
+        )}
         {/* "+" rather than a pencil: this starts a NEW conversation, it does not edit one */}
         {!selected && !composing && (
           <button className="ghost" title={t('whisper.new')} onClick={() => setComposing(true)}>
@@ -494,10 +506,7 @@ export default function WhisperPanel({
         </div>
       ) : !selected ? (
         <div className="whisper-list">
-          {/* stated plainly, because the gap looks like a bug otherwise: Twitch has no API that
-              reads whispers, only one that sends them, so anything that arrived while the app
-              was shut cannot be fetched afterwards by anyone */}
-          <div className="whisper-note">{t('whisper.offlineGap')}</div>
+          {noteOpen && <div className="whisper-note">{t('whisper.offlineGap')}</div>}
           {conversations.length === 0 && <div className="picker-empty">{t('whisper.empty')}</div>}
           {conversations.map(([login, msgs]) => {
             const last = msgs[msgs.length - 1]

@@ -628,6 +628,7 @@ export const en = {
   'whisper.favorite': 'Favorite contact',
   'whisper.reply': 'Reply to this message',
   'whisper.you': 'You',
+  'whisper.why': 'Why are older messages missing?',
   'whisper.offlineGap':
     'ⓘ Whispers sent while the app was closed cannot be fetched: Twitch only offers an API for sending whispers, never for reading them. What you see here is what arrived while StickiChat was running.',
   'whisper.replyCancel': 'Cancel the reply',

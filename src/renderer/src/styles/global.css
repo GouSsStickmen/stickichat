@@ -3602,6 +3602,21 @@ button:has(> svg) {
   flex-direction: column;
   padding: 4px;
 }
+/* circled "!" that holds the offline-history explanation */
+.whisper-info-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.whisper-info-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 /* the "no offline history" note above the conversation list */
 .whisper-note {
   margin: 2px 4px 6px;
@@ -3877,7 +3892,7 @@ button:has(> svg) {
 /* the track: a rail, the filled part behind the engine, and the engine itself riding on top */
 .hype-track {
   position: relative;
-  height: 26px;
+  height: 34px;
 }
 .hype-rail {
   position: absolute;
@@ -3899,7 +3914,8 @@ button:has(> svg) {
 }
 .hype-loco {
   position: absolute;
-  bottom: 1px;
+  /* the wheels sit on the rail, not above it */
+  bottom: 2px;
   line-height: 0;
   color: var(--accent-strong);
   /* centred on its own position, so at 0% it sits ON the start of the rail, not before it */
@@ -3921,14 +3937,19 @@ button:has(> svg) {
 .hype-loco-wrap {
   position: relative;
   display: inline-block;
+  /* the whole engine is mixed from the theme's accent, so it belongs to whatever palette is on
+     — never a hardcoded toy orange. The outline is the darkest surface blended with the text
+     colour, which stays visible on a dark panel AND on a light one. */
+  --loco-body: var(--accent);
+  --loco-dark: color-mix(in srgb, var(--accent-strong) 78%, var(--loco-line));
+  --loco-line: color-mix(in srgb, var(--surface-1) 82%, var(--text));
+  --loco-wheel: color-mix(in srgb, var(--accent-strong) 40%, var(--loco-line));
+  --loco-hub: color-mix(in srgb, var(--accent-strong) 55%, var(--loco-line));
+  --loco-glass: color-mix(in srgb, var(--text) 78%, var(--surface-1));
 }
 .hype-loco-svg {
   display: block;
   overflow: visible;
-}
-/* punched-out window: the boiler colour shows through as the glass */
-.hype-loco-window {
-  fill: var(--surface-3);
 }
 /* the wheels turn about their own centre — transform-box makes the SVG bbox the origin */
 .hype-wheel {
@@ -3936,8 +3957,10 @@ button:has(> svg) {
   transform-origin: center;
   animation: hype-roll 0.9s linear infinite;
 }
+/* the small carrying wheels cover less ground per turn, so they spin faster */
+.hype-wheel-mid,
 .hype-wheel-front {
-  animation-duration: 0.6s;
+  animation-duration: 0.55s;
 }
 .hype-train.ended .hype-wheel {
   animation: none;
@@ -3947,32 +3970,73 @@ button:has(> svg) {
     transform: rotate(360deg);
   }
 }
-/* smoke leaves the chimney and is left BEHIND — the puffs drift back and up while fading */
+/* smoke leaves the funnel and is left BEHIND — the puffs fly back and up, growing and fading */
 .hype-smoke {
   position: absolute;
-  left: 26px;
-  top: -2px;
+  left: 25px;
+  top: -3px;
   pointer-events: none;
+  color: color-mix(in srgb, var(--text) 60%, transparent);
 }
 .hype-smoke i {
   position: absolute;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
   opacity: 0;
-  animation: hype-puff 1.2s linear infinite;
+  animation: hype-puff 1.4s linear infinite;
 }
 .hype-train.ended .hype-smoke {
   display: none;
 }
 @keyframes hype-puff {
   0% {
-    transform: translate(0, 0) scale(0.5);
-    opacity: 0.55;
+    transform: translate(0, 0) scale(0.35);
+    opacity: 0.6;
+  }
+  60% {
+    opacity: 0.35;
   }
   100% {
-    transform: translate(-22px, -13px) scale(1.6);
+    /* far enough back that the trail reads as speed, not as a puffing kettle */
+    transform: translate(-40px, -20px) scale(2);
+    opacity: 0;
+  }
+}
+/* speed lines rushing past the engine — the background half of "it is moving fast" */
+.hype-speed {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.hype-speed i {
+  position: absolute;
+  left: 26px;
+  height: 2px;
+  width: 14px;
+  border-radius: 1px;
+  background: linear-gradient(to left, currentColor, transparent);
+  opacity: 0;
+  animation: hype-streak 0.75s linear infinite;
+}
+.hype-train.ended .hype-speed {
+  display: none;
+}
+@keyframes hype-streak {
+  0% {
+    transform: translateX(0) scaleX(0.4);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(-34px) scaleX(1);
     opacity: 0;
   }
 }
