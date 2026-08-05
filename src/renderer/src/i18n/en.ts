@@ -249,7 +249,7 @@ export const en = {
   'set.fontsUploaded': 'Uploaded',
   'set.fontDelete': 'Delete this uploaded font',
   'set.lineSpacing': 'Line spacing inside messages (px)',
-  'set.sidebarDefault': 'Highlights panel opens on',
+  'set.sidebarDefault': 'Events panel opens on',
   'set.rememberWindowSize': 'Remember window size and position',
   'set.mute': 'Mute all sounds',
   'set.showMentionBg': 'Highlight mention background',
@@ -259,9 +259,9 @@ export const en = {
   'picker.editFavs': 'Reorder',
   'btn.type.copy': 'Copy message text',
   'gift.showAll': 'show all',
-  'set.highlightSidebar': 'Show a sidebar with highlighted messages',
-  'highlights.title': 'Highlights',
-  'highlights.empty': 'Nothing highlighted yet',
+  'set.highlightSidebar': 'Show the events sidebar',
+  'highlights.title': 'Events',
+  'highlights.empty': 'No events yet',
   'set.openInWindow': 'Open settings in a separate window',
   'set.firstMessageSound': "Play a sound on a viewer's first message this stream",
 
@@ -622,7 +622,7 @@ export const en = {
   'whisper.noUser': 'User not found',
   'whisper.favorite': 'Favorite contact',
   'set.whispersAsWindow': 'Open whispers in a separate window',
-  'set.highlightsAsWindow': 'Open the highlights panel in a separate window',
+  'set.highlightsAsWindow': 'Open the events panel in a separate window',
   'highlights.redeems': 'Redeems',
   'highlights.openWindow': 'Open in a separate window',
 
@@ -1027,7 +1027,7 @@ export const en = {
   'hint.settingsAsWindow': 'Settings open in their own window instead of the in-app overlay.',
   'hint.emotePickerAsWindow': 'The emote picker opens in its own window you can keep on a second monitor.',
   'hint.alwaysOnTop': 'The main window stays above every other application.',
-  'hint.highlightSidebar': 'A side panel listing mentions and highlighted messages of the current chat.',
+  'hint.highlightSidebar': "The current chat's events: mentions, subs, redeems, moderation actions.",
   'hint.mentionSound': 'Plays when any message mentions one of your accounts.',
   'hint.firstMessageSound': 'Plays when a viewer writes for the first time during the current stream (active tab only).',
   'hint.keywordSound': 'Plays when a message contains one of your keywords; the message is highlighted like a mention.',
@@ -1036,7 +1036,7 @@ export const en = {
   'hint.mentionBg': 'Background highlight for messages that mention you.',
   'hint.clientId': 'Your own Twitch application Client ID (from dev.twitch.tv). Change only if you know why.',
   'hint.emojiNameLang': 'Language of emoji names in search and tooltips.',
-  'hint.sidebarDefault': 'Which tab the highlights side panel opens on.',
+  'hint.sidebarDefault': 'Which tab the events side panel opens on.',
   'hint.rememberWindowSize': 'Windows reopen with the same size and position as last time.',
 
   // Misc

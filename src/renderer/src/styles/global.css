@@ -617,6 +617,14 @@ select:focus {
 .highlight-item-nick {
   font-weight: 700;
 }
+/* the time an event happened. Quiet and tabular so a column of them lines up and the eye can
+   skim it without the digits pulling attention away from the event itself. */
+.hl-time {
+  color: var(--text-faint);
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
 /* full text with wrapping — a one-line ellipsis hid most of the message */
 .highlight-item-text {
   color: var(--text-muted);

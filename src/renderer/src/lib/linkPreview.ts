@@ -82,10 +82,28 @@ function isFetchableHost(url: string): boolean {
 }
 
 /**
- * Sites serve very different HTML to "a browser" than to a bare fetch: YouTube hands an
- * Electron UA a consent/JS shell with no OpenGraph tags at all, which is why almost nothing
- * except Twitch clips ever produced a card. Ask like a browser does.
+ * Ask as what we are: a link unfurler.
+ *
+ * Pretending to be Chrome was making this WORSE, and measurably so. A site that thinks it is
+ * talking to a browser serves the interactive app — a JavaScript shell with no OpenGraph tags
+ * at all, or a generic site-wide title. The same URL asked by an unfurler gets the static
+ * summary the tags exist for:
+ *
+ *   open.spotify.com/track/…   browser: no og:title      unfurler: "Never Gonna Give You Up"
+ *   instagram.com/twitch/      browser: no og:title      unfurler: "Twitch • Instagram profile"
+ *   twitch.tv/<channel>        browser: "Twitch"         unfurler: "GouS_Stickmen - Twitch"
+ *
+ * That last one is the whole "sometimes the title is wrong" report in one line. And an honest
+ * name works exactly as well as impersonating someone else's crawler — measured against
+ * Discordbot on all of the above, identical results — so there is no reason to lie about it.
  */
+const UNFURL_HEADERS: Record<string, string> = {
+  'User-Agent': 'Mozilla/5.0 (compatible; StickiChatBot/1.0; +https://github.com/GouSsStickmen/stickichat)',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'uk,en;q=0.9'
+}
+
+/** a few sites do the opposite and only talk to browsers — second attempt, not the first */
 const BROWSER_HEADERS: Record<string, string> = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -121,9 +139,13 @@ async function oEmbedPreview(url: string): Promise<LinkPreviewData | null> {
   else if (host === 'soundcloud.com') endpoint = `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`
   else if (host === 'reddit.com') endpoint = `https://www.reddit.com/oembed?url=${encodeURIComponent(url)}`
   else if (host === 'tiktok.com') endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
+  // Spotify's own oEmbed answers with the track/album/playlist name and its cover art, which
+  // is both cleaner and more reliable than scraping the page for it
+  else if (host === 'open.spotify.com' || host === 'spotify.com')
+    endpoint = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`
   if (!endpoint) return null
 
-  const res = await window.sticki.fetchJson(endpoint, { headers: BROWSER_HEADERS })
+  const res = await window.sticki.fetchJson(endpoint, { headers: UNFURL_HEADERS })
   const j = res.json as { title?: string; author_name?: string; thumbnail_url?: string; provider_name?: string } | null
   if (!res.ok || !j || (!j.title && !j.thumbnail_url)) return null
   // YouTube's oEmbed thumbnail is the 480px "hqdefault"; maxres exists for most videos and
@@ -166,16 +188,33 @@ async function load(url: string): Promise<LinkPreviewData | null> {
   const viaOEmbed = await oEmbedPreview(url).catch(() => null)
   if (viaOEmbed) return viaOEmbed
 
-  const res = await window.sticki.fetchJson(url, { headers: BROWSER_HEADERS })
+  // Ask as an unfurler first. If that gets a real summary we are done; if all it got was the
+  // page's site-wide <title> we ask again as a browser, because a few sites do it the other
+  // way round. Whatever weak answer we did get is kept as the fallback — a plain <title> is
+  // still better than no card for the many small pages that have no OpenGraph tags at all.
+  const first = await fetchCard(url, UNFURL_HEADERS)
+  if (first?.strong) return first.data
+  const second = await fetchCard(url, BROWSER_HEADERS)
+  if (second?.strong) return second.data
+  return first?.data ?? second?.data ?? null
+}
+
+/** `strong` = the page actually described this link (OpenGraph tags or a picture) */
+async function fetchCard(
+  url: string,
+  headers: Record<string, string>
+): Promise<{ data: LinkPreviewData; strong: boolean } | null> {
+  const res = await window.sticki.fetchJson(url, { headers })
   // image hosts like kappa.lol serve the picture straight off an extension-less URL, so the
   // path tells us nothing — the Content-Type does
-  if (/^image\//i.test(res.contentType ?? '')) return { kind: 'image', image: url }
+  if (/^image\//i.test(res.contentType ?? '')) return { data: { kind: 'image', image: url }, strong: true }
   if (!res.ok || typeof res.text !== 'string') return null
   const html = res.text.slice(0, 400_000)
   if (!/<meta|<title/i.test(html)) return null
 
   const rawTitle = /<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1]
-  const title = metaTag(html, 'og:title') ?? metaTag(html, 'twitter:title') ?? (rawTitle ? decodeEntities(rawTitle).trim() : undefined)
+  const ogTitle = metaTag(html, 'og:title') ?? metaTag(html, 'twitter:title')
+  const title = ogTitle ?? (rawTitle ? decodeEntities(rawTitle).trim() : undefined)
   let image = metaTag(html, 'og:image') ?? metaTag(html, 'twitter:image')
   if (image) {
     try {
@@ -194,5 +233,7 @@ async function load(url: string): Promise<LinkPreviewData | null> {
     }
   }
   if (!title && !image) return null
-  return { kind: 'link', title, description, image, siteName }
+  // Weak means all we got was the site-wide <title> — "Spotify – Web Player", "Twitch" — with
+  // nothing that describes THIS link. Worth keeping as a last resort, not worth stopping at.
+  return { data: { kind: 'link', title, description, image, siteName }, strong: !!(ogTitle || image) }
 }

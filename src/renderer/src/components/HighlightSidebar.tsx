@@ -28,6 +28,16 @@ function ItemText({ msg }: { msg: ChatMessage }): React.JSX.Element {
   return <RichText msg={msg} />
 }
 
+/** when an event happened — hour and minute in the row, the full date on hover */
+export function EventTime({ at }: { at: number }): React.JSX.Element {
+  const d = new Date(at)
+  return (
+    <span className="hl-time" title={d.toLocaleString()}>
+      {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+    </span>
+  )
+}
+
 /**
  * A nick with its 7TV paint. This is a component and not an inline span on purpose: the list
  * renders up to 150 rows, and `ensureSevenTvCosmetic` writes to the store for every new chatter
@@ -229,6 +239,10 @@ export default function HighlightSidebar({
           </button>
         )}
       </div>
+      {/* every entry says WHEN. A list of events without times answers "what happened" but
+          never "when", and that is usually the actual question — a sub from two hours ago and
+          one from ten seconds ago looked identical. Full date in the tooltip: the panel keeps
+          history across sessions, so an entry can easily be from yesterday. */}
       <div className="highlight-list" ref={listRef} onScroll={onScroll} style={{ fontSize }}>
         {items.length === 0 && <div className="picker-empty">{t('highlights.empty')}</div>}
         {items.map((m) => {
@@ -245,6 +259,7 @@ export default function HighlightSidebar({
                 className={`highlight-item ${m.timestamp > lastReadAt ? 'unread' : ''}`}
                 onClick={() => jumpTo(m.id)}
               >
+                <EventTime at={m.timestamp} />
                 <HlNick userId={m.userId} color={color} enabled={stvOn} dark={dark}>
                   {m.rewardIcon ? (
                     <img className="hl-redeem-icon" src={m.rewardIcon} alt="" />
@@ -267,6 +282,7 @@ export default function HighlightSidebar({
               className={`highlight-item ${m.timestamp > lastReadAt ? 'unread' : ''}`}
               onClick={() => jumpTo(m.id)}
             >
+              <EventTime at={m.timestamp} />
               <HlNick userId={m.userId} color={color} enabled={stvOn} dark={dark}>
                 {m.redeemed && '🔴 '}
                 {!m.system &&
