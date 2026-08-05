@@ -194,6 +194,22 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
       }
       return
     }
+    /**
+     * Measuring costs a collapse, and the collapse costs the chat its scroll position.
+     *
+     * To measure the content the box has to go to `height: auto` for an instant — which, at two
+     * or more lines, makes it ONE line tall and hands those pixels back to the chat above. If
+     * the chat was at the end, the browser clamps its scrollTop down to fit the taller viewport;
+     * restoring the real height then leaves it exactly that far SHORT of the end. That is the
+     * dip under the input on every keystroke, and with scrolling locked (where nothing corrects
+     * it afterwards) it is the input slowly crawling over the messages.
+     *
+     * Nothing is painted between the collapse and the restore, so putting the scroll back here
+     * erases the whole excursion. Any REAL height change is still handled afterwards, by the
+     * event below and by the list's own resize handling.
+     */
+    const sc = ta.closest('.pane')?.querySelector<HTMLElement>('.chat-scroller') ?? null
+    const keepScroll = sc?.scrollTop ?? 0
     ta.style.height = 'auto'
     // scrollHeight is content + padding and does NOT include the border, but the box is
     // border-box — so `height = scrollHeight` left the text two pixels taller than the box it
@@ -210,6 +226,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     // to keep the caret in view. Below the cap, take one extra pixel: invisible, and it ends
     // the nudging for good.
     if (want < 120 && ta.scrollHeight > ta.clientHeight) ta.style.height = `${want + 1}px`
+    if (sc && Math.abs(sc.scrollTop - keepScroll) > 0.5) sc.scrollTop = keepScroll
     /**
      * Tell the chat above, NOW.
      *
