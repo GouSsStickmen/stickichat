@@ -228,7 +228,12 @@ export class IrcClient {
             'logged in',
             `as ${msg.params[0] ?? '?'} · joining ${this.channels.size} · ${this.sendQueue.length} queued`
           )
-          for (const ch of this.channels) this.rawSend(`JOIN #${ch}`)
+          // a reconnect re-joins everything — through the same paced queue, because the burst
+          // is exactly what the rate limit is there to stop
+          this.joinQueue = [...this.channels]
+          this.joinedInWindow = 0
+          this.windowStart = 0
+          this.pumpJoins()
           for (const q of this.sendQueue) this.rawSend(q)
           this.sendQueue = []
           this.opts.onOpen?.()
@@ -315,7 +320,50 @@ export class IrcClient {
     const ch = channel.toLowerCase()
     if (this.channels.has(ch)) return
     this.channels.add(ch)
-    this.sendOrQueue(`JOIN #${ch}`)
+    this.queueJoin(ch)
+  }
+
+  /**
+   * JOIN is rate limited: Twitch allows 20 attempts per 10 seconds for an ordinary account and
+   * silently ignores the rest — no error, the channel simply never opens and its pane sits empty
+   * until something makes us re-join. With twenty-odd chats in the layout, firing them all at
+   * once on every connect put the tail of the list over that line every single time.
+   *
+   * So joins go through a small paced queue: a batch, a pause, the next batch.
+   */
+  private static readonly JOIN_BATCH = 15
+  private static readonly JOIN_WINDOW = 11000
+  private joinQueue: string[] = []
+  private joinTimer: number | null = null
+  private joinedInWindow = 0
+  private windowStart = 0
+
+  private queueJoin(ch: string): void {
+    this.joinQueue.push(ch)
+    this.pumpJoins()
+  }
+
+  private pumpJoins(): void {
+    if (this.joinTimer !== null) return
+    const now = Date.now()
+    if (now - this.windowStart >= IrcClient.JOIN_WINDOW) {
+      this.windowStart = now
+      this.joinedInWindow = 0
+    }
+    while (this.joinQueue.length && this.joinedInWindow < IrcClient.JOIN_BATCH) {
+      const ch = this.joinQueue.shift()!
+      // a channel closed while it waited in the queue no longer needs joining
+      if (!this.channels.has(ch)) continue
+      this.joinedInWindow++
+      this.sendOrQueue(`JOIN #${ch}`)
+    }
+    if (!this.joinQueue.length) return
+    const wait = Math.max(500, IrcClient.JOIN_WINDOW - (Date.now() - this.windowStart))
+    diagSocket('irc', 'join paced', `${this.joinQueue.length} channel(s) waiting ${Math.round(wait / 1000)}s`)
+    this.joinTimer = window.setTimeout(() => {
+      this.joinTimer = null
+      this.pumpJoins()
+    }, wait)
   }
 
   part(channel: string): void {
@@ -385,6 +433,10 @@ export class IrcClient {
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
+    }
+    if (this.joinTimer !== null) {
+      clearTimeout(this.joinTimer)
+      this.joinTimer = null
     }
     try {
       this.ws?.close()
