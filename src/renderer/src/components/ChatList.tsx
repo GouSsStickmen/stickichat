@@ -376,6 +376,15 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
             ourScrollTop.current = bottom
           }
         }
+        // Re-anchor NOW, at whatever position the resize left us on.
+        //
+        // The anchor holds "message X, this far below the top" and the layout effect restores
+        // it whenever content moves. It was captured before the resize, so any render that
+        // followed dragged the view straight back to the old scroll position and undid the
+        // re-pin — the chat ended up parked exactly one input-line short of the bottom and
+        // stayed there. The scroll event that would have refreshed it arrives too late: it is
+        // dispatched asynchronously, and the restoring render can happen first.
+        grabAnchor(el.scrollTop)
       }
       if (el.clientWidth === lastW) return
       lastW = el.clientWidth
@@ -383,7 +392,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [rerender, following, locked])
+  }, [rerender, following, locked, grabAnchor])
 
   const onScroll = useCallback((): void => {
     const el = scRef.current
