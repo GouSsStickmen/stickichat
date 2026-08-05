@@ -375,17 +375,19 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       if (el.clientHeight !== lastH) {
         const delta = el.clientHeight - lastH
         lastH = el.clientHeight
-        if (!locked) {
-          const wanted =
-            following.current || atBottomRef.current
-              ? el.scrollHeight - el.clientHeight
-              : el.scrollTop - delta
-          const target = Math.max(0, Math.min(wanted, el.scrollHeight - el.clientHeight))
-          if (Math.abs(el.scrollTop - target) > 0.5) {
-            el.scrollTop = target
-            scrollTopRef.current = target
-            ourScrollTop.current = target
-          }
+        // Compensating happens even while the list is LOCKED. The lock means "do not chase new
+        // messages", not "let the input eat the bottom of the page": with it on, a growing
+        // input simply covered the last lines. Locked just takes the delta shift instead of the
+        // pin, which is the same promise — the content under the reader does not move.
+        const wanted =
+          (following.current || atBottomRef.current) && !locked
+            ? el.scrollHeight - el.clientHeight
+            : el.scrollTop - delta
+        const target = Math.max(0, Math.min(wanted, el.scrollHeight - el.clientHeight))
+        if (Math.abs(el.scrollTop - target) > 0.5) {
+          el.scrollTop = target
+          scrollTopRef.current = target
+          ourScrollTop.current = target
         }
         // Re-anchor NOW, at whatever position the resize left us on.
         //

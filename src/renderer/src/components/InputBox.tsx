@@ -184,10 +184,14 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const autoGrow = (): void => {
     const ta = taRef.current
     if (!ta) return
+    const before = ta.style.height
     if (!ta.value) {
       // empty field: reset to the CSS min-height — measuring scrollHeight here picks up the
       // multi-line PLACEHOLDER and inflates the box after erasing text
       ta.style.height = ''
+      if (before !== '') {
+        window.dispatchEvent(new CustomEvent('sticki:inputgrew', { detail: { paneId: pane.id } }))
+      }
       return
     }
     ta.style.height = 'auto'
@@ -206,6 +210,18 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     // to keep the caret in view. Below the cap, take one extra pixel: invisible, and it ends
     // the nudging for good.
     if (want < 120 && ta.scrollHeight > ta.clientHeight) ta.style.height = `${want + 1}px`
+    /**
+     * Tell the chat above, NOW.
+     *
+     * The list also watches its own size, but a ResizeObserver whose target changed during the
+     * layout-effect phase can be delivered in the FOLLOWING frame — and the frame in between is
+     * painted with the shorter viewport and the old scroll position, which is the chat visibly
+     * dropping behind the input for a sixtieth of a second on every line it gains. This event is
+     * dispatched synchronously, before paint, so the correction lands in the same frame.
+     */
+    if (before !== ta.style.height) {
+      window.dispatchEvent(new CustomEvent('sticki:inputgrew', { detail: { paneId: pane.id } }))
+    }
   }
 
   // Grow on EVERY text change, not only typing: external inserts (emotes, mod-button fill,

@@ -151,6 +151,26 @@ export default function MessageList({
     window.addEventListener('sticki:grew', rePin)
     const keepalive = window.setInterval(rePin, 1500)
 
+    /**
+     * The input of THIS pane just changed height — correct the scroll in the same frame.
+     *
+     * The list watches its own size too, but a ResizeObserver whose target changed during the
+     * layout-effect phase can be delivered a frame late, and that frame is painted with the
+     * shorter viewport and the old scroll position: the chat visibly drops behind the input on
+     * every line it gains. The input dispatches this synchronously, before paint.
+     *
+     * Unconditionally to the end, and NOT via rePin: rePin declines small distances while smooth
+     * scroll is on, which is right for arriving messages (that gap is what the glide animates)
+     * and wrong here — the viewport moved under the reader and there is nothing to animate.
+     */
+    const onInputGrew = (e: Event): void => {
+      const detail = (e as CustomEvent<{ paneId: string }>).detail
+      if (detail?.paneId !== pane.id) return
+      if (!followingRef.current || scrollLocked) return
+      listRef.current?.toBottom()
+    }
+    window.addEventListener('sticki:inputgrew', onInputGrew)
+
     const el = wrapRef.current
     const onWheel = (e: WheelEvent): void => {
       if (e.deltaY < 0) stopFollowing()
@@ -178,6 +198,7 @@ export default function MessageList({
     window.addEventListener('sticki:syncscroll', onSync)
     return () => {
       window.removeEventListener('sticki:grew', rePin)
+      window.removeEventListener('sticki:inputgrew', onInputGrew)
       window.clearInterval(keepalive)
       el?.removeEventListener('wheel', onWheel)
       window.removeEventListener('sticki:syncscroll', onSync)
