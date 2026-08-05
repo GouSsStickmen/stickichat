@@ -1553,7 +1553,11 @@ select:focus {
   align-items: center;
   background: var(--surface-3);
 }
-.usercard .uc-head img {
+/* the AVATAR only — a direct child of the header.
+   As `.uc-head img` this also caught every badge nested deeper in the same block: 48px and a
+   circular mask, which is why badges came out huge and cropped into ovals no matter what the
+   badge rules said. Same specificity, later in the file, so it won every time. */
+.usercard .uc-head > img {
   width: 48px;
   height: 48px;
   border-radius: var(--radius-circle);

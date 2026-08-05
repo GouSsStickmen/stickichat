@@ -360,20 +360,31 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     let lastH = el.clientHeight
     const ro = new ResizeObserver(() => {
       viewRef.current = el.clientHeight
-      // The viewport got shorter — the input grew a line, a banner appeared. scrollTop is
-      // measured from the TOP, so it survives untouched and the newest message slides below
-      // the fold: from the reader's side the whole chat lurches downward. If we were glued to
-      // the bottom we must still be glued to it after the resize.
+      /**
+       * The viewport changed height — the input grew a line, a banner appeared.
+       *
+       * scrollTop is measured from the TOP, so it survives the resize untouched and the BOTTOM
+       * edge does all the moving: whatever the reader was looking at slides under the input,
+       * deeper with every line it gains. The bottom is what has to stay still.
+       *
+       * Glued to the end: pin to the exact end. Reading history: shift by the delta, which
+       * leaves the same line sitting on the input's top edge. Both mean "the chat rises with
+       * the input"; the first is simply exact. (atBottom as well as following, because with
+       * smooth scroll the glide can be a few pixels short when the resize lands.)
+       */
       if (el.clientHeight !== lastH) {
+        const delta = el.clientHeight - lastH
         lastH = el.clientHeight
-        // atBottom as well as following: with smooth scroll the glide can be a few pixels short
-        // of the end when the resize lands, and that is still "the reader is at the bottom"
-        if ((following.current || atBottomRef.current) && !locked) {
-          const bottom = el.scrollHeight - el.clientHeight
-          if (Math.abs(el.scrollTop - bottom) > 0.5) {
-            el.scrollTop = bottom
-            scrollTopRef.current = bottom
-            ourScrollTop.current = bottom
+        if (!locked) {
+          const wanted =
+            following.current || atBottomRef.current
+              ? el.scrollHeight - el.clientHeight
+              : el.scrollTop - delta
+          const target = Math.max(0, Math.min(wanted, el.scrollHeight - el.clientHeight))
+          if (Math.abs(el.scrollTop - target) > 0.5) {
+            el.scrollTop = target
+            scrollTopRef.current = target
+            ourScrollTop.current = target
           }
         }
         // Re-anchor NOW, at whatever position the resize left us on.
