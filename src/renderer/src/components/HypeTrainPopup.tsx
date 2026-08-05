@@ -26,44 +26,51 @@ function Locomotive(): React.JSX.Element {
         <i style={{ animationDelay: '0.6s' }} />
         <i style={{ animationDelay: '0.9s' }} />
       </span>
-      <svg className="hype-loco-svg" viewBox="0 0 52 44" width="38" height="32" aria-hidden="true">
-        <g strokeLinejoin="round" strokeLinecap="round" strokeWidth="2.6" stroke="var(--loco-line)">
-          {/* cowcatcher — the wedge at the front, bottom right */}
-          <path d="M42 30l8 8h-8z" fill="var(--loco-dark)" />
+      {/* One flat colour, no outline: at this size an outline only muddies the silhouette.
+          The window, the wheel rims and the spoke gaps are cut out in the panel colour, so the
+          shape still reads and the spin is still visible. */}
+      <svg className="hype-loco-svg" viewBox="0 0 52 46" width="38" height="34" aria-hidden="true">
+        <g fill="var(--loco-body)">
+          {/* cowcatcher — the wedge at the front */}
+          <path d="M41 30l9 9h-9z" />
           {/* cab roof, overhanging on both sides */}
-          <path d="M1 14h22v3H1z" fill="var(--loco-dark)" />
+          <path d="M2 14h22v3.5H2z" />
           {/* cab */}
-          <path d="M4 17h16v17H4z" fill="var(--loco-body)" />
-          {/* boiler: the long body, rounded at the front */}
-          <path d="M20 24h20a5 5 0 0 1 0 10H20z" fill="var(--loco-dark)" />
-          {/* funnel, flaring upward, with its cap */}
-          <path d="M31 17h8l-2.5-9h-3z" fill="var(--loco-dark)" />
-          <path d="M32.5 5h9v3h-9z" fill="var(--loco-body)" />
+          <path d="M5 17h15v18H5z" />
+          {/* boiler, rounded at the nose */}
+          <path d="M19 24h21a5 5 0 0 1 0 11H19z" />
+          {/* funnel: sits ON the boiler and flares upward, with its cap on top */}
+          <path d="M32 24h5l2 -12h-9z" />
+          <path d="M29 9h11v3.5H29z" />
           {/* steam dome between cab and funnel */}
-          <path d="M24 24v-5a2.5 2.5 0 0 1 5 0v5z" fill="var(--loco-body)" />
-          {/* running board under the boiler */}
-          <path d="M4 34h40v3H4z" fill="var(--loco-dark)" />
-          {/* cab window */}
-          <path d="M8 21h8v6H8z" fill="var(--loco-glass)" />
+          <path d="M23 24v-4.5a2.5 2.5 0 0 1 5 0V24z" />
+          {/* running board */}
+          <path d="M4 35h38v3.5H4z" />
         </g>
-        {/* big driving wheel under the cab, with a hub — the spokes make the spin readable */}
+        {/* cab window, punched out */}
+        <path d="M8 20.5h9v6.5H8z" fill="var(--loco-cut)" />
+        {/* big driving wheel — rim, hollow centre, spokes and hub */}
         <g className="hype-wheel hype-wheel-back">
-          <circle cx="14" cy="35" r="7.5" fill="var(--loco-wheel)" stroke="var(--loco-line)" strokeWidth="2.6" />
-          <circle cx="14" cy="35" r="2.5" fill="var(--loco-hub)" stroke="var(--loco-line)" strokeWidth="1.6" />
+          <circle cx="14" cy="36" r="8" fill="var(--loco-body)" />
+          <circle cx="14" cy="36" r="5.4" fill="var(--loco-cut)" />
           <path
-            d="M14 28v14M7 35h14M9.2 30.2l9.6 9.6M18.8 30.2l-9.6 9.6"
-            stroke="var(--loco-line)"
-            strokeWidth="1.3"
+            d="M14 30v12M8 36h12M10 32l8 8M18 32l-8 8"
+            stroke="var(--loco-body)"
+            strokeWidth="1.6"
+            strokeLinecap="round"
           />
+          <circle cx="14" cy="36" r="2" fill="var(--loco-body)" />
         </g>
         {/* two carrying wheels under the boiler */}
         <g className="hype-wheel hype-wheel-mid">
-          <circle cx="28" cy="38" r="4.5" fill="var(--loco-hub)" stroke="var(--loco-line)" strokeWidth="2.4" />
-          <path d="M28 34v8M24 38h8" stroke="var(--loco-line)" strokeWidth="1.1" />
+          <circle cx="28" cy="39" r="5" fill="var(--loco-body)" />
+          <circle cx="28" cy="39" r="3" fill="var(--loco-cut)" />
+          <path d="M28 36v6M25 39h6" stroke="var(--loco-body)" strokeWidth="1.4" strokeLinecap="round" />
         </g>
         <g className="hype-wheel hype-wheel-front">
-          <circle cx="38" cy="38" r="4.5" fill="var(--loco-hub)" stroke="var(--loco-line)" strokeWidth="2.4" />
-          <path d="M38 34v8M34 38h8" stroke="var(--loco-line)" strokeWidth="1.1" />
+          <circle cx="38" cy="39" r="5" fill="var(--loco-body)" />
+          <circle cx="38" cy="39" r="3" fill="var(--loco-cut)" />
+          <path d="M38 36v6M35 39h6" stroke="var(--loco-body)" strokeWidth="1.4" strokeLinecap="round" />
         </g>
       </svg>
     </span>

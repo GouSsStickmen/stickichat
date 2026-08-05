@@ -3892,7 +3892,7 @@ button:has(> svg) {
 /* the track: a rail, the filled part behind the engine, and the engine itself riding on top */
 .hype-track {
   position: relative;
-  height: 34px;
+  height: 38px;
 }
 .hype-rail {
   position: absolute;
@@ -3937,15 +3937,11 @@ button:has(> svg) {
 .hype-loco-wrap {
   position: relative;
   display: inline-block;
-  /* the whole engine is mixed from the theme's accent, so it belongs to whatever palette is on
-     — never a hardcoded toy orange. The outline is the darkest surface blended with the text
-     colour, which stays visible on a dark panel AND on a light one. */
+  /* one flat colour, taken from the theme's accent, so the engine belongs to whatever palette
+     is on. The cut-outs are the panel itself showing through — that is what keeps the window
+     and the spokes readable without an outline. */
   --loco-body: var(--accent);
-  --loco-dark: color-mix(in srgb, var(--accent-strong) 78%, var(--loco-line));
-  --loco-line: color-mix(in srgb, var(--surface-1) 82%, var(--text));
-  --loco-wheel: color-mix(in srgb, var(--accent-strong) 40%, var(--loco-line));
-  --loco-hub: color-mix(in srgb, var(--accent-strong) 55%, var(--loco-line));
-  --loco-glass: color-mix(in srgb, var(--text) 78%, var(--surface-1));
+  --loco-cut: var(--surface-3);
 }
 .hype-loco-svg {
   display: block;
@@ -3972,9 +3968,10 @@ button:has(> svg) {
 }
 /* smoke leaves the funnel and is left BEHIND — the puffs fly back and up, growing and fading */
 .hype-smoke {
+  /* anchored at the mouth of the funnel, which is where smoke actually comes from */
   position: absolute;
   left: 25px;
-  top: -3px;
+  top: 3px;
   pointer-events: none;
   color: color-mix(in srgb, var(--text) 60%, transparent);
 }
