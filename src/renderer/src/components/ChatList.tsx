@@ -396,6 +396,15 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         // stayed there. The scroll event that would have refreshed it arrives too late: it is
         // dispatched asynchronously, and the restoring render can happen first.
         grabAnchor(el.scrollTop)
+        // and say out loud where we ended up. `atBottom` is otherwise only recomputed in the
+        // scroll handler, which runs asynchronously — long enough for a two-line jump in the
+        // input to be read as "the reader has left the end", raising the new-messages chip and
+        // handing the list to the anchor branch, which is what kept it parked below the end.
+        const bottomNow = el.scrollHeight - el.scrollTop - el.clientHeight <= 40
+        if (bottomNow !== atBottomRef.current) {
+          atBottomRef.current = bottomNow
+          onAtBottomChange?.(bottomNow)
+        }
       }
       if (el.clientWidth === lastW) return
       lastW = el.clientWidth
@@ -403,7 +412,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [rerender, following, locked, grabAnchor])
+  }, [rerender, following, locked, grabAnchor, onAtBottomChange])
 
   const onScroll = useCallback((): void => {
     const el = scRef.current
