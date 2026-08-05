@@ -156,6 +156,14 @@ export function playRaidSound(
   playAlertSound({ type: s.raidSoundType, volume: s.raidSoundVolume, data }, 'raid', force)
 }
 
+export function playHypeTrainSound(
+  s: Pick<Settings, 'hypeTrainSoundType' | 'hypeTrainSoundVolume' | 'hypeTrainSoundCustomId' | 'customSounds'>,
+  force = false
+): void {
+  const data = s.customSounds.find((c) => c.id === s.hypeTrainSoundCustomId)?.data
+  playAlertSound({ type: s.hypeTrainSoundType, volume: s.hypeTrainSoundVolume, data }, 'hype-train', force)
+}
+
 export function playWhisperSound(
   s: Pick<Settings, 'whisperSoundType' | 'whisperSoundVolume' | 'whisperSoundCustomId' | 'customSounds'>,
   force = false

@@ -50,6 +50,21 @@ export interface ChannelPrompt {
   shoutout?: boolean
 }
 
+/** the hype train currently running in one of the open channels (one at a time, like Twitch) */
+export interface HypeTrain {
+  channel: string
+  level: number
+  /** points into the current level and what it needs — the bar */
+  value: number
+  goal: number
+  /** unix ms the train expires at unless someone feeds it */
+  expiresAt: number
+  /** last contributor, shown under the bar */
+  by?: string
+  /** set when it is over: the popup lingers a few seconds on the result */
+  ended?: 'COMPLETED' | 'EXPIRE'
+}
+
 interface UiState {
   settingsOpen: boolean
   /** which settings section to land on when the modal/window opens next */
@@ -62,6 +77,7 @@ interface UiState {
   expandedGifts: Record<string, boolean>
   /** small "add this channel?" prompt (raids) */
   channelPrompt: ChannelPrompt | null
+  hypeTrain: HypeTrain | null
   whispersOpen: boolean
   /** split mode: scrolling one pane scrolls the others by the same amount */
   scrollSync: boolean
@@ -76,6 +92,7 @@ interface UiState {
   dismissToast: (id: number) => void
   setEmotePreview: (v: EmotePreviewTarget | null) => void
   setChannelPrompt: (v: ChannelPrompt | null) => void
+  setHypeTrain: (v: HypeTrain | null) => void
   setWhispersOpen: (v: boolean) => void
   toggleScrollSync: () => void
   markReauthNeeded: (id: string, login: string) => void
@@ -105,6 +122,7 @@ export const useUiStore = create<UiState>()((set) => ({
   emotePreview: null,
   expandedGifts: {},
   channelPrompt: null,
+  hypeTrain: null,
   whispersOpen: false,
   scrollSync: false,
   reauthAccounts: [],
@@ -132,6 +150,7 @@ export const useUiStore = create<UiState>()((set) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setEmotePreview: (emotePreview) => set({ emotePreview }),
   setChannelPrompt: (channelPrompt) => set({ channelPrompt }),
+  setHypeTrain: (hypeTrain) => set({ hypeTrain }),
   setWhispersOpen: (whispersOpen) => set({ whispersOpen }),
   toggleScrollSync: () => set((s) => ({ scrollSync: !s.scrollSync })),
   markReauthNeeded: (id, login) =>

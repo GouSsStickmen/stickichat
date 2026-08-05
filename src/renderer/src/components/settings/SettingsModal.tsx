@@ -35,6 +35,7 @@ import {
   playStreamUpSound,
   playWhisperSound,
   playRaidSound,
+  playHypeTrainSound,
   playErrorSound
 } from '../../lib/sound'
 import { CHANGELOG } from '../../changelog'
@@ -1500,6 +1501,26 @@ function NotificationsSection(): React.JSX.Element {
           />
         </>
       )}
+      <div className="set-group-title">{t('hype.title')}</div>
+      <div className="set-block">
+        <Toggle label={t('set.hypeTrainLine')} hint={t('hint.hypeTrainLine')} value={settings.hypeTrainLine} onChange={(v) => set({ hypeTrainLine: v })} />
+        <Toggle label={t('set.hypeTrainPopup')} hint={t('hint.hypeTrainPopup')} value={settings.hypeTrainPopup} onChange={(v) => set({ hypeTrainPopup: v })} />
+        {settings.hypeTrainPopup && (
+          <div className="set-sub">
+            {/* trains are rare — without this you would have to wait for a real one to find out
+                whether you even want the popup, and where it lands on your screen */}
+            <button className="ghost" onClick={showHypeTrainDemo}>
+              {t('set.hypeTrainPreview')}
+            </button>
+          </div>
+        )}
+        <Toggle label={t('set.hypeTrainSound')} value={settings.hypeTrainSound} onChange={(v) => set({ hypeTrainSound: v })} />
+        {settings.hypeTrainSound && (
+          <div className="set-sub">
+            <SoundSettings kind="hypeTrain" />
+          </div>
+        )}
+      </div>
       <div className="set-group-title">{t('set.group.errors')}</div>
       <Toggle label={t('set.errorSound')} hint={t('hint.errorSound')} value={settings.errorSound} onChange={(v) => set({ errorSound: v })} />
       {settings.errorSound && <SoundSettings kind="error" />}
@@ -1591,7 +1612,37 @@ function WindowsSection(): React.JSX.Element {
   )
 }
 
-type SoundKind = 'mention' | 'firstMessage' | 'keyword' | 'nickAlert' | 'streamUp' | 'whisper' | 'raid' | 'error'
+/**
+ * A demo train for the preview button: it climbs a level, then rolls away.
+ *
+ * Deliberately drives the same store the real one does, so what you see here is exactly what a
+ * real train looks like — including the sound, if it is switched on.
+ */
+function showHypeTrainDemo(): void {
+  const ui = useUiStore.getState()
+  const settings = useSettingsStore.getState().settings
+  const base = { channel: 'preview', goal: 1000, by: 'Bobik069' }
+  ui.setHypeTrain({ ...base, level: 2, value: 350, expiresAt: Date.now() + 300_000 })
+  if (settings.hypeTrainSound) playHypeTrainSound(settings, true)
+  const steps = [
+    { at: 1200, patch: { level: 2, value: 800 } },
+    { at: 2600, patch: { level: 3, value: 200 } },
+    { at: 4200, patch: { level: 3, value: 700 } }
+  ]
+  for (const s of steps) {
+    window.setTimeout(() => {
+      const cur = useUiStore.getState().hypeTrain
+      if (cur?.channel === 'preview') ui.setHypeTrain({ ...cur, ...s.patch })
+    }, s.at)
+  }
+  window.setTimeout(() => {
+    const cur = useUiStore.getState().hypeTrain
+    if (cur?.channel === 'preview') ui.setHypeTrain(null)
+  }, 9000)
+}
+
+type SoundKind =
+  | 'mention' | 'firstMessage' | 'keyword' | 'nickAlert' | 'streamUp' | 'whisper' | 'raid' | 'hypeTrain' | 'error'
 
 const SOUND_KEYS = {
   mention: { type: 'mentionSoundType', volume: 'mentionSoundVolume', customId: 'mentionSoundCustomId' },
@@ -1605,6 +1656,7 @@ const SOUND_KEYS = {
   streamUp: { type: 'streamUpSoundType', volume: 'streamUpSoundVolume', customId: 'streamUpSoundCustomId' },
   whisper: { type: 'whisperSoundType', volume: 'whisperSoundVolume', customId: 'whisperSoundCustomId' },
   raid: { type: 'raidSoundType', volume: 'raidSoundVolume', customId: 'raidSoundCustomId' },
+  hypeTrain: { type: 'hypeTrainSoundType', volume: 'hypeTrainSoundVolume', customId: 'hypeTrainSoundCustomId' },
   error: { type: 'errorSoundType', volume: 'errorSoundVolume', customId: 'errorSoundCustomId' }
 } as const
 
@@ -1616,6 +1668,7 @@ const SOUND_PLAYERS: Record<SoundKind, (s: Settings, force?: boolean) => void> =
   streamUp: playStreamUpSound,
   whisper: playWhisperSound,
   raid: playRaidSound,
+  hypeTrain: playHypeTrainSound,
   error: (_s, force) => playErrorSound(force)
 }
 

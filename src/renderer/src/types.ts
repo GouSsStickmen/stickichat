@@ -1027,6 +1027,15 @@ export interface Settings {
   raidSoundType: SoundChoice
   raidSoundVolume: number
   raidSoundCustomId?: string
+  /** announce hype trains with an info line in the channel's chat */
+  hypeTrainLine: boolean
+  /** the floating train popup with the live level and countdown */
+  hypeTrainPopup: boolean
+  /** sound when a train starts and on every level-up */
+  hypeTrainSound: boolean
+  hypeTrainSoundType: SoundChoice
+  hypeTrainSoundVolume: number
+  hypeTrainSoundCustomId?: string
   /** sound when an error notification (red toast) appears */
   errorSound: boolean
   errorSoundType: SoundChoice
@@ -1247,6 +1256,11 @@ export const DEFAULT_SETTINGS: Settings = {
   raidSound: true,
   raidSoundType: 'bell',
   raidSoundVolume: 0.5,
+  hypeTrainLine: true,
+  hypeTrainPopup: true,
+  hypeTrainSound: true,
+  hypeTrainSoundType: 'bell',
+  hypeTrainSoundVolume: 0.5,
   errorSound: false,
   errorSoundType: 'pop',
   errorSoundVolume: 0.5,

@@ -43,6 +43,23 @@ export interface PollEvent {
   choices: string[]
 }
 
+export interface HypeTrainEvent {
+  channelId: string
+  kind: 'start' | 'progress' | 'level' | 'end'
+  /** 1..5 — the level the train is on right now */
+  level: number
+  /** points into the CURRENT level */
+  value: number
+  /** points the current level needs */
+  goal: number
+  /** unix ms when the train expires unless it is fed */
+  expiresAt: number
+  /** who just contributed (progress events only) */
+  userDisplay?: string
+  /** why it stopped: the train finished level 5, or it simply ran out of time */
+  endReason?: 'COMPLETED' | 'EXPIRE'
+}
+
 export class PubSubClient {
   private ws: WebSocket | null = null
   private closed = false
@@ -57,6 +74,7 @@ export class PubSubClient {
   private onRedeem: (e: RedemptionEvent) => void
   private onRaid?: (e: RaidEvent) => void
   private onPoll?: (e: PollEvent) => void
+  private onHype?: (e: HypeTrainEvent) => void
   /** poll/prediction ids already announced (both topics repeat update events) */
   private announcedPolls = new Set<string>()
 
@@ -65,13 +83,15 @@ export class PubSubClient {
     getChannelIds: () => string[],
     onRedeem: (e: RedemptionEvent) => void,
     onRaid?: (e: RaidEvent) => void,
-    onPoll?: (e: PollEvent) => void
+    onPoll?: (e: PollEvent) => void,
+    onHype?: (e: HypeTrainEvent) => void
   ) {
     this.getAccount = getAccount
     this.getChannelIds = getChannelIds
     this.onRedeem = onRedeem
     this.onRaid = onRaid
     this.onPoll = onPoll
+    this.onHype = onHype
     this.connect()
   }
 
@@ -143,6 +163,9 @@ export class PubSubClient {
       }
       if (msg.type === 'MESSAGE' && msg.data?.topic?.startsWith('predictions-channel-v1.')) {
         this.handlePredictionMessage(msg.data.topic, msg.data.message ?? '')
+      }
+      if (msg.type === 'MESSAGE' && msg.data?.topic?.startsWith('hype-train-events-v1.')) {
+        this.handleHypeMessage(msg.data.topic, msg.data.message ?? '')
       }
       // a rejected LISTEN used to vanish without trace: the topic simply never delivered
       // anything and the session was later dropped as unused. ERR_BADAUTH here is the single
@@ -285,6 +308,64 @@ export class PubSubClient {
     })
   }
 
+  /**
+   * Hype train, live.
+   *
+   * EventSub has channel.hype_train.*, but its scope is broadcaster-only — it would light up
+   * for your own channel and stay dark for every other chat you watch. This viewer topic is
+   * what the Twitch page itself listens to, so the train shows up wherever you are.
+   *
+   * `progression` fires per contribution, `level-up` when the bar fills; both carry the whole
+   * progress object, so one mapping covers all of them.
+   */
+  private handleHypeMessage(topic: string, raw: string): void {
+    if (!this.onHype) return
+    const channelId = topic.slice('hype-train-events-v1.'.length)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let payload: { type?: string; data?: any }
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      return
+    }
+    const kinds: Record<string, HypeTrainEvent['kind']> = {
+      'hype-train-start': 'start',
+      'hype-train-progression': 'progress',
+      'hype-train-level-up': 'level',
+      'hype-train-end': 'end'
+    }
+    const kind = kinds[payload.type ?? '']
+    if (!kind) return
+    const d = payload.data ?? {}
+    if (kind === 'end') {
+      this.onHype({
+        channelId,
+        kind,
+        level: 0,
+        value: 0,
+        goal: 0,
+        expiresAt: Date.now(),
+        endReason: d.ending_reason === 'COMPLETED' ? 'COMPLETED' : 'EXPIRE'
+      })
+      return
+    }
+    const p = d.progress ?? {}
+    // level-up carries the deadline as an absolute ms timestamp, the others as seconds left
+    const expiresAt =
+      typeof d.time_to_expire === 'number'
+        ? d.time_to_expire
+        : Date.now() + Math.max(0, Number(p.remaining_seconds ?? 0)) * 1000
+    this.onHype({
+      channelId,
+      kind,
+      level: Number(p.level?.value ?? 1),
+      value: Number(p.value ?? 0),
+      goal: Number(p.goal ?? p.level?.goal ?? 1),
+      expiresAt,
+      userDisplay: d.user_display_name || d.user_login || undefined
+    })
+  }
+
   private async listenAll(): Promise<void> {
     const account = this.getAccount()
     if (!account) return
@@ -310,7 +391,8 @@ export class PubSubClient {
             `community-points-channel-v1.${id}`,
             `raid.${id}`,
             `polls.${id}`,
-            `predictions-channel-v1.${id}`
+            `predictions-channel-v1.${id}`,
+            `hype-train-events-v1.${id}`
           ],
           auth_token: token
         }

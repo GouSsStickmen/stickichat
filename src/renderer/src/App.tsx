@@ -21,6 +21,7 @@ import WhispersWindow from './components/WhispersWindow'
 import HighlightsWindow from './components/HighlightsWindow'
 import OverlayEditorWindow from './components/OverlayEditorWindow'
 import ChannelPrompt from './components/ChannelPrompt'
+import HypeTrainPopup from './components/HypeTrainPopup'
 import ReauthBanner from './components/ReauthBanner'
 import { buildChannelSeed, injectChannelSeed } from './lib/detachSeed'
 import { hexToRgba } from './lib/tokenize'
@@ -490,6 +491,9 @@ export default function App(): React.JSX.Element | null {
       <div className="app">
         <SettingsModal standalone initialSection={special.section} />
         {addAccountOpen && <DeviceAuthModal onClose={() => useUiStore.getState().setAddAccountOpen(false)} />}
+        {/* the preview button drives THIS window's store — real trains only ever show in the main
+            window, but the demo has to appear where the button was pressed */}
+        <HypeTrainPopup />
         <Toasts />
       </div>
     )
@@ -553,6 +557,7 @@ export default function App(): React.JSX.Element | null {
       {userCard && <UserCard target={userCard} />}
       <EmoteHoverPreview />
       <ChannelPrompt />
+      <HypeTrainPopup />
       <Toasts />
     </div>
   )

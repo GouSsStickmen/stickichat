@@ -19,7 +19,8 @@ import {
   playNickAlertSound,
   playStreamUpSound,
   playWhisperSound,
-  playRaidSound
+  playRaidSound,
+  playHypeTrainSound
 } from '../lib/sound'
 import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
 import { EventSubClient, EventSubDesired } from '../lib/eventsub'
@@ -31,7 +32,7 @@ const SUB_EVENT_IDS = new Set([
   'sub', 'resub', 'subgift', 'submysterygift',
   'giftpaidupgrade', 'anongiftpaidupgrade', 'primepaidupgrade'
 ])
-import { PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
+import { HypeTrainEvent, PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
 import { diagInfo, diagWarn } from '../lib/diag'
 
 /**
@@ -204,7 +205,8 @@ class ChatService {
         },
         (e) => this.handleRedemption(e),
         (e) => this.handlePubSubRaid(e),
-        (e) => this.handlePollStart(e)
+        (e) => this.handlePollStart(e),
+        (e) => this.handleHypeTrain(e)
       )
     }
   }
@@ -283,6 +285,68 @@ class ChatService {
     const lang = useSettingsStore.getState().settings.language
     const key = e.kind === 'prediction' ? 'info.predictionStart' : 'info.pollStart'
     this.localInfo(channel, translate(lang, key, { title: e.title, choices: e.choices.join(' · ') }))
+  }
+
+  /** level of the train we last announced, per channel — progression fires per contribution */
+  private hypeLevel = new Map<string, number>()
+
+  /**
+   * A hype train in one of the open channels.
+   *
+   * Three separate things, each behind its own switch: an info line in that chat, a sound, and
+   * the floating popup with the live level. `progression` arrives on EVERY contribution, so the
+   * chat line and the sound are tied to the LEVEL changing — the popup takes every update,
+   * because that is what makes its bar move.
+   */
+  private handleHypeTrain(e: HypeTrainEvent): void {
+    // the standalone highlights window shares the PubSub client — only the main window announces
+    if (window.location.hash) return
+    const ids = useChatStore.getState().channelIds
+    const channel = Object.keys(ids).find((login) => ids[login] === e.channelId)
+    if (!channel) return
+    const settings = useSettingsStore.getState().settings
+    const lang = settings.language
+    const ui = useUiStore.getState()
+
+    if (e.kind === 'end') {
+      const level = this.hypeLevel.get(channel) ?? 0
+      this.hypeLevel.delete(channel)
+      diagInfo('hype', `${channel}: train over at level ${level} (${e.endReason})`)
+      if (settings.hypeTrainLine && level > 0) {
+        this.localInfo(channel, translate(lang, 'info.hypeEnd', { level: String(level) }))
+      }
+      // leave the popup up for a moment on the result, then let it go
+      if (ui.hypeTrain?.channel === channel) {
+        ui.setHypeTrain({ ...ui.hypeTrain, ended: e.endReason ?? 'EXPIRE' })
+        window.setTimeout(() => {
+          const cur = useUiStore.getState().hypeTrain
+          if (cur?.channel === channel && cur.ended) useUiStore.getState().setHypeTrain(null)
+        }, 8000)
+      }
+      return
+    }
+
+    const prev = this.hypeLevel.get(channel) ?? 0
+    const climbed = e.level > prev
+    this.hypeLevel.set(channel, e.level)
+
+    if (settings.hypeTrainPopup) {
+      ui.setHypeTrain({
+        channel,
+        level: e.level,
+        value: e.value,
+        goal: Math.max(1, e.goal),
+        expiresAt: e.expiresAt,
+        by: e.userDisplay
+      })
+    }
+    if (!climbed) return
+    diagInfo('hype', `${channel}: level ${e.level} (${e.value}/${e.goal})`)
+    if (settings.hypeTrainLine) {
+      const key = prev === 0 ? 'info.hypeStart' : 'info.hypeLevel'
+      this.localInfo(channel, translate(lang, key, { level: String(e.level) }))
+    }
+    if (settings.hypeTrainSound) playHypeTrainSound(settings)
   }
 
   /** a channel-point redemption from PubSub — announce it with the real reward name/cost */
