@@ -79,12 +79,18 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   /** the last scrollTop WE wrote, so a scroll event can tell our move from the user's */
   const ourScrollTop = useRef(-1)
 
-  // ---- heights are only valid for one layout; a font or spacing change voids all of them ----
+  /**
+   * A font or spacing change makes every cached height wrong — but do NOT throw them away.
+   *
+   * Clearing meant every row instantly became the 34px fallback, the total collapsed, and for
+   * one frame the visible range covered almost nothing: caught in the log as "showing 1 of 799
+   * rows". A stale height is a far better estimate than a constant, and it is only ever an
+   * estimate for a moment: the measure pass below overwrites any row whose real height differs
+   * the frame it appears, and rows off screen get corrected as they scroll in. So the layout
+   * key only needs to force one re-render; the numbers repair themselves.
+   */
   const layoutRef = useRef(layoutKey)
-  if (layoutRef.current !== layoutKey) {
-    layoutRef.current = layoutKey
-    heights.current.clear()
-  }
+  if (layoutRef.current !== layoutKey) layoutRef.current = layoutKey
 
   // ---- offsets: a prefix sum over the CURRENT array, recomputed per render ----
   // Eight hundred to three thousand map lookups is tens of microseconds and it is the reason
@@ -227,7 +233,9 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     return () => cancelAnimationFrame(raf)
   }, [smooth, locked, following])
 
-  // width changes rewrap every message, so every height is wrong — start over
+  // a width change rewraps every message, so every height is now an estimate rather than a
+  // fact — same as a settings change, and handled the same way: re-render and let the measure
+  // pass correct what is on screen. Nothing is discarded (see the layout-key note above).
   useEffect(() => {
     const el = scRef.current
     if (!el) return
@@ -236,7 +244,6 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       viewRef.current = el.clientHeight
       if (el.clientWidth === lastW) return
       lastW = el.clientWidth
-      heights.current.clear()
       rerender()
     })
     ro.observe(el)
