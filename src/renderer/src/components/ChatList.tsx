@@ -80,6 +80,8 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
    * shrink — this one message goes back to the same place on screen afterwards.
    */
   const anchor = useRef<{ id: string; gap: number } | null>(null)
+  /** the head changed in this update — set during render, consumed by the layout effect */
+  const headMoved = useRef(false)
   const prevRef = useRef<ChatMessage[]>([])
   /**
    * The index the FIRST message in the array carries.
@@ -153,6 +155,8 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     if (prev !== messages && prev.length && messages.length) {
       const firstId = messages[0].id
       if (prev[0].id !== firstId) {
+        // the front moved: everything below it slid, so the view has to be put back
+        headMoved.current = true
         const prepended = messages.findIndex((m) => m.id === prev[0].id)
         if (prepended > 0) {
           // history arrived in front of everything we had
@@ -173,6 +177,24 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const view = viewRef.current || 1
   const from = lowerBound(offsets, scrollTopRef.current - OVERSCAN)
   const to = upperBound(offsets, scrollTopRef.current + view + OVERSCAN)
+
+  // the current layout, readable from callbacks that must not be rebuilt on every message
+  const offsetsRef = useRef<number[]>([])
+  const msgsRef = useRef<ChatMessage[]>([])
+  offsetsRef.current = offsets
+  msgsRef.current = messages
+
+  /** remember the topmost message on screen and how far above the edge it starts */
+  const grabAnchor = useCallback((top: number): void => {
+    const off = offsetsRef.current
+    const msgs = msgsRef.current
+    if (msgs.length === 0) {
+      anchor.current = null
+      return
+    }
+    const at = Math.min(lowerBound(off, top), msgs.length - 1)
+    anchor.current = { id: msgs[at].id, gap: off[at] - top }
+  }, [])
 
   /** pin to the newest message — exact, because `total` is a real sum and not a guess */
   const pin = useCallback((el: HTMLElement, height: number) => {
@@ -234,20 +256,27 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       changed = true
     }
 
-    // 2. put the view back where it was — by ANCHOR, not by arithmetic.
+    // 2. put the view back where it was — by ANCHOR, and ONLY when something moved it.
     //
-    //    The first version subtracted the removed height from scrollTop, and it was wrong in a
-    //    way the log stated outright: "trim 1456px: scrollTop was 7440 before the commit, 6057
-    //    after". The browser had already moved it 1383px, because a shrunken document clamps
-    //    scrollTop to its new maximum on its own — so subtracting again double-counted and the
-    //    parked view crawled upward on every trim.
+    //    Holding a specific message still is immune to everything: it does not care who
+    //    touched scrollTop or why, nor whether rows above changed height. Subtracting the
+    //    removed height instead was wrong in a way the log stated outright — "trim 1456px:
+    //    scrollTop was 7440 before the commit, 6057 after" — the browser had already moved
+    //    1383 of those pixels by clamping a shrunken document, so subtracting double-counted.
     //
-    //    Holding a specific message still is immune to all of that. It does not care who
-    //    touched scrollTop or why, it does not care whether rows above changed height, and it
-    //    is what "the chat stays where I left it" actually means.
-    if (following.current && !locked && !smooth) {
-      pin(el, el.scrollHeight)
-    } else {
+    //    THE GATE IS THE OTHER HALF, and leaving it out broke scrolling outright. This effect
+    //    runs after EVERY render, including the one the scroll handler itself causes, so an
+    //    ungated restore put the scroll straight back where it came from: the wheel did
+    //    nothing, and at the bottom every arriving message yanked the view. Restore only when
+    //    the content actually moved under the reader — the head was cut, or a row changed
+    //    height. A plain scroll changes neither and must be left completely alone.
+    const moved = headMoved.current || changed
+    headMoved.current = false
+
+    if (following.current && !locked) {
+      // smooth mode has its own animation driving the scroll; pinning here would fight it
+      if (!smooth) pin(el, el.scrollHeight)
+    } else if (moved) {
       const a = anchor.current
       if (a) {
         const i = messages.findIndex((m) => m.id === a.id)
@@ -262,14 +291,8 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       }
     }
 
-    // 3. remember what to hold on to next time: the topmost message on screen, and how far
-    //    above the viewport's top edge it starts
-    const top = el.scrollTop
-    const at = lowerBound(offsets, top)
-    anchor.current =
-      messages.length > 0 && at < messages.length
-        ? { id: messages[at].id, gap: offsets[at] - top }
-        : null
+    // 3. remember what to hold on to next time, from wherever the scroll ended up
+    grabAnchor(el.scrollTop)
 
     if (changed) rerender()
   })
@@ -320,6 +343,11 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     if (!el) return
     scrollTopRef.current = el.scrollTop
     ourScrollTop.current = el.scrollTop
+    // The anchor has to follow the reader, not lag a frame behind them. It is what the layout
+    // effect restores to, so an anchor left over from before this scroll would drag the view
+    // back the moment anything else changed — which, while scrolling into unmeasured rows, is
+    // every single frame.
+    grabAnchor(el.scrollTop)
     const bottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 40
     if (bottom !== atBottomRef.current) {
       atBottomRef.current = bottom
