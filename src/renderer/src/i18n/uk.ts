@@ -263,6 +263,7 @@ export const uk: Record<TranslationKey, string> = {
   'gift.showAll': 'показати всі',
   'set.highlightSidebar': 'Показувати бічну панель подій',
   'highlights.title': 'Події',
+  'highlights.tab': 'Виділені',
   'highlights.empty': 'Поки що подій немає',
   'set.openInWindow': 'Відкрити налаштування в окремому вікні',
   'set.firstMessageSound': 'Звук на перше повідомлення глядача за цю сесію',
@@ -328,6 +329,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.sound.coin': 'Монетка',
   'set.sound.chirp': 'Цвірінь',
   'set.sound.buzz': 'Дзиж',
+  'set.sound.dindin': 'Дін-дін',
+  'set.sound.chuchu': 'Чух-чух',
   'set.sound.library': 'Завантажені звуки',
   'set.sound.upload': 'Завантажити звук…',
   'set.sound.tooBig': 'Файл завеликий (макс 2 МБ)',
@@ -627,6 +630,8 @@ export const uk: Record<TranslationKey, string> = {
   'whisper.favorite': 'Обраний контакт',
   'whisper.reply': 'Відповісти на це повідомлення',
   'whisper.you': 'Ти',
+  'whisper.offlineGap':
+    'ⓘ Приватні, надіслані поки застосунок був закритий, підтягнути неможливо: Twitch дає API лише на надсилання шепоту, не на читання. Тут видно тільки те, що прийшло за увімкненого StickiChat.',
   'whisper.replyCancel': 'Скасувати відповідь',
   'whisper.width': 'Потягни, щоб змінити ширину панелі',
   'set.whispersAsWindow': 'Відкривати приватні окремим вікном',
@@ -980,7 +985,9 @@ export const uk: Record<TranslationKey, string> = {
   'set.hypeTrainPopup': 'Спливаюче вікно з потягом',
   'hint.hypeTrainPopup': 'Потяг їде по колії в такт заповненню рівня, поруч — рівень і час до кінця.',
   'set.hypeTrainPreview': '🚂 Показати, як це виглядає',
-  'set.hypeTrainSound': 'Звук на старті та на новому рівні',
+  'set.hypeTrainSound': 'Звуки хайп-трейну',
+  'set.hypeTrainStartSound': 'Коли трейн вирушає',
+  'set.hypeTrainLevelSound': 'Коли бере новий рівень',
 
   // Info lines
   'info.connLost': '⚠ Звʼязок із чатом втрачено — перепідключення…',

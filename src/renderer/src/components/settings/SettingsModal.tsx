@@ -35,7 +35,8 @@ import {
   playStreamUpSound,
   playWhisperSound,
   playRaidSound,
-  playHypeTrainSound,
+  playHypeTrainStartSound,
+  playHypeTrainLevelSound,
   playErrorSound
 } from '../../lib/sound'
 import { CHANGELOG } from '../../changelog'
@@ -1517,7 +1518,10 @@ function NotificationsSection(): React.JSX.Element {
         <Toggle label={t('set.hypeTrainSound')} value={settings.hypeTrainSound} onChange={(v) => set({ hypeTrainSound: v })} />
         {settings.hypeTrainSound && (
           <div className="set-sub">
-            <SoundSettings kind="hypeTrain" />
+            <div className="set-sub-title">{t('set.hypeTrainStartSound')}</div>
+            <SoundSettings kind="hypeTrainStart" />
+            <div className="set-sub-title">{t('set.hypeTrainLevelSound')}</div>
+            <SoundSettings kind="hypeTrainLevel" />
           </div>
         )}
       </div>
@@ -1623,16 +1627,19 @@ function showHypeTrainDemo(): void {
   const settings = useSettingsStore.getState().settings
   const base = { channel: 'preview', goal: 1000, by: 'Bobik069' }
   ui.setHypeTrain({ ...base, level: 2, value: 350, expiresAt: Date.now() + 300_000 })
-  if (settings.hypeTrainSound) playHypeTrainSound(settings, true)
+  if (settings.hypeTrainSound) playHypeTrainStartSound(settings, true)
   const steps = [
     { at: 1200, patch: { level: 2, value: 800 } },
-    { at: 2600, patch: { level: 3, value: 200 } },
+    { at: 2600, patch: { level: 3, value: 200 }, levelUp: true },
     { at: 4200, patch: { level: 3, value: 700 } }
   ]
   for (const s of steps) {
     window.setTimeout(() => {
       const cur = useUiStore.getState().hypeTrain
-      if (cur?.channel === 'preview') ui.setHypeTrain({ ...cur, ...s.patch })
+      if (cur?.channel !== 'preview') return
+      ui.setHypeTrain({ ...cur, ...s.patch })
+      // so the preview also answers "what do I hear when it climbs a level?"
+      if (s.levelUp && settings.hypeTrainSound) playHypeTrainLevelSound(settings, true)
     }, s.at)
   }
   window.setTimeout(() => {
@@ -1642,7 +1649,8 @@ function showHypeTrainDemo(): void {
 }
 
 type SoundKind =
-  | 'mention' | 'firstMessage' | 'keyword' | 'nickAlert' | 'streamUp' | 'whisper' | 'raid' | 'hypeTrain' | 'error'
+  | 'mention' | 'firstMessage' | 'keyword' | 'nickAlert' | 'streamUp' | 'whisper' | 'raid'
+  | 'hypeTrainStart' | 'hypeTrainLevel' | 'error'
 
 const SOUND_KEYS = {
   mention: { type: 'mentionSoundType', volume: 'mentionSoundVolume', customId: 'mentionSoundCustomId' },
@@ -1656,7 +1664,16 @@ const SOUND_KEYS = {
   streamUp: { type: 'streamUpSoundType', volume: 'streamUpSoundVolume', customId: 'streamUpSoundCustomId' },
   whisper: { type: 'whisperSoundType', volume: 'whisperSoundVolume', customId: 'whisperSoundCustomId' },
   raid: { type: 'raidSoundType', volume: 'raidSoundVolume', customId: 'raidSoundCustomId' },
-  hypeTrain: { type: 'hypeTrainSoundType', volume: 'hypeTrainSoundVolume', customId: 'hypeTrainSoundCustomId' },
+  hypeTrainStart: {
+    type: 'hypeTrainStartSoundType',
+    volume: 'hypeTrainStartSoundVolume',
+    customId: 'hypeTrainStartSoundCustomId'
+  },
+  hypeTrainLevel: {
+    type: 'hypeTrainLevelSoundType',
+    volume: 'hypeTrainLevelSoundVolume',
+    customId: 'hypeTrainLevelSoundCustomId'
+  },
   error: { type: 'errorSoundType', volume: 'errorSoundVolume', customId: 'errorSoundCustomId' }
 } as const
 
@@ -1668,7 +1685,8 @@ const SOUND_PLAYERS: Record<SoundKind, (s: Settings, force?: boolean) => void> =
   streamUp: playStreamUpSound,
   whisper: playWhisperSound,
   raid: playRaidSound,
-  hypeTrain: playHypeTrainSound,
+  hypeTrainStart: playHypeTrainStartSound,
+  hypeTrainLevel: playHypeTrainLevelSound,
   error: (_s, force) => playErrorSound(force)
 }
 

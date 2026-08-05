@@ -781,10 +781,18 @@ export const DEFAULT_OVERLAY_STYLE: Omit<OverlayProfile, 'id' | 'name'> = {
 // ---------- Hotkeys ----------
 
 /** built-in synthesized notification sounds */
-export type SoundPreset = 'ping' | 'pop' | 'bell' | 'chime' | 'blip' | 'knock' | 'coin' | 'chirp' | 'buzz'
+/**
+ * Built-in sounds. Most are synthesized on the spot (a few oscillator notes, no assets);
+ * `dindin` and `chuchu` are real recordings shipped with the app — a train needs a train.
+ */
+export type SoundPreset =
+  | 'ping' | 'pop' | 'bell' | 'chime' | 'blip' | 'knock' | 'coin' | 'chirp' | 'buzz'
+  | 'dindin' | 'chuchu'
 /** a sound choice: a built-in preset or an uploaded custom sound */
 export type SoundChoice = SoundPreset | 'custom'
-export const SOUND_PRESETS: SoundPreset[] = ['ping', 'pop', 'bell', 'chime', 'blip', 'knock', 'coin', 'chirp', 'buzz']
+export const SOUND_PRESETS: SoundPreset[] = [
+  'ping', 'pop', 'bell', 'chime', 'blip', 'knock', 'coin', 'chirp', 'buzz', 'dindin', 'chuchu'
+]
 
 export type HotkeyAction =
   | 'reconnect'
@@ -1031,11 +1039,14 @@ export interface Settings {
   hypeTrainLine: boolean
   /** the floating train popup with the live level and countdown */
   hypeTrainPopup: boolean
-  /** sound when a train starts and on every level-up */
+  /** sounds for the train — departure and every level after it get their own */
   hypeTrainSound: boolean
-  hypeTrainSoundType: SoundChoice
-  hypeTrainSoundVolume: number
-  hypeTrainSoundCustomId?: string
+  hypeTrainStartSoundType: SoundChoice
+  hypeTrainStartSoundVolume: number
+  hypeTrainStartSoundCustomId?: string
+  hypeTrainLevelSoundType: SoundChoice
+  hypeTrainLevelSoundVolume: number
+  hypeTrainLevelSoundCustomId?: string
   /** sound when an error notification (red toast) appears */
   errorSound: boolean
   errorSoundType: SoundChoice
@@ -1259,8 +1270,10 @@ export const DEFAULT_SETTINGS: Settings = {
   hypeTrainLine: true,
   hypeTrainPopup: true,
   hypeTrainSound: true,
-  hypeTrainSoundType: 'bell',
-  hypeTrainSoundVolume: 0.5,
+  hypeTrainStartSoundType: 'dindin',
+  hypeTrainStartSoundVolume: 0.5,
+  hypeTrainLevelSoundType: 'chuchu',
+  hypeTrainLevelSoundVolume: 0.5,
   errorSound: false,
   errorSoundType: 'pop',
   errorSoundVolume: 0.5,

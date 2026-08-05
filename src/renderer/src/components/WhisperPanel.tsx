@@ -494,6 +494,10 @@ export default function WhisperPanel({
         </div>
       ) : !selected ? (
         <div className="whisper-list">
+          {/* stated plainly, because the gap looks like a bug otherwise: Twitch has no API that
+              reads whispers, only one that sends them, so anything that arrived while the app
+              was shut cannot be fetched afterwards by anyone */}
+          <div className="whisper-note">{t('whisper.offlineGap')}</div>
           {conversations.length === 0 && <div className="picker-empty">{t('whisper.empty')}</div>}
           {conversations.map(([login, msgs]) => {
             const last = msgs[msgs.length - 1]

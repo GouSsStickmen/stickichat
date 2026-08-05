@@ -3149,6 +3149,23 @@ button:has(> svg) {
   padding-top: 3px;
   padding-bottom: 3px;
 }
+/* label for a sub-block that holds more than one thing (e.g. two sound pickers in a row) */
+.set-sub-title {
+  margin: var(--space-2) 0 2px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.set-sub-title:first-child {
+  margin-top: 0;
+}
+/* nested pickers already sit inside a frame — a second border would be visual noise */
+.set-sub .set-sub {
+  margin-left: 0;
+  padding: 0;
+  border: none;
+  background: none;
+}
 
 /* group headings separate by space; the rule only appears where a card doesn't already
    do the separating */
@@ -3585,6 +3602,17 @@ button:has(> svg) {
   flex-direction: column;
   padding: 4px;
 }
+/* the "no offline history" note above the conversation list */
+.whisper-note {
+  margin: 2px 4px 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-3) 70%, transparent);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  flex-shrink: 0;
+}
 .whisper-conv {
   display: flex;
   flex-direction: column;
@@ -3849,7 +3877,7 @@ button:has(> svg) {
 /* the track: a rail, the filled part behind the engine, and the engine itself riding on top */
 .hype-track {
   position: relative;
-  height: 20px;
+  height: 26px;
 }
 .hype-rail {
   position: absolute;
@@ -3871,9 +3899,9 @@ button:has(> svg) {
 }
 .hype-loco {
   position: absolute;
-  bottom: 2px;
-  font-size: 16px;
-  line-height: 1;
+  bottom: 1px;
+  line-height: 0;
+  color: var(--accent-strong);
   /* centred on its own position, so at 0% it sits ON the start of the rail, not before it */
   transform: translateX(-50%);
   transition: left 0.6s ease;
@@ -3887,7 +3915,65 @@ button:has(> svg) {
     transform: translateX(-50%) translateY(0);
   }
   to {
-    transform: translateX(-50%) translateY(-2px);
+    transform: translateX(-50%) translateY(-1.5px);
+  }
+}
+.hype-loco-wrap {
+  position: relative;
+  display: inline-block;
+}
+.hype-loco-svg {
+  display: block;
+  overflow: visible;
+}
+/* punched-out window: the boiler colour shows through as the glass */
+.hype-loco-window {
+  fill: var(--surface-3);
+}
+/* the wheels turn about their own centre — transform-box makes the SVG bbox the origin */
+.hype-wheel {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hype-roll 0.9s linear infinite;
+}
+.hype-wheel-front {
+  animation-duration: 0.6s;
+}
+.hype-train.ended .hype-wheel {
+  animation: none;
+}
+@keyframes hype-roll {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* smoke leaves the chimney and is left BEHIND — the puffs drift back and up while fading */
+.hype-smoke {
+  position: absolute;
+  left: 26px;
+  top: -2px;
+  pointer-events: none;
+}
+.hype-smoke i {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  animation: hype-puff 1.2s linear infinite;
+}
+.hype-train.ended .hype-smoke {
+  display: none;
+}
+@keyframes hype-puff {
+  0% {
+    transform: translate(0, 0) scale(0.5);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-22px, -13px) scale(1.6);
+    opacity: 0;
   }
 }
 .hype-foot {

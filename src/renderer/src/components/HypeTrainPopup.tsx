@@ -4,6 +4,50 @@ import { useSettingsStore } from '../store/settings'
 import { useT } from '../i18n'
 
 /**
+ * The locomotive, drawn rather than borrowed from the emoji font.
+ *
+ * 🚂 points left in most fonts and looks like whatever the OS decided that year. This one faces
+ * the direction it travels, has big driving wheels that actually turn (spokes, so the rotation
+ * reads), and the smoke is emitted behind it — the puffs drift backwards and fade, which is what
+ * sells the speed. Wheels and smoke are pure CSS animation, so it costs nothing per frame.
+ */
+function Locomotive(): React.JSX.Element {
+  return (
+    <span className="hype-loco-wrap">
+      <span className="hype-smoke">
+        <i style={{ animationDelay: '0s' }} />
+        <i style={{ animationDelay: '0.4s' }} />
+        <i style={{ animationDelay: '0.8s' }} />
+      </span>
+      <svg className="hype-loco-svg" viewBox="0 0 40 26" width="34" height="22" aria-hidden="true">
+        {/* boiler + cab, nose to the right */}
+        <path
+          d="M4 6h13v10h6l3-4h6a2 2 0 0 1 2 2v8H4z"
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+        {/* chimney, at the front where the smoke leaves */}
+        <rect x="28" y="3" width="5" height="5" rx="1" fill="currentColor" />
+        {/* cab window, punched out so the shape is readable at 22px */}
+        <rect x="7" y="8" width="6" height="5" rx="1" className="hype-loco-window" />
+        {/* rear driving wheel — the big one, with spokes so the spin is visible */}
+        <g className="hype-wheel hype-wheel-back">
+          <circle cx="12" cy="19" r="6" fill="var(--surface-3)" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M12 14v10M7 19h10M8.5 15.5l7 7M15.5 15.5l-7 7" stroke="currentColor" strokeWidth="1.1" />
+        </g>
+        {/* front wheel — smaller, turns faster, like a real loco */}
+        <g className="hype-wheel hype-wheel-front">
+          <circle cx="30" cy="21" r="4" fill="var(--surface-3)" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M30 17v8M26 21h8" stroke="currentColor" strokeWidth="1" />
+        </g>
+      </svg>
+    </span>
+  )
+}
+
+/**
  * The hype train, live: a little train that rides along the track as the level fills.
  *
  * The train's position IS the progress bar — no separate bar to read, you see how far along the
@@ -40,7 +84,7 @@ export default function HypeTrainPopup(): React.JSX.Element | null {
   return (
     <div className={`hype-train ${train.ended ? 'ended' : ''}`}>
       <div className="hype-head">
-        <b className="hype-title">🚂 {t('hype.title')}</b>
+        <b className="hype-title">{t('hype.title')}</b>
         <span className="hype-level">{t('hype.level', { level: String(train.level) })}</span>
         <div className="spacer" />
         {!train.ended && <span className="hype-clock">{`${mm}:${ss}`}</span>}
@@ -53,7 +97,7 @@ export default function HypeTrainPopup(): React.JSX.Element | null {
         <div className="hype-fill" style={{ width: `${pct}%` }} />
         {/* the engine sits at the head of the filled section, nose forward */}
         <span className="hype-loco" style={{ left: `${pct}%` }}>
-          🚂
+          <Locomotive />
         </span>
       </div>
       <div className="hype-foot">

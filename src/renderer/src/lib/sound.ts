@@ -1,6 +1,8 @@
 import { Settings, SoundChoice } from '../types'
 import { useUiStore } from '../store/ui'
 import { useSettingsStore } from '../store/settings'
+import dinDinUrl from '../assets/sounds/din-din.mp3'
+import chuChuUrl from '../assets/sounds/train-chu-chu.mp3'
 
 let ctx: AudioContext | null = null
 const lastPlayed: Record<string, number> = {}
@@ -9,7 +11,8 @@ type Note = { freq: number; start: number; dur: number; type: OscillatorType }
 
 import { SoundPreset } from '../types'
 
-const PRESETS: Record<SoundPreset, Note[]> = {
+/** the synthesized presets; the file-backed ones (see FILE_PRESETS) never reach this table */
+const PRESETS: Partial<Record<SoundPreset, Note[]>> = {
   ping: [
     { freq: 660, start: 0, dur: 0.25, type: 'sine' },
     { freq: 880, start: 0.09, dur: 0.25, type: 'sine' }
@@ -53,11 +56,30 @@ const PRESETS: Record<SoundPreset, Note[]> = {
   ]
 }
 
+/**
+ * Presets that are files, not oscillators. Imported (not fetched by path) so the bundler
+ * fingerprints them and they survive packaging — a bare "/sounds/x.mp3" resolves to nothing
+ * inside an asar archive.
+ */
+const FILE_PRESETS: Partial<Record<SoundPreset, string>> = {
+  dindin: dinDinUrl,
+  chuchu: chuChuUrl
+}
+
 function playPreset(kind: SoundPreset, volume: number): void {
+  const file = FILE_PRESETS[kind]
+  if (file) {
+    const audio = new Audio(file)
+    audio.volume = volume
+    audio.play().catch(() => {
+      /* the file is bundled; a failure here means the tab has no audio permission yet */
+    })
+    return
+  }
   ctx ??= new AudioContext()
   const t0 = ctx.currentTime
   const peak = 0.02 + 0.16 * volume
-  for (const n of PRESETS[kind]) {
+  for (const n of PRESETS[kind] ?? PRESETS.ping!) {
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = n.type
@@ -156,12 +178,34 @@ export function playRaidSound(
   playAlertSound({ type: s.raidSoundType, volume: s.raidSoundVolume, data }, 'raid', force)
 }
 
-export function playHypeTrainSound(
-  s: Pick<Settings, 'hypeTrainSoundType' | 'hypeTrainSoundVolume' | 'hypeTrainSoundCustomId' | 'customSounds'>,
+export function playHypeTrainStartSound(
+  s: Pick<
+    Settings,
+    'hypeTrainStartSoundType' | 'hypeTrainStartSoundVolume' | 'hypeTrainStartSoundCustomId' | 'customSounds'
+  >,
   force = false
 ): void {
-  const data = s.customSounds.find((c) => c.id === s.hypeTrainSoundCustomId)?.data
-  playAlertSound({ type: s.hypeTrainSoundType, volume: s.hypeTrainSoundVolume, data }, 'hype-train', force)
+  const data = s.customSounds.find((c) => c.id === s.hypeTrainStartSoundCustomId)?.data
+  playAlertSound(
+    { type: s.hypeTrainStartSoundType, volume: s.hypeTrainStartSoundVolume, data },
+    'hype-train-start',
+    force
+  )
+}
+
+export function playHypeTrainLevelSound(
+  s: Pick<
+    Settings,
+    'hypeTrainLevelSoundType' | 'hypeTrainLevelSoundVolume' | 'hypeTrainLevelSoundCustomId' | 'customSounds'
+  >,
+  force = false
+): void {
+  const data = s.customSounds.find((c) => c.id === s.hypeTrainLevelSoundCustomId)?.data
+  playAlertSound(
+    { type: s.hypeTrainLevelSoundType, volume: s.hypeTrainLevelSoundVolume, data },
+    'hype-train-level',
+    force
+  )
 }
 
 export function playWhisperSound(

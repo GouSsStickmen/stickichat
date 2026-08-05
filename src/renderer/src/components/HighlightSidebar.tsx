@@ -200,7 +200,9 @@ export default function HighlightSidebar({
           className={`picker-tab-btn ${mode === 'highlights' ? 'active' : ''}`}
           onClick={() => setMode('highlights')}
         >
-          {t('highlights.title')}
+          {/* the panel is "Події"; THIS tab is the subset that matched a highlight rule, and
+              calling both the same made the tab row read like it did nothing */}
+          {t('highlights.tab')}
         </button>
         <button
           className={`picker-tab-btn ${mode === 'mentions' ? 'active' : ''}`}

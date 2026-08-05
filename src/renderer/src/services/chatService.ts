@@ -20,7 +20,8 @@ import {
   playStreamUpSound,
   playWhisperSound,
   playRaidSound,
-  playHypeTrainSound
+  playHypeTrainStartSound,
+  playHypeTrainLevelSound
 } from '../lib/sound'
 import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
 import { EventSubClient, EventSubDesired } from '../lib/eventsub'
@@ -206,8 +207,22 @@ class ChatService {
         (e) => this.handleRedemption(e),
         (e) => this.handlePubSubRaid(e),
         (e) => this.handlePollStart(e),
-        (e) => this.handleHypeTrain(e)
+        (e) => this.relayHypeTrain(e)
       )
+    }
+    // A chat popped into its own window is a separate renderer with no PubSub of its own, so
+    // the train would ride only in the main window while the window you are actually watching
+    // showed nothing. The socket owner relays every event through localStorage; the others
+    // replay it into their own stores and announce it for the channels THEY have open.
+    if (hash.startsWith('#detached')) {
+      window.addEventListener('storage', (ev) => {
+        if (ev.key !== ChatService.HYPE_RELAY || !ev.newValue) return
+        try {
+          this.handleHypeTrain(JSON.parse(ev.newValue) as HypeTrainEvent)
+        } catch {
+          /* malformed relay payload */
+        }
+      })
     }
   }
 
@@ -289,6 +304,19 @@ class ChatService {
 
   /** level of the train we last announced, per channel — progression fires per contribution */
   private hypeLevel = new Map<string, number>()
+  /** localStorage key the PubSub owner writes so other windows see the same train */
+  private static readonly HYPE_RELAY = 'sticki:hypeTrain'
+
+  /** pass the event to the other windows, then handle it here */
+  private relayHypeTrain(e: HypeTrainEvent): void {
+    try {
+      // the value has to differ every time or the storage event does not fire twice in a row
+      localStorage.setItem(ChatService.HYPE_RELAY, JSON.stringify({ ...e, at: Date.now() }))
+    } catch {
+      /* storage full or unavailable — the main window still gets its train */
+    }
+    this.handleHypeTrain(e)
+  }
 
   /**
    * A hype train in one of the open channels.
@@ -299,8 +327,11 @@ class ChatService {
    * because that is what makes its bar move.
    */
   private handleHypeTrain(e: HypeTrainEvent): void {
-    // the standalone highlights window shares the PubSub client — only the main window announces
-    if (window.location.hash) return
+    // the standalone highlights window shares the PubSub client but shows no chat — it would
+    // announce into a buffer nobody reads. The main window and popped-out chats do announce,
+    // each for the channels it has open.
+    const hash = window.location.hash
+    if (hash && !hash.startsWith('#detached')) return
     const ids = useChatStore.getState().channelIds
     const channel = Object.keys(ids).find((login) => ids[login] === e.channelId)
     if (!channel) return
@@ -346,7 +377,11 @@ class ChatService {
       const key = prev === 0 ? 'info.hypeStart' : 'info.hypeLevel'
       this.localInfo(channel, translate(lang, key, { level: String(e.level) }))
     }
-    if (settings.hypeTrainSound) playHypeTrainSound(settings)
+    // departure and a level-up are different moments, so they get different sounds
+    if (settings.hypeTrainSound) {
+      if (prev === 0) playHypeTrainStartSound(settings)
+      else playHypeTrainLevelSound(settings)
+    }
   }
 
   /** a channel-point redemption from PubSub — announce it with the real reward name/cost */

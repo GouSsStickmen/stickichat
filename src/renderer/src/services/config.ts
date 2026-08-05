@@ -153,7 +153,9 @@ const PART_KEYS: Record<Exclude<ConfigPart, 'highlightRules' | 'modButtons' | 'f
     'nickAlertSoundVolume', 'nickAlertSoundOnActive', 'whisperSound', 'whisperSoundType',
     'whisperSoundVolume', 'whisperNotify', 'streamUpNotify', 'streamUpSound', 'streamUpSoundType',
     'streamUpSoundVolume', 'raidPrompt', 'raidSound', 'raidSoundType', 'raidSoundVolume',
-    'hypeTrainLine', 'hypeTrainPopup', 'hypeTrainSound', 'hypeTrainSoundType', 'hypeTrainSoundVolume',
+    'hypeTrainLine', 'hypeTrainPopup', 'hypeTrainSound',
+    'hypeTrainStartSoundType', 'hypeTrainStartSoundVolume',
+    'hypeTrainLevelSoundType', 'hypeTrainLevelSoundVolume',
     'errorSound', 'mutedErrors', 'customSounds'
   ],
   overlays: ['chatOverlays', 'overlayEnabled', 'overlayPort'],

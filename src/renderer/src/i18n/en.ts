@@ -261,6 +261,7 @@ export const en = {
   'gift.showAll': 'show all',
   'set.highlightSidebar': 'Show the events sidebar',
   'highlights.title': 'Events',
+  'highlights.tab': 'Highlighted',
   'highlights.empty': 'No events yet',
   'set.openInWindow': 'Open settings in a separate window',
   'set.firstMessageSound': "Play a sound on a viewer's first message this stream",
@@ -326,6 +327,8 @@ export const en = {
   'set.sound.coin': 'Coin',
   'set.sound.chirp': 'Chirp',
   'set.sound.buzz': 'Buzz',
+  'set.sound.dindin': 'Ding-ding',
+  'set.sound.chuchu': 'Choo-choo',
   'set.sound.library': 'Uploaded sounds',
   'set.sound.upload': 'Upload sound…',
   'set.sound.tooBig': 'File is too big (max 2 MB)',
@@ -625,6 +628,8 @@ export const en = {
   'whisper.favorite': 'Favorite contact',
   'whisper.reply': 'Reply to this message',
   'whisper.you': 'You',
+  'whisper.offlineGap':
+    'ⓘ Whispers sent while the app was closed cannot be fetched: Twitch only offers an API for sending whispers, never for reading them. What you see here is what arrived while StickiChat was running.',
   'whisper.replyCancel': 'Cancel the reply',
   'whisper.width': 'Drag to resize the panel',
   'set.whispersAsWindow': 'Open whispers in a separate window',
@@ -978,7 +983,9 @@ export const en = {
   'set.hypeTrainPopup': 'Floating train popup',
   'hint.hypeTrainPopup': 'The train rides along the track as the level fills, with the level and the time left beside it.',
   'set.hypeTrainPreview': '🚂 Show me what it looks like',
-  'set.hypeTrainSound': 'Sound on departure and on every level',
+  'set.hypeTrainSound': 'Hype train sounds',
+  'set.hypeTrainStartSound': 'When the train departs',
+  'set.hypeTrainLevelSound': 'When it takes a new level',
 
   // Info lines
   'info.connLost': '⚠ Lost the chat connection — reconnecting…',
