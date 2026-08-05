@@ -72,12 +72,56 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
 
   const scrollTopRef = useRef(0)
   const viewRef = useRef(0)
-  /** how far the head moved in this update, in pixels — subtracted from scrollTop before paint */
-  const trimmedPx = useRef(0)
+  /**
+   * The message the view is holding on to, and how far above the viewport's top edge it sits.
+   *
+   * This is the whole scroll-stability mechanism when the reader is not at the bottom: whatever
+   * happens to the array — the head cut, a row growing, the browser clamping scrollTop after a
+   * shrink — this one message goes back to the same place on screen afterwards.
+   */
+  const anchor = useRef<{ id: string; gap: number } | null>(null)
   const prevRef = useRef<ChatMessage[]>([])
+  /**
+   * The index the FIRST message in the array carries.
+   *
+   * A message must keep the same number for as long as it is on screen, because the row
+   * striping is `index % 2`. Array position is not that number: trimming the head shifts every
+   * position by a couple of hundred, so the parity of every single message flips at once and
+   * the light and dark rows swap places — reported exactly that way. Counting the head changes
+   * keeps the numbering attached to the messages instead of to their slots.
+   */
+  const baseIndex = useRef(0)
   const atBottomRef = useRef(true)
   /** the last scrollTop WE wrote, so a scroll event can tell our move from the user's */
   const ourScrollTop = useRef(-1)
+
+  /**
+   * Rows that finish growing AFTER they were measured — an emote or a link preview arriving.
+   *
+   * Rows are positioned absolutely from their cached height, so a row that grows in the DOM
+   * without the cache noticing overlaps the one below it until something else forces a render.
+   * That is the "messages jump very fast and come back" report: the gap between the row
+   * getting taller and us finding out. Only the rows currently on screen are watched — a few
+   * dozen — and the observer is disconnected wholesale each pass rather than tracked per row.
+   */
+  const rerenderRef = useRef<() => void>(() => {})
+  rerenderRef.current = rerender
+  const sizeWatch = useRef<ResizeObserver | null>(null)
+  if (!sizeWatch.current && typeof ResizeObserver !== 'undefined') {
+    sizeWatch.current = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const el = e.target as HTMLElement
+        const id = el.dataset.mid
+        if (!id) continue
+        const h = el.offsetHeight
+        if (h === 0 || heights.current.get(id) === h) continue
+        // one render is enough: the measure pass reads every row and fixes them all at once
+        rerenderRef.current()
+        return
+      }
+    })
+  }
+  useEffect(() => () => sizeWatch.current?.disconnect(), [])
 
   /**
    * A font or spacing change makes every cached height wrong — but do NOT throw them away.
@@ -102,20 +146,24 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     total += heights.current.get(messages[i].id) ?? FALLBACK_HEIGHT
   }
 
-  // ---- how much disappeared off the front since the last render ----
+  // ---- how far the NUMBERING moved, so a message keeps its index for its whole life ----
+  // (the scroll itself is handled by the anchor, which needs none of this)
   {
     const prev = prevRef.current
     if (prev !== messages && prev.length && messages.length) {
       const firstId = messages[0].id
       if (prev[0].id !== firstId) {
-        let cut = 0
-        for (const m of prev) {
-          if (m.id === firstId) break
-          cut += heights.current.get(m.id) ?? FALLBACK_HEIGHT
+        const prepended = messages.findIndex((m) => m.id === prev[0].id)
+        if (prepended > 0) {
+          // history arrived in front of everything we had
+          baseIndex.current -= prepended
+        } else {
+          let removed = 0
+          while (removed < prev.length && prev[removed].id !== firstId) removed++
+          // the new head really is further along the old list; otherwise the two are unrelated
+          // (channel cleared) and the numbering starts over
+          baseIndex.current = removed < prev.length ? baseIndex.current + removed : 0
         }
-        // only if we actually found the new head further along — otherwise the two lists are
-        // unrelated (channel cleared) and there is nothing to compensate
-        if (prev.some((m) => m.id === firstId)) trimmedPx.current += cut
       }
     }
     prevRef.current = messages
@@ -171,40 +219,57 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     if (!el) return
     viewRef.current = el.clientHeight
 
-    // 1. measure — and note how much of the change was above the fold
+    // 1. measure. Re-arm the growth watcher on exactly the rows that exist now, so rows that
+    //    scrolled away stop being watched and the observer never accumulates.
     let changed = false
-    let shiftAbove = 0
+    sizeWatch.current?.disconnect()
     for (const row of Array.from(el.querySelectorAll<HTMLElement>('[data-mid]'))) {
       const id = row.dataset.mid
       if (!id) continue
+      sizeWatch.current?.observe(row)
       const h = row.offsetHeight
       if (h === 0) continue
-      const was = heights.current.get(id)
-      if (was === h) continue
+      if (heights.current.get(id) === h) continue
       heights.current.set(id, h)
       changed = true
-      if (was !== undefined && row.offsetTop < scrollTopRef.current) shiftAbove += h - was
     }
 
-    // 2. the head was cut: everything left slid up by exactly that much, so slide the view too
-    const cut = trimmedPx.current
-    trimmedPx.current = 0
-
-    if (locked) {
-      if (cut || shiftAbove) {
-        const next = Math.max(0, el.scrollTop - cut + shiftAbove)
-        el.scrollTop = next
-        ourScrollTop.current = next
-        scrollTopRef.current = next
-      }
-    } else if (following.current && !smooth) {
+    // 2. put the view back where it was — by ANCHOR, not by arithmetic.
+    //
+    //    The first version subtracted the removed height from scrollTop, and it was wrong in a
+    //    way the log stated outright: "trim 1456px: scrollTop was 7440 before the commit, 6057
+    //    after". The browser had already moved it 1383px, because a shrunken document clamps
+    //    scrollTop to its new maximum on its own — so subtracting again double-counted and the
+    //    parked view crawled upward on every trim.
+    //
+    //    Holding a specific message still is immune to all of that. It does not care who
+    //    touched scrollTop or why, it does not care whether rows above changed height, and it
+    //    is what "the chat stays where I left it" actually means.
+    if (following.current && !locked && !smooth) {
       pin(el, el.scrollHeight)
-    } else if (cut || shiftAbove) {
-      const next = Math.max(0, el.scrollTop - cut + shiftAbove)
-      el.scrollTop = next
-      ourScrollTop.current = next
-      scrollTopRef.current = next
+    } else {
+      const a = anchor.current
+      if (a) {
+        const i = messages.findIndex((m) => m.id === a.id)
+        if (i >= 0) {
+          const next = Math.max(0, offsets[i] - a.gap)
+          if (Math.abs(next - el.scrollTop) > 0.5) {
+            el.scrollTop = next
+            ourScrollTop.current = next
+            scrollTopRef.current = next
+          }
+        }
+      }
     }
+
+    // 3. remember what to hold on to next time: the topmost message on screen, and how far
+    //    above the viewport's top edge it starts
+    const top = el.scrollTop
+    const at = lowerBound(offsets, top)
+    anchor.current =
+      messages.length > 0 && at < messages.length
+        ? { id: messages[at].id, gap: offsets[at] - top }
+        : null
 
     if (changed) rerender()
   })
@@ -253,19 +318,35 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const onScroll = useCallback((): void => {
     const el = scRef.current
     if (!el) return
-    const top = el.scrollTop
-    // our own writes come back as scroll events too; only a move we did not make is the user
-    const mine = Math.abs(top - ourScrollTop.current) < 1.5
-    scrollTopRef.current = top
-    if (!mine && top < ourScrollTop.current - 1.5) onUserScrolledUp?.()
-    ourScrollTop.current = top
-    const bottom = el.scrollHeight - top - el.clientHeight <= 40
+    scrollTopRef.current = el.scrollTop
+    ourScrollTop.current = el.scrollTop
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 40
     if (bottom !== atBottomRef.current) {
       atBottomRef.current = bottom
       onAtBottomChange?.(bottom)
     }
     rerender()
-  }, [onAtBottomChange, onUserScrolledUp, rerender])
+  }, [onAtBottomChange, rerender])
+
+  /**
+   * Dragging the SCROLLBAR is a scroll, and it fires no wheel event.
+   *
+   * The previous attempt at this inferred intent from the direction of the scroll — "it went
+   * up and we did not move it, so the user did" — and that is wrong in the one case that
+   * matters: shrinking the content makes the browser clamp scrollTop downward by itself, which
+   * happens on every head trim. So the chat let go of the bottom for no reason, at random.
+   * A pointerdown past the content width is in the scrollbar gutter and nowhere else, which
+   * settles it with no inference at all.
+   */
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>): void => {
+      const el = scRef.current
+      if (!el || e.target !== el) return
+      if (e.nativeEvent.offsetX < el.clientWidth) return
+      onUserScrolledUp?.()
+    },
+    [onUserScrolledUp]
+  )
 
   // first fill: start at the newest message rather than at the top of the scrollback
   const seededRef = useRef(false)
@@ -287,13 +368,19 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         // otherwise they escape the wrapper and every row is reported shorter than it draws
         style={{ position: 'absolute', top: offsets[i], left: 0, right: 0, display: 'flow-root' }}
       >
-        {renderRow(m, i)}
+        {renderRow(m, baseIndex.current + i)}
       </div>
     )
   }
 
   return (
-    <div ref={scRef} className="chat-scroller" data-chat-scroller="true" onScroll={onScroll}>
+    <div
+      ref={scRef}
+      className="chat-scroller"
+      data-chat-scroller="true"
+      onScroll={onScroll}
+      onPointerDown={onPointerDown}
+    >
       <div style={{ height: total, position: 'relative' }}>{rows}</div>
     </div>
   )
