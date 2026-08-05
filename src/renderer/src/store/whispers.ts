@@ -88,10 +88,29 @@ window.addEventListener('storage', (e) => {
   }
 })
 
-/** the conversation currently open in ANY window (suppresses its notification sound) */
+/**
+ * Which conversation the user is actually LOOKING at — the one whose arrival should not ping.
+ *
+ * This used to be a bare login written to localStorage and removed on unmount, and that is a
+ * latch that can stick shut. Close the app (or crash it) with a conversation open and the key
+ * survives the restart, so from then on every whisper from that person is silently treated as
+ * "already being read": no sound, no unread badge, forever. That is a bug you cannot even see,
+ * because nothing about it is visible — reported as "whispers just don't notify for me".
+ *
+ * So it expires. The panel refreshes the marker while it is open AND its window has focus; a
+ * marker nobody has refreshed for a few seconds means nobody is looking, whatever happened to
+ * the window that wrote it. Anything written by an older version parses as junk and is ignored,
+ * which heals the stuck state on first launch without asking the user to do anything.
+ */
+const OPEN_THREAD_TTL = 10_000
+
 export function getOpenWhisperThread(): string | null {
   try {
-    return localStorage.getItem(LS_OPEN_THREAD) || null
+    const raw = localStorage.getItem(LS_OPEN_THREAD)
+    if (!raw) return null
+    const v = JSON.parse(raw) as { login?: string; ts?: number }
+    if (!v?.login || typeof v.ts !== 'number') return null
+    return Date.now() - v.ts < OPEN_THREAD_TTL ? v.login : null
   } catch {
     return null
   }
@@ -99,7 +118,7 @@ export function getOpenWhisperThread(): string | null {
 
 export function setOpenWhisperThread(login: string | null): void {
   try {
-    if (login) localStorage.setItem(LS_OPEN_THREAD, login)
+    if (login) localStorage.setItem(LS_OPEN_THREAD, JSON.stringify({ login, ts: Date.now() }))
     else localStorage.removeItem(LS_OPEN_THREAD)
   } catch {
     /* best-effort */

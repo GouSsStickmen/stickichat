@@ -659,6 +659,12 @@ select:focus {
   position: relative;
   user-select: text;
 }
+/* A rule between messages. On the TOP edge, not the bottom: with the list positioning every
+   row itself there is no "last child" to special-case, and a top border never leaves a stray
+   line hanging under the newest message. */
+.msg.ruled {
+  border-top: 1px solid var(--border);
+}
 .msg.alt {
   background: var(--surface-2);
 }

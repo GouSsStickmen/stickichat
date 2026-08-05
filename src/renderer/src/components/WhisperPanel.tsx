@@ -88,10 +88,31 @@ export default function WhisperPanel({
   const colorFor = (w: Whisper): string =>
     ensureReadable(colors[w.otherId] || w.color || fallbackColor(w.otherLogin), dark)
 
-  // publish which conversation is open — the notification sound for it is suppressed
+  /**
+   * Publish which conversation is open, so its arrival does not ping — but as a HEARTBEAT,
+   * not a flag. A flag set once and cleared on unmount never gets cleared when the app is
+   * closed or killed with the panel open, and the leftover silences that person's whispers
+   * for good. A marker that has to be renewed cannot outlive the thing it describes.
+   *
+   * Focus is part of "looking at it": a panel sitting open in a window behind three others is
+   * not being read, and suppressing the ping for it is how a whisper gets missed entirely.
+   */
   useEffect(() => {
-    setOpenWhisperThread(selected)
-    return () => setOpenWhisperThread(null)
+    if (!selected) {
+      setOpenWhisperThread(null)
+      return
+    }
+    const beat = (): void => setOpenWhisperThread(document.hasFocus() ? selected : null)
+    beat()
+    const t = window.setInterval(beat, 3000)
+    window.addEventListener('focus', beat)
+    window.addEventListener('blur', beat)
+    return () => {
+      window.clearInterval(t)
+      window.removeEventListener('focus', beat)
+      window.removeEventListener('blur', beat)
+      setOpenWhisperThread(null)
+    }
   }, [selected])
 
   // close on outside click / Escape (popover mode only)

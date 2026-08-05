@@ -32,7 +32,7 @@ const SUB_EVENT_IDS = new Set([
   'giftpaidupgrade', 'anongiftpaidupgrade', 'primepaidupgrade'
 ])
 import { PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
-import { diagInfo } from '../lib/diag'
+import { diagInfo, diagWarn } from '../lib/diag'
 
 /**
  * Invisible U+E0000 (a Unicode TAG character): appended to a repeated message so Twitch
@@ -383,6 +383,9 @@ class ChatService {
   private modSubErrorShown = false
   private onEventSubError(desired: EventSubDesired, status: number): void {
     const lang = useSettingsStore.getState().settings.language
+    // every rejection, not just the ones we show a toast for: a report that says "feature X
+    // does nothing" is answerable in one line if the log already says X was never subscribed
+    diagWarn('eventsub', `${desired.type} rejected for ${desired.account.login}: HTTP ${status}`)
     if (desired.type === 'user.whisper.message') {
       if (this.eventSubErrorShown) return
       this.eventSubErrorShown = true
@@ -471,9 +474,20 @@ class ChatService {
       const settings = useSettingsStore.getState().settings
       // no ping for the conversation the user is looking at right now (any window)
       const openThread = getOpenWhisperThread()
-      if (this.ownsSound && settings.whisperSound && openThread !== (event.from_user_login ?? '').toLowerCase()) {
-        playWhisperSound(settings)
-      }
+      const from = (event.from_user_login ?? '').toLowerCase()
+      const ping = this.ownsSound && settings.whisperSound && openThread !== from
+      /**
+       * Say WHY, every time. "Whispers arrive but never notify" was reported once and could
+       * not be told apart from "whispers do not arrive" without this line — there are four
+       * separate reasons the ping is skipped and none of them used to leave a trace.
+       */
+      diagInfo(
+        'whisper',
+        ping
+          ? `from ${from} → ping`
+          : `from ${from} → silent (${!this.ownsSound ? 'not the sound-owning window' : !settings.whisperSound ? 'whisper sound is off in settings' : `thread "${openThread}" is open and focused`})`
+      )
+      if (ping) playWhisperSound(settings)
     } else if (type === 'channel.raid') {
       const fromLogin = (event.from_broadcaster_user_login ?? '').toLowerCase()
       const toLogin = (event.to_broadcaster_user_login ?? '').toLowerCase()

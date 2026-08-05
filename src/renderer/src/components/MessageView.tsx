@@ -621,6 +621,9 @@ function MessageViewInner({
   // shared chat: visitors from the partner channel get a subtle tint + origin tag
   if (msg.sourceRoomId) classes.push('shared-msg')
   if (settings.alternatingBackground && index % 2 === 1) classes.push('alt')
+  // a rule between messages instead of (or as well as) the stripes — the other way of telling
+  // where one message ends, and the one that stays readable on a busy custom theme
+  if (settings.messageSeparators) classes.push('ruled')
   if (isMention && settings.showMentionBg) classes.push('mention')
   if (msg.deleted) classes.push('deleted')
   if (msg.historical) classes.push('historical')

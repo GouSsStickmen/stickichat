@@ -1186,6 +1186,7 @@ function ChatSection(): React.JSX.Element {
         </div>
       )}
       <Toggle label={t('set.altBg')} hint={t('hint.altBg')} value={settings.alternatingBackground} onChange={(v) => set({ alternatingBackground: v })} />
+      <Toggle label={t('set.msgSeparators')} hint={t('hint.msgSeparators')} value={settings.messageSeparators} onChange={(v) => set({ messageSeparators: v })} />
       <div className="set-group-title">{t('set.group.chatPane')}</div>
       <Toggle label={t('set.streamInfo')} hint={t('hint.streamInfo')} value={settings.showStreamInfo} onChange={(v) => set({ showStreamInfo: v })} />
       <Toggle label={t('set.smoothChatScroll')} hint={t('hint.smoothChatScroll')} value={settings.smoothChatScroll} onChange={(v) => set({ smoothChatScroll: v })} />

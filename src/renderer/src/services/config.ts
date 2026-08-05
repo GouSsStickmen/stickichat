@@ -136,7 +136,7 @@ const PART_KEYS: Record<Exclude<ConfigPart, 'highlightRules' | 'modButtons' | 'f
     'messageSpacing', 'lineSpacing', 'savedColors', 'recentColors'
   ],
   chat: [
-    'showTimestamps', 'timestampSeconds', 'alternatingBackground', 'showStreamInfo',
+    'showTimestamps', 'timestampSeconds', 'alternatingBackground', 'messageSeparators', 'showStreamInfo',
     'smoothChatScroll', 'linkPreviews', 'linkDisplay', 'linkPreviewsClipsOnly',
     'linkPreviewsExpanded', 'linkHoverPreview', 'linkHoverImagesOnly', 'linkHoverSize',
     'linkPreviewScale', 'inputAccountDisplay', 'showBits', 'showRedeems', 'loadHistory',

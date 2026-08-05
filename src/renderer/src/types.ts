@@ -917,6 +917,8 @@ export interface Settings {
   showTimestamps: boolean
   timestampSeconds: boolean
   alternatingBackground: boolean
+  /** a hairline between messages — the other way to see where one ends and the next begins */
+  messageSeparators: boolean
   loadHistory: boolean // recent-messages.robotty.de
   highlightMentions: boolean
   mentionSound: boolean
@@ -1172,6 +1174,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showTimestamps: true,
   timestampSeconds: false,
   alternatingBackground: false,
+  messageSeparators: false,
   loadHistory: true,
   highlightMentions: true,
   mentionSound: true,

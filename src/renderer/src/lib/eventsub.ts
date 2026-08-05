@@ -1,6 +1,6 @@
 import { Account } from '../types'
 import { createEventSubSubscription } from './helix'
-import { diagSocket } from './diag'
+import { diagInfo, diagSocket, diagWarn } from './diag'
 
 /**
  * Twitch EventSub over WebSocket. Used for things IRC no longer delivers — whispers
@@ -144,6 +144,12 @@ export class EventSubClient {
         // one second every single time, so the retry never backed off and the app reconnected
         // roughly every thirteen seconds, forever. It resets when a subscription succeeds.
         this.created.clear()
+        // which features this session actually asks for — the first thing worth knowing when
+        // someone reports that whispers, raids or the mod feed do nothing
+        diagInfo(
+          'eventsub',
+          `session ready — subscribing to ${this.getDesired().map((d) => d.type).join(', ') || 'nothing'}`
+        )
         this.subscribeAll()
         break
       }
@@ -199,6 +205,9 @@ export class EventSubClient {
           }
         } catch (e) {
           console.warn('[eventsub] subscribe error', d.type, e)
+          // a network failure here is indistinguishable from "the feature is broken" from the
+          // outside, and it used to leave nothing behind at all
+          diagWarn('eventsub', `${d.type} for ${d.account.login} threw: ${String(e)}`)
         }
       }
     } finally {
