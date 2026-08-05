@@ -568,6 +568,16 @@ select:focus {
   min-height: 0;
   min-width: 0;
 }
+/* the chat's own scroller. `overflow-anchor: none` is not optional: Chrome's scroll anchoring
+   tries to keep "the element you were looking at" still by silently adjusting scrollTop, which
+   fights a list that positions every row itself and knows exactly where the scroll belongs. */
+.chat-scroller {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-anchor: none;
+}
 .highlight-sidebar {
   width: 220px;
   flex-shrink: 0;

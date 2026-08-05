@@ -15,7 +15,7 @@ export function useFlip(
   dragging: boolean
 ): void {
   const prevRects = useRef(new Map<string, { left: number; top: number }>())
-  const prevSize = useRef({ w: 0, h: 0 })
+  const prevSize = useRef({ w: 0 })
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -28,10 +28,13 @@ export function useFlip(
     // glide is ever started; measured, zero in both directions. Kept because animating a
     // reflow would still be wrong the moment something else does trigger a render mid-resize,
     // but it is not a confirmed fix for that report.
+    // WIDTH only. Height was in here too and that was wrong: closing or adding a tab can push
+    // the row count up or down, which changes the container's height — so the very reorders
+    // this animation exists for were being classified as "a resize" and snapped instead of
+    // glided. Width is the one dimension only an outside force (the window) changes.
     const w = container.clientWidth
-    const h = container.clientHeight
-    const resized = w !== prevSize.current.w || h !== prevSize.current.h
-    prevSize.current = { w, h }
+    const resized = w !== prevSize.current.w
+    prevSize.current = { w }
     // offsetLeft/offsetTop, NOT getBoundingClientRect: rects include transforms, so measuring
     // an element mid-glide returns where it currently APPEARS, and storing that as its
     // "previous" position makes the next pass animate from a place it was never laid out in.
