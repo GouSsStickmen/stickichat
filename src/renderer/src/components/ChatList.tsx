@@ -148,6 +148,19 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   useEffect(() => () => sizeWatch.current?.disconnect(), [])
 
   /**
+   * A row announcing that it just changed height on purpose — a link card opened or closed, a
+   * gift list unfolded. The re-render is scheduled from inside the reporter's LAYOUT effect, so
+   * React flushes it before the browser paints: the measure pass, the new offsets and the
+   * anchor restore all land in the same frame the row grew in. Left to the size observer alone
+   * this arrives a frame later, and a frame is exactly what "the chat jumped" is made of.
+   */
+  useEffect(() => {
+    const onRowResized = (): void => rerender()
+    window.addEventListener('sticki:rowresized', onRowResized)
+    return () => window.removeEventListener('sticki:rowresized', onRowResized)
+  }, [rerender])
+
+  /**
    * A font or spacing change makes every cached height wrong — but do NOT throw them away.
    *
    * Clearing meant every row instantly became the 34px fallback, the total collapsed, and for

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Account, ChatMessage, FavoriteEmote, MOD_ONLY_TYPES, Settings } from '../types'
 import { tokenizeMessage, Token, fallbackColor, ensureReadable, hexToRgba, formatDuration, hiResEmoteUrl } from '../lib/tokenize'
 import { emotePageUrl } from '../lib/emoteProviders'
@@ -268,6 +268,22 @@ function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
   }, [enabled, clipsOnly, text])
   const [data, setData] = useState<LinkPreviewData | null>(null)
   useEffect(() => setOpen(expandDefault), [expandDefault])
+  /**
+   * Say that this row's height just changed — BEFORE the frame is painted.
+   *
+   * The list positions every row absolutely from a cached height, so a row that silently grows
+   * covers the ones under it until the list finds out. Its own observer does find out, but a
+   * frame later: that is the card appearing several messages further down, and the view
+   * lurching when the correction lands. Opening a card while reading history was worse still,
+   * because the old signal only re-pinned a list that was following the end — parked halfway up
+   * the history, nothing compensated at all and the reader was simply thrown somewhere else.
+   *
+   * A layout effect runs after the DOM has the new size and before the browser paints it, which
+   * is exactly the moment the list needs to hear about it.
+   */
+  useLayoutEffect(() => {
+    window.dispatchEvent(new CustomEvent('sticki:rowresized'))
+  }, [open_, data])
   useEffect(() => {
     let alive = true
     setData(null)
