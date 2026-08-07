@@ -43,9 +43,18 @@ export interface PollEvent {
   choices: string[]
 }
 
+/**
+ * Twitch runs four kinds of hype train and tells you which in a different field depending on
+ * the kind, so the flavour is sniffed from whatever the payload happens to carry rather than
+ * read from one place that does not exist.
+ */
+export type HypeTrainKind = 'regular' | 'shared' | 'golden' | 'community'
+
 export interface HypeTrainEvent {
   channelId: string
   kind: 'start' | 'progress' | 'level' | 'end'
+  /** which of the four flavours this train is */
+  flavour: HypeTrainKind
   /** 1..5 — the level the train is on right now */
   level: number
   /** points into the CURRENT level */
@@ -58,6 +67,30 @@ export interface HypeTrainEvent {
   userDisplay?: string
   /** why it stopped: the train finished level 5, or it simply ran out of time */
   endReason?: 'COMPLETED' | 'EXPIRE'
+}
+
+/**
+ * Which flavour of train this is, from whatever the payload happens to say.
+ *
+ * There is no single field: a golden train is flagged on the config, a shared one is known by
+ * having participants from more than one channel, and community trains have been announced
+ * under more than one name. So this looks at several places and at the free-text type, and
+ * falls back to "regular" — the flavour only decides how it is dressed and whether it is
+ * allowed to interrupt you, so guessing wrong is cosmetic rather than broken.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sniffFlavour(d: any): HypeTrainKind {
+  const cfg = d?.config ?? {}
+  if (d?.is_golden_kappa_train || cfg.is_golden_kappa_train) return 'golden'
+  if (d?.is_community_train || cfg.is_community_train) return 'community'
+  if (d?.is_shared_train || cfg.is_shared_train || Array.isArray(d?.shared_train_participants))
+    return 'shared'
+  const label = String(d?.type ?? d?.train_type ?? cfg.type ?? '').toLowerCase()
+  if (label.includes('golden') || label.includes('mythic') || label.includes('treasure'))
+    return 'golden'
+  if (label.includes('community')) return 'community'
+  if (label.includes('shared')) return 'shared'
+  return 'regular'
 }
 
 export class PubSubClient {
@@ -341,10 +374,12 @@ export class PubSubClient {
     const kind = kinds[payload.type ?? '']
     if (!kind) return
     const d = payload.data ?? {}
+    const flavour = sniffFlavour(d)
     if (kind === 'end') {
       this.onHype({
         channelId,
         kind,
+        flavour,
         level: 0,
         value: 0,
         goal: 0,
@@ -362,6 +397,7 @@ export class PubSubClient {
     this.onHype({
       channelId,
       kind,
+      flavour,
       level: Number(p.level?.value ?? 1),
       value: Number(p.value ?? 0),
       goal: Number(p.goal ?? p.level?.goal ?? 1),

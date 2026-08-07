@@ -53,6 +53,8 @@ export interface ChannelPrompt {
 /** the hype train currently running in one of the open channels (one at a time, like Twitch) */
 export interface HypeTrain {
   channel: string
+  /** regular · shared · golden/mythic · community — decides its dress and its noise */
+  flavour: 'regular' | 'shared' | 'golden' | 'community'
   level: number
   /** points into the current level and what it needs — the bar */
   value: number

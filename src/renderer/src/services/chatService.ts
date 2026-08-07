@@ -386,6 +386,7 @@ class ChatService {
     if (settings.hypeTrainPopup) {
       ui.setHypeTrain({
         channel,
+        flavour: e.flavour,
         level: e.level,
         value: e.value,
         goal: Math.max(1, e.goal),
@@ -411,7 +412,8 @@ class ChatService {
       (p) => p.channel === channel
     )
     // departure and a level-up are different moments, so they get different sounds
-    if (settings.hypeTrainSound && (onScreen || settings.hypeTrainSoundInactive)) {
+    const mayInterrupt = onScreen || settings.hypeTrainInactiveKinds.includes(e.flavour)
+    if (settings.hypeTrainSound && mayInterrupt) {
       if (prev === 0) playHypeTrainStartSound(settings)
       else playHypeTrainLevelSound(settings)
     }

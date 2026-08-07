@@ -1056,8 +1056,14 @@ export interface Settings {
   hypeTrainPopup: boolean
   /** sounds for the train — departure and every level after it get their own */
   hypeTrainSound: boolean
-  /** also chime for trains in channels whose tab is not in front */
-  hypeTrainSoundInactive: boolean
+  /**
+   * Which train flavours may chime for a channel whose tab is NOT in front.
+   *
+   * Per flavour rather than one switch: a regular train runs somewhere most of the day and is
+   * not worth interrupting for, while a golden one is rare enough that missing it is the whole
+   * complaint. Empty = only the channel you are looking at ever makes a sound.
+   */
+  hypeTrainInactiveKinds: ('regular' | 'shared' | 'golden' | 'community')[]
   hypeTrainStartSoundType: SoundChoice
   hypeTrainStartSoundVolume: number
   hypeTrainStartSoundCustomId?: string
@@ -1287,7 +1293,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hypeTrainLine: true,
   hypeTrainPopup: true,
   hypeTrainSound: true,
-  hypeTrainSoundInactive: false,
+  hypeTrainInactiveKinds: ['golden', 'community'],
   hypeTrainStartSoundType: 'dindin',
   hypeTrainStartSoundVolume: 0.5,
   hypeTrainLevelSoundType: 'chuchu',

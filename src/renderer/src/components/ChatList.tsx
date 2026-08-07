@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { ChatMessage } from '../types'
+import { diagWarn } from '../lib/diag'
 
 /**
  * The chat list, done the way Chatterino does it rather than the way a DOM virtualizer does.
@@ -137,6 +138,9 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const ourScrollTop = useRef(-1)
   /** the glide's own fractional position; -1 when it is not running (see the glide) */
   const glidePos = useRef(-1)
+  /** the deferred re-slice (see onScroll), and where the last one was taken from */
+  const sliceRaf = useRef(0)
+  const lastSliceAt = useRef(0)
   /** bumped whenever a height is written; the prefix sum is rebuilt only when it moves */
   const geomVersion = useRef(0)
   const builtFor = useRef(-1)
@@ -189,7 +193,13 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       if (hit) rerenderRef.current()
     })
   }
-  useEffect(() => () => sizeWatch.current?.disconnect(), [])
+  useEffect(
+    () => () => {
+      sizeWatch.current?.disconnect()
+      if (sliceRaf.current) cancelAnimationFrame(sliceRaf.current)
+    },
+    []
+  )
   /**
    * A settings change makes every cached height a guess again — but only for rows that come
    * back on screen, which is why a flag would not do. The generation number rides alongside
@@ -609,6 +619,53 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     }
   })
 
+  // TEMP-JANK: how long frames take while the reader is actually scrolling
+  useEffect(() => {
+    const el = scRef.current
+    if (!el) return
+    let raf = 0
+    let last = 0
+    let until = 0
+    let frames = 0
+    let worst = 0
+    let slow = 0
+    const onWheel = (): void => {
+      if (!until) {
+        frames = 0
+        worst = 0
+        slow = 0
+        last = performance.now()
+      }
+      until = performance.now() + 400
+    }
+    el.addEventListener('wheel', onWheel, { passive: true })
+    const tick = (now: number): void => {
+      raf = requestAnimationFrame(tick)
+      if (!until) return
+      const dt = now - last
+      last = now
+      if (dt > 0 && dt < 2000) {
+        frames++
+        if (dt > worst) worst = dt
+        if (dt > 20) slow++
+      }
+      if (now > until) {
+        until = 0
+        if (frames > 5) {
+          diagWarn(
+            'jank',
+            `scroll burst: ${frames} frames, worst ${worst.toFixed(1)}ms, over-20ms ${slow}, n=${msgsRef.current.length}`
+          )
+        }
+      }
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(raf)
+      el.removeEventListener('wheel', onWheel)
+    }
+  }, [])
+
   /**
    * The glide: one animation that never restarts, so a faster chat just moves it faster.
    *
@@ -791,7 +848,39 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     const off = offsetsRef.current
     const nf = lowerBound(off, el.scrollTop - OVERSCAN_UP)
     const nt = upperBound(off, el.scrollTop + el.clientHeight + OVERSCAN_DOWN)
-    if (nf !== rangeRef.current.from || nt !== rangeRef.current.to) rerender()
+    if (nf === rangeRef.current.from && nt === rangeRef.current.to) return
+
+    /**
+     * Re-slice on the NEXT frame, not inside the scroll event.
+     *
+     * A state update from a scroll handler is flushed synchronously, so the render, the measure
+     * pass and the layout effect all ran before the browser was allowed to paint the frame the
+     * reader had just scrolled. That is one dropped frame every time the slice changes — which,
+     * at the edges of the overscan, is most of the way through a flick. It is exactly the shape
+     * of "it stops for a moment and then carries on": the scroll itself is composited and
+     * smooth, and we were the thing standing in front of it.
+     *
+     * Deferring is safe because the rows are already drawn a thousand pixels ahead. The one
+     * case it is not safe is a fling that clears the whole overscan in a single frame, which
+     * would show a band of nothing — so that one renders immediately, because a blank is worse
+     * than a stutter.
+     */
+    const jumped = Math.abs(el.scrollTop - lastSliceAt.current) > OVERSCAN_DOWN
+    if (jumped) {
+      lastSliceAt.current = el.scrollTop
+      if (sliceRaf.current) {
+        cancelAnimationFrame(sliceRaf.current)
+        sliceRaf.current = 0
+      }
+      rerender()
+      return
+    }
+    if (sliceRaf.current) return
+    sliceRaf.current = requestAnimationFrame(() => {
+      sliceRaf.current = 0
+      lastSliceAt.current = scRef.current?.scrollTop ?? lastSliceAt.current
+      rerender()
+    })
   }, [onAtBottomChange, rerender])
 
   /**

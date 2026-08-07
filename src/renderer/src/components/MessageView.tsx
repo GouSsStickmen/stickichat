@@ -58,6 +58,15 @@ interface Props {
   flash: boolean
 }
 
+/** Twitch's bits Message Effects, normalised to the three looks they actually are */
+export function effectClass(id: string): string {
+  const k = id.toLowerCase()
+  if (k.includes('party') || k.includes('emote') || k.includes('simmer')) return 'emote-party'
+  if (k.includes('rainbow') || k.includes('eclipse')) return 'rainbow-eclipse'
+  if (k.includes('cosmic') || k.includes('abyss')) return 'cosmic-abyss'
+  return 'generic'
+}
+
 function formatTime(ts: number, withSeconds: boolean): string {
   const d = new Date(ts)
   const hh = String(d.getHours()).padStart(2, '0')
@@ -629,7 +638,14 @@ function MessageViewInner({
   if (dragX > 0) classes.push('swiping')
   // bits power-ups (Twitch-style): gigantified emote + animated message effect
   if (settings.showBits && msg.gigantified) classes.push('gigantified')
-  const bitsEffect = settings.showBits && msg.messageEffect ? msg.messageEffect : ''
+  /**
+   * Which of Twitch's three Message Effects this is.
+   *
+   * Matched by shape rather than by an exact tag value: Twitch has renamed these ids at least
+   * once, and an id we do not recognise should still land on the effect it obviously means
+   * rather than falling back to a generic wash. Anything genuinely unknown keeps the default.
+   */
+  const bitsEffect = settings.showBits && msg.messageEffect ? effectClass(msg.messageEffect) : ''
   if (bitsEffect) classes.push('msg-effect', `effect-${bitsEffect}`)
 
   const canAct = !!account && !!msg.userId
@@ -769,8 +785,8 @@ function MessageViewInner({
             } as React.CSSProperties
           }
         >
-          {/* the motes that drift down through a cosmic-abyss message; absolutely positioned,
-              so this adds nothing to the row's height */}
+          {/* the particles each effect throws; absolutely positioned, so neither adds anything
+              to the row's height */}
           {bitsEffect === 'cosmic-abyss' && (
             <span className="fx-motes" aria-hidden="true">
               <i style={{ left: '8%', animationDelay: '0s' }} />
@@ -779,6 +795,16 @@ function MessageViewInner({
               <i style={{ left: '58%', animationDelay: '0.35s' }} />
               <i style={{ left: '73%', animationDelay: '2.1s' }} />
               <i style={{ left: '89%', animationDelay: '1.05s' }} />
+            </span>
+          )}
+          {bitsEffect === 'emote-party' && (
+            <span className="fx-party" aria-hidden="true">
+              <i style={{ left: '6%', animationDelay: '0s' }}>🎉</i>
+              <i style={{ left: '21%', animationDelay: '0.18s' }}>😹</i>
+              <i style={{ left: '38%', animationDelay: '0.36s' }}>🥳</i>
+              <i style={{ left: '55%', animationDelay: '0.09s' }}>✨</i>
+              <i style={{ left: '71%', animationDelay: '0.27s' }}>😻</i>
+              <i style={{ left: '87%', animationDelay: '0.45s' }}>🎊</i>
             </span>
           )}
           {swipeEnabled && (
@@ -936,8 +962,10 @@ function MessageViewInner({
               🚨 {msg.raiderFrom}
             </span>
           )}
-          {msg.sourceRoomId && <SharedSourceTag roomId={msg.sourceRoomId} />}
           {msg.isAction ? ' ' : ': '}
+          {/* after the colon, not before it: the tag says where the message came from, so it
+              belongs with the message rather than glued onto the end of the nick */}
+          {msg.sourceRoomId && <SharedSourceTag roomId={msg.sourceRoomId} />}
           {brailleArt && !artLines && (
             <span className="art-width-ctl" title={`${artCols}`}>
               <input

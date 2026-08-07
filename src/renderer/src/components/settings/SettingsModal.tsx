@@ -1511,22 +1511,39 @@ function NotificationsSection(): React.JSX.Element {
         <Toggle label={t('set.hypeTrainPopup')} hint={t('hint.hypeTrainPopup')} value={settings.hypeTrainPopup} onChange={(v) => set({ hypeTrainPopup: v })} />
         {settings.hypeTrainPopup && (
           <div className="set-sub">
-            {/* trains are rare — without this you would have to wait for a real one to find out
-                whether you even want the popup, and where it lands on your screen */}
-            <button className="ghost" onClick={showHypeTrainDemo}>
-              {t('set.hypeTrainPreview')}
-            </button>
+            {/* trains are rare, and three of the four flavours are rarer still — without this
+                you would have to wait for a real one to find out whether you want the popup,
+                where it lands, and what each kind looks like */}
+            <div className="set-sub-title">{t('set.hypeTrainPreviewKind')}</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {HYPE_KINDS.map((k) => (
+                <button key={k} className="ghost" onClick={() => showHypeTrainDemo(k)}>
+                  {t(`hype.kind.${k}` as Parameters<typeof t>[0])}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         <Toggle label={t('set.hypeTrainSound')} value={settings.hypeTrainSound} onChange={(v) => set({ hypeTrainSound: v })} />
         {settings.hypeTrainSound && (
           <div className="set-sub">
-            <Toggle
-              label={t('set.hypeTrainSoundInactive')}
-              hint={t('hint.hypeTrainSoundInactive')}
-              value={settings.hypeTrainSoundInactive}
-              onChange={(v) => set({ hypeTrainSoundInactive: v })}
-            />
+            <div className="set-sub-title">{t('set.hypeTrainInactive')}</div>
+            <p className="hint" style={{ marginTop: 0 }}>{t('hint.hypeTrainInactive')}</p>
+            {HYPE_KINDS.map((k) => (
+              <Toggle
+                key={k}
+                label={t(`hype.kind.${k}` as Parameters<typeof t>[0])}
+                hint={t(`hype.kind.${k}.hint` as Parameters<typeof t>[0])}
+                value={settings.hypeTrainInactiveKinds.includes(k)}
+                onChange={(v) =>
+                  set({
+                    hypeTrainInactiveKinds: v
+                      ? [...settings.hypeTrainInactiveKinds, k]
+                      : settings.hypeTrainInactiveKinds.filter((x) => x !== k)
+                  })
+                }
+              />
+            ))}
             <div className="set-sub-title">{t('set.hypeTrainStartSound')}</div>
             <SoundSettings kind="hypeTrainStart" />
             <div className="set-sub-title">{t('set.hypeTrainLevelSound')}</div>
@@ -1631,10 +1648,12 @@ function WindowsSection(): React.JSX.Element {
  * Deliberately drives the same store the real one does, so what you see here is exactly what a
  * real train looks like — including the sound, if it is switched on.
  */
-function showHypeTrainDemo(): void {
+const HYPE_KINDS = ['regular', 'shared', 'golden', 'community'] as const
+
+function showHypeTrainDemo(flavour: (typeof HYPE_KINDS)[number] = 'regular'): void {
   const ui = useUiStore.getState()
   const settings = useSettingsStore.getState().settings
-  const base = { channel: 'preview', goal: 1000, by: 'Bobik069' }
+  const base = { channel: 'preview', flavour, goal: 1000, by: 'Bobik069' }
   ui.setHypeTrain({ ...base, level: 2, value: 350, expiresAt: Date.now() + 300_000 })
   if (settings.hypeTrainSound) playHypeTrainStartSound(settings, true)
   const steps = [
