@@ -82,6 +82,13 @@ export default function LinkCard(): React.JSX.Element | null {
       window.clearTimeout(closeTimer.current)
       closeTimer.current = window.setTimeout(close, 320)
     }
+    // Scrolling the chat by hand takes the card's anchor with it, so the card would end up
+    // pointing at a message that has moved on. It closes rather than drifts. Deliberately the
+    // WHEEL and not the scroll event: at the bottom of a live chat the scroll position moves
+    // by itself several times a second, and closing on that would make a card impossible to
+    // read. This is the reader moving the chat, which is exactly when the card is stale.
+    const onWheel = (): void => close()
+    window.addEventListener('wheel', onWheel, { passive: true })
     // capture, so a click that lands on a message still closes the card first
     window.addEventListener('mousedown', onDown, true)
     window.addEventListener('keydown', onKey)
@@ -89,6 +96,7 @@ export default function LinkCard(): React.JSX.Element | null {
     window.addEventListener('sticki:linkcardmaybeclose', maybeClose)
     return () => {
       window.clearTimeout(closeTimer.current)
+      window.removeEventListener('wheel', onWheel)
       window.removeEventListener('mousedown', onDown, true)
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('sticki:closelinkcard', close)

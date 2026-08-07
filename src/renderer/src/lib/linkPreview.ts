@@ -143,6 +143,20 @@ async function oEmbedPreview(url: string): Promise<LinkPreviewData | null> {
   // is both cleaner and more reliable than scraping the page for it
   else if (host === 'open.spotify.com' || host === 'spotify.com')
     endpoint = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`
+  // Sites that answer a crawler with an app shell and nothing else. Pinterest is the one that
+  // got reported: the page is JavaScript all the way down, so scraping it finds no tags at
+  // all, while its oEmbed hands over the pin's title and its picture without argument.
+  else if (host === 'pinterest.com' || host === 'pin.it' || /(^|\.)pinterest\./.test(host))
+    endpoint = `https://www.pinterest.com/oembed.json?url=${encodeURIComponent(url)}`
+  else if (host === 'imgur.com') endpoint = `https://api.imgur.com/oembed.json?url=${encodeURIComponent(url)}`
+  else if (host === 'dailymotion.com' || host === 'dai.ly')
+    endpoint = `https://www.dailymotion.com/services/oembed?format=json&url=${encodeURIComponent(url)}`
+  else if (host === 'streamable.com')
+    endpoint = `https://api.streamable.com/oembed.json?url=${encodeURIComponent(url)}`
+  else if (host === 'flickr.com' || host === 'flic.kr')
+    endpoint = `https://www.flickr.com/services/oembed?format=json&url=${encodeURIComponent(url)}`
+  else if (host === 'bsky.app')
+    endpoint = `https://embed.bsky.app/oembed?format=json&url=${encodeURIComponent(url)}`
   if (!endpoint) return null
 
   const res = await window.sticki.fetchJson(endpoint, { headers: UNFURL_HEADERS })
@@ -192,11 +206,39 @@ async function load(url: string): Promise<LinkPreviewData | null> {
   // page's site-wide <title> we ask again as a browser, because a few sites do it the other
   // way round. Whatever weak answer we did get is kept as the fallback — a plain <title> is
   // still better than no card for the many small pages that have no OpenGraph tags at all.
-  const first = await fetchCard(url, UNFURL_HEADERS)
+  const first = await fetchCard(url, UNFURL_HEADERS).catch(() => null)
   if (first?.strong) return first.data
-  const second = await fetchCard(url, BROWSER_HEADERS)
+  const second = await fetchCard(url, BROWSER_HEADERS).catch(() => null)
   if (second?.strong) return second.data
-  return first?.data ?? second?.data ?? null
+  return first?.data ?? second?.data ?? bareCard(url)
+}
+
+/**
+ * What is left when a site tells us nothing at all.
+ *
+ * Plenty of pages have no OpenGraph tags, refuse anything that is not a signed-in browser, or
+ * are a JavaScript shell with an empty <head>. Returning null for those meant the link sat in
+ * the message with no preview and no explanation, indistinguishable from the feature being
+ * broken. The host and the last path segment are not much, but they are true, they are free,
+ * and they mean every link behaves the same way.
+ */
+function bareCard(url: string): LinkPreviewData | null {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return null
+  }
+  const host = u.hostname.replace(/^www\./, '')
+  let tail = ''
+  try {
+    tail = decodeURIComponent(u.pathname).split('/').filter(Boolean).pop() ?? ''
+  } catch {
+    tail = u.pathname.split('/').filter(Boolean).pop() ?? ''
+  }
+  // "/pin/1234-some-thing/" reads better as "some thing" than as itself
+  const title = tail.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[-_+]+/g, ' ').trim()
+  return { kind: 'link', siteName: host, title: title || host }
 }
 
 /** `strong` = the page actually described this link (OpenGraph tags or a picture) */

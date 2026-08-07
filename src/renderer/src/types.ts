@@ -1297,7 +1297,7 @@ export const DEFAULT_SETTINGS: Settings = {
   linkPreviews: true,
   linkDisplay: 'full',
   linkPreviewsClipsOnly: false,
-  linkPreviewsExpanded: false,
+  linkPreviewsExpanded: true,
   linkHoverPreview: true,
   linkHoverImagesOnly: false,
   linkHoverSize: 560,

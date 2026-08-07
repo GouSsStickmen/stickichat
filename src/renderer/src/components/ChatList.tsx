@@ -369,6 +369,8 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     // 1. measure, keeping the growth watcher armed on exactly the rows that exist now — rows
     //    that scrolled away stop being watched, and nothing is re-armed for no reason.
     let changed = false
+    /** a row that was already on screen changed height, rather than a new one appearing */
+    let corrected = false
     const gen = generation.current
     // a row the reader opened or closed in this very commit — read before the measure pass,
     // which has to treat it as a row it knows nothing about
@@ -395,7 +397,10 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         measuredAt.current.set(id, gen)
         if (was === h) continue
         if (was === undefined) measuredCount.current++
-        else measuredSum.current -= was
+        else {
+          measuredSum.current -= was
+          corrected = true
+        }
         measuredSum.current += h
         avgHeight.current = measuredSum.current / measuredCount.current
         heights.current.set(id, h)
@@ -419,6 +424,9 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       dirty.current.delete(id)
       measuredAt.current.set(id, gen)
       if (was === h) continue
+      // a row we already knew has changed size — an emote or a badge finished loading and
+      // rewrapped the line. Not an arrival, and it must not be animated like one (see the pin)
+      if (was !== undefined) corrected = true
       // keep the running mean honest: a row measured twice replaces its own contribution
       if (was === undefined) measuredCount.current++
       else measuredSum.current -= was
@@ -528,12 +536,19 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     // distance, and the animation below then eats it. That is the difference between a chat
     // that crawls and one that steps a line at a time.
     //
-    // A card the reader just opened is the exception to smooth mode, and it has to be. The
-    // glide exists to animate messages ARRIVING; a row growing under the cursor is not an
-    // arrival, it is the page changing shape, and animating it means the card spends those
-    // frames sunk behind the input before rising into place — reported exactly that way. It
-    // gets the same exact assignment instant mode would give it.
-    if (following.current && !locked && (!smooth || opened)) {
+    // Two things are exceptions to smooth mode, and for the same reason: the glide exists to
+    // animate messages ARRIVING, and neither of these is an arrival.
+    //
+    // A card the reader just opened is the page changing shape under the cursor; animating it
+    // meant the card spent those frames sunk behind the input before rising into place.
+    //
+    // A row that was already on screen changing height is an emote or a badge finishing its
+    // download and rewrapping the line — a correction, and one that lands well after the
+    // message did. Gliding it produced the second, delayed nudge people described as the new
+    // message "not quite finishing" its climb out from behind the input: the glide arrived,
+    // stopped, and then a moment later crept a little further for no reason the reader could
+    // see. Applied exactly, it is invisible.
+    if (following.current && !locked && (!smooth || opened || corrected)) {
       pin(el, el.scrollHeight)
     } else if (moved) {
       const a = anchor.current
