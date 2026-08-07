@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MOD_ONLY_TYPES, Pane } from '../types'
+import { MESSAGE_ONLY_TYPES, MOD_ONLY_TYPES, Pane } from '../types'
 import { useChatStore, lookupUserBadges } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
 import { getUsers } from '../lib/helix'
@@ -66,7 +66,9 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const isBroadcaster = account && account.login.toLowerCase() === pane.channel.toLowerCase()
   const isMod = canModerate(account, pane.channel, channelId)
   const modButtons = useSettingsStore((s) => s.modButtons)
-  const hasToolbarButtons = modButtons.some((b) => b.scope === 'toolbar' && !MOD_ONLY_TYPES.has(b.type))
+  const hasToolbarButtons = modButtons.some(
+    (b) => b.scope === 'toolbar' && !MOD_ONLY_TYPES.has(b.type) && !MESSAGE_ONLY_TYPES.has(b.type)
+  )
   const showHighlightSidebar = useSettingsStore((s) => s.settings.showHighlightSidebar)
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null)
   const [chattersOpen, setChattersOpen] = useState(false)
@@ -188,6 +190,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           {channelName ?? pane.channel}
         </span>
         {isLive && <span className="live-badge">{t('pane.live')}</span>}
+        <RoomModeTags channel={pane.channel} />
         {isMod && (
           <span className={`mod-badge ${isBroadcaster ? 'broadcaster' : ''}`}>
             {isBroadcaster ? t('mod.youAreBroadcaster') : t('mod.youAreMod')}
@@ -375,5 +378,44 @@ function ChatSearch({ channel, onClose }: { channel: string; onClose: () => void
         ✕
       </button>
     </div>
+  )
+}
+
+/**
+ * Which restrictions this chat currently has on.
+ *
+ * Every one of these is a reason a message you type might be refused, and the only way to find
+ * out used to be to try: Twitch answers with an English NOTICE after the fact, if at all. Shown
+ * only when something IS on, so a normal chat's header stays exactly as it was.
+ */
+function RoomModeTags({ channel }: { channel: string }): React.JSX.Element | null {
+  const t = useT()
+  const modes = useChatStore((s) => s.roomModes[channel])
+  if (!modes) return null
+  const tags: { key: string; text: string; title: string }[] = []
+  if (modes.emoteOnly) tags.push({ key: 'emote', text: t('modes.tag.emote'), title: t('modes.emoteOnly') })
+  if (modes.subsOnly) tags.push({ key: 'subs', text: t('modes.tag.subs'), title: t('modes.subsOnly') })
+  if (modes.uniqueChat) tags.push({ key: 'r9k', text: t('modes.tag.unique'), title: t('modes.uniqueChat') })
+  if (typeof modes.followersOnly === 'number' && modes.followersOnly >= 0) {
+    // 0 means "any follower"; anything above is a waiting period in minutes
+    const mins = modes.followersOnly
+    tags.push({
+      key: 'follow',
+      text: mins > 0 ? t('modes.tag.followMin', { n: String(mins) }) : t('modes.tag.follow'),
+      title: t('modes.followersOnly')
+    })
+  }
+  if (modes.slow && modes.slow > 0) {
+    tags.push({ key: 'slow', text: t('modes.tag.slow', { n: String(modes.slow) }), title: t('modes.slowMode') })
+  }
+  if (!tags.length) return null
+  return (
+    <span className="room-modes">
+      {tags.map((tag) => (
+        <span key={tag.key} className="room-mode-tag" title={tag.title}>
+          {tag.text}
+        </span>
+      ))}
+    </span>
   )
 }

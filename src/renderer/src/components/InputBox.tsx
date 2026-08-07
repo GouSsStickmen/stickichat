@@ -111,6 +111,25 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
   const [narrow, setNarrow] = useState(false)
   const accountAsAvatar = useSettingsStore((s) => s.settings.inputAccountDisplay) === 'avatar'
   const [acctOpen, setAcctOpen] = useState(false)
+  const acctRef = useRef<HTMLSpanElement>(null)
+
+  // the picker used to be a native <select> in one of its two modes, which closed itself; a
+  // popover has to be told
+  useEffect(() => {
+    if (!acctOpen) return
+    const onDown = (e: MouseEvent): void => {
+      if (!acctRef.current?.contains(e.target as Node)) setAcctOpen(false)
+    }
+    const onEsc = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setAcctOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onEsc)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onEsc)
+    }
+  }, [acctOpen])
 
   // narrow panes swap the account <select> for a compact avatar button
   useEffect(() => {
@@ -577,67 +596,64 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             onClose={() => setPickerOpen(false)}
           />
         )}
-        {narrow || accountAsAvatar ? (
-          <span style={{ position: 'relative' }}>
-            <button
-              className="ghost account-compact"
-              title={account?.displayName ?? t('pane.account')}
-              onClick={() => setAcctOpen((v) => !v)}
-            >
-              {account?.avatarUrl ? (
-                <img src={account.avatarUrl} alt={account.displayName} draggable={false} />
-              ) : (
-                '👤'
-              )}
-            </button>
-            {acctOpen && (
-              <div className="popover account-pop">
-                {accounts.map((a) => (
-                  <button
-                    key={a.id}
-                    className={a.id === pane.accountId ? 'primary' : 'ghost'}
-                    onClick={() => {
-                      useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: a.id })
-                      setAcctOpen(false)
-                    }}
-                  >
-                    {a.avatarUrl && <img src={a.avatarUrl} alt="" draggable={false} />} {a.displayName}
-                  </button>
-                ))}
+        {/*
+          One picker, two triggers.
+
+          The compact mode had a proper popover and the full-name mode had a native <select>,
+          which meant two different-looking menus for the same choice — and only the <select>
+          could add an account, because "+ add" was an <option> rather than a button. Both now
+          open the same panel; the only difference is whether the trigger shows a face or a name.
+        */}
+        <span className="account-picker" ref={acctRef}>
+          <button
+            className={`ghost ${narrow || accountAsAvatar ? 'account-compact' : 'account-wide'}`}
+            title={account?.displayName ?? t('pane.account')}
+            onClick={() => setAcctOpen((v) => !v)}
+          >
+            {account?.avatarUrl ? (
+              <img src={account.avatarUrl} alt={account.displayName} draggable={false} />
+            ) : (
+              '\u{1F464}'
+            )}
+            {!(narrow || accountAsAvatar) && (
+              <span className="account-wide-name">{account?.displayName ?? t('pane.readOnly')}</span>
+            )}
+          </button>
+          {acctOpen && (
+            <div className="popover account-pop">
+              {accounts.map((a) => (
                 <button
-                  className="ghost"
+                  key={a.id}
+                  className={a.id === pane.accountId ? 'primary' : 'ghost'}
                   onClick={() => {
-                    useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: null })
+                    useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: a.id })
                     setAcctOpen(false)
                   }}
                 >
-                  {t('pane.readOnly')}
+                  {a.avatarUrl && <img src={a.avatarUrl} alt="" draggable={false} />} {a.displayName}
                 </button>
-              </div>
-            )}
-          </span>
-        ) : (
-          <select
-            className="account-select"
-            title={t('pane.account')}
-            value={pane.accountId ?? ''}
-            onChange={(e) => {
-              if (e.target.value === '__add__') {
-                useUiStore.getState().setAddAccountOpen(true)
-                return
-              }
-              useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: e.target.value || null })
-            }}
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.displayName}
-              </option>
-            ))}
-            <option value="">{t('pane.readOnly')}</option>
-            <option value="__add__">+ {t('auth.addAccount')}</option>
-          </select>
-        )}
+              ))}
+              <button
+                className={pane.accountId ? 'ghost' : 'primary'}
+                onClick={() => {
+                  useLayoutStore.getState().updatePane(tabId, pane.id, { accountId: null })
+                  setAcctOpen(false)
+                }}
+              >
+                {t('pane.readOnly')}
+              </button>
+              <button
+                className="ghost"
+                onClick={() => {
+                  setAcctOpen(false)
+                  useUiStore.getState().setAddAccountOpen(true)
+                }}
+              >
+                + {t('auth.addAccount')}
+              </button>
+            </div>
+          )}
+        </span>
         {myStreak && (
           <button
             type="button"

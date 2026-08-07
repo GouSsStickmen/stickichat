@@ -18,9 +18,13 @@ function fmtTime(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** whisper text: emotes from every set (no channel context), links + RMB copy */
-function WhisperText({ text }: { text: string }): React.JSX.Element {
-  return <RichText msg={{ text, emotesTag: undefined, channel: '' }} />
+/**
+ * Whisper text: emotes from every set (no channel context), clickable links, and right-click
+ * to put an emote or a nick into the reply box — the same gesture the main chat has. Shift
+ * still copies.
+ */
+function WhisperText({ text, onInsert }: { text: string; onInsert?: (t: string) => void }): React.JSX.Element {
+  return <RichText msg={{ text, emotesTag: undefined, channel: '' }} onInsert={onInsert} />
 }
 
 /**
@@ -547,7 +551,14 @@ export default function WhisperPanel({
                   {newDay && <div className="whisper-day">{fmtDay(w.timestamp)}</div>}
                   <div className={`whisper-msg ${w.incoming ? '' : 'out'}`}>
                     {quote && <div className="whisper-quote">↩ {quote}</div>}
-                    <span className="whisper-ts">{fmtTime(w.timestamp)}</span> <WhisperText text={body} />
+                    <span className="whisper-ts">{fmtTime(w.timestamp)}</span> <WhisperText
+                      text={body}
+                      onInsert={(tok) =>
+                        setText((cur) =>
+                          cur.length === 0 || cur.endsWith(' ') ? `${cur}${tok} ` : `${cur} ${tok} `
+                        )
+                      }
+                    />
                     <button
                       className="whisper-reply-btn"
                       title={t('whisper.reply')}

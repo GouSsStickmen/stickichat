@@ -4,6 +4,23 @@ import { useSettingsStore } from './settings'
 
 export type ConnState = 'connecting' | 'open' | 'closed'
 
+/**
+ * The restrictions a channel currently has on. Every one of them is a reason a message you try
+ * to send might be refused, and until now the only way to find that out was to be refused —
+ * Twitch's own reply arrives as an English NOTICE after the fact. Numbers are minutes for
+ * followers-only (0 = any follower) and seconds for slow mode; `null`/absent means off.
+ */
+export interface RoomModes {
+  emoteOnly?: boolean
+  subsOnly?: boolean
+  /** unique-chat / R9K: no repeating what someone else just said */
+  uniqueChat?: boolean
+  /** minutes a viewer must have followed for; 0 means "any follower", -1/absent = off */
+  followersOnly?: number
+  /** seconds between messages */
+  slow?: number
+}
+
 interface ChatState {
   /** channel login -> ring buffer of messages */
   messages: Record<string, ChatMessage[]>
@@ -28,6 +45,8 @@ interface ChatState {
   lastReadAt: Record<string, number>
   /** "channel:userId" -> timeout info for MY accounts (until: -1 = permanent ban) */
   selfTimeouts: Record<string, { until: number; reason?: string }>
+  /** channel login -> which restricted chat modes are currently on (from ROOMSTATE) */
+  roomModes: Record<string, RoomModes>
   appendMessages: (channel: string, msgs: ChatMessage[]) => void
   prependMessages: (channel: string, msgs: ChatMessage[]) => void
   /** merge a message snapshot (e.g. handed over from another window on detach/reattach)
@@ -40,6 +59,8 @@ interface ChatState {
   clearChannel: (channel: string) => void
   dropChannel: (channel: string) => void
   setChannelId: (channel: string, id: string) => void
+  /** merge a ROOMSTATE delta — Twitch sends only the tags that CHANGED after the first one */
+  patchRoomModes: (channel: string, patch: RoomModes) => void
   setConnState: (s: ConnState) => void
   setLiveChannels: (live: Record<string, boolean>) => void
   setChannelNames: (names: Record<string, string>) => void
@@ -146,6 +167,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   unreadMessages: {},
   lastReadAt: {},
   selfTimeouts: {},
+  roomModes: {},
   appendMessages: (channel, msgs) =>
     set((s) => {
       const limit = useSettingsStore.getState().settings.messageLimit
@@ -230,6 +252,8 @@ export const useChatStore = create<ChatState>()((set) => ({
       delete messages[channel]
       return { messages }
     }),
+  patchRoomModes: (channel, patch) =>
+    set((s) => ({ roomModes: { ...s.roomModes, [channel]: { ...s.roomModes[channel], ...patch } } })),
   setChannelId: (channel, id) =>
     set((s) =>
       s.channelIds[channel] === id ? s : { channelIds: { ...s.channelIds, [channel]: id } }

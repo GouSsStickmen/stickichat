@@ -15,6 +15,7 @@ import { useSettingsStore } from '../store/settings'
 import { translate } from '../i18n'
 import { HttpResponse } from '../lib/http'
 import { localizeApiError } from '../lib/apiErrors'
+import { runSlashCommand } from '../lib/slashCommands'
 
 /** turns a few known raw Twitch API errors into a clearer message */
 function friendlyMessage(raw: string): string {
@@ -32,6 +33,31 @@ export interface ActionContext {
   targetLogin?: string
   targetMsgId?: string
   targetText?: string
+}
+
+/**
+ * Send a button's text the way the input bar would.
+ *
+ * A button whose text starts with "/" used to go out as a raw PRIVMSG, and Twitch answered
+ * "Unrecognized command" — because most of what people think of as chat commands are not chat
+ * at all, they are Helix calls the client is expected to make. The input bar has always known
+ * that; buttons did not, so the same text worked when typed and failed when clicked. They now
+ * take the same path. A leading SPACE still opts out, exactly as it does when typing, for the
+ * rare button that really does want to post a literal slash.
+ */
+async function sendOrRun(text: string, ctx: ActionContext): Promise<void> {
+  const msg = text.trim()
+  if (!msg) return
+  if (msg.startsWith('/') && !text.startsWith(' ')) {
+    await runSlashCommand(msg, {
+      account: ctx.account,
+      channel: ctx.channel,
+      channelId: ctx.channelId,
+      toast: useUiStore.getState().toast
+    })
+    return
+  }
+  await chatService.sendMessage(ctx.account, ctx.channel, text.startsWith(' ') ? ` ${msg}` : text)
 }
 
 function report(res: HttpResponse, okText: string, login?: string): boolean {
@@ -114,14 +140,10 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
         report(await sendAnnouncement(ctx.account, ctx.channelId, fill(btn.text, ctx), btn.color), '📢', ctx.account.login)
         break
       }
-      case 'snippet': {
-        if (!btn.text) return
-        await chatService.sendMessage(ctx.account, ctx.channel, fill(btn.text, ctx))
-        break
-      }
+      case 'snippet':
       case 'link': {
         if (!btn.text) return
-        await chatService.sendMessage(ctx.account, ctx.channel, fill(btn.text, ctx))
+        await sendOrRun(fill(btn.text, ctx), ctx)
         break
       }
       case 'copy': {

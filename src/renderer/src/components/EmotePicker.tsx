@@ -333,6 +333,25 @@ export default function EmotePicker({
     // sub-only emote of a channel we're not subscribed to: shown so you know it exists, with
     // a padlock, and picking it would only produce plain text — so it doesn't insert
     const locked = 'locked' in e && !!(e as { locked?: boolean }).locked
+    /**
+     * WHY it is locked, not just that it is.
+     *
+     * A padlock on its own tells you the emote exists and you cannot have it, which is the
+     * least useful half of the information — tier 2 and tier 3 emotes look identical to a
+     * tier 1 subscriber who is wondering why theirs do not work. Twitch tells us the tier and
+     * the type; this passes it on.
+     */
+    const lockHint = locked
+      ? (() => {
+          const tier = 'tier' in e ? (e as { tier?: string }).tier : undefined
+          const kind = 'emoteType' in e ? (e as { emoteType?: string }).emoteType : undefined
+          if (kind === 'bitstier') return t('picker.lockedBits')
+          if (tier === '2000') return t('picker.lockedTier', { n: '2' })
+          if (tier === '3000') return t('picker.lockedTier', { n: '3' })
+          if (tier === '1000') return t('picker.lockedTier', { n: '1' })
+          return t('picker.locked')
+        })()
+      : ''
     // 7TV/BTTV/FFZ emotes are often much wider than tall; a square cell squashes them, so a
     // wide emote gets a wide cell (the grid is dense-packed, so the row simply reflows)
     const wide = ('size' in e && !!e.size && e.size >= 48) || aspectCache.get(e.url) === true
@@ -351,7 +370,8 @@ export default function EmotePicker({
               ? emojiLabel(e.code, emojiNameLang)
               : combo
                 ? [e.code, ...combo.map((o) => o.code)].join(' + ') + ` (${PROVIDER_LABEL[e.provider]})`
-                : `${e.code} (${PROVIDER_LABEL[e.provider]})${isLayer ? ` · ${t('picker.zeroWidth')}` : ''}`
+                : `${e.code} (${PROVIDER_LABEL[e.provider]})${isLayer ? ` · ${t('picker.zeroWidth')}` : ''}${locked ? `
+${lockHint}` : ''}`
         }
         onMouseEnter={() => setPreview(e)}
 
@@ -385,7 +405,7 @@ export default function EmotePicker({
         }}
       >
         {isFav && <span className="fav-star"><StarIcon filled size={12} /></span>}
-        {locked && <span className="emote-lock" title={t('picker.locked')}><LockIcon size={12} /></span>}
+        {locked && <span className="emote-lock" title={lockHint}><LockIcon size={12} /></span>}
         {isKaomoji ? (
           <span className="kaomoji-fav-text">{e.code}</span>
         ) : e.provider === 'emoji' ? (

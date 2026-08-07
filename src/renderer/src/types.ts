@@ -175,10 +175,12 @@ export type HighlightKind =
   | 'firstStream'
   | 'watchStreak'
   | 'sharedChat'
+  /** subscriptions, resubs, gifts and gift upgrades — the whole sub family */
+  | 'subEvent'
 
 /** kinds that don't need a value input (the category itself is the match) */
 export const VALUELESS_HL_KINDS: ReadonlySet<HighlightKind> = new Set([
-  'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat'
+  'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat', 'subEvent'
 ])
 
 export interface HighlightRule {
@@ -839,6 +841,19 @@ export const MOD_ONLY_TYPES: ReadonlySet<ModActionType> = new Set([
   'timeout', 'ban', 'unban', 'delete', 'warn', 'shoutout', 'raid', 'announce'
 ])
 
+/**
+ * Actions that need A MESSAGE to act on, so the toolbar above the chat is not a place they can
+ * live: there is no clicked message up there, and a button that can only ever fail is worse
+ * than one that is not offered. Settings hides the placement choice for these entirely rather
+ * than letting someone build a button that does nothing.
+ *
+ * `raid` and `announce` are the mirror image — they act on the CHANNEL and belong on the
+ * toolbar — but they have always been offered correctly, so they are not listed here.
+ */
+export const MESSAGE_ONLY_TYPES: ReadonlySet<ModActionType> = new Set([
+  'delete', 'timeout', 'ban', 'unban', 'warn', 'shoutout', 'copy', 'resend', 'msgToInput'
+])
+
 
 export interface ModButton {
   id: string
@@ -1041,6 +1056,8 @@ export interface Settings {
   hypeTrainPopup: boolean
   /** sounds for the train — departure and every level after it get their own */
   hypeTrainSound: boolean
+  /** also chime for trains in channels whose tab is not in front */
+  hypeTrainSoundInactive: boolean
   hypeTrainStartSoundType: SoundChoice
   hypeTrainStartSoundVolume: number
   hypeTrainStartSoundCustomId?: string
@@ -1270,6 +1287,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hypeTrainLine: true,
   hypeTrainPopup: true,
   hypeTrainSound: true,
+  hypeTrainSoundInactive: false,
   hypeTrainStartSoundType: 'dindin',
   hypeTrainStartSoundVolume: 0.5,
   hypeTrainLevelSoundType: 'chuchu',

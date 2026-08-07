@@ -62,6 +62,20 @@ interface PersistedRedeem {
 }
 
 /**
+ * Ukrainian counts three ways, and getting it wrong is what makes a translated app read as
+ * translated: 1 рік, 2 роки, 5 років — and 11–14 take the last form even though they end in
+ * 1–4.
+ */
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod100 = Math.abs(n) % 100
+  const mod10 = mod100 % 10
+  if (mod100 >= 11 && mod100 <= 14) return many
+  if (mod10 === 1) return one
+  if (mod10 >= 2 && mod10 <= 4) return few
+  return many
+}
+
+/**
  * Chat architecture:
  *  - ONE anonymous reader connection joined to every open channel. It is the
  *    single source of truth for displayed messages, so even our own messages
@@ -351,6 +365,9 @@ class ChatService {
       if (settings.hypeTrainLine && level > 0) {
         this.localInfo(channel, translate(lang, 'info.hypeEnd', { level: String(level) }))
       }
+      // this train is over, so a dismissal of ITS popup expires with it — the next train is
+      // news again and gets announced normally
+      if (ui.hypeDismissed === channel) ui.allowHypeTrain()
       // leave the popup up for a moment on the result, then let it go
       if (ui.hypeTrain?.channel === channel) {
         ui.setHypeTrain({ ...ui.hypeTrain, ended: e.endReason ?? 'EXPIRE' })
@@ -382,8 +399,19 @@ class ChatService {
       const key = prev === 0 ? 'info.hypeStart' : 'info.hypeLevel'
       this.localInfo(channel, translate(lang, key, { level: String(e.level) }))
     }
+    /**
+     * A train in a channel you are not looking at is news you may or may not want announced.
+     *
+     * With thirty channels open, a train is running somewhere most of the time, and a chime for
+     * every level of every one of them is noise rather than information. Off by default for
+     * channels whose tab is not in front; the channel you ARE watching always sounds.
+     */
+    const { tabs, activeTabId } = useLayoutStore.getState()
+    const onScreen = (tabs.find((t) => t.id === activeTabId)?.panes ?? []).some(
+      (p) => p.channel === channel
+    )
     // departure and a level-up are different moments, so they get different sounds
-    if (settings.hypeTrainSound) {
+    if (settings.hypeTrainSound && (onScreen || settings.hypeTrainSoundInactive)) {
       if (prev === 0) playHypeTrainStartSound(settings)
       else playHypeTrainLevelSound(settings)
     }
@@ -1012,6 +1040,29 @@ class ChatService {
         break
       }
       case 'ROOMSTATE': {
+        /**
+         * Which restrictions the channel has on, merged rather than replaced.
+         *
+         * Twitch sends the full set once on join and then only the tag that CHANGED — so
+         * assigning the parsed object wholesale would forget every other mode the moment a
+         * moderator toggled one of them.
+         */
+        if (m.channel) {
+          const num = (v: string | undefined): number | undefined =>
+            v === undefined ? undefined : parseInt(v, 10)
+          const bool = (v: string | undefined): boolean | undefined =>
+            v === undefined ? undefined : v === '1'
+          const patch = {
+            emoteOnly: bool(m.tags['emote-only']),
+            subsOnly: bool(m.tags['subs-only']),
+            uniqueChat: bool(m.tags['r9k']),
+            followersOnly: num(m.tags['followers-only']),
+            slow: num(m.tags['slow'])
+          }
+          // drop the keys this particular ROOMSTATE said nothing about
+          const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
+          if (Object.keys(clean).length) useChatStore.getState().patchRoomModes(m.channel, clean)
+        }
         const id = m.tags['room-id']
         if (id && m.channel) {
           const known = useChatStore.getState().channelIds[m.channel]
@@ -1187,8 +1238,22 @@ class ChatService {
       case 'midnightsquid':
       case 'cheer':
         return en
-      default:
+      default: {
+        /**
+         * Twitch keeps adding notices faster than it documents their ids, and the moderator
+         * anniversary is one of them: it arrives with an id we have no mapping for and an
+         * English `system-msg`, so it was the one line in a Ukrainian chat still reading
+         * "…celebrating N years as a moderator". Recognising it by SHAPE rather than by an id
+         * we would have to guess means it works whatever Twitch calls it this month, and
+         * anything genuinely unknown still falls through to Twitch's own wording.
+         */
+        const years = /(\d+)[\s-]*year/i.exec(en)
+        if (years && /moderat/i.test(en)) {
+          const n = Number(years[1])
+          return `🛡️ ${name} — вже ${n} ${plural(n, 'рік', 'роки', 'років')} модерує цей канал!`
+        }
         return en
+      }
     }
   }
 

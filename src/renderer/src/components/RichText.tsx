@@ -7,17 +7,25 @@ import { useUiStore } from '../store/ui'
 import EmojiGlyph from './EmojiGlyph'
 
 /**
- * Read-only rich message renderer for the panels/windows that AREN'T the chat pane
- * (usercard, whispers, highlights). Links are clickable; right-click on a nick / emote /
- * "!command" copies it to the clipboard (those windows have no chat input to insert into).
+ * Rich message renderer for the panels/windows that AREN'T the chat pane (usercard, whispers,
+ * highlights). Links are clickable; right-click on a nick / emote / "!command" copies it.
+ *
+ * Where there IS somewhere to type — the whispers panel has its own input — right-click puts
+ * the token there instead, which is what it does in the main chat. Copying used to be the only
+ * option because these panels started out read-only, and the difference was invisible: the same
+ * gesture on the same-looking emote did one thing in chat and another in a whisper. Shift keeps
+ * the clipboard behaviour, exactly as in chat.
  */
 export default function RichText({
   msg,
-  channel
+  channel,
+  onInsert
 }: {
   msg: Pick<ChatMessage, 'text' | 'emotesTag' | 'channel'>
   /** channel to resolve channel emotes/cheermotes from; falls back to msg.channel */
   channel?: string
+  /** given, right-click inserts the token here instead of copying it */
+  onInsert?: (text: string) => void
 }): React.JSX.Element {
   const emoteVersion = useEmotesStore((s) => s.version)
   const ch = channel ?? msg.channel
@@ -37,6 +45,11 @@ export default function RichText({
 
   const copy = (text: string) => (e: React.MouseEvent): void => {
     e.preventDefault()
+    // Shift forces the clipboard even where there is an input to insert into
+    if (onInsert && !e.shiftKey) {
+      onInsert(text.trim())
+      return
+    }
     window.sticki.copyText(text.trim())
     useUiStore.getState().toast('📋')
   }

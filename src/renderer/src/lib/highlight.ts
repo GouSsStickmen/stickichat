@@ -38,6 +38,9 @@ export function highlightRuleMatches(msg: ChatMessage, rule: HighlightRule, ctx:
     case 'sharedChat':
       // shared stream: the message came from the partner channel's chat
       return !!msg.sourceRoomId
+    case 'subEvent':
+      // every flavour of subscription notice: new, resub, gifted, upgraded
+      return !!msg.subEvent
   }
 }
 

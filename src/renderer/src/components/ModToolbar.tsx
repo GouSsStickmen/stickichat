@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Account, MOD_ONLY_TYPES, Pane } from '../types'
+import { Account, MESSAGE_ONLY_TYPES, MOD_ONLY_TYPES, Pane } from '../types'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
 import { runModButton, resolveUserId } from '../services/modActions'
@@ -28,6 +28,28 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
   const [modes, setModes] = useState<ChatSettingsPatch | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const isBroadcaster = account.login.toLowerCase() === pane.channel.toLowerCase()
+
+  /**
+   * Publish this bar's height as `--modbar-h`, the third thing floating panels have to clear.
+   *
+   * Toasts and the hype train were already pinned below the tab bar and the pane header, and
+   * still landed on top of these buttons — the bar sits between the header and the chat, so it
+   * was simply missing from the sum. Measured rather than assumed: it wraps onto a second row
+   * on a narrow pane, and a constant would be wrong exactly when it matters most.
+   */
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const publish = (): void =>
+      document.documentElement.style.setProperty('--modbar-h', `${Math.round(el.offsetHeight)}px`)
+    publish()
+    const ro = new ResizeObserver(publish)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      document.documentElement.style.setProperty('--modbar-h', '0px')
+    }
+  }, [])
 
   const openModes = async (): Promise<void> => {
     setPopover((p) => (p === 'modes' ? null : 'modes'))
@@ -66,6 +88,10 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
   const toast = useUiStore.getState().toast
   const toolbarButtons = modButtons
     .filter((b) => b.scope === 'toolbar')
+    // settings no longer offers this placement for message-only actions, but configurations
+    // built before it did still carry them — drop them here rather than drawing a button that
+    // has nothing to act on
+    .filter((b) => !MESSAGE_ONLY_TYPES.has(b.type))
     .filter((b) => isMod || !MOD_ONLY_TYPES.has(b.type))
     .filter((b) => !b.channels?.length || b.channels.includes(pane.channel))
 

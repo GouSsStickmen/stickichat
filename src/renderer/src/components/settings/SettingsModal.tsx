@@ -12,6 +12,7 @@ import {
   HighlightKind,
   HighlightRule,
   HotkeyAction,
+  MESSAGE_ONLY_TYPES,
   ModActionType,
   ModButton,
   OverlayProfile,
@@ -1518,6 +1519,12 @@ function NotificationsSection(): React.JSX.Element {
         <Toggle label={t('set.hypeTrainSound')} value={settings.hypeTrainSound} onChange={(v) => set({ hypeTrainSound: v })} />
         {settings.hypeTrainSound && (
           <div className="set-sub">
+            <Toggle
+              label={t('set.hypeTrainSoundInactive')}
+              hint={t('hint.hypeTrainSoundInactive')}
+              value={settings.hypeTrainSoundInactive}
+              onChange={(v) => set({ hypeTrainSoundInactive: v })}
+            />
             <div className="set-sub-title">{t('set.hypeTrainStartSound')}</div>
             <SoundSettings kind="hypeTrainStart" />
             <div className="set-sub-title">{t('set.hypeTrainLevelSound')}</div>
@@ -2126,17 +2133,34 @@ function ModerationSection(): React.JSX.Element {
             </div>
           </div>
           <div className="modbtn-line">
-            <select value={b.type} onChange={(e) => update(b.id, { type: e.target.value as ModActionType })}>
+            <select
+              value={b.type}
+              onChange={(e) => {
+                const type = e.target.value as ModActionType
+                // an action that needs a clicked message cannot live on the toolbar, so
+                // switching to one moves the button rather than leaving it somewhere it
+                // could only ever fail
+                update(b.id, MESSAGE_ONLY_TYPES.has(type) ? { type, scope: 'message' } : { type })
+              }}
+            >
               {BUTTON_TYPES.map((bt) => (
                 <option key={bt} value={bt}>
                   {t(`btn.type.${bt}` as Parameters<typeof t>[0])}
                 </option>
               ))}
             </select>
-            <select value={b.scope} onChange={(e) => update(b.id, { scope: e.target.value as 'message' | 'toolbar' })}>
-              <option value="message">{t('set.modBtn.scope.message')}</option>
-              <option value="toolbar">{t('set.modBtn.scope.toolbar')}</option>
-            </select>
+            {/* the placement choice is only a choice for actions that have one: these work on
+                the message you clicked, and the bar above the chat has no clicked message */}
+            {MESSAGE_ONLY_TYPES.has(b.type) ? (
+              <span className="hint modbtn-fixed-scope" title={t('set.modBtn.messageOnly')}>
+                {t('set.modBtn.scope.message')}
+              </span>
+            ) : (
+              <select value={b.scope} onChange={(e) => update(b.id, { scope: e.target.value as 'message' | 'toolbar' })}>
+                <option value="message">{t('set.modBtn.scope.message')}</option>
+                <option value="toolbar">{t('set.modBtn.scope.toolbar')}</option>
+              </select>
+            )}
             <ChannelMultiSelect
               value={b.channels ?? []}
               known={knownChannels}
@@ -2232,7 +2256,7 @@ const BADGE_OPTIONS: { id: string; labelKey: string }[] = [
 /* 'raider' is deliberately absent: the category never actually matched anything, so offering
    it was offering a rule that silently does nothing. The kind stays in the type so old saved
    rules still parse — they're dropped on load below. */
-const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat']
+const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'subEvent', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat']
 
 function HighlightsSection(): React.JSX.Element {
   const t = useT()

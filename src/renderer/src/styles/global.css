@@ -92,7 +92,9 @@
   /* where everything that floats over the chat starts: under the tab bar AND under the pane
      header, so a toast never covers the pane's own buttons. Both parts are measured at runtime
      (TabBar and ChatPane publish them) — the fallbacks are just the one-row sizes. */
-  --notif-top: calc(var(--tabbar-h, 46px) + var(--panehead-h, 34px) + 8px);
+  /* everything a floating panel has to clear: the tab bar, the pane header, and the mod-button
+     bar between them and the chat. All three are measured by the components that draw them. */
+  --notif-top: calc(var(--tabbar-h, 46px) + var(--panehead-h, 34px) + var(--modbar-h, 0px) + 8px);
   /* text and icons sitting on ANY saturated fill — accent, danger, success, the live dot */
   --accent-text: #ffffff;
   --danger: #eb4c4c;
@@ -553,6 +555,39 @@ select:focus {
   font-size: var(--fs-md);
   padding: 3px 9px;
   background: var(--surface-3);
+}
+/* which restrictions the chat has on — only drawn when there ARE any */
+.room-modes {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.room-mode-tag {
+  font-size: var(--fs-xs, 10px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn, #ffb84d) 18%, transparent);
+  color: var(--warn, #ffb84d);
+  border: 1px solid color-mix(in srgb, var(--warn, #ffb84d) 35%, transparent);
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* stands in for the placement dropdown when the action has no placement to choose */
+.modbtn-fixed-scope {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  height: 30px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-faint);
+  cursor: help;
+  white-space: nowrap;
 }
 .mod-toolbar .spacer {
   flex: 1;
@@ -1166,7 +1201,7 @@ select:focus {
 .input-row {
   --input-h: 34px;
 }
-.input-row .account-select,
+.input-row .account-picker > button,
 .input-row > button {
   height: var(--input-h);
   min-height: var(--input-h);
@@ -1254,10 +1289,6 @@ select:focus {
   vertical-align: -0.3em;
   border-radius: var(--radius-xs);
 }
-.account-select {
-  max-width: 130px;
-  font-size: var(--fs-md);
-}
 /* narrow-pane replacement for the account select: just the avatar */
 .account-compact {
   width: 34px;
@@ -1272,6 +1303,31 @@ select:focus {
   width: 24px;
   height: 24px;
   border-radius: var(--radius-circle);
+}
+/* the same trigger with room for a name — both modes open the identical panel */
+.account-picker {
+  position: relative;
+  display: inline-flex;
+  align-self: center;
+}
+.account-wide {
+  height: 34px;
+  padding: 0 10px 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+}
+.account-wide img {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-circle);
+  flex: 0 0 auto;
+}
+.account-wide-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .account-pop {
   bottom: 100%;
@@ -3968,8 +4024,40 @@ button:has(> svg) {
   transition: left 0.6s ease;
   animation: hype-chug 0.5s ease-in-out infinite alternate;
 }
+/**
+ * The departure: wheelspin, then away.
+ *
+ * A train that simply froze when it was over said nothing about how it went. Now the engine
+ * digs in — the wheels spin up while it barely moves, throwing sparks off the rail — and then
+ * it finds grip and leaves the frame to the right, trailing the smoke it has been making all
+ * along. Two seconds, once; `forwards` keeps it gone rather than snapping back for the few
+ * seconds the panel lingers on the result.
+ */
 .hype-train.ended .hype-loco {
-  animation: none;
+  animation: hype-depart 2s cubic-bezier(0.55, 0, 0.9, 0.35) forwards;
+}
+@keyframes hype-depart {
+  /* wheelspin: shuddering in place, going nowhere */
+  0% {
+    transform: translateX(-50%) translateY(0);
+  }
+  12% {
+    transform: translateX(calc(-50% + 2px)) translateY(-1px);
+  }
+  24% {
+    transform: translateX(calc(-50% - 2px)) translateY(0);
+  }
+  36% {
+    transform: translateX(calc(-50% + 2px)) translateY(-1px);
+  }
+  /* it bites */
+  48% {
+    transform: translateX(calc(-50% + 6px)) translateY(0);
+  }
+  100% {
+    transform: translateX(calc(-50% + 340px)) translateY(0);
+    opacity: 0;
+  }
 }
 @keyframes hype-chug {
   from {
@@ -4003,8 +4091,41 @@ button:has(> svg) {
 .hype-wheel-front {
   animation-duration: 0.55s;
 }
+/* wheelspin first — far faster than the ground speed, which is what makes it read as slipping */
 .hype-train.ended .hype-wheel {
-  animation: none;
+  animation-duration: 0.18s;
+}
+/* sparks struck off the rail while the wheels are slipping: a short, hot burst, then done */
+.hype-sparks {
+  position: absolute;
+  left: 8px;
+  bottom: 0;
+  pointer-events: none;
+  color: var(--warn, #ffb84d);
+}
+.hype-sparks i {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 4px currentColor;
+  opacity: 0;
+}
+/* only while it is slipping — a running train does not throw sparks */
+.hype-train.ended .hype-sparks i {
+  animation: hype-spark 0.42s ease-out 6;
+}
+@keyframes hype-spark {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    /* thrown backwards and up, the way grit comes off a spinning wheel */
+    transform: translate(-22px, -12px) scale(0.2);
+    opacity: 0;
+  }
 }
 @keyframes hype-roll {
   to {
@@ -4029,8 +4150,9 @@ button:has(> svg) {
   opacity: 0;
   animation: hype-puff 1.4s linear infinite;
 }
-.hype-train.ended .hype-smoke {
-  display: none;
+/* the smoke keeps coming as it pulls away — that is the trail it leaves behind */
+.hype-train.ended .hype-smoke i {
+  animation-duration: 0.8s;
 }
 @keyframes hype-puff {
   0% {

@@ -373,6 +373,8 @@ export interface TwitchUserEmote {
   emoteType: string
   /** this account cannot actually send it (sub-only emote of a channel we're not subbed to) */
   locked?: boolean
+  /** subscription tier that unlocks it: '1000' | '2000' | '3000' (absent for other types) */
+  tier?: string
 }
 
 /**
@@ -446,7 +448,9 @@ export async function getChannelEmotes(account: Account, broadcasterId: string):
         .replace('{{scale}}', scale),
       provider: 'twitch' as const,
       ownerId: broadcasterId,
-      emoteType: e.emote_type ?? 'subscriptions'
+      emoteType: e.emote_type ?? 'subscriptions',
+      // what it takes to unlock it, so the padlock can say so instead of just refusing
+      tier: e.tier
     }
   })
 }

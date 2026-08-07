@@ -97,6 +97,15 @@ interface UiState {
   /** small "add this channel?" prompt (raids) */
   channelPrompt: ChannelPrompt | null
   hypeTrain: HypeTrain | null
+  /**
+   * The channel whose train popup the reader closed by hand.
+   *
+   * Closing it used to last until the next contribution, which on a train being fed a gift sub
+   * every few seconds is no time at all — the popup came straight back and the ✕ read as
+   * broken. A dismissal now holds for the rest of THAT train; the service clears it when the
+   * train ends, so the next one is announced normally.
+   */
+  hypeDismissed: string | null
   whispersOpen: boolean
   /** split mode: scrolling one pane scrolls the others by the same amount */
   scrollSync: boolean
@@ -113,6 +122,8 @@ interface UiState {
   setLinkCard: (v: LinkCardTarget | null) => void
   setChannelPrompt: (v: ChannelPrompt | null) => void
   setHypeTrain: (v: HypeTrain | null) => void
+  dismissHypeTrain: () => void
+  allowHypeTrain: () => void
   setWhispersOpen: (v: boolean) => void
   toggleScrollSync: () => void
   markReauthNeeded: (id: string, login: string) => void
@@ -144,6 +155,7 @@ export const useUiStore = create<UiState>()((set) => ({
   expandedGifts: {},
   channelPrompt: null,
   hypeTrain: null,
+  hypeDismissed: null,
   whispersOpen: false,
   scrollSync: false,
   reauthAccounts: [],
@@ -172,7 +184,10 @@ export const useUiStore = create<UiState>()((set) => ({
   setEmotePreview: (emotePreview) => set({ emotePreview }),
   setLinkCard: (linkCard) => set({ linkCard }),
   setChannelPrompt: (channelPrompt) => set({ channelPrompt }),
-  setHypeTrain: (hypeTrain) => set({ hypeTrain }),
+  setHypeTrain: (hypeTrain) => set((s) => (hypeTrain && s.hypeDismissed === hypeTrain.channel ? s : { hypeTrain })),
+  dismissHypeTrain: () =>
+    set((s) => ({ hypeTrain: null, hypeDismissed: s.hypeTrain?.channel ?? s.hypeDismissed })),
+  allowHypeTrain: () => set({ hypeDismissed: null }),
   setWhispersOpen: (whispersOpen) => set({ whispersOpen }),
   toggleScrollSync: () => set((s) => ({ scrollSync: !s.scrollSync })),
   markReauthNeeded: (id, login) =>
