@@ -48,15 +48,41 @@ export default function MessageList({
     () => new Set(settings.mutedUsers.filter((u) => u.mode === 'hide').map((u) => u.login)),
     [settings.mutedUsers]
   )
-  const messages = useMemo(
-    () =>
-      allMessages.filter(
-        (m) =>
-          (!m.groupedUnder || expandedGifts[m.groupedUnder]) &&
-          (m.system || !hiddenLogins.has(m.login))
-      ),
-    [allMessages, expandedGifts, hiddenLogins]
-  )
+  const messages = useMemo(() => {
+    const kept = allMessages.filter(
+      (m) =>
+        (!m.groupedUnder || expandedGifts[m.groupedUnder]) &&
+        (m.system || !hiddenLogins.has(m.login))
+    )
+    /**
+     * An unfolded gift group belongs UNDER ITS HEADER, not wherever the clock left it.
+     *
+     * The gifts are separate usernotices and the chat keeps arriving while they land, so
+     * chronological order scatters them: "показати всі" was opening a list that started three
+     * or four unrelated messages further down, with other people's chat threaded through it.
+     * The grouping already says which header each gift belongs to; using it for placement as
+     * well as for folding is what makes the list read as one block.
+     */
+    if (!kept.some((m) => m.groupedUnder)) return kept
+    const under = new Map<string, ChatMessage[]>()
+    for (const m of kept) {
+      if (!m.groupedUnder) continue
+      const at = under.get(m.groupedUnder)
+      if (at) at.push(m)
+      else under.set(m.groupedUnder, [m])
+    }
+    const present = new Set(kept.map((m) => m.id))
+    const out: ChatMessage[] = []
+    for (const m of kept) {
+      // a gift whose header is still in the buffer is emitted with the header, not here; one
+      // whose header has been trimmed away keeps its own place rather than disappearing
+      if (m.groupedUnder && present.has(m.groupedUnder)) continue
+      out.push(m)
+      const group = under.get(m.id)
+      if (group) out.push(...group)
+    }
+    return out
+  }, [allMessages, expandedGifts, hiddenLogins])
   const emoteVersion = useEmotesStore((s) => s.version)
   const listRef = useRef<ChatListHandle>(null)
   const wrapRef = useRef<HTMLDivElement>(null)

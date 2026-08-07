@@ -35,7 +35,7 @@ import { ChatMessage } from '../types'
  * corrections into something that happens off screen. Downward the rows are almost always
  * measured already, so a screenful is plenty.
  */
-const OVERSCAN_UP = 2000
+const OVERSCAN_UP = 1200
 const OVERSCAN_DOWN = 600
 /**
  * What an unmeasured row is assumed to be.
@@ -104,6 +104,18 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const anchor = useRef<{ id: string; gap: number } | null>(null)
   /** the head changed in this update — set during render, consumed by the layout effect */
   const headMoved = useRef(false)
+  /**
+   * The array itself changed in this update — set during render, consumed by the layout effect.
+   *
+   * Not the same thing as the head moving. Unfolding a mass-gift group INSERTS twenty rows into
+   * the middle of the list: the head is untouched, and if those rows happen to be a height we
+   * already know then nothing was re-measured either, so both of the old "something moved"
+   * signals stayed false and the view was left wherever the insertion pushed it. Any change to
+   * the array can move content under the reader, so any change re-asserts the anchor. When
+   * nothing actually shifted — the usual case, a message appended at the end — the restore
+   * computes the position the view is already at and the 0.5px guard drops it.
+   */
+  const listMoved = useRef(false)
   const prevRef = useRef<ChatMessage[]>([])
   /**
    * The index the FIRST message in the array carries.
@@ -131,6 +143,16 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const rerenderRef = useRef<() => void>(() => {})
   rerenderRef.current = rerender
   const sizeWatch = useRef<ResizeObserver | null>(null)
+  /**
+   * Which row element is currently under the growth watcher.
+   *
+   * The measure pass used to disconnect the observer and re-observe all ~60 rows every time it
+   * ran, which on a scroll meant sixty removals and sixty additions per event — and, because
+   * `observe()` re-fires an initial observation, sixty callbacks the next frame for rows that
+   * had not moved a pixel. Keeping the element per id turns the whole thing into the two or
+   * three rows that actually entered or left the slice.
+   */
+  const watched = useRef(new Map<string, HTMLElement>())
   if (!sizeWatch.current && typeof ResizeObserver !== 'undefined') {
     sizeWatch.current = new ResizeObserver((entries) => {
       for (const e of entries) {
@@ -188,6 +210,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   // (the scroll itself is handled by the anchor, which needs none of this)
   {
     const prev = prevRef.current
+    if (prev !== messages) listMoved.current = true
     if (prev !== messages && prev.length && messages.length) {
       const firstId = messages[0].id
       if (prev[0].id !== firstId) {
@@ -238,6 +261,8 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   // the current layout, readable from callbacks that must not be rebuilt on every message
   const offsetsRef = useRef<number[]>([])
   const msgsRef = useRef<ChatMessage[]>([])
+  /** the slice actually on screen, so a scroll that does not change it can skip the render */
+  const rangeRef = useRef({ from: 0, to: 0 })
   offsetsRef.current = offsets
   msgsRef.current = messages
 
@@ -254,12 +279,19 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   }, [])
 
   /** pin to the newest message — exact, because `total` is a real sum and not a guess */
-  const pin = useCallback((el: HTMLElement, height: number) => {
-    const target = Math.max(0, height - el.clientHeight)
-    el.scrollTop = target
-    ourScrollTop.current = target
-    scrollTopRef.current = target
-  }, [])
+  const pin = useCallback(
+    (el: HTMLElement, height: number) => {
+      const target = Math.max(0, height - el.clientHeight)
+      el.scrollTop = target
+      ourScrollTop.current = target
+      scrollTopRef.current = target
+      // re-anchor in the same breath. The scroll event that would otherwise do it is delivered
+      // asynchronously, and any render arriving first would restore the anchor from before the
+      // jump and quietly undo it — the same trap the resize handler documents.
+      grabAnchor(target)
+    },
+    [grabAnchor]
+  )
 
   useImperativeHandle(
     ref,
@@ -270,12 +302,15 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       },
       toIndex: (index: number) => {
         const el = scRef.current
-        if (!el || index < 0 || index >= offsets.length) return
-        const h = heights.current.get(messages[index].id) ?? avgHeight.current
-        const target = Math.max(0, offsets[index] - (el.clientHeight - h) / 2)
+        const off = offsetsRef.current
+        const msgs = msgsRef.current
+        if (!el || index < 0 || index >= off.length) return
+        const h = heights.current.get(msgs[index].id) ?? avgHeight.current
+        const target = Math.max(0, off[index] - (el.clientHeight - h) / 2)
         el.scrollTop = target
         ourScrollTop.current = target
         scrollTopRef.current = target
+        grabAnchor(target)
       },
       scroller: () => scRef.current,
       distanceFromBottom: () => {
@@ -283,7 +318,9 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         return el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0
       }
     }),
-    [messages, offsets, pin]
+    // everything in here reads through refs, so the handle is built once instead of on every
+    // arriving message — which also stops the parent's effects from being torn down and rebuilt
+    [pin, grabAnchor]
   )
 
   /**
@@ -297,15 +334,20 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     const el = scRef.current
     if (!el) return
     viewRef.current = el.clientHeight
+    // what is on screen is decided here, not during render: a render React discards would
+    // otherwise leave the scroll handler comparing against a slice that was never committed,
+    // and the render it then skipped is the one that fills the gap the reader scrolled into
+    rangeRef.current = { from, to }
 
-    // 1. measure. Re-arm the growth watcher on exactly the rows that exist now, so rows that
-    //    scrolled away stop being watched and the observer never accumulates.
+    // 1. measure, keeping the growth watcher armed on exactly the rows that exist now — rows
+    //    that scrolled away stop being watched, and nothing is re-armed for no reason.
     let changed = false
-    sizeWatch.current?.disconnect()
+    const shown = new Map<string, HTMLElement>()
     for (const row of Array.from(el.querySelectorAll<HTMLElement>('[data-mid]'))) {
       const id = row.dataset.mid
       if (!id) continue
-      sizeWatch.current?.observe(row)
+      shown.set(id, row)
+      if (watched.current.get(id) !== row) sizeWatch.current?.observe(row)
       const h = row.offsetHeight
       if (h === 0) continue
       if (heights.current.get(id) === h) continue
@@ -318,6 +360,50 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       heights.current.set(id, h)
       changed = true
     }
+    for (const [id, node] of watched.current) {
+      if (shown.get(id) !== node) sizeWatch.current?.unobserve(node)
+    }
+    watched.current = shown
+
+    /**
+     * Rebuild the prefix sum from what was just measured — AND WRITE IT INTO THE DOM.
+     *
+     * Two separate faults lived here, and both of them read as "the chat moved on its own".
+     *
+     * `offsets` was built during render, BEFORE these corrections existed, and both the restore
+     * below and the anchor grabbed at the end read from it. Working off numbers the measure
+     * pass has already invalidated made every height correction nudge the view by its own error
+     * instead of cancelling it.
+     *
+     * The second is worse and is why recomputing alone was not enough: the DOM is still laid
+     * out from the render's numbers. The spacer is the OLD total, every row sits at its OLD
+     * top. Assigning a scrollTop derived from the new geometry against the old document gets it
+     * silently clamped when the new position is past the old end — and the correcting render
+     * that follows has nothing left to tell it anything moved, so the view simply stays where
+     * the clamp put it. Writing the spacer and the visible rows first makes the assignment land
+     * in the document it was computed for, and makes this frame drawable as it stands: React's
+     * catch-up render below is bookkeeping, not the thing the reader is waiting to see.
+     */
+    if (changed) {
+      const fresh: number[] = new Array(messages.length)
+      const indexOf = new Map<string, number>()
+      let sum = 0
+      const guessNow = avgHeight.current
+      for (let i = 0; i < messages.length; i++) {
+        const id = messages[i].id
+        fresh[i] = sum
+        indexOf.set(id, i)
+        sum += heights.current.get(id) ?? guessNow
+      }
+      offsetsRef.current = fresh
+      const spacer = el.firstElementChild as HTMLElement | null
+      if (spacer) spacer.style.height = `${sum}px`
+      for (const [id, node] of shown) {
+        const i = indexOf.get(id)
+        if (i !== undefined) node.style.top = `${fresh[i]}px`
+      }
+    }
+    const live = offsetsRef.current
 
     // 2. put the view back where it was — by ANCHOR, and ONLY when something moved it.
     //
@@ -333,8 +419,9 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     //    nothing, and at the bottom every arriving message yanked the view. Restore only when
     //    the content actually moved under the reader — the head was cut, or a row changed
     //    height. A plain scroll changes neither and must be left completely alone.
-    const moved = headMoved.current || changed
+    const moved = headMoved.current || listMoved.current || changed
     headMoved.current = false
+    listMoved.current = false
 
     // Instant mode pins to the newest message and that is the whole behaviour.
     //
@@ -352,7 +439,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       if (a) {
         const i = messages.findIndex((m) => m.id === a.id)
         if (i >= 0) {
-          const next = Math.max(0, offsets[i] - a.gap)
+          const next = Math.max(0, (live[i] ?? 0) - a.gap)
           if (Math.abs(next - el.scrollTop) > 0.5) {
             el.scrollTop = next
             ourScrollTop.current = next
@@ -365,7 +452,15 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     // 3. remember what to hold on to next time, from wherever the scroll ended up
     grabAnchor(el.scrollTop)
 
-    if (changed) rerender()
+    // 4. and only re-render if the corrections actually changed WHICH rows belong on screen.
+    //    The geometry is already in the DOM, so a render that produces the same slice would
+    //    write the same numbers back over themselves — and it is not one render, it is one per
+    //    measure pass, which while scrolling into unmeasured history is every single event.
+    if (changed) {
+      const nf = lowerBound(live, el.scrollTop - OVERSCAN_UP)
+      const nt = upperBound(live, el.scrollTop + el.clientHeight + OVERSCAN_DOWN)
+      if (nf !== rangeRef.current.from || nt !== rangeRef.current.to) rerender()
+    }
   })
 
   /** the glide: one animation that never restarts, so a faster chat just moves it faster */
@@ -473,7 +568,19 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       atBottomRef.current = bottom
       onAtBottomChange?.(bottom)
     }
-    rerender()
+    /**
+     * Render only when the slice has to change.
+     *
+     * A wheel notch is dozens of events, and the overscan is a thousand pixels deep — most of
+     * those events land inside rows that are already drawn, and the render they used to force
+     * was a prefix sum over the whole buffer plus a reconciliation of every visible row plus a
+     * measure pass, all to arrive at exactly the markup already on screen. Two binary searches
+     * answer whether any of that is needed. This is the difference the reader feels as weight.
+     */
+    const off = offsetsRef.current
+    const nf = lowerBound(off, el.scrollTop - OVERSCAN_UP)
+    const nt = upperBound(off, el.scrollTop + el.clientHeight + OVERSCAN_DOWN)
+    if (nf !== rangeRef.current.from || nt !== rangeRef.current.to) rerender()
   }, [onAtBottomChange, rerender])
 
   /**
