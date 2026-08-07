@@ -25,9 +25,27 @@ import { ChatMessage } from '../types'
  *  - only the rows on screen exist in the DOM, plus a screenful either side.
  */
 
-/** rows above/below the viewport that are rendered anyway, so scrolling never shows a gap */
-const OVERSCAN = 700
-/** what an unmeasured row is assumed to be until it has been on screen once */
+/**
+ * Rows rendered outside the viewport, so scrolling never shows a gap — and, more importantly,
+ * so a row is MEASURED before it is looked at.
+ *
+ * Deliberately lopsided. Reading history means travelling upward, and every row up there is
+ * unmeasured: it is drawn at an estimate, corrected the moment it exists in the DOM, and the
+ * correction moves everything below it. Measuring a long way ahead of the reader turns those
+ * corrections into something that happens off screen. Downward the rows are almost always
+ * measured already, so a screenful is plenty.
+ */
+const OVERSCAN_UP = 2000
+const OVERSCAN_DOWN = 600
+/**
+ * What an unmeasured row is assumed to be.
+ *
+ * A constant is a bad guess: 34px was a small font with no spacing, and at a large font with
+ * message spacing a real row is half again to twice that. Every one of those rows then lurches
+ * when its real height lands, which is what deep upward scrolling looked like — messages
+ * flickering as if drawn twice. The average of what HAS been measured is the same arithmetic
+ * and a far better guess, and it costs one counter.
+ */
 const FALLBACK_HEIGHT = 34
 
 export interface ChatListHandle {
@@ -67,6 +85,10 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
 ) {
   const scRef = useRef<HTMLDivElement | null>(null)
   const heights = useRef(new Map<string, number>())
+  /** running mean of every row measured so far — the estimate for rows not yet seen */
+  const avgHeight = useRef(FALLBACK_HEIGHT)
+  const measuredCount = useRef(0)
+  const measuredSum = useRef(0)
   const [, bump] = useState(0)
   const rerender = useCallback(() => bump((n) => n + 1), [])
 
@@ -141,11 +163,12 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   // ---- offsets: a prefix sum over the CURRENT array, recomputed per render ----
   // Eight hundred to three thousand map lookups is tens of microseconds and it is the reason
   // there is no incremental-update bookkeeping anywhere in here to get subtly wrong.
+  const guess = avgHeight.current
   const offsets: number[] = new Array(messages.length)
   let total = 0
   for (let i = 0; i < messages.length; i++) {
     offsets[i] = total
-    total += heights.current.get(messages[i].id) ?? FALLBACK_HEIGHT
+    total += heights.current.get(messages[i].id) ?? guess
   }
 
   // ---- how far the NUMBERING moved, so a message keeps its index for its whole life ----
@@ -196,8 +219,8 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       if (i >= 0) scrollTopRef.current = Math.max(0, offsets[i] - a.gap)
     }
   }
-  const from = lowerBound(offsets, scrollTopRef.current - OVERSCAN)
-  const to = upperBound(offsets, scrollTopRef.current + view + OVERSCAN)
+  const from = lowerBound(offsets, scrollTopRef.current - OVERSCAN_UP)
+  const to = upperBound(offsets, scrollTopRef.current + view + OVERSCAN_DOWN)
 
   // the current layout, readable from callbacks that must not be rebuilt on every message
   const offsetsRef = useRef<number[]>([])
@@ -235,7 +258,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       toIndex: (index: number) => {
         const el = scRef.current
         if (!el || index < 0 || index >= offsets.length) return
-        const h = heights.current.get(messages[index].id) ?? FALLBACK_HEIGHT
+        const h = heights.current.get(messages[index].id) ?? avgHeight.current
         const target = Math.max(0, offsets[index] - (el.clientHeight - h) / 2)
         el.scrollTop = target
         ourScrollTop.current = target
@@ -273,6 +296,12 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       const h = row.offsetHeight
       if (h === 0) continue
       if (heights.current.get(id) === h) continue
+      // keep the running mean honest: a row measured twice replaces its own contribution
+      const was = heights.current.get(id)
+      if (was === undefined) measuredCount.current++
+      else measuredSum.current -= was
+      measuredSum.current += h
+      avgHeight.current = measuredSum.current / measuredCount.current
       heights.current.set(id, h)
       changed = true
     }
