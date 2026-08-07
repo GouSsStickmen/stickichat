@@ -564,22 +564,52 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     }
   })
 
-  /** the glide: one animation that never restarts, so a faster chat just moves it faster */
+  /**
+   * The glide: one animation that never restarts, so a faster chat just moves it faster.
+   *
+   * Speed is proportional to how far behind it is, which makes the TIME to catch up roughly
+   * constant whatever the distance — one line and ten lines both take about a quarter of a
+   * second. That is the part that reads as smooth. The previous rule took a fixed fraction of
+   * the remaining distance per FRAME, which spends most of the movement in the first two or
+   * three frames and then crawls: for the one-line case that everybody actually watches, it
+   * was over before the eye could follow it, which is why it looked no different from having
+   * no animation at all. Frame time is measured rather than assumed, so a 144Hz screen glides
+   * at the same speed as a 60Hz one instead of two and a half times faster.
+   */
   useEffect(() => {
     if (!smooth || locked) return
     let raf = 0
-    const step = (): void => {
+    let last = performance.now()
+    const step = (now: number): void => {
       raf = requestAnimationFrame(step)
+      const dt = Math.min((now - last) / 1000, 0.05)
+      last = now
       const el = scRef.current
       if (!el || !following.current) return
       const away = el.scrollHeight - el.scrollTop - el.clientHeight
       if (away < 0.5) return
       // beyond a screen and a half this is a correction, not an animation — gliding across it
       // would be half a second of showing the wrong part of the conversation
-      const next =
-        away > el.clientHeight * 1.5
-          ? el.scrollHeight - el.clientHeight
-          : el.scrollTop + Math.max(1.5, away * 0.28)
+      if (away > el.clientHeight * 1.5) {
+        const end = el.scrollHeight - el.clientHeight
+        el.scrollTop = end
+        ourScrollTop.current = end
+        scrollTopRef.current = end
+        return
+      }
+      /**
+       * Fast enough to arrive, slow enough to be seen.
+       *
+       * Speed proportional to the distance means a time constant, not a distance: this one
+       * closes a gap in about a tenth of a second whatever its size. Too gentle and the chat
+       * outruns it — a message a fifth of a second is quicker than the glide, and the newest
+       * line never finishes climbing out from behind the input, which is what a slower version
+       * of this did. Too brisk and it is over before the eye can follow, which is what taking a
+       * fixed fraction of the remaining distance PER FRAME did. The floor is what lands the
+       * last couple of pixels instead of creeping through them.
+       */
+      const speed = Math.min(Math.max(away * 9, 90), 3000)
+      const next = Math.min(el.scrollTop + speed * dt, el.scrollTop + away)
       el.scrollTop = next
       ourScrollTop.current = next
       scrollTopRef.current = next

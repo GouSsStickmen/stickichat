@@ -21,7 +21,7 @@ import { localizeApiError } from '../lib/apiErrors'
 import { useSevenTvColors, ensureSevenTvCosmetic, paintStyleOf } from '../lib/seventvCosmetics'
 import { useBttvBadges, ensureBttvBadges } from '../lib/bttvCosmetics'
 import { useFfzBadges, ensureFfzBadges } from '../lib/ffzCosmetics'
-import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
+import { clipSlugFromUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
 import { getSourceChannelInfo } from '../lib/sourceChannels'
 import { useShoutoutCooldown, shoutoutStatus, formatCooldown } from '../lib/shoutoutCooldown'
 
@@ -116,16 +116,10 @@ function TokenView({
     }
     case 'link':
       return (
-        <a
-          href={token.url}
-          title={token.url}
-          onClick={(e) => {
-            e.preventDefault()
-            window.sticki.openExternal(token.url)
-          }}
-        >
-          {linkDisplay === 'short' ? `\u{1F517}\u00A0${t('misc.linkShort')}` : token.label}
-        </a>
+        <LinkToken
+          url={token.url}
+          label={linkDisplay === 'short' ? `\u{1F517}\u00A0${t('misc.linkShort')}` : token.label}
+        />
       )
     case 'mention': {
       const login = mentionLogin
@@ -267,165 +261,110 @@ function TokenView({
 // generator (28–40+). Measure one cell's width in OUR font, wrap at an adjustable column
 // count (slider on the art itself), and remember the last pick as the new default.
 let brailleCellWidth: number | null = null
-/** inline card under a message that contains a link (clip title+thumb / OG preview) */
-function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
-  const t = useT()
-  const expandDefault = useSettingsStore((s) => s.settings.linkPreviewsExpanded)
-  const hoverEnabled = useSettingsStore((s) => s.settings.linkHoverPreview)
-  const hoverImagesOnly = useSettingsStore((s) => s.settings.linkHoverImagesOnly)
-  const hoverSize = useSettingsStore((s) => s.settings.linkHoverSize)
-  const [open_, setOpen] = useState(expandDefault)
-  const enabled = useSettingsStore((s) => s.settings.linkPreviews)
+/**
+ * A link in a message, and the way its preview is reached.
+ *
+ * Two things changed here, and the second one is why the chat stopped moving.
+ *
+ * The preview is per LINK, not per message. The old card took the first URL in the text and
+ * ignored every other one, so a message with three links previewed one of them.
+ *
+ * And the card is no longer part of the message. Drawn inline it was part of the document:
+ * opening it made the row taller, which moved every row under it, which the list then had to
+ * undo — in the right frame, in every combination of following-the-end and reading-history.
+ * The floating card (see LinkCard) has nothing to undo, because nothing about the row changes.
+ */
+function LinkToken({ url, label }: { url: string; label: string }): React.JSX.Element {
+  const previews = useSettingsStore((s) => s.settings.linkPreviews)
   const clipsOnly = useSettingsStore((s) => s.settings.linkPreviewsClipsOnly)
-  const scale = useSettingsStore((s) => s.settings.linkPreviewScale)
-  const url = useMemo(() => {
-    if (!enabled) return null
-    const u = extractFirstUrl(text)
-    if (!u) return null
-    if (clipsOnly && !clipSlugFromUrl(u)) return null
-    return u
-  }, [enabled, clipsOnly, text])
+  // "open on hover" — the same setting that used to mean "draw the card already open", which
+  // is the same wish: see the preview without asking for it twice
+  const onHover = useSettingsStore((s) => s.settings.linkPreviewsExpanded)
+  const eligible = previews && (!clipsOnly || !!clipSlugFromUrl(url))
+  const timer = useRef<number | undefined>(undefined)
+
+  const openAt = (el: HTMLElement, sticky: boolean): void => {
+    const r = el.getBoundingClientRect()
+    useUiStore.getState().setLinkCard({ url, x: r.left, y: r.bottom, sticky })
+  }
+
+  return (
+    <>
+      <a
+        href={url}
+        title={url}
+        onClick={(e) => {
+          e.preventDefault()
+          window.sticki.openExternal(url)
+        }}
+        onMouseEnter={
+          eligible && onHover
+            ? (e) => {
+                // a short delay, so dragging the pointer across a wall of links does not open
+                // and discard a dozen cards on the way past
+                const el = e.currentTarget
+                window.clearTimeout(timer.current)
+                timer.current = window.setTimeout(() => openAt(el, false), 180)
+              }
+            : undefined
+        }
+        onMouseLeave={
+          eligible && onHover
+            ? () => {
+                window.clearTimeout(timer.current)
+                // the card decides whether to go — the pointer may be on its way ONTO it
+                window.dispatchEvent(new CustomEvent('sticki:linkcardmaybeclose'))
+              }
+            : undefined
+        }
+      >
+        {label}
+      </a>
+      {eligible && !onHover && <LinkChip url={url} />}
+    </>
+  )
+}
+
+/** the small tag after a link that says what is behind it; clicking opens the floating card */
+function LinkChip({ url }: { url: string }): React.JSX.Element | null {
+  const t = useT()
   const [data, setData] = useState<LinkPreviewData | null>(null)
-  useEffect(() => setOpen(expandDefault), [expandDefault])
-  /**
-   * Say that this row's height just changed — BEFORE the frame is painted.
-   *
-   * The list positions every row absolutely from a cached height, so a row that silently grows
-   * covers the ones under it until the list finds out. Its own observer does find out, but a
-   * frame later: that is the card appearing several messages further down, and the view
-   * lurching when the correction lands. Opening a card while reading history was worse still,
-   * because the old signal only re-pinned a list that was following the end — parked halfway up
-   * the history, nothing compensated at all and the reader was simply thrown somewhere else.
-   *
-   * A layout effect runs after the DOM has the new size and before the browser paints it, which
-   * is exactly the moment the list needs to hear about it.
-   */
-  useLayoutEffect(() => {
-    window.dispatchEvent(new CustomEvent('sticki:rowresized'))
-  }, [open_, data])
   useEffect(() => {
     let alive = true
     setData(null)
-    if (url)
-      fetchLinkPreview(url).then((d) => {
-        if (!alive || !d) return
-        setData(d)
-        // the card makes the message taller AFTER render — a pinned-to-bottom list must
-        // re-pin, otherwise autoscroll appears "stuck" (especially in background windows)
-        window.dispatchEvent(new CustomEvent('sticki:grew'))
-      })
+    fetchLinkPreview(url).then((d) => {
+      if (alive && d) setData(d)
+    })
     return () => {
       alive = false
     }
   }, [url])
-  if (!url || !data) return null
-  const zoomStyle = scale !== 100 ? ({ zoom: scale / 100 } as React.CSSProperties) : undefined
-  const open = (): void => {
-    window.sticki.openExternal(url)
-  }
-  // hovering the card blows the artwork up next to the cursor — a chat-sized thumbnail is
-  // too small to actually see what was linked
-  const hoverBig = (e: React.MouseEvent): void => {
-    if (!data.image || !hoverEnabled) return
-    // "pictures only" skips video artwork (Twitch clips, YouTube thumbs) — those are just a
-    // still frame, so blowing them up adds nothing
-    if (hoverImagesOnly && data.kind !== 'image') return
-    useUiStore.getState().setEmotePreview({
-      url: data.image,
-      code: data.title ?? data.siteName ?? url,
-      x: e.clientX,
-      y: e.clientY,
-      wide: true,
-      wideSize: hoverSize
-    })
-  }
-  const hoverOff = (): void => useUiStore.getState().setEmotePreview(null)
-
+  // the tag arriving can push the message onto a second line — the one height change left in
+  // this feature, and it is announced before the frame is painted so the list absorbs it in
+  // the same frame rather than one later
+  useLayoutEffect(() => {
+    window.dispatchEvent(new CustomEvent('sticki:rowresized'))
+  }, [data])
+  if (!data) return null
   const label = data.title ?? data.siteName ?? t('misc.linkShort')
-  // collapsed by default: a spammed chat shouldn't turn into a wall of cards. The arrow chip
-  // says what's behind it, one click opens the real preview.
-  if (!open_) {
-    return (
-      <span
-        className="link-preview-toggle"
-        title={label}
-        onClick={(e) => {
-          e.stopPropagation()
-          setOpen(true)
-          window.dispatchEvent(new CustomEvent('sticki:grew'))
-        }}
-      >
-        ▸ {data.kind === 'clip' ? '🎬' : '🔗'} <span className="lpt-label">{label}</span>
-      </span>
-    )
-  }
-
-  const collapse = (e: React.MouseEvent): void => {
-    e.stopPropagation()
-    setOpen(false)
-    hoverOff()
-  }
-  if (data.kind === 'image') {
-    return (
-      <span className="lp-wrap">
-        <span className="link-preview-toggle" onClick={collapse} title={t('misc.collapse')}>
-          ▾
-        </span>
-        <img
-          className="lp-image"
-          style={zoomStyle}
-          src={data.image}
-          alt=""
-          loading="lazy"
-          // a bare picture has no height until it arrives and no box we can reserve for it,
-          // since we never learn its proportions in advance. Announcing the load synchronously
-          // lets the list re-measure in the frame the picture lands, instead of the next one —
-          // the difference between a card settling and a card visibly dropping and coming back
-          onLoad={() => window.dispatchEvent(new CustomEvent('sticki:rowresized'))}
-          onError={() => window.dispatchEvent(new CustomEvent('sticki:rowresized'))}
-          onClick={open}
-          onMouseMove={hoverBig}
-          onMouseLeave={hoverOff}
-          title={url}
-        />
-      </span>
-    )
-  }
   return (
-    <span className="lp-wrap">
-      <span className="link-preview-toggle" onClick={collapse} title={t('misc.collapse')}>
-        ▾
-      </span>
-      <div
-        className="lp-card"
-        style={zoomStyle}
-        onClick={open}
-        onMouseMove={hoverBig}
-        onMouseLeave={hoverOff}
-        title={url}
-      >
-        {data.image && (
-          <img
-            className="lp-thumb"
-            src={data.image}
-            alt=""
-            loading="lazy"
-            // the box is reserved in CSS, so this only matters for the odd picture that fails
-            // to load and collapses the row — say so in the same frame rather than a frame later
-            onError={() => window.dispatchEvent(new CustomEvent('sticki:rowresized'))}
-          />
-        )}
-        <div className="lp-body">
-          {data.siteName && (
-            <div className="lp-site">
-              {data.kind === 'clip' ? '🎬 ' : ''}
-              {data.siteName}
-            </div>
-          )}
-          {data.title && <div className="lp-title">{data.title}</div>}
-          {data.description && <div className="lp-desc">{data.description}</div>}
-        </div>
-      </div>
+    <span
+      className="link-preview-toggle"
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation()
+        // the tag is a toggle: clicking the one that is already showing puts it away, so the
+        // same gesture opens and closes and nothing has to be aimed at to dismiss a card
+        const shown = useUiStore.getState().linkCard
+        if (shown && shown.url === url && shown.sticky) {
+          useUiStore.getState().setLinkCard(null)
+          return
+        }
+        const r = e.currentTarget.getBoundingClientRect()
+        useUiStore.getState().setLinkCard({ url, x: r.left, y: r.bottom, sticky: true })
+      }}
+    >
+      ▸ {data.kind === 'clip' ? '🎬' : '🔗'} <span className="lpt-label">{label}</span>
     </span>
   )
 }
@@ -1010,7 +949,6 @@ function MessageViewInner({
               ))}
             </span>
           )}
-          {!msg.deleted && <LinkPreviewCard text={msg.text} />}
         </div>
       </div>
       {canAct && (

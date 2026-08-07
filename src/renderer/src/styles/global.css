@@ -4139,50 +4139,51 @@ button:has(> svg) {
   }
 }
 
-/* ---- inline link previews ---- */
-.lp-card {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  max-width: 420px;
-  margin: 4px 0 2px;
-  padding: 8px 10px;
+/* ---- the floating link preview card ---- */
+/*
+ * Fixed, above everything, and positioned from JS so it can never leave the window.
+ * Deliberately NOT inside the message list: a card in the list is a row that changed height,
+ * and every scroll bug this feature ever had came from that.
+ */
+.link-card {
+  position: fixed;
+  z-index: 60;
+  max-width: min(440px, calc(100vw - 16px));
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-lg);
-  cursor: pointer;
+  box-shadow: var(--elev-3, 0 10px 30px rgba(0, 0, 0, 0.45));
   overflow: hidden;
+  cursor: pointer;
 }
-.lp-card:hover {
-  background: var(--surface-3, var(--surface-2));
+.link-card:hover {
   border-color: var(--text-faint);
 }
-.lp-thumb {
+.lc-body {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+}
+.lc-thumb {
   width: 120px;
-  /*
-   * A FIXED height, not a max — the box has to exist before the picture does.
-   *
-   * An <img> with no intrinsic size yet is zero tall, so the card first drew at the height of
-   * its text alone and grew when the thumbnail arrived. At the bottom of the chat that growth
-   * is what pushed the card under the input for the frame it took the list to notice and
-   * re-pin. Reserving the space means the card is its final height the moment it appears and
-   * nothing has to be corrected afterwards. `cover` was already cropping to this box.
-   */
+  /* reserved, not max: an image with no intrinsic size yet is zero tall, and a card that
+     grows after it appears is a card that jumps under the cursor */
   height: 68px;
   object-fit: cover;
   border-radius: var(--radius-md);
   flex: 0 0 auto;
 }
-.lp-body {
+.lc-text {
   min-width: 0;
 }
-.lp-site {
+.lc-site {
   font-size: var(--fs-sm);
   color: var(--text-faint);
   margin-bottom: 2px;
 }
-.lp-title {
+.lc-title {
   font-weight: 600;
   font-size: var(--fs-lg);
   line-height: 1.25;
@@ -4191,22 +4192,19 @@ button:has(> svg) {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.lp-desc {
-  font-size: var(--fs-md);
-  color: var(--text-faint);
-  margin-top: 2px;
+.lc-desc {
+  margin-top: 3px;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.lp-image {
+.lc-image {
   display: block;
-  max-width: 320px;
-  max-height: 180px;
-  border-radius: var(--radius-lg);
-  margin: 4px 0 2px;
-  cursor: pointer;
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: 60vh;
 }
 
 /* own watch-streak chip in the input bar */

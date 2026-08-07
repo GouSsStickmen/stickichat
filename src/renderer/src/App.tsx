@@ -15,6 +15,7 @@ import UserCard from './components/UserCard'
 import Toasts from './components/Toasts'
 import UpdateBanner from './components/UpdateBanner'
 import EmoteHoverPreview from './components/EmoteHoverPreview'
+import LinkCard from './components/LinkCard'
 import EmotePickerWindow from './components/EmotePickerWindow'
 import UserCardWindow from './components/UserCardWindow'
 import WhispersWindow from './components/WhispersWindow'
@@ -578,6 +579,7 @@ export default function App(): React.JSX.Element | null {
       )}
       {userCard && <UserCard target={userCard} />}
       <EmoteHoverPreview />
+      <LinkCard />
       <ChannelPrompt />
       <HypeTrainPopup />
       <Toasts />

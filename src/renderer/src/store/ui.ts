@@ -65,6 +65,23 @@ export interface HypeTrain {
   ended?: 'COMPLETED' | 'EXPIRE'
 }
 
+/**
+ * The link preview that is open right now, and where on screen it was asked for.
+ *
+ * One at a time, and OUTSIDE the message list. A card drawn inline is part of the document:
+ * opening it makes the row taller, which moves every row below it, which is a scroll problem
+ * dressed up as a preview. Anchoring it to the click instead means the chat's geometry never
+ * changes at all — nothing to compensate for, nothing to jump.
+ */
+export interface LinkCardTarget {
+  url: string
+  /** where the link sits on screen, so the card can open beside it and stay in the window */
+  x: number
+  y: number
+  /** hover-opened cards close themselves when the pointer leaves; clicked ones stay */
+  sticky: boolean
+}
+
 interface UiState {
   settingsOpen: boolean
   /** which settings section to land on when the modal/window opens next */
@@ -73,6 +90,8 @@ interface UiState {
   userCard: UserCardTarget | null
   toasts: Toast[]
   emotePreview: EmotePreviewTarget | null
+  /** the floating link preview card, or null when none is open */
+  linkCard: LinkCardTarget | null
   /** mass-gift groups the user expanded (header message id -> true) */
   expandedGifts: Record<string, boolean>
   /** small "add this channel?" prompt (raids) */
@@ -91,6 +110,7 @@ interface UiState {
   toast: (text: string, kind?: 'ok' | 'error') => void
   dismissToast: (id: number) => void
   setEmotePreview: (v: EmotePreviewTarget | null) => void
+  setLinkCard: (v: LinkCardTarget | null) => void
   setChannelPrompt: (v: ChannelPrompt | null) => void
   setHypeTrain: (v: HypeTrain | null) => void
   setWhispersOpen: (v: boolean) => void
@@ -120,6 +140,7 @@ export const useUiStore = create<UiState>()((set) => ({
   userCard: null,
   toasts: [],
   emotePreview: null,
+  linkCard: null,
   expandedGifts: {},
   channelPrompt: null,
   hypeTrain: null,
@@ -149,6 +170,7 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setEmotePreview: (emotePreview) => set({ emotePreview }),
+  setLinkCard: (linkCard) => set({ linkCard }),
   setChannelPrompt: (channelPrompt) => set({ channelPrompt }),
   setHypeTrain: (hypeTrain) => set({ hypeTrain }),
   setWhispersOpen: (whispersOpen) => set({ whispersOpen }),
