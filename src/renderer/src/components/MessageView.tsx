@@ -25,6 +25,25 @@ import { clipSlugFromUrl, extractFirstUrl, fetchLinkPreview, LinkPreviewData } f
 import { getSourceChannelInfo } from '../lib/sourceChannels'
 import { useShoutoutCooldown, shoutoutStatus, formatCooldown } from '../lib/shoutoutCooldown'
 
+/**
+ * Tokenized messages, kept alive after their row leaves the screen.
+ *
+ * This is the one thing Chatterino does that a DOM chat cannot get for free. There a message is
+ * laid out ONCE into a MessageLayout that lives on the message, and scrolling only paints it;
+ * the layout is thrown away when the width or the font changes and at no other time. Here the
+ * row is a React component, and virtualization unmounts it the moment it leaves the overscan —
+ * taking its `useMemo` with it. Scroll back over the same forty messages and every one of them
+ * is split into code points, matched against the emote tables and the chatter set, and rebuilt
+ * from nothing. That is the work behind the hitch on a fast flick upwards.
+ *
+ * The tokens depend only on the message text, the emote tables and two settings, so they can
+ * outlive the component. The key carries everything that can change them; a stale key simply
+ * misses and re-tokenizes.
+ */
+const layoutCache = new Map<string, Token[]>()
+/** roughly four screens of a busy channel's buffer — dropped wholesale, it refills in one pass */
+const LAYOUT_CACHE_MAX = 6000
+
 interface Props {
   msg: ChatMessage
   index: number
@@ -358,6 +377,12 @@ function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
           src={data.image}
           alt=""
           loading="lazy"
+          // a bare picture has no height until it arrives and no box we can reserve for it,
+          // since we never learn its proportions in advance. Announcing the load synchronously
+          // lets the list re-measure in the frame the picture lands, instead of the next one —
+          // the difference between a card settling and a card visibly dropping and coming back
+          onLoad={() => window.dispatchEvent(new CustomEvent('sticki:rowresized'))}
+          onError={() => window.dispatchEvent(new CustomEvent('sticki:rowresized'))}
           onClick={open}
           onMouseMove={hoverBig}
           onMouseLeave={hoverOff}
@@ -379,7 +404,17 @@ function LinkPreviewCard({ text }: { text: string }): React.JSX.Element | null {
         onMouseLeave={hoverOff}
         title={url}
       >
-        {data.image && <img className="lp-thumb" src={data.image} alt="" loading="lazy" />}
+        {data.image && (
+          <img
+            className="lp-thumb"
+            src={data.image}
+            alt=""
+            loading="lazy"
+            // the box is reserved in CSS, so this only matters for the odd picture that fails
+            // to load and collapses the row — say so in the same frame rather than a frame later
+            onError={() => window.dispatchEvent(new CustomEvent('sticki:rowresized'))}
+          />
+        )}
         <div className="lp-body">
           {data.siteName && (
             <div className="lp-site">
@@ -509,6 +544,9 @@ function MessageViewInner({
 
   const tokens = useMemo(() => {
     if (msg.system === 'info') return []
+    const cacheKey = `${msg.id} ${emoteVersion} ${settings.theme} ${settings.colorBareNicks ? 1 : 0}`
+    const cached = layoutCache.get(cacheKey)
+    if (cached) return cached
     const toks = tokenizeMessage(
       msg,
       lookupEmote(msg.channel),
@@ -531,6 +569,10 @@ function MessageViewInner({
         }
       }
     }
+    // an emote reload or a theme flip changes every key at once, so the old entries are dead
+    // weight rather than a leak that grows — but they still have to go
+    if (layoutCache.size >= LAYOUT_CACHE_MAX) layoutCache.clear()
+    layoutCache.set(cacheKey, toks)
     return toks
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msg, emoteVersion, settings.theme, settings.colorBareNicks])

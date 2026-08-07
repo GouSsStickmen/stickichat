@@ -4160,7 +4160,16 @@ button:has(> svg) {
 }
 .lp-thumb {
   width: 120px;
-  max-height: 68px;
+  /*
+   * A FIXED height, not a max — the box has to exist before the picture does.
+   *
+   * An <img> with no intrinsic size yet is zero tall, so the card first drew at the height of
+   * its text alone and grew when the thumbnail arrived. At the bottom of the chat that growth
+   * is what pushed the card under the input for the frame it took the list to notice and
+   * re-pin. Reserving the space means the card is its final height the moment it appears and
+   * nothing has to be corrected afterwards. `cover` was already cropping to this box.
+   */
+  height: 68px;
   object-fit: cover;
   border-radius: var(--radius-md);
   flex: 0 0 auto;

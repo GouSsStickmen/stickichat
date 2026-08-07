@@ -97,21 +97,25 @@ export default function MessageList({
   messagesRef.current = messages
 
   /**
-   * Everything that changes how tall a row draws. When any of it moves, the list throws its
-   * height cache away and measures again — which is why these settings can be changed freely
-   * without the layout going wrong, and why they no longer need a restart to take effect.
+   * Everything that changes how tall a row draws. When any of it moves, the list stops trusting
+   * its cached heights and measures again as rows come back on screen — which is why these
+   * settings can be changed freely without the layout going wrong.
+   *
+   * The counter is the part that makes this safe rather than merely mostly right. The list now
+   * skips re-reading a row whose height it already knows, so a setting missing from this list
+   * is no longer self-healing the way it was when every row was measured every frame: separator
+   * lines, the message layout mode, the preview scale all change heights and none of them were
+   * named here. Rather than keep guessing at the list, count the times the settings object was
+   * replaced at all. Settings change by hand, a few times a session; measuring again costs one
+   * pass over what is on screen.
    */
-  const layoutKey = [
-    settings.fontSize,
-    settings.lineSpacing,
-    settings.messageSpacing,
-    settings.emoteScale,
-    settings.badgeSize,
-    settings.showTimestamps,
-    settings.timestampSeconds,
-    settings.linkPreviews,
-    emoteVersion
-  ].join('|')
+  const settingsGen = useRef(0)
+  const lastSettings = useRef(settings)
+  if (lastSettings.current !== settings) {
+    lastSettings.current = settings
+    settingsGen.current++
+  }
+  const layoutKey = `${settingsGen.current}|${emoteVersion}`
 
   const stopFollowing = (): void => {
     followingRef.current = false

@@ -61,6 +61,19 @@ export class EventSubClient {
   /** last status logged per key, so a stuck subscription warns once instead of once per pass */
   private lastWarned = new Map<string, number>()
   private retryTimer: number | null = null
+  /**
+   * When the CLIENT may next speak to Twitch at all, and how hard it has been refused.
+   *
+   * A per-key cooldown is not a rate limit. Thirty-four channels means thirty-four raid
+   * subscriptions, so however long each key waits there is always one whose turn has just come
+   * round: measured on a real session, one rejected POST every 1.2 seconds, for as long as the
+   * app stayed open. 429 is not a statement about that subscription, it is a statement about
+   * this client — so it has to stop the whole pass, not move one key to the back of the queue.
+   */
+  private rateLimitedUntil = 0
+  private rateStep = 0
+  /** last reported "waiting out a backoff" count, so the line marks changes not passes */
+  private lastHeld = -1
   /** coalesces the burst of resync() calls that arrives when many channels open at once */
   private resyncTimer: number | null = null
   private getDesired: () => EventSubDesired[]
@@ -201,8 +214,10 @@ export class EventSubClient {
       clearTimeout(this.retryTimer)
       this.retryTimer = null
     }
-    if (this.closed || this.retryAt.size === 0) return
-    const delay = Math.max(1000, Math.min(...this.retryAt.values()) - Date.now())
+    if (this.closed || (this.retryAt.size === 0 && this.rateLimitedUntil === 0)) return
+    // whichever comes later: the first key's own turn, or the client being allowed to speak
+    const nextKey = this.retryAt.size ? Math.min(...this.retryAt.values()) : this.rateLimitedUntil
+    const delay = Math.max(1000, Math.max(nextKey, this.rateLimitedUntil) - Date.now())
     this.retryTimer = window.setTimeout(() => {
       this.retryTimer = null
       void this.subscribeAll().finally(() => this.armRetryTimer())
@@ -218,6 +233,11 @@ export class EventSubClient {
       for (const d of this.getDesired()) {
         if (this.created.has(d.key)) continue
         if (!this.sessionId) break
+        // the whole client is serving a rate limit — nothing goes out until it lifts
+        if (Date.now() < this.rateLimitedUntil) {
+          held++
+          continue
+        }
         // still serving its cooldown — do not spend a request (or a log line) on it
         const wait = (this.retryAt.get(d.key) ?? 0) - Date.now()
         if (wait > 0) {
@@ -238,6 +258,9 @@ export class EventSubClient {
             // THIS is what makes a session worth having — only now is the retry delay safe
             // to reset (see the note in session_welcome)
             this.backoff = 1000
+            // Twitch is taking requests again
+            this.rateStep = 0
+            this.rateLimitedUntil = 0
             this.onSubOk?.(d)
           } else {
             console.warn('[eventsub] subscribe failed', d.type, res.status, res.json ?? res.text)
@@ -251,12 +274,29 @@ export class EventSubClient {
             if (!retryable) {
               this.created.add(d.key)
             } else {
-              // wait as long as the server asked, and only invent a delay when it stayed silent
+              /**
+               * Wait at least as long as the server asked — and at least as long as OUR OWN
+               * backoff, which is the half that was missing.
+               *
+               * `ratelimit-reset` says when the request bucket refills, not when this
+               * subscription will start being accepted. On a repeating 429 it is a fraction of
+               * a second away, and taking it verbatim REPLACED the exponential backoff with
+               * "try again next second" — permanently. With thirty channels open that is
+               * thirty rejected POSTs a second, and the log from one session had four thousand
+               * of them in eleven minutes, still going. The hint is a floor, not a ceiling.
+               */
               const step = Math.min((this.retryStep.get(d.key) ?? 0) + 1, 6)
               this.retryStep.set(d.key, step)
               const wanted = retryAfterMs(res)
-              const backoff = wanted || Math.min(5000 * 2 ** (step - 1), 5 * 60_000)
+              const backoff = Math.max(Math.min(5000 * 2 ** (step - 1), 5 * 60_000), wanted)
               this.scheduleRetry(d.key, backoff)
+              if (res.status === 429) {
+                // shut the whole client up, not just this key (see rateLimitedUntil)
+                this.rateStep = Math.min(this.rateStep + 1, 6)
+                const gate = Math.max(Math.min(5000 * 2 ** (this.rateStep - 1), 5 * 60_000), wanted)
+                this.rateLimitedUntil = Date.now() + gate
+                this.armRetryTimer()
+              }
               // one line per NEW situation, not one per attempt
               if (this.lastWarned.get(d.key) !== res.status) {
                 this.lastWarned.set(d.key, res.status)
@@ -278,7 +318,13 @@ export class EventSubClient {
           diagWarn('eventsub', `${d.type} for ${d.account.login} threw: ${String(e)} — retry in 15s`)
         }
       }
-      if (held) diagInfo('eventsub', `${held} subscription(s) waiting out a backoff, not retried this pass`)
+      // only when it moves: unchanged, this was a line a second for the life of the session
+      if (held !== this.lastHeld) {
+        this.lastHeld = held
+        if (held) {
+          diagInfo('eventsub', `${held} subscription(s) waiting out a backoff, not retried this pass`)
+        }
+      }
       // a channel that was closed (or a subscription that finally landed) must not keep the
       // retry timer alive for the rest of the session
       const wanted = new Set(this.getDesired().map((d) => d.key))

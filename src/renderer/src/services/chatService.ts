@@ -185,6 +185,8 @@ class ChatService {
         (type, event, envelopeId) => this.handleEventSub(type, event, envelopeId),
         (desired, status) => this.onEventSubError(desired, status),
         (desired) => {
+          // it worked, so the next failure is news again rather than a repeat
+          this.subErrorSeen.delete(desired.key)
           // suppress duplicate IRC lines only once the rich mod feed is REALLY active
           if (desired.type === 'channel.moderate' && desired.channelLogin) {
             this.modEventChannels.add(desired.channelLogin)
@@ -483,10 +485,16 @@ class ChatService {
    *  whisper scope existed, so surface a single actionable hint instead of failing silently */
   private eventSubErrorShown = false
   private modSubErrorShown = false
+  private subErrorSeen = new Map<string, number>()
   private onEventSubError(desired: EventSubDesired, status: number): void {
     const lang = useSettingsStore.getState().settings.language
-    // every rejection, not just the ones we show a toast for: a report that says "feature X
-    // does nothing" is answerable in one line if the log already says X was never subscribed
+    // Every rejection is worth a line — a report that says "feature X does nothing" is
+    // answerable at once if the log says X was never subscribed. Every rejection of the SAME
+    // thing for the same reason is not: with a subscription per open channel, one rate limit
+    // wrote a line per channel per retry until the file was nothing else. Once per key per
+    // status, and a recovery clears it so the next spell is reported again.
+    if (this.subErrorSeen.get(desired.key) === status) return
+    this.subErrorSeen.set(desired.key, status)
     diagWarn('eventsub', `${desired.type} rejected for ${desired.account.login}: HTTP ${status}`)
     if (desired.type === 'user.whisper.message') {
       if (this.eventSubErrorShown) return

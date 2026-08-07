@@ -153,21 +153,42 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
    * three rows that actually entered or left the slice.
    */
   const watched = useRef(new Map<string, HTMLElement>())
+  /**
+   * Rows whose cached height the observer has just contradicted.
+   *
+   * The measure pass reads `offsetHeight` off every row on screen, and the answer is almost
+   * always the number already in the cache — sixty reads per commit to learn nothing. It only
+   * needs to read a row it has never seen, or one this observer says has changed. Everything
+   * else it already knows, and knowing it is the entire point of caching by message id.
+   */
+  const dirty = useRef(new Set<string>())
   if (!sizeWatch.current && typeof ResizeObserver !== 'undefined') {
     sizeWatch.current = new ResizeObserver((entries) => {
+      let hit = false
       for (const e of entries) {
         const el = e.target as HTMLElement
         const id = el.dataset.mid
         if (!id) continue
         const h = el.offsetHeight
         if (h === 0 || heights.current.get(id) === h) continue
-        // one render is enough: the measure pass reads every row and fixes them all at once
-        rerenderRef.current()
-        return
+        dirty.current.add(id)
+        hit = true
       }
+      // one render for the batch: the measure pass fixes every marked row at once
+      if (hit) rerenderRef.current()
     })
   }
   useEffect(() => () => sizeWatch.current?.disconnect(), [])
+  /**
+   * A settings change makes every cached height a guess again — but only for rows that come
+   * back on screen, which is why a flag would not do. The generation number rides alongside
+   * each measurement: anything stamped with an older one gets re-read the next time it is
+   * rendered, and rows nobody looks at cost nothing until somebody does.
+   */
+  const generation = useRef(0)
+  const measuredAt = useRef(new Map<string, number>())
+  /** a row the reader deliberately opened or closed, consumed by the next layout effect */
+  const deliberate = useRef(false)
 
   /**
    * A row announcing that it just changed height on purpose — a link card opened or closed, a
@@ -177,7 +198,10 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
    * this arrives a frame later, and a frame is exactly what "the chat jumped" is made of.
    */
   useEffect(() => {
-    const onRowResized = (): void => rerender()
+    const onRowResized = (): void => {
+      deliberate.current = true
+      rerender()
+    }
     window.addEventListener('sticki:rowresized', onRowResized)
     return () => window.removeEventListener('sticki:rowresized', onRowResized)
   }, [rerender])
@@ -193,7 +217,10 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
    * key only needs to force one re-render; the numbers repair themselves.
    */
   const layoutRef = useRef(layoutKey)
-  if (layoutRef.current !== layoutKey) layoutRef.current = layoutKey
+  if (layoutRef.current !== layoutKey) {
+    layoutRef.current = layoutKey
+    generation.current++
+  }
 
   // ---- offsets: a prefix sum over the CURRENT array, recomputed per render ----
   // Eight hundred to three thousand map lookups is tens of microseconds and it is the reason
@@ -342,17 +369,57 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     // 1. measure, keeping the growth watcher armed on exactly the rows that exist now — rows
     //    that scrolled away stop being watched, and nothing is re-armed for no reason.
     let changed = false
+    const gen = generation.current
+    // a row the reader opened or closed in this very commit — read before the measure pass,
+    // which has to treat it as a row it knows nothing about
+    const opened = deliberate.current
+    deliberate.current = false
     const shown = new Map<string, HTMLElement>()
     for (const row of Array.from(el.querySelectorAll<HTMLElement>('[data-mid]'))) {
       const id = row.dataset.mid
       if (!id) continue
       shown.set(id, row)
-      if (watched.current.get(id) !== row) sizeWatch.current?.observe(row)
+      // an element we have not seen before is either a row scrolling in or one React rebuilt,
+      // and in both cases its height is worth reading even if we think we know it
+      const entered = watched.current.get(id) !== row
+      if (entered) sizeWatch.current?.observe(row)
+      const was = heights.current.get(id)
+      if (opened) {
+        // a row the reader just opened or closed is the same element with the same generation
+        // and nothing has contradicted it yet, so every test below would wave it through — and
+        // the whole point of the pre-paint signal is that this height changes NOW rather than
+        // whenever the observer gets round to saying so. It is one pass, on a click.
+        const h = row.offsetHeight
+        if (h === 0) continue
+        dirty.current.delete(id)
+        measuredAt.current.set(id, gen)
+        if (was === h) continue
+        if (was === undefined) measuredCount.current++
+        else measuredSum.current -= was
+        measuredSum.current += h
+        avgHeight.current = measuredSum.current / measuredCount.current
+        heights.current.set(id, h)
+        changed = true
+        continue
+      }
+      // Already known, still the same element, nobody has contradicted it, and the settings
+      // that decide how tall a row draws have not moved: there is nothing to learn from reading
+      // the DOM, and reading it is what made this loop cost sixty layout queries per commit
+      // instead of the two or three rows that actually arrived.
+      if (
+        !entered &&
+        was !== undefined &&
+        !dirty.current.has(id) &&
+        measuredAt.current.get(id) === gen
+      ) {
+        continue
+      }
       const h = row.offsetHeight
       if (h === 0) continue
-      if (heights.current.get(id) === h) continue
+      dirty.current.delete(id)
+      measuredAt.current.set(id, gen)
+      if (was === h) continue
       // keep the running mean honest: a row measured twice replaces its own contribution
-      const was = heights.current.get(id)
       if (was === undefined) measuredCount.current++
       else measuredSum.current -= was
       measuredSum.current += h
@@ -364,6 +431,34 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       if (shown.get(id) !== node) sizeWatch.current?.unobserve(node)
     }
     watched.current = shown
+
+    /**
+     * Forget the messages the ring buffer has already forgotten.
+     *
+     * Heights are keyed by message id and nothing ever removed them, so a night on a busy
+     * channel left tens of thousands of entries for messages that no longer exist — and the
+     * running mean was still averaging every one of them, which makes the estimate for a new
+     * row slowly stop reflecting the rows actually on screen. Rebuilding at four times the
+     * buffer size is rare enough to be free and keeps both honest.
+     */
+    if (heights.current.size > Math.max(4000, messages.length * 4)) {
+      const keptH = new Map<string, number>()
+      const keptG = new Map<string, number>()
+      let sum = 0
+      for (const m of messages) {
+        const h = heights.current.get(m.id)
+        if (h === undefined) continue
+        keptH.set(m.id, h)
+        sum += h
+        const g = measuredAt.current.get(m.id)
+        if (g !== undefined) keptG.set(m.id, g)
+      }
+      heights.current = keptH
+      measuredAt.current = keptG
+      measuredCount.current = keptH.size
+      measuredSum.current = sum
+      if (keptH.size) avgHeight.current = sum / keptH.size
+    }
 
     /**
      * Rebuild the prefix sum from what was just measured — AND WRITE IT INTO THE DOM.
@@ -432,7 +527,13 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     // the anchor instead leaves the same text on screen, which CREATES that thirty pixels of
     // distance, and the animation below then eats it. That is the difference between a chat
     // that crawls and one that steps a line at a time.
-    if (following.current && !locked && !smooth) {
+    //
+    // A card the reader just opened is the exception to smooth mode, and it has to be. The
+    // glide exists to animate messages ARRIVING; a row growing under the cursor is not an
+    // arrival, it is the page changing shape, and animating it means the card spends those
+    // frames sunk behind the input before rising into place — reported exactly that way. It
+    // gets the same exact assignment instant mode would give it.
+    if (following.current && !locked && (!smooth || opened)) {
       pin(el, el.scrollHeight)
     } else if (moved) {
       const a = anchor.current
@@ -547,6 +648,9 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       }
       if (el.clientWidth === lastW) return
       lastW = el.clientWidth
+      // a narrower pane rewraps every message, so every cached height is now a guess — the same
+      // invalidation a font change gets, and for the same reason
+      generation.current++
       rerender()
     })
     ro.observe(el)
