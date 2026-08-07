@@ -200,7 +200,19 @@ async function load(url: string): Promise<LinkPreviewData | null> {
   if (/\.(png|jpe?g|gif|webp|avif)(\?|#|$)/i.test(url)) return { kind: 'image', image: url }
 
   const viaOEmbed = await oEmbedPreview(url).catch(() => null)
-  if (viaOEmbed) return viaOEmbed
+  if (viaOEmbed) {
+    if (viaOEmbed.description) return viaOEmbed
+    /**
+     * A track without its artist is half a preview.
+     *
+     * oEmbed carries a byline in `author_name` for video hosts, and Spotify simply does not
+     * send one — a track came back as a bare song title with no idea whose it is. The page's
+     * own tags do say ("Song · Rick Astley · 1987"), so when the byline is missing, and only
+     * then, ask for them and borrow the description.
+     */
+    const og = await fetchCard(url, UNFURL_HEADERS).catch(() => null)
+    return og?.data.description ? { ...viaOEmbed, description: og.data.description } : viaOEmbed
+  }
 
   // Ask as an unfurler first. If that gets a real summary we are done; if all it got was the
   // page's site-wide <title> we ask again as a browser, because a few sites do it the other

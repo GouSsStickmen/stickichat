@@ -701,8 +701,9 @@ select:focus {
 /* A rule between messages. On the TOP edge, not the bottom: with the list positioning every
    row itself there is no "last child" to special-case, and a top border never leaves a stray
    line hanging under the newest message. */
+/* falls back to the theme's border colour when the theme has not chosen its own */
 .msg.ruled {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--msg-separator, var(--border));
 }
 .msg.alt {
   background: var(--surface-2);
@@ -875,39 +876,145 @@ select:focus {
 .msg.gigantified .emote-wrap img {
   height: calc(7.4em * var(--emote-scale));
 }
-/* Message Effect: animated tinted background behind the whole line. A generic shimmer
-   covers every effect id; a couple of the named ones get their own gradient. */
+/**
+ * Bits "Message Effects", the three Twitch actually sells.
+ *
+ * The old version painted every one of them as the same washed gradient, and rainbow-eclipse
+ * as a raw six-stop rainbow that made the text unreadable — nothing like what the person who
+ * spent the bits saw on Twitch. Each has its own idea now: a lit border, a slow violet flow,
+ * and a dark field with things drifting through it. All three keep a dark base under the text,
+ * because the point is to decorate the message, not to hide it.
+ *
+ * `--fx` is drawn by a pseudo-element rather than by the row's own background: the row already
+ * uses that for the alternating stripe and the highlight tint, and layering beats fighting.
+ */
 .msg.msg-effect {
   position: relative;
   border-radius: var(--radius-md);
-  padding-top: 3px;
-  padding-bottom: 3px;
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--accent) 22%, transparent),
-    color-mix(in srgb, var(--accent) 6%, transparent),
-    color-mix(in srgb, var(--accent) 22%, transparent));
-  background-size: 200% 100%;
-  animation: msg-effect-shimmer 3s linear infinite;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  isolation: isolate;
+}
+.msg.msg-effect::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ---- simmer: a lit rim that travels round the message ---- */
+.msg.effect-simmer::before {
+  background:
+    linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+    conic-gradient(
+      from var(--fx-angle, 0deg),
+      #ff7b00,
+      #ffd166,
+      #06d6a0,
+      #118ab2,
+      #ef476f,
+      #ff7b00
+    ) border-box;
+  border: 2px solid transparent;
+  animation: fx-spin 4s linear infinite;
+}
+/* the angle is animatable only as a registered property; without @property the fallback is a
+   plain rotation of the whole layer, which reads the same at this size */
+@property --fx-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes fx-spin {
+  to {
+    --fx-angle: 360deg;
+  }
+}
+
+/* ---- rainbow eclipse: violet lava, flowing ---- */
+.msg.effect-rainbow-eclipse::before {
+  background: linear-gradient(
+    100deg,
+    #2a0b45,
+    #6a1fb0,
+    #b429f9,
+    #ff4fd8,
+    #6a1fb0,
+    #2a0b45
+  );
+  background-size: 300% 100%;
+  animation: fx-flow 7s linear infinite;
+  filter: saturate(1.1);
 }
 .msg.effect-rainbow-eclipse {
-  /* NOT tokens: Twitch defines these bits-effect colours, they must match Twitch exactly */
-  background: linear-gradient(90deg, #ff2400, #e81d1d, #e8b71d, #1de840, #1ddde8, #2b1de8, #dd00f3);
-  background-size: 400% 100%;
-  animation: msg-effect-shimmer 5s linear infinite;
   color: #fff;
 }
-.msg.effect-simmer {
-  background: linear-gradient(90deg,
-    color-mix(in srgb, #ff7b00 28%, transparent),
-    color-mix(in srgb, #ffb703 10%, transparent),
-    color-mix(in srgb, #ff7b00 28%, transparent));
-  background-size: 200% 100%;
-  animation: msg-effect-shimmer 2.4s linear infinite;
+@keyframes fx-flow {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 300% 50%;
+  }
 }
-@keyframes msg-effect-shimmer {
-  from { background-position: 0% 0; }
-  to { background-position: 200% 0; }
+
+/* ---- cosmic abyss: a deep field with motes drifting down through it ---- */
+.msg.effect-cosmic-abyss::before {
+  background:
+    radial-gradient(120% 140% at 20% 0%, #3b1d6e 0%, transparent 60%),
+    radial-gradient(120% 140% at 85% 100%, #123a6b 0%, transparent 60%),
+    #10071f;
 }
+.msg.effect-cosmic-abyss {
+  color: #f2eaff;
+}
+.msg.effect-cosmic-abyss .fx-motes {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+}
+.msg.effect-cosmic-abyss .fx-motes i {
+  position: absolute;
+  top: -14%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #d8b4ff;
+  box-shadow: 0 0 6px #b429f9;
+  opacity: 0;
+  animation: fx-fall 3.2s linear infinite;
+}
+@keyframes fx-fall {
+  0% {
+    transform: translateY(0) scale(0.7);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(220%) scale(1.1);
+    opacity: 0;
+  }
+}
+
+/* anything Twitch adds later, until it gets a look of its own */
+.msg.msg-effect:not(.effect-simmer):not(.effect-rainbow-eclipse):not(.effect-cosmic-abyss)::before {
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--accent) 26%, transparent),
+    color-mix(in srgb, var(--accent) 8%, transparent),
+    color-mix(in srgb, var(--accent) 26%, transparent)
+  );
+  background-size: 300% 100%;
+  animation: fx-flow 6s linear infinite;
+}
+
 .msg .sysmsg {
   color: var(--system-text);
   font-style: italic;
@@ -4673,10 +4780,26 @@ button:has(> svg) {
 }
 
 /* shared-chat origin tag in avatar-only mode: just the round channel picture */
+/**
+ * Avatar-only mode: the same badge, wearing only its picture.
+ *
+ * `vertical-align: -3px` was a guess that only looked right at one font size — the face sat
+ * below the line of the text it belongs to. `middle` aligns it to the text's own centre at any
+ * size. It also keeps the ring the full-nick pill has, so the two modes read as the same thing
+ * rather than as a badge and a stray picture.
+ */
 .shared-src-tag.avatar-only {
   padding: 0;
   background: none;
-  vertical-align: -3px;
+  vertical-align: middle;
+  line-height: 0;
+}
+.shared-src-tag.avatar-only .shared-src-av {
+  width: 1.25em;
+  height: 1.25em;
+  margin-right: 0;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 /* ---- layered emotes: same "this is a layer" frame everywhere it can appear ---- */

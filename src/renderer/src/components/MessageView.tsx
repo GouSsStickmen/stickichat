@@ -629,7 +629,8 @@ function MessageViewInner({
   if (dragX > 0) classes.push('swiping')
   // bits power-ups (Twitch-style): gigantified emote + animated message effect
   if (settings.showBits && msg.gigantified) classes.push('gigantified')
-  if (settings.showBits && msg.messageEffect) classes.push('msg-effect', `effect-${msg.messageEffect}`)
+  const bitsEffect = settings.showBits && msg.messageEffect ? msg.messageEffect : ''
+  if (bitsEffect) classes.push('msg-effect', `effect-${bitsEffect}`)
 
   const canAct = !!account && !!msg.userId
   // moderators/broadcasters can't be timed out or banned by another mod — only their messages can be deleted
@@ -748,7 +749,16 @@ function MessageViewInner({
           style={
             {
               opacity: muted?.mode === 'dim' ? muted.opacity : undefined,
-              background: msg.announceColor ? undefined : customBg,
+              /**
+               * A bits effect owns the background of the line it is on.
+               *
+               * A highlight rule writes its tint INLINE, and an inline background beats any
+               * stylesheet — so a viewer who highlights, say, their own messages, or subs, lost
+               * the animation they had just paid bits for: the effect was still there, painted
+               * underneath a flat colour. The effect wins; it is the rarer and more deliberate
+               * of the two.
+               */
+              background: msg.announceColor || bitsEffect ? undefined : customBg,
               // PRIMARY announcements take the broadcaster's own color for this channel
               '--announce-accent': msg.announceColor
                 ? msg.announceColor === 'primary'
@@ -759,6 +769,18 @@ function MessageViewInner({
             } as React.CSSProperties
           }
         >
+          {/* the motes that drift down through a cosmic-abyss message; absolutely positioned,
+              so this adds nothing to the row's height */}
+          {bitsEffect === 'cosmic-abyss' && (
+            <span className="fx-motes" aria-hidden="true">
+              <i style={{ left: '8%', animationDelay: '0s' }} />
+              <i style={{ left: '24%', animationDelay: '0.7s' }} />
+              <i style={{ left: '41%', animationDelay: '1.4s' }} />
+              <i style={{ left: '58%', animationDelay: '0.35s' }} />
+              <i style={{ left: '73%', animationDelay: '2.1s' }} />
+              <i style={{ left: '89%', animationDelay: '1.05s' }} />
+            </span>
+          )}
           {swipeEnabled && (
             <span
               className="swipe-grip"

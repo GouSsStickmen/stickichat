@@ -94,6 +94,11 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
 
   const scrollTopRef = useRef(0)
   const viewRef = useRef(0)
+  /** the current layout, readable from callbacks that must not be rebuilt on every message */
+  const offsetsRef = useRef<number[]>([])
+  const msgsRef = useRef<ChatMessage[]>([])
+  /** the slice actually on screen, so a scroll that does not change it can skip the render */
+  const rangeRef = useRef({ from: 0, to: 0 })
   /**
    * The message the view is holding on to, and how far above the viewport's top edge it sits.
    *
@@ -132,6 +137,10 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const ourScrollTop = useRef(-1)
   /** the glide's own fractional position; -1 when it is not running (see the glide) */
   const glidePos = useRef(-1)
+  /** bumped whenever a height is written; the prefix sum is rebuilt only when it moves */
+  const geomVersion = useRef(0)
+  const builtFor = useRef(-1)
+  const totalRef = useRef(0)
 
   /**
    * Rows that finish growing AFTER they were measured — an emote or a link preview arriving.
@@ -222,18 +231,37 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   if (layoutRef.current !== layoutKey) {
     layoutRef.current = layoutKey
     generation.current++
+    // the stale heights stay (see above) but the estimate for unmeasured rows is about to
+    // change, so the sum has to be walked again
+    geomVersion.current++
   }
 
-  // ---- offsets: a prefix sum over the CURRENT array, recomputed per render ----
-  // Eight hundred to three thousand map lookups is tens of microseconds and it is the reason
-  // there is no incremental-update bookkeeping anywhere in here to get subtly wrong.
-  const guess = avgHeight.current
-  const offsets: number[] = new Array(messages.length)
-  let total = 0
-  for (let i = 0; i < messages.length; i++) {
-    offsets[i] = total
-    total += heights.current.get(messages[i].id) ?? guess
+  /**
+   * The prefix sum, rebuilt only when it can have changed.
+   *
+   * It used to be recomputed on every render — a walk over the whole buffer with a map lookup
+   * per message. At three thousand messages that is three thousand lookups for a wheel notch
+   * that added one row to the slice, and it happens on the same thread as the scroll: not a
+   * freeze, but a hitch you can feel, which is exactly how it was described. Two things can
+   * invalidate it and nothing else can: the array changing, or a height being measured. Both
+   * bump a counter, so the common case — the reader scrolling through rows nobody has touched
+   * — reuses the array it already has.
+   */
+  const arrayChanged = prevRef.current !== messages
+  if (arrayChanged || builtFor.current !== geomVersion.current) {
+    const guess = avgHeight.current
+    const fresh: number[] = new Array(messages.length)
+    let sum = 0
+    for (let i = 0; i < messages.length; i++) {
+      fresh[i] = sum
+      sum += heights.current.get(messages[i].id) ?? guess
+    }
+    offsetsRef.current = fresh
+    totalRef.current = sum
+    builtFor.current = geomVersion.current
   }
+  const offsets = offsetsRef.current
+  const total = totalRef.current
 
   // ---- how far the NUMBERING moved, so a message keeps its index for its whole life ----
   // (the scroll itself is handled by the anchor, which needs none of this)
@@ -288,11 +316,6 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const to = upperBound(offsets, scrollTopRef.current + view + OVERSCAN_DOWN)
 
   // the current layout, readable from callbacks that must not be rebuilt on every message
-  const offsetsRef = useRef<number[]>([])
-  const msgsRef = useRef<ChatMessage[]>([])
-  /** the slice actually on screen, so a scroll that does not change it can skip the render */
-  const rangeRef = useRef({ from: 0, to: 0 })
-  offsetsRef.current = offsets
   msgsRef.current = messages
 
   /** remember the topmost message on screen and how far above the edge it starts */
@@ -406,6 +429,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         measuredSum.current += h
         avgHeight.current = measuredSum.current / measuredCount.current
         heights.current.set(id, h)
+        geomVersion.current++
         changed = true
         continue
       }
@@ -435,6 +459,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       measuredSum.current += h
       avgHeight.current = measuredSum.current / measuredCount.current
       heights.current.set(id, h)
+      geomVersion.current++
       changed = true
     }
     for (const [id, node] of watched.current) {
@@ -465,6 +490,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       }
       heights.current = keptH
       measuredAt.current = keptG
+      geomVersion.current++
       measuredCount.current = keptH.size
       measuredSum.current = sum
       if (keptH.size) avgHeight.current = sum / keptH.size
@@ -501,6 +527,8 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         sum += heights.current.get(id) ?? guessNow
       }
       offsetsRef.current = fresh
+      totalRef.current = sum
+      builtFor.current = geomVersion.current
       const spacer = el.firstElementChild as HTMLElement | null
       if (spacer) spacer.style.height = `${sum}px`
       for (const [id, node] of shown) {

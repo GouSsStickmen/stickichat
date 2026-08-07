@@ -54,6 +54,7 @@ const DARK: Record<string, string> = {
   '--system-text': '#adadb8',
   '--link': '#8ab4f8',
   '--scrollbar': '#3a3a41',
+  '--msg-separator': '#303036',
   '--shadow-sm': '0 1px 3px rgba(0, 0, 0, 0.35)',
   '--shadow-md': '0 4px 14px rgba(0, 0, 0, 0.4)',
   '--shadow': '0 8px 30px rgba(0, 0, 0, 0.55)',
@@ -93,6 +94,7 @@ export const THEMES: Theme[] = [
       '--system-text': '#53535f',
       '--link': '#1a6dcc',
       '--scrollbar': '#c5c5cc',
+      '--msg-separator': '#d8d8dc',
       // a light surface needs a much softer shadow or everything looks bruised
       '--shadow-sm': '0 1px 3px rgba(0, 0, 0, 0.1)',
       '--shadow-md': '0 4px 14px rgba(0, 0, 0, 0.12)',
@@ -117,6 +119,7 @@ export const THEMES: Theme[] = [
       '--border': '#26262b',
       '--text': '#f2f2f4',
       '--scrollbar': '#2e2e34',
+      '--msg-separator': '#26262b',
       '--checker-a': '#232329',
       '--checker-b': '#0c0c0f'
     }
@@ -268,7 +271,9 @@ export const EDITABLE_TOKENS: { group: string; tokens: string[] }[] = [
   { group: 'text', tokens: ['--text', '--text-muted', '--text-faint', '--system-text'] },
   { group: 'accent', tokens: ['--accent', '--accent-strong', '--accent-text', '--link'] },
   { group: 'state', tokens: ['--danger', '--success', '--warning', '--live'] },
-  { group: 'misc', tokens: ['--scrollbar'] }
+  // the rule between messages is a theme's decision, not a global one: on a dark theme it
+  // wants to be barely there, on a light one it carries the whole structure
+  { group: 'misc', tokens: ['--scrollbar', '--msg-separator'] }
 ]
 
 /** #rrggbb -> relative luminance, for the contrast readout and the derived tones */

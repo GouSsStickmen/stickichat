@@ -504,6 +504,8 @@ export const en = {
   'set.timestamps': 'Show timestamps',
   'set.timestampSeconds': 'Timestamps with seconds',
   'set.altBg': 'Alternating message background',
+  'token.msgSeparator': 'Line between messages',
+  'token.msgSeparator.hint': 'Colour of the separator rule. Applies when "Separate messages with lines" is on.',
   'set.msgSeparators': 'Separate messages with lines',
   'set.history': 'Load chat history on join (recent-messages)',
   'set.highlightMentions': 'Highlight mentions of my accounts',
@@ -569,9 +571,9 @@ export const en = {
 
   // Highlight categories
   'hl.mention': 'Mentions of me',
-  'hl.kind.sharedChat': 'Shared chat (co-stream)',
+  'hl.kind.sharedChat': 'Shared stream',
   'hl.kind.subEvent': 'Subscriptions (new, resub, gifted)',
-  'set.group.sharedChat': 'Shared chat (co-stream)',
+  'set.group.sharedChat': 'Shared stream',
   'set.sharedChatTagMode': 'Source channel tag',
   'hint.sharedChatTagMode': 'Show the avatar together with the channel name, or the avatar only.',
   'set.sharedChatTagMode.full': 'Avatar + channel name',
@@ -1001,7 +1003,7 @@ export const en = {
   'set.hypeTrainPreview': '🚂 Show me what it looks like',
   'set.hypeTrainSound': 'Hype train sounds',
   'set.hypeTrainSoundInactive': 'Also for channels that are not in front',
-  'hint.hypeTrainSoundInactive': 'Off — only the train in the channel whose tab is in front makes a sound. With dozens of channels open a train is running somewhere most of the time, and a chime for every level of every one of them is noise rather than information.',
+  'hint.hypeTrainSoundInactive': 'On — any open channel makes a sound. Off — only the channel whose tab you have open.',
   'set.hypeTrainStartSound': 'When the train departs',
   'set.hypeTrainLevelSound': 'When it takes a new level',
 

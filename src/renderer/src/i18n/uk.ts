@@ -507,6 +507,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.timestamps': 'Показувати час',
   'set.timestampSeconds': 'Час із секундами',
   'set.altBg': 'Чергування фону повідомлень',
+  'token.msgSeparator': 'Лінія між повідомленнями',
+  'token.msgSeparator.hint': 'Колір лінії-роздільника. Діє, коли увімкнено «Розділяти повідомлення лініями».',
   'set.msgSeparators': 'Розділяти повідомлення лініями',
   'set.history': 'Завантажувати історію чату (recent-messages)',
   'set.highlightMentions': 'Підсвічувати згадки моїх акаунтів',
@@ -572,9 +574,9 @@ export const uk: Record<TranslationKey, string> = {
 
   // Highlight categories
   'hl.mention': 'Згадки мене',
-  'hl.kind.sharedChat': 'Спільний чат (ко-стрим)',
+  'hl.kind.sharedChat': 'Спільний стрім',
   'hl.kind.subEvent': 'Підписки (нові, продовження, подарунки)',
-  'set.group.sharedChat': 'Спільний чат (ко-стрим)',
+  'set.group.sharedChat': 'Спільний стрім',
   'set.sharedChatTagMode': 'Позначка каналу-джерела',
   'hint.sharedChatTagMode': 'Показувати аватарку разом із назвою каналу чи лише аватарку.',
   'set.sharedChatTagMode.full': 'Аватарка + назва каналу',
@@ -1004,7 +1006,7 @@ export const uk: Record<TranslationKey, string> = {
   'set.hypeTrainPreview': '🚂 Показати, як це виглядає',
   'set.hypeTrainSound': 'Звуки хайп-трейну',
   'set.hypeTrainSoundInactive': 'Звук і для неактивних вкладок',
-  'hint.hypeTrainSoundInactive': 'Вимкнено — звучить лише трейн у каналі, вкладка якого зараз попереду. З десятками відкритих каналів трейн їде десь майже завжди, і сигнал на кожен рівень кожного з них — це вже шум, а не інформація.',
+  'hint.hypeTrainSoundInactive': 'Увімкнено — звук лунає для будь-якого відкритого каналу. Вимкнено — лише для того, чия вкладка зараз відкрита.',
   'set.hypeTrainStartSound': 'Коли трейн вирушає',
   'set.hypeTrainLevelSound': 'Коли бере новий рівень',
 

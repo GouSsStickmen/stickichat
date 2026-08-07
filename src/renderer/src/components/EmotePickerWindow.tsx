@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useAccountsStore } from '../store/accounts'
 import {
   loadGlobalBadges,
@@ -18,7 +18,6 @@ export default function EmotePickerWindow({
 }: {
   payload: EmotePickerWindowPayload
 }): React.JSX.Element {
-  const [closed, setClosed] = useState(false)
   const account = useAccountsStore((s) => s.accounts.find((a) => a.id === payload.accountId))
 
   useEffect(() => {
@@ -43,8 +42,6 @@ export default function EmotePickerWindow({
     if (payload.channelId) loadTwitchChannelEmotes(account, payload.channelId)
   }, [account])
 
-  if (closed) return <div className="app" />
-
   return (
     <div className="app">
       <EmotePicker
@@ -57,7 +54,14 @@ export default function EmotePickerWindow({
             JSON.stringify({ paneId: payload.paneId, text: `${emoteInsertText(emote)} ` } satisfies InsertEventDetail)
           )
         }}
-        onClose={() => setClosed(true)}
+        /**
+         * Escape closes the WINDOW, not the picker inside it.
+         *
+         * Blanking the content left an empty dark window with nothing in it and no way back —
+         * the emotes had simply vanished. In every other standalone window here, closing means
+         * closing; this one was the exception because it reused the popover's close handler.
+         */
+        onClose={() => window.close()}
       />
       <Toasts />
     </div>

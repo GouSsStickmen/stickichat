@@ -1035,7 +1035,8 @@ const TOKEN_LABELS: Record<string, TranslationKey> = {
   '--success': 'token.success',
   '--warning': 'token.warning',
   '--live': 'token.live',
-  '--scrollbar': 'token.scrollbar'
+  '--scrollbar': 'token.scrollbar',
+  '--msg-separator': 'token.msgSeparator'
 }
 
 /** one line per token saying where in the app it shows up — a colour picker with no idea
@@ -1058,7 +1059,8 @@ const TOKEN_HINTS: Record<string, TranslationKey> = {
   '--success': 'token.success.hint',
   '--warning': 'token.warning.hint',
   '--live': 'token.live.hint',
-  '--scrollbar': 'token.scrollbar.hint'
+  '--scrollbar': 'token.scrollbar.hint',
+  '--msg-separator': 'token.msgSeparator.hint'
 }
 
 /** group id -> i18n key, so the lookup stays typed instead of a template string */
@@ -1649,10 +1651,20 @@ function showHypeTrainDemo(): void {
       if (s.levelUp && settings.hypeTrainSound) playHypeTrainLevelSound(settings, true)
     }, s.at)
   }
+  /**
+   * …and then it ends, because that is half of what the preview is for.
+   *
+   * The demo used to simply vanish, so the one part nobody sees until a real train finishes —
+   * the wheelspin, the sparks and the departure — was the part you could not preview.
+   */
+  window.setTimeout(() => {
+    const cur = useUiStore.getState().hypeTrain
+    if (cur?.channel === 'preview') ui.setHypeTrain({ ...cur, ended: 'COMPLETED' })
+  }, 5800)
   window.setTimeout(() => {
     const cur = useUiStore.getState().hypeTrain
     if (cur?.channel === 'preview') ui.setHypeTrain(null)
-  }, 9000)
+  }, 11500)
 }
 
 type SoundKind =
