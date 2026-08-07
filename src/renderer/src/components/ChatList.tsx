@@ -130,6 +130,8 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const atBottomRef = useRef(true)
   /** the last scrollTop WE wrote, so a scroll event can tell our move from the user's */
   const ourScrollTop = useRef(-1)
+  /** the glide's own fractional position; -1 when it is not running (see the glide) */
+  const glidePos = useRef(-1)
 
   /**
    * Rows that finish growing AFTER they were measured — an emote or a link preview arriving.
@@ -600,9 +602,15 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       const dt = Math.min((now - last) / 1000, 0.05)
       last = now
       const el = scRef.current
-      if (!el || !following.current) return
+      if (!el || !following.current) {
+        glidePos.current = -1
+        return
+      }
       const away = el.scrollHeight - el.scrollTop - el.clientHeight
-      if (away < 0.5) return
+      if (away < 0.5) {
+        glidePos.current = -1
+        return
+      }
       // beyond a screen and a half this is a correction, not an animation — gliding across it
       // would be half a second of showing the wrong part of the conversation
       if (away > el.clientHeight * 1.5) {
@@ -610,28 +618,54 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         el.scrollTop = end
         ourScrollTop.current = end
         scrollTopRef.current = end
+        glidePos.current = -1
         return
       }
       /**
        * Fast enough to arrive, slow enough to be seen.
        *
-       * Speed proportional to the distance means a time constant, not a distance: this one
-       * closes a gap in about a tenth of a second whatever its size. Too gentle and the chat
-       * outruns it — a message a fifth of a second is quicker than the glide, and the newest
-       * line never finishes climbing out from behind the input, which is what a slower version
-       * of this did. Too brisk and it is over before the eye can follow, which is what taking a
-       * fixed fraction of the remaining distance PER FRAME did. The floor is what lands the
-       * last couple of pixels instead of creeping through them.
+       * Speed proportional to the distance is a time constant rather than a distance: a gap of
+       * any size closes in about a tenth of a second. Too gentle and the chat outruns it and
+       * the newest line never finishes climbing out from behind the input; too brisk and it is
+       * over before the eye can follow, which is what taking a fixed fraction of the remaining
+       * distance PER FRAME did.
        */
       const speed = Math.min(Math.max(away * 9, 90), 3000)
-      const next = Math.min(el.scrollTop + speed * dt, el.scrollTop + away)
+      /**
+       * Keep the sub-pixel remainder OURSELVES, because scrollTop will not.
+       *
+       * The element rounds every scroll offset to a whole device pixel. Ask for 9702.9 and it
+       * reads back 9702 — so a step smaller than a pixel is not slow, it is nothing at all, and
+       * the next frame starts from the same place and throws away the same fraction again. At
+       * 144Hz the step for a fifteen-pixel gap is 0.94px, so the glide simply stopped: measured
+       * on a live chat, forty consecutive frames writing 9702.9 and reading 9702.0, while the
+       * document height never moved. That is the whole "the new message does not quite arrive,
+       * then creeps up later" report — later being whenever something else happened to nudge
+       * the scroll across a pixel boundary. Carrying the fraction in a float of our own and
+       * writing whole pixels means every frame's motion actually lands.
+       */
+      if (glidePos.current < 0 || Math.abs(el.scrollTop - Math.round(glidePos.current)) > 0.6) {
+        glidePos.current = el.scrollTop
+      }
+      glidePos.current = Math.min(glidePos.current + speed * dt, el.scrollTop + away)
+      const next = Math.round(glidePos.current)
+      if (next === el.scrollTop) return
       el.scrollTop = next
       ourScrollTop.current = next
       scrollTopRef.current = next
+      /**
+       * Move the anchor WITH the glide, in the same breath.
+       *
+       * The anchor is otherwise refreshed by the scroll handler, and a scroll event is
+       * dispatched asynchronously — so a render landing between a glide frame and its event
+       * restores the anchor from before that frame and gives the pixels straight back. While
+       * the glide is driving, it owns the anchor too.
+       */
+      grabAnchor(next)
     }
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [smooth, locked, following])
+  }, [smooth, locked, following, grabAnchor])
 
   // a width change rewraps every message, so every height is now an estimate rather than a
   // fact — same as a settings change, and handled the same way: re-render and let the measure
