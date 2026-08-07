@@ -110,7 +110,7 @@ class ChatService {
       nick: 'anon',
       onMessage: (m) => this.handleReaderMessage(m),
       onOpen: () => this.announceConnection(true),
-      onClose: () => this.announceConnection(false)
+      onClose: (silentFor) => this.announceConnection(false, silentFor)
     })
 
     // keep reader joins in sync with open panes
@@ -1497,7 +1497,21 @@ class ChatService {
   /** when the line went down, so the refill knows how far back to reach */
   private downSince = 0
 
-  private announceConnection(open: boolean): void {
+  /**
+   * A blip is not news. On a line that recycles idle connections — a router, an ISP, a VPN —
+   * the socket dies every ten or twenty minutes and comes back in under two seconds with the
+   * missed messages refilled. Writing "connection lost" and "connection restored" for that is
+   * how a working chat looks broken: a report came in listing three "disconnects", all three of
+   * which were two-second gaps that the refill had already covered.
+   *
+   * So the announcement waits. Reconnect inside the grace window and nothing is ever written;
+   * take longer and the chat says so, and says when it is back.
+   */
+  private static readonly OUTAGE_GRACE = 6000
+  private outageTimer: number | null = null
+  private announcedDown = false
+
+  private announceConnection(open: boolean, silentFor = 0): void {
     useChatStore.getState().setConnState(open ? 'open' : 'connecting')
     // don't announce "restored" for the very first connect of the session
     if (open && !this.connDown) return
@@ -1505,16 +1519,36 @@ class ChatService {
     this.connDown = !open
     // the standalone windows share this service — only the main window writes chat lines
     if (window.location.hash) return
+    const lang = useSettingsStore.getState().settings.language
+
     if (!open) {
-      this.downSince = Date.now()
-    } else if (this.downSince) {
+      // the line may have been dead for a while before the close surfaced — refill from there
+      this.downSince = Date.now() - Math.min(silentFor, 5 * 60_000)
+      if (this.outageTimer === null) {
+        this.outageTimer = window.setTimeout(() => {
+          this.outageTimer = null
+          this.announcedDown = true
+          const text = translate(lang, 'info.connLost')
+          for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.localInfo(ch, text)
+        }, ChatService.OUTAGE_GRACE)
+      }
+      return
+    }
+
+    if (this.outageTimer !== null) {
+      clearTimeout(this.outageTimer)
+      this.outageTimer = null
+    }
+    if (this.downSince) {
       // saying "connection restored" while the minute we missed stays a hole is only half the
       // job — go and fetch what happened in it
       this.backfillAfterOutage(this.downSince)
       this.downSince = 0
     }
-    const lang = useSettingsStore.getState().settings.language
-    const text = translate(lang, open ? 'info.connRestored' : 'info.connLost')
+    // nothing was ever said about it being down, so there is nothing to take back
+    if (!this.announcedDown) return
+    this.announcedDown = false
+    const text = translate(lang, 'info.connRestored')
     for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.localInfo(ch, text)
   }
 
@@ -1667,7 +1701,7 @@ class ChatService {
         nick: 'anon',
         onMessage: (m) => this.handleReaderMessage(m),
         onOpen: () => this.announceConnection(true),
-        onClose: () => this.announceConnection(false)
+        onClose: (silentFor) => this.announceConnection(false, silentFor)
       })
       for (const ch of allOpenChannels(useLayoutStore.getState().tabs)) this.reader.join(ch)
     }

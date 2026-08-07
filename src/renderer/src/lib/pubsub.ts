@@ -140,9 +140,13 @@ export class PubSubClient {
       // the backoff is NOT reset here — see listenAll(). An open socket that listens to
       // nothing gets closed again, and resetting on open kept the retry pinned at one second.
       this.listenAll()
-      // Twitch drops the socket if it doesn't see a PING at least every 5 minutes
+      // Twitch drops the socket if it doesn't see a PING at least every 5 minutes — but the
+      // reason for pinging every MINUTE is the other end of the wire: on a line that recycles
+      // idle connections, four minutes of silence is far more than enough for the router to
+      // collect the socket, and this one carries redemptions and hype trains, which arrive in
+      // bursts with long quiet stretches between them.
       if (this.pingTimer !== null) clearInterval(this.pingTimer)
-      this.pingTimer = window.setInterval(() => this.send({ type: 'PING' }), 240000)
+      this.pingTimer = window.setInterval(() => this.send({ type: 'PING' }), 60000)
     }
     ws.onmessage = (ev) => {
       if (this.ws !== ws) return

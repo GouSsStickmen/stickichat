@@ -86,7 +86,9 @@ export interface IrcClientOptions {
   onAuthFailed?: () => void
   onMessage: (msg: IrcMessage) => void
   onOpen?: () => void
-  onClose?: () => void
+  /** `silentFor` = ms since the last byte arrived, i.e. how long the line may ALREADY have been
+   *  dead before the close was noticed — the refill has to reach back that far, not to now */
+  onClose?: (silentFor: number) => void
 }
 
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443'
@@ -115,11 +117,17 @@ export class IrcClient {
    * window they named: the network blip lasted seconds, the rest was us sitting on a corpse.
    * Chatterino survives the same line because it probes far more often.
    *
-   * 45/10/10 detects it in about a minute. The cost is one PING a minute on a silent channel.
+   * 20/10/5 detects it in about half a minute — and, more importantly, keeps the line WARM.
+   * A report from a user whose chat dropped every ten to twenty minutes has all four sockets
+   * dying with code 1006 (no close frame — the line vanished under them) after 45 to 74 seconds
+   * of silence, which is the signature of a router or ISP recycling an idle connection. Twitch
+   * itself only speaks every few minutes, so on a quiet channel nothing else keeps the mapping
+   * alive. A ping every twenty seconds is three times the traffic of nothing at all, and it is
+   * what stops the connection from being collected in the first place.
    */
-  private static readonly IDLE_BEFORE_PING = 45_000
+  private static readonly IDLE_BEFORE_PING = 20_000
   private static readonly PONG_GRACE = 10_000
-  private static readonly WATCHDOG_TICK = 10_000
+  private static readonly WATCHDOG_TICK = 5_000
   private lastActivity = Date.now()
   private pingSentAt: number | null = null
   private watchdog: number
@@ -131,6 +139,11 @@ export class IrcClient {
     this.watchdog = window.setInterval(() => {
       if (this.closed || this.authStopped) return
       const now = Date.now()
+      // a reconnect is already on its way — the socket closed on its own a moment ago and this
+      // would dial a SECOND one on top of it. The report has exactly that: "closed … reconnect
+      // scheduled in 1000ms" followed 0.6s later by "watchdog timeout — reconnecting", two
+      // connects and two logins for one drop.
+      if (this.reconnectTimer !== null) return
       if (this.pingSentAt !== null && now - this.pingSentAt > IrcClient.PONG_GRACE) {
         // pinged and heard nothing — the socket is dead, rebuild it now
         diagSocket('irc', 'watchdog timeout', `no PONG in ${IrcClient.PONG_GRACE / 1000}s — reconnecting`)
@@ -272,7 +285,7 @@ export class IrcClient {
         )}s`
       )
       this.ready = false
-      this.opts.onClose?.()
+      this.opts.onClose?.(Date.now() - this.lastActivity)
       this.scheduleReconnect()
     }
     ws.onerror = () => {
