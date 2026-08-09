@@ -5,6 +5,7 @@ const api = {
   decrypt: (stored: string): Promise<string | null> => ipcRenderer.invoke('secure:decrypt', stored),
   getConfig: (): Promise<unknown> => ipcRenderer.invoke('config:get'),
   setConfig: (cfg: unknown): Promise<boolean> => ipcRenderer.invoke('config:set', cfg),
+  inlineAssets: (value: unknown): Promise<unknown> => ipcRenderer.invoke('config:inline', value),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('app:openExternal', url),
   pickScreenColor: (): Promise<string | null> => ipcRenderer.invoke('eyedropper:pick'),
   eyedropperResult: (hex: string | null): void => ipcRenderer.send('eyedropper:result', hex),

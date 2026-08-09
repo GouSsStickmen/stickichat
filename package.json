@@ -12,6 +12,7 @@
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:debug": "electron-vite dev --remoteDebuggingPort 9222",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "dist": "electron-vite build && electron-builder --win",

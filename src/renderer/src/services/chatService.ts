@@ -35,6 +35,7 @@ const SUB_EVENT_IDS = new Set([
 ])
 import { HypeTrainEvent, PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
 import { diagInfo, diagWarn } from '../lib/diag'
+import { queueWrite } from '../lib/lsWriter'
 
 /**
  * Invisible U+E0000 (a Unicode TAG character): appended to a repeated message so Twitch
@@ -901,13 +902,18 @@ class ChatService {
     }
   }
 
+  /**
+   * Called every time somebody speaks for the first time this stream — which on a big channel is
+   * most messages for the first hour, and each call rewrote the entire login list. On kaicenat
+   * that list reached 330 KB, so a synchronous serialize-and-store ran per new chatter. Deferred
+   * and coalesced: the set is serialised once, when the browser is idle.
+   */
   private persistFirstSeen(channel: string): void {
     const startedAt = this.streamStartedAt.get(channel)
     const seen = this.seenThisSession.get(channel)
     if (!startedAt || !seen) return
     try {
-      localStorage.setItem(
-        this.firstSeenKey(channel),
+      queueWrite(this.firstSeenKey(channel), () =>
         JSON.stringify({ startedAt, logins: [...seen] })
       )
     } catch {

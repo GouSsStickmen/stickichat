@@ -31,15 +31,25 @@ function roleOf(channel: string, login: string, mods: Set<string>, vips: Set<str
 }
 
 /**
- * Badges for EVERY login in one pass over the buffer. Calling lookupUserBadges per row meant
- * ~400 full backward scans of the message buffer on each render — that was the scroll jank.
+ * Badges for every login on screen.
+ *
+ * This used to walk the whole message buffer once, to avoid `lookupUserBadges` per row — back
+ * when that function scanned the buffer backwards and four hundred rows meant four hundred
+ * scans. It does not any more: the chat store keeps a per-channel map of who has spoken, so a
+ * lookup is a map hit. The one full pass that replaced four hundred is now the only pass left,
+ * and it runs over four thousand messages every time the chatter list refreshes — measured as a
+ * ~105ms frame, arriving like clockwork in the middle of scrolling.
+ *
+ * So ask per login again. Three hundred and seventy-five map hits cost nothing.
  */
-function buildBadgeMap(channel: string): Map<string, { setId: string; version: string }[]> {
-  const msgs = useChatStore.getState().messages[channel] ?? []
+function buildBadgeMap(
+  channel: string,
+  logins: string[]
+): Map<string, { setId: string; version: string }[]> {
   const map = new Map<string, { setId: string; version: string }[]>()
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const m = msgs[i]
-    if (m.login && !map.has(m.login) && m.badges?.length) map.set(m.login, m.badges)
+  for (const login of logins) {
+    const badges = lookupUserBadges(channel, login)
+    if (badges?.length) map.set(login, badges)
   }
   return map
 }
@@ -119,7 +129,10 @@ export default function ChattersList({ pane, account, channelId, isMod, onClose 
   }, [chatters, query])
 
   // one pass over the buffer, reused by every row
-  const badgeMap = useMemo(() => buildBadgeMap(pane.channel), [pane.channel, chatters])
+  const badgeMap = useMemo(
+    () => buildBadgeMap(pane.channel, filtered.map((c) => c.user_login)),
+    [pane.channel, filtered]
+  )
 
   const grouped = useMemo(() => {
     const groups: Record<Role, Chatter[]> = { moderator: [], vip: [], viewer: [], broadcaster: [] }

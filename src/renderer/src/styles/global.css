@@ -3033,10 +3033,22 @@ input[type='number']::-webkit-inner-spin-button {
   overflow: hidden;
   /* fixed cell box: lazy images can't reflow the row (that reflow made the scroll jolt) */
   min-height: 34px;
-  /* off-screen cells aren't laid out/painted — smooth scroll even with ~1900 emoji nodes.
-     the reserved size matches min-height so the scrollbar stays steady */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 34px;
+  /*
+   * NO `content-visibility: auto` HERE — it was measured, and it costs three times what it saves.
+   *
+   * It used to be on this rule, on the reasoning that skipping ~1900 off-screen emoji cells must
+   * be cheaper than laying them out. It is not, once the cell has a fixed `min-height`: the grid
+   * already knows every cell's size without looking inside it, so there is nothing left to skip —
+   * while `content-visibility` still has to work out which cells came into view and lay them out
+   * DURING the scroll, every frame. The emoji tab, 1913 cells, same gesture:
+   *
+   *   content-visibility: auto  → p50 27.0ms  (37fps, and it felt like less)
+   *   contain-intrinsic-size fixed instead of auto → p50 23.6ms
+   *   no content-visibility     → p50  8.8ms  (110fps)
+   *
+   * The `min-height` above is what made the difference; it arrived later than the containment did
+   * and quietly turned it from an optimisation into overhead.
+   */
 }
 .emoji-cell-char {
   /* inline-block so max-width/overflow actually apply — an inline span ignores them, which is

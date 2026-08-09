@@ -2,6 +2,8 @@ export interface StickiApi {
   encrypt(plain: string): Promise<string>
   decrypt(stored: string): Promise<string | null>
   getConfig(): Promise<unknown>
+  /** expand asset references back into data URLs — for export only */
+  inlineAssets(value: unknown): Promise<unknown>
   setConfig(cfg: unknown): Promise<boolean>
   openExternal(url: string): Promise<void>
   pickScreenColor(): Promise<string | null>

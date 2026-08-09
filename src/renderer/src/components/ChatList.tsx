@@ -1,6 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { ChatMessage } from '../types'
-import { diagWarn } from '../lib/diag'
 
 /**
  * The chat list, done the way Chatterino does it rather than the way a DOM virtualizer does.
@@ -90,6 +89,30 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
   const avgHeight = useRef(FALLBACK_HEIGHT)
   const measuredCount = useRef(0)
   const measuredSum = useRef(0)
+  /**
+   * The guess handed to a row we have never measured — remembered, so it cannot change later.
+   *
+   * `avgHeight` moves a little every time a row is measured, and it used to be read fresh on every
+   * rebuild. That silently re-valued EVERY unmeasured row at once, including the hundreds sitting
+   * above the reader: their offsets shifted, the anchor restore faithfully followed the shift, and
+   * the page crept. With the scroll locked and the buffer full — nothing arriving, nothing
+   * growing — a row was measured sliding thirteen pixels down the screen in six seconds, about a
+   * pixel per message, which is exactly what it looked like.
+   *
+   * Freezing each row's estimate the first time it is needed makes the geometry above the reader
+   * stop moving for reasons that have nothing to do with the reader. The estimate is thrown away
+   * the moment the row is really measured, so this costs nothing in accuracy.
+   */
+  const estimates = useRef(new Map<string, number>())
+  const heightFor = useCallback((id: string): number => {
+    const real = heights.current.get(id)
+    if (real !== undefined) return real
+    const kept = estimates.current.get(id)
+    if (kept !== undefined) return kept
+    const fresh = avgHeight.current
+    estimates.current.set(id, fresh)
+    return fresh
+  }, [])
   const [, bump] = useState(0)
   const rerender = useCallback(() => bump((n) => n + 1), [])
 
@@ -259,12 +282,11 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
    */
   const arrayChanged = prevRef.current !== messages
   if (arrayChanged || builtFor.current !== geomVersion.current) {
-    const guess = avgHeight.current
     const fresh: number[] = new Array(messages.length)
     let sum = 0
     for (let i = 0; i < messages.length; i++) {
       fresh[i] = sum
-      sum += heights.current.get(messages[i].id) ?? guess
+      sum += heightFor(messages[i].id)
     }
     offsetsRef.current = fresh
     totalRef.current = sum
@@ -367,7 +389,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         const off = offsetsRef.current
         const msgs = msgsRef.current
         if (!el || index < 0 || index >= off.length) return
-        const h = heights.current.get(msgs[index].id) ?? avgHeight.current
+        const h = heightFor(msgs[index].id)
         const target = Math.max(0, off[index] - (el.clientHeight - h) / 2)
         el.scrollTop = target
         ourScrollTop.current = target
@@ -429,6 +451,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
         const h = row.offsetHeight
         if (h === 0) continue
         dirty.current.delete(id)
+        estimates.current.delete(id)
         measuredAt.current.set(id, gen)
         if (was === h) continue
         if (was === undefined) measuredCount.current++
@@ -458,6 +481,7 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       const h = row.offsetHeight
       if (h === 0) continue
       dirty.current.delete(id)
+      estimates.current.delete(id)
       measuredAt.current.set(id, gen)
       if (was === h) continue
       // a row we already knew has changed size — an emote or a badge finished loading and
@@ -500,6 +524,13 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       }
       heights.current = keptH
       measuredAt.current = keptG
+      // the estimates are keyed the same way and go stale the same way
+      const keptE = new Map<string, number>()
+      for (const m of messages) {
+        const e = estimates.current.get(m.id)
+        if (e !== undefined) keptE.set(m.id, e)
+      }
+      estimates.current = keptE
       geomVersion.current++
       measuredCount.current = keptH.size
       measuredSum.current = sum
@@ -529,12 +560,11 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       const fresh: number[] = new Array(messages.length)
       const indexOf = new Map<string, number>()
       let sum = 0
-      const guessNow = avgHeight.current
       for (let i = 0; i < messages.length; i++) {
         const id = messages[i].id
         fresh[i] = sum
         indexOf.set(id, i)
-        sum += heights.current.get(id) ?? guessNow
+        sum += heightFor(id)
       }
       offsetsRef.current = fresh
       totalRef.current = sum
@@ -588,25 +618,42 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     // message "not quite finishing" its climb out from behind the input: the glide arrived,
     // stopped, and then a moment later crept a little further for no reason the reader could
     // see. Applied exactly, it is invisible.
+    /** the anchor still describes where the view belongs — do not overwrite it below */
+    let stillHeld = false
     if (following.current && !locked && (!smooth || opened || corrected)) {
       pin(el, el.scrollHeight)
+      stillHeld = true // pin re-anchors itself, in the same breath
     } else if (moved) {
       const a = anchor.current
-      if (a) {
-        const i = messages.findIndex((m) => m.id === a.id)
-        if (i >= 0) {
-          const next = Math.max(0, (live[i] ?? 0) - a.gap)
-          if (Math.abs(next - el.scrollTop) > 0.5) {
-            el.scrollTop = next
-            ourScrollTop.current = next
-            scrollTopRef.current = next
-          }
+      const i = a ? messages.findIndex((m) => m.id === a.id) : -1
+      if (a && i >= 0) {
+        const next = Math.max(0, (live[i] ?? 0) - a.gap)
+        if (Math.abs(next - el.scrollTop) > 0.5) {
+          el.scrollTop = next
+          ourScrollTop.current = next
+          scrollTopRef.current = next
         }
+        stillHeld = true
       }
     }
 
-    // 3. remember what to hold on to next time, from wherever the scroll ended up
-    grabAnchor(el.scrollTop)
+    // 3. remember what to hold on to next time, from wherever the scroll ended up — but ONLY
+    //    when we are not already holding on to something.
+    //
+    //    THIS IS WHERE THE PAGE USED TO CREEP. Re-anchoring ran unconditionally, including on the
+    //    commits where the restore above had just been dropped by the half-pixel guard, and on the
+    //    ones where assigning scrollTop lost a fraction to whole-pixel rounding. Either way the
+    //    debt was real and small — and this line immediately rewrote the anchor to match where the
+    //    view actually was, declaring the debt paid. Nothing ever collected it, so every trim gave
+    //    away another fraction of a pixel in the same direction: with the scroll locked on a busy
+    //    channel, a row measured sliding thirteen pixels down the screen in six seconds while the
+    //    buffer height never changed.
+    //
+    //    Keeping the anchor makes the debt survive instead. It is still the same message and still
+    //    the same intended gap; the correction simply waits until it is worth a whole pixel, and
+    //    then it is spent. The view stops where it was put. An anchor whose message has been
+    //    trimmed away is not held at all, so it falls through and a fresh one is taken.
+    if (!stillHeld) grabAnchor(el.scrollTop)
 
     // 4. and only re-render if the corrections actually changed WHICH rows belong on screen.
     //    The geometry is already in the DOM, so a render that produces the same slice would
@@ -618,53 +665,6 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
       if (nf !== rangeRef.current.from || nt !== rangeRef.current.to) rerender()
     }
   })
-
-  // TEMP-JANK: how long frames take while the reader is actually scrolling
-  useEffect(() => {
-    const el = scRef.current
-    if (!el) return
-    let raf = 0
-    let last = 0
-    let until = 0
-    let frames = 0
-    let worst = 0
-    let slow = 0
-    const onWheel = (): void => {
-      if (!until) {
-        frames = 0
-        worst = 0
-        slow = 0
-        last = performance.now()
-      }
-      until = performance.now() + 400
-    }
-    el.addEventListener('wheel', onWheel, { passive: true })
-    const tick = (now: number): void => {
-      raf = requestAnimationFrame(tick)
-      if (!until) return
-      const dt = now - last
-      last = now
-      if (dt > 0 && dt < 2000) {
-        frames++
-        if (dt > worst) worst = dt
-        if (dt > 20) slow++
-      }
-      if (now > until) {
-        until = 0
-        if (frames > 5) {
-          diagWarn(
-            'jank',
-            `scroll burst: ${frames} frames, worst ${worst.toFixed(1)}ms, over-20ms ${slow}, n=${msgsRef.current.length}`
-          )
-        }
-      }
-    }
-    raf = requestAnimationFrame(tick)
-    return () => {
-      cancelAnimationFrame(raf)
-      el.removeEventListener('wheel', onWheel)
-    }
-  }, [])
 
   /**
    * The glide: one animation that never restarts, so a faster chat just moves it faster.

@@ -1,4 +1,6 @@
 import { createServer, Server, ServerResponse } from 'http'
+import { createReadStream } from 'fs'
+import { ASSET_SCHEME, assetFile, assetContentType } from './assets'
 
 /**
  * Local chat-overlay server for OBS Browser Source (overlay editor v2).
@@ -44,8 +46,32 @@ const clients = new Set<SseClient>()
 const backlog = new Map<string, OverlayLine[]>()
 const BACKLOG_LIMIT = 30
 
+/**
+ * Point the overlay page at assets it can actually reach.
+ *
+ * Uploaded pictures, fonts and badges live as files now, referenced as `sticki-asset://…`. That
+ * scheme only exists inside the app; OBS loads this page over plain HTTP from another origin and
+ * would render nothing. Swap the references for this server's own route on the way out — the
+ * stored config stays canonical, only what goes over the wire is rewritten.
+ */
+function forTheWire<T>(value: T): T {
+  if (typeof value === 'string') {
+    return (value.startsWith(`${ASSET_SCHEME}://`)
+      ? `/asset/${value.slice(ASSET_SCHEME.length + 3)}`
+      : value) as unknown as T
+  }
+  if (Array.isArray(value)) return value.map(forTheWire) as unknown as T
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = forTheWire(v)
+    return out as unknown as T
+  }
+  return value
+}
+
 function styleFor(profile: string): OverlayStyle | undefined {
-  return styles[profile] ?? Object.values(styles)[0]
+  const style = styles[profile] ?? Object.values(styles)[0]
+  return style ? forTheWire(style) : undefined
 }
 
 export function overlayPush(channel: string, line: OverlayLine): void {
@@ -148,6 +174,19 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
       clients.add(client)
       req.on('close', () => clients.delete(client))
       return
+    }
+    if (url.pathname.startsWith('/asset/')) {
+      const file = assetFile(decodeURIComponent(url.pathname.slice('/asset/'.length)))
+      if (file) {
+        res.writeHead(200, {
+          'Content-Type': assetContentType(file),
+          // content-addressed: the name changes when the bytes do, so this can never go stale
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Access-Control-Allow-Origin': '*'
+        })
+        createReadStream(file).pipe(res)
+        return
+      }
     }
     res.writeHead(404)
     res.end('not found')

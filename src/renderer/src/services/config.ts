@@ -258,9 +258,41 @@ function snapshot(): AppConfig {
 // persistence active in several windows that would ping-pong notifications forever.
 let applyingRemote = false
 
+/**
+ * Saving the config is expensive, and it is expensive in proportion to what people put in it.
+ *
+ * Measured on a real profile: one save reads 24.8 MB back from the main process (219 ms),
+ * serialises it (112 ms) and writes it all again — and `settings` is 99.9% of that, almost
+ * entirely overlay backgrounds and uploaded sounds carried as base64. None of that is affordable
+ * in the middle of a gesture.
+ *
+ * Dragging a tab calls `moveTab` for EVERY position the tab passes through, and each of those is
+ * a store change, and each store change schedules one of these. So the drag was interrupted by
+ * a multi-hundred-millisecond write, repeatedly, which is exactly the "it does not track where I
+ * am dragging" complaint. Hold the writes while the hand is down and do one when it lifts.
+ */
+let saveHeld = false
+let saveOwed = false
+
+/** stop persisting until `releaseConfigSaves` — for the duration of a drag, and nothing longer */
+export function holdConfigSaves(): void {
+  saveHeld = true
+}
+
+export function releaseConfigSaves(): void {
+  saveHeld = false
+  if (!saveOwed) return
+  saveOwed = false
+  scheduleSave()
+}
+
 let saveTimer: number | null = null
 function scheduleSave(): void {
   if (applyingRemote) return
+  if (saveHeld) {
+    saveOwed = true
+    return
+  }
   if (saveTimer !== null) return
   saveTimer = window.setTimeout(async () => {
     saveTimer = null

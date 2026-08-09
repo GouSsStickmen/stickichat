@@ -45,35 +45,72 @@ export const useEmotesStore = create<EmotesState>()((set) => ({
   channelBadges: {},
   cheermotes: {},
   version: 0,
-  setGlobalEmotes: (m) => set((s) => ({ globalEmotes: m, version: s.version + 1 })),
-  setChannelEmotes: (channel, m) =>
-    set((s) => ({
-      channelEmotes: { ...s.channelEmotes, [channel]: m },
-      version: s.version + 1
-    })),
-  setTwitchEmotes: (accountId, list) =>
-    set((s) => ({
-      twitchByAccount: { ...s.twitchByAccount, [accountId]: list },
-      version: s.version + 1
-    })),
-  setOwnerNames: (names) =>
-    set((s) => ({ ownerNames: { ...s.ownerNames, ...names }, version: s.version + 1 })),
-  setOwnerLogins: (logins) =>
-    set((s) => ({ ownerLogins: { ...s.ownerLogins, ...logins }, version: s.version + 1 })),
-  setOwnerAvatars: (avatars) =>
-    set((s) => ({ ownerAvatars: { ...s.ownerAvatars, ...avatars }, version: s.version + 1 })),
-  setGlobalBadges: (b) => set((s) => ({ globalBadges: b, version: s.version + 1 })),
-  setChannelBadges: (channel, b) =>
-    set((s) => ({
-      channelBadges: { ...s.channelBadges, [channel]: b },
-      version: s.version + 1
-    })),
-  setCheermotes: (channel, list) =>
-    set((s) => ({
-      cheermotes: { ...s.cheermotes, [channel]: list },
-      version: s.version + 1
-    }))
+  setGlobalEmotes: (m) => {
+    set({ globalEmotes: m })
+    bumpVersion()
+  },
+  setChannelEmotes: (channel, m) => {
+    set((s) => ({ channelEmotes: { ...s.channelEmotes, [channel]: m } }))
+    bumpVersion()
+  },
+  setTwitchEmotes: (accountId, list) => {
+    set((s) => ({ twitchByAccount: { ...s.twitchByAccount, [accountId]: list } }))
+    bumpVersion()
+  },
+  setOwnerNames: (names) => {
+    set((s) => ({ ownerNames: { ...s.ownerNames, ...names } }))
+    bumpVersion()
+  },
+  setOwnerLogins: (logins) => {
+    set((s) => ({ ownerLogins: { ...s.ownerLogins, ...logins } }))
+    bumpVersion()
+  },
+  setOwnerAvatars: (avatars) => {
+    set((s) => ({ ownerAvatars: { ...s.ownerAvatars, ...avatars } }))
+    bumpVersion()
+  },
+  setGlobalBadges: (b) => {
+    set({ globalBadges: b })
+    bumpVersion()
+  },
+  setChannelBadges: (channel, b) => {
+    set((s) => ({ channelBadges: { ...s.channelBadges, [channel]: b } }))
+    bumpVersion()
+  },
+  setCheermotes: (channel, list) => {
+    set((s) => ({ cheermotes: { ...s.cheermotes, [channel]: list } }))
+    bumpVersion()
+  }
 }))
+
+/**
+ * Announce "the emote tables changed" AT MOST ONCE PER FRAME.
+ *
+ * `version` is the signal every message watches, and it is far more expensive than it looks:
+ * it is a prop on every rendered message (so it breaks their memo together), it is part of the
+ * key of the tokenized-layout cache (so it throws the whole cache away), and it is part of the
+ * chat list's layout key (so every row is measured again). One bump is a full re-render, a full
+ * re-tokenize and a full re-measure of everything on screen.
+ *
+ * The data itself is written immediately — lookups always see the newest tables. Only the
+ * announcement waits. That matters because opening thirty channels fires roughly a hundred and
+ * fifty of these within the first minute: global emotes, then per channel a 7TV set, a BTTV
+ * set, an FFZ set, a badge set, a cheermote list, owner names and owner avatars. Each one was
+ * paying for the whole screen. Profiled: repeated 150-millisecond tasks with an almost empty
+ * message buffer, which is what gave it away — the cost had nothing to do with the chat.
+ */
+let bumpQueued = false
+
+function bumpVersion(): void {
+  if (bumpQueued) return
+  bumpQueued = true
+  const flush = (): void => {
+    bumpQueued = false
+    useEmotesStore.setState((s) => ({ version: s.version + 1 }))
+  }
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(flush)
+  else setTimeout(flush, 16)
+}
 
 /**
  * Resolve a cheermote word like "Cheer100" for a channel → its icon + amount + tier color.

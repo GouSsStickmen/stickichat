@@ -5,6 +5,7 @@ import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
 import { useWhispersStore } from '../store/whispers'
 import { startPointerReorder, justReordered } from '../lib/pointerReorder'
+import { holdConfigSaves, releaseConfigSaves } from '../services/config'
 import { buildChannelSeed } from '../lib/detachSeed'
 import { useFlip } from '../lib/useFlip'
 import WhisperPanel from './WhisperPanel'
@@ -247,7 +248,13 @@ export default function TabBar(): React.JSX.Element {
                 index,
                 axis: 'x',
                 onMove: (_from, to) => useLayoutStore.getState().moveTab(tab.id, to),
-                onDragState: (d) => setDraggingTab(d ? tab.id : null)
+                onDragState: (d) => {
+                  setDraggingTab(d ? tab.id : null)
+                  // every position the tab passes through is a store change, and persisting the
+                  // config costs hundreds of milliseconds — see holdConfigSaves. One save, on drop.
+                  if (d) holdConfigSaves()
+                  else releaseConfigSaves()
+                }
               })
             }}
             onClick={() => {

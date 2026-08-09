@@ -76,6 +76,56 @@ interface ChatState {
   markChannelsRead: (channels: string[]) => void
 }
 
+/**
+ * Who has spoken in a channel, and what we know about them — kept as a map instead of found
+ * by walking the buffer.
+ *
+ * Every one of the lookups below used to scan the whole ring buffer backwards. That is fine
+ * once; it is not fine where they are actually called from. `isKnownChatter` is handed to the
+ * tokenizer and asked about EVERY WORD of every message, to decide whether a bare word is
+ * somebody's nick — so laying out one forty-word message walked three and a half thousand
+ * messages forty times. Scrolling into a screenful of unseen history did that for thirty rows
+ * at once, and the profiler caught the result: single tasks of 150 to 180 milliseconds, and one
+ * of 2.3 seconds, in the middle of a scroll.
+ *
+ * The map is built from the same messages as they arrive, which is work proportional to what
+ * arrived rather than to what is already there. Nothing else about the buffer changes.
+ */
+interface ChatterInfo {
+  color?: string
+  userId?: string
+  badges?: BadgeRef[]
+}
+
+const chatterIndex = new Map<string, Map<string, ChatterInfo>>()
+
+function indexOf(channel: string): Map<string, ChatterInfo> {
+  let m = chatterIndex.get(channel)
+  if (!m) {
+    m = new Map()
+    chatterIndex.set(channel, m)
+  }
+  return m
+}
+
+/** fold a batch of messages into the channel's chatter map (newest wins) */
+function indexMessages(channel: string, msgs: ChatMessage[]): void {
+  const m = indexOf(channel)
+  for (const msg of msgs) {
+    if (msg.login) {
+      const cur = m.get(msg.login)
+      const next: ChatterInfo = cur ? { ...cur } : {}
+      if (msg.color) next.color = msg.color
+      if (msg.userId) next.userId = msg.userId
+      if (!msg.system && msg.badges) next.badges = msg.badges
+      m.set(msg.login, next)
+    }
+    // someone who was replied to is a real user here even if we never saw them type
+    const parent = msg.replyParent?.login
+    if (parent && !m.has(parent)) m.set(parent, {})
+  }
+}
+
 /** shallow record equality — skips store updates (and their re-renders) when nothing changed */
 function sameRecord<T>(a: Record<string, T>, b: Record<string, T>): boolean {
   const ak = Object.keys(a)
@@ -87,13 +137,7 @@ function sameRecord<T>(a: Record<string, T>, b: Record<string, T>): boolean {
 
 /** most recent known chat color for a login in a channel (for coloring @mentions) */
 export function lookupUserColor(channel: string, login: string): string | undefined {
-  const msgs = useChatStore.getState().messages[channel]
-  if (!msgs) return undefined
-  const lower = login.toLowerCase()
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].login === lower && msgs[i].color) return msgs[i].color
-  }
-  return undefined
+  return chatterIndex.get(channel)?.get(login.toLowerCase())?.color
 }
 
 /**
@@ -106,37 +150,17 @@ export function isKnownChatter(channel: string, login: string): boolean {
   // the broadcaster counts even if they never type in their own chat — their name is the
   // single most common thing people write without an "@"
   if (lower === channel.toLowerCase()) return true
-  const msgs = useChatStore.getState().messages[channel]
-  if (!msgs) return false
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const m = msgs[i]
-    if (m.login === lower) return true
-    // someone who was replied to / raided in is a real user here too, even with no message
-    if (m.replyParent?.login === lower) return true
-  }
-  return false
+  return chatterIndex.get(channel)?.has(lower) ?? false
 }
 
 /** twitch user id for a login seen in this channel's buffer (for cosmetic lookups) */
 export function lookupUserId(channel: string, login: string): string | undefined {
-  const msgs = useChatStore.getState().messages[channel]
-  if (!msgs) return undefined
-  const lower = login.toLowerCase()
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].login === lower && msgs[i].userId) return msgs[i].userId
-  }
-  return undefined
+  return chatterIndex.get(channel)?.get(login.toLowerCase())?.userId
 }
 
 /** most recent known badges for a login in a channel (best-effort, from the local buffer) */
 export function lookupUserBadges(channel: string, login: string): BadgeRef[] | undefined {
-  const msgs = useChatStore.getState().messages[channel]
-  if (!msgs) return undefined
-  const lower = login.toLowerCase()
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].login === lower && !msgs[i].system) return msgs[i].badges
-  }
-  return undefined
+  return chatterIndex.get(channel)?.get(login.toLowerCase())?.badges
 }
 
 /**
@@ -153,6 +177,34 @@ export function lookupUserBadges(channel: string, login: string): BadgeRef[] | u
  * than in blocks — and that is not a coincidence, it is the same reasoning.
  */
 const SLACK = 0
+
+/**
+ * Is this id already in the buffer? Answered by looking at the END of it, not all of it.
+ *
+ * The old version built a Set of every id in the channel on every batch of messages. At three
+ * and a half thousand messages that is three and a half thousand string hashes plus a throwaway
+ * array of the same size — per channel, per flush. With thirty-odd channels open it was the
+ * single longest thing the renderer did: measured at 178ms in one task, which is a fifth of a
+ * second in which nothing moves, and it landed in the middle of scrolling as often as anywhere
+ * else. That is the "it stops and then carries on" people were describing.
+ *
+ * A duplicate can only ever be a RECENT message: they come from a reader replaying after a
+ * reconnect, or from a second connection briefly delivering the same lines. Nothing produces a
+ * duplicate of something that scrolled past twenty minutes ago. So the check looks at the last
+ * few hundred, which is bounded work no matter how long the buffer grows.
+ */
+const DEDUPE_WINDOW = 400
+
+function recentlySeen(buf: ChatMessage[], id: string, end: 'tail' | 'head' = 'tail'): boolean {
+  if (end === 'head') {
+    const stop = Math.min(buf.length, DEDUPE_WINDOW)
+    for (let i = 0; i < stop; i++) if (buf[i].id === id) return true
+    return false
+  }
+  const start = Math.max(0, buf.length - DEDUPE_WINDOW)
+  for (let i = buf.length - 1; i >= start; i--) if (buf[i].id === id) return true
+  return false
+}
 
 export const useChatStore = create<ChatState>()((set) => ({
   messages: {},
@@ -175,9 +227,9 @@ export const useChatStore = create<ChatState>()((set) => ({
       // dedupe by id: a message id must be unique in the buffer, otherwise the virtualized
       // list (keyed on id) renders duplicates and breaks scrolling. This guards against any
       // double-delivery (e.g. a reconnecting reader replaying, or a stray second connection).
-      const seen = new Set(cur.map((m) => m.id))
-      const add = msgs.filter((m) => !seen.has(m.id))
+      const add = msgs.filter((m) => !recentlySeen(cur, m.id))
       if (add.length === 0) return s
+      indexMessages(channel, add)
       let next = [...cur, ...add]
       if (next.length > limit + SLACK) next = next.slice(next.length - limit)
       return { messages: { ...s.messages, [channel]: next } }
@@ -185,10 +237,11 @@ export const useChatStore = create<ChatState>()((set) => ({
   prependMessages: (channel, msgs) =>
     set((s) => {
       const cur = s.messages[channel] ?? []
-      // history arrives after live messages may have started; dedupe by id
-      const seen = new Set(cur.map((m) => m.id))
-      const add = msgs.filter((m) => !seen.has(m.id))
+      // history arrives after live messages may have started; dedupe by id. History lands at
+      // the FRONT, so the window that can collide with it is the front of the buffer.
+      const add = msgs.filter((m) => !recentlySeen(cur, m.id, 'head'))
       if (add.length === 0) return s
+      indexMessages(channel, add)
       return { messages: { ...s.messages, [channel]: [...add, ...cur] } }
     }),
   seedMessages: (channel, msgs) =>
@@ -196,10 +249,12 @@ export const useChatStore = create<ChatState>()((set) => ({
       if (msgs.length === 0) return s
       const limit = useSettingsStore.getState().settings.messageLimit
       const cur = s.messages[channel] ?? []
-      const seen = new Set(cur.map((m) => m.id))
-      const merged = [...cur, ...msgs.filter((m) => !seen.has(m.id))].sort(
-        (a, b) => a.timestamp - b.timestamp
-      )
+      // a handover merges two whole buffers, so this one really does need to look at all of it
+      const seen = new Set<string>()
+      for (const m of cur) seen.add(m.id)
+      const fresh = msgs.filter((m) => !seen.has(m.id))
+      indexMessages(channel, fresh)
+      const merged = [...cur, ...fresh].sort((a, b) => a.timestamp - b.timestamp)
       const next = merged.length > limit ? merged.slice(merged.length - limit) : merged
       return { messages: { ...s.messages, [channel]: next } }
     }),
@@ -250,6 +305,8 @@ export const useChatStore = create<ChatState>()((set) => ({
     set((s) => {
       const messages = { ...s.messages }
       delete messages[channel]
+      // the chatter map is keyed by channel too, and a closed tab should not keep paying for it
+      chatterIndex.delete(channel)
       return { messages }
     }),
   patchRoomModes: (channel, patch) =>

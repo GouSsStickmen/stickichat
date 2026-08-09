@@ -1,6 +1,7 @@
 import { ipcMain, safeStorage, shell, app, BrowserWindow, desktopCapturer, screen, clipboard } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
+import { inlineAssets } from './assets'
 import { overlayConfigure, overlayDelete, overlayPush, overlayRestart, OverlayDelete, OverlayStyle, OverlayLine } from './overlayServer'
 import { buildReport, log, logDir, tailLog, watchWindow } from './diagnostics'
 
@@ -90,6 +91,8 @@ export function registerIpc(): void {
 
   ipcMain.handle('config:get', () => readConfig())
   ipcMain.handle('config:set', (_e, cfg: unknown) => writeConfig(cfg))
+  // export has to carry the bytes, not references into this machine's asset directory
+  ipcMain.handle('config:inline', (_e, value: unknown) => inlineAssets(value))
 
   ipcMain.handle('app:openExternal', (_e, url: string) => {
     if (url.startsWith('https://') || url.startsWith('http://')) shell.openExternal(url)

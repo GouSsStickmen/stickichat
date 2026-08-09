@@ -2,13 +2,16 @@ import { app, shell, screen, session, BrowserWindow, Menu, Rectangle } from 'ele
 import { join } from 'path'
 import { registerIpc } from './ipc'
 import { initAutoUpdater } from './updater'
-import { readConfig, readWindowState, writeWindowState } from './storage'
+import { readConfig, readWindowState, writeWindowState, compactConfig } from './storage'
+import { registerAssetScheme, serveAssetProtocol } from './assets'
 import { startDiagnostics, watchWindow } from './diagnostics'
 
 // The dev build and the installed app resolve to the SAME userData dir (Windows paths are
 // case-insensitive), and two Electron instances fight over Chromium's cache locks — the loser
 // runs with NO http cache at all ("Unable to create cache: Access is denied"), so every emote
 // image re-downloads constantly. Keep the config file shared, but give dev its own session dir.
+registerAssetScheme()
+
 if (!app.isPackaged) {
   app.setPath('sessionData', join(app.getPath('userData'), 'dev-session'))
 }
@@ -166,6 +169,9 @@ app.whenReady().then(() => {
   // Local Font Access API (font picker) keeps working across Electron upgrades
   session.defaultSession.setPermissionCheckHandler(() => true)
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb(true))
+  serveAssetProtocol()
+  // shrink whatever the config still carries inline before any window can save it back
+  compactConfig()
   registerIpc()
   createWindow()
   initAutoUpdater()

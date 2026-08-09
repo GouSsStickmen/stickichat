@@ -2832,11 +2832,16 @@ function OverlaySection(): React.JSX.Element {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   const safeName = (s2: string): string => s2.replace(/[^\w\-. ]+/g, '_').trim() || 'overlay'
-  const exportOne = (o: ChatOverlayConfig): void =>
-    downloadJson(exportOverlayJson(o), `${safeName(o.name)}.stickichat-overlay.json`)
-  const exportAll = (): void => {
+  // pictures and fonts live as files now; a shared overlay has to carry the bytes, so expand the
+  // asset references on the way out (see main/assets.ts)
+  const exportOne = async (o: ChatOverlayConfig): Promise<void> => {
+    const full = (await window.sticki.inlineAssets(o)) as ChatOverlayConfig
+    downloadJson(exportOverlayJson(full), `${safeName(o.name)}.stickichat-overlay.json`)
+  }
+  const exportAll = async (): Promise<void> => {
     if (!settings.chatOverlays.length) return
-    downloadJson(exportOverlayJson(settings.chatOverlays), `stickichat-overlays-${new Date().toISOString().slice(0, 10)}.json`)
+    const full = (await window.sticki.inlineAssets(settings.chatOverlays)) as ChatOverlayConfig[]
+    downloadJson(exportOverlayJson(full), `stickichat-overlays-${new Date().toISOString().slice(0, 10)}.json`)
   }
   const importFile = (file: File | undefined): void => {
     if (!file) return
@@ -3064,8 +3069,11 @@ function AdvancedSection(): React.JSX.Element {
   // everything selected is the old behaviour; unticking is the new part
   const [parts, setParts] = useState<ConfigPart[]>(CONFIG_PARTS)
 
-  const doExport = (): void => {
-    const blob = new Blob([exportConfigJson(parts)], { type: 'application/json' })
+  const doExport = async (): Promise<void> => {
+    const json = exportConfigJson(parts)
+    // same reason as the overlay export: send the files, not references into this machine
+    const full = JSON.stringify(await window.sticki.inlineAssets(JSON.parse(json)), null, 2)
+    const blob = new Blob([full], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     const stamp = new Date().toISOString().slice(0, 10)
