@@ -37,8 +37,6 @@ export const uk: Record<TranslationKey, string> = {
   'tab.filter.all': 'Показано всі вкладки — клікни, щоб лишити лише онлайн',
   'tab.filter.online': 'Показано лише онлайн — клікни, щоб лишити лише офлайн',
   'tab.filter.offline': 'Показано лише офлайн — клікни, щоб показати всі',
-  'pane.syncScrollOn': 'Синхронізувати прокрутку чатів',
-  'pane.syncScrollOff': 'Вимкнути синхронну прокрутку',
   'tab.zoomIn': 'Більші вкладки',
   'tab.zoomOut': 'Менші вкладки',
   'tab.rename': 'Перейменувати вкладку',
@@ -146,6 +144,10 @@ export const uk: Record<TranslationKey, string> = {
   'set.caseSensitiveNicks': 'Враховувати регістр нікнейма',
   'set.announceEmoteChanges': 'Повідомляти в чаті про нові емоути 7TV',
   'hint.announceEmoteChanges': 'Коли до набору каналу додають або прибирають емоут — у чат пишеться рядок. Емоут одразу починає працювати, перезапуск не потрібен.',
+  'info.emoteCardAdded': 'Додано емоут',
+  'info.emoteCardRemoved': 'Видалено емоут',
+  'info.emoteCardInSet': 'додано до набору',
+  'info.emoteCardOutSet': 'видалено з набору',
   'info.emoteAdded': '😃 Нові емоути 7TV: {emotes}',
   'info.emoteRemoved': '🗑 Прибрано емоути 7TV: {emotes}',
   'info.emoteBy': ' (від {user})',
@@ -1119,5 +1121,8 @@ export const uk: Record<TranslationKey, string> = {
   'misc.chatCleared': 'Чат очищено',
   'misc.newMessages': 'Нові повідомлення нижче',
   'misc.reconnecting': '🔄 Перепідключення…',
+  'pane.changeChannel': 'Змінити канал у цій панелі',
+  'pane.syncMemberOn': 'Ця панель синхронізує прокрутку — вимкнути для неї',
+  'pane.syncMemberOff': 'Ця панель прокручується окремо — увімкнути синхронізацію',
   'pane.scrollLock': 'Заблокувати автоскрол (Ctrl+L)'
 }

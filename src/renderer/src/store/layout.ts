@@ -21,6 +21,8 @@ interface LayoutState {
   updatePane: (tabId: string, paneId: string, patch: Partial<Pane>) => void
   moveTab: (tabId: string, toIndex: number) => void
   swapPanes: (tabId: string, paneIdA: string, paneIdB: string) => void
+  /** drag-reorder inside the split grid */
+  movePane: (tabId: string, paneId: string, toIndex: number) => void
 }
 
 export const useLayoutStore = create<LayoutState>()((set) => ({
@@ -79,6 +81,18 @@ export const useLayoutStore = create<LayoutState>()((set) => ({
       tabs.splice(Math.max(0, Math.min(toIndex, tabs.length)), 0, tab)
       return { tabs }
     }),
+  movePane: (tabId, paneId, toIndex) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t
+        const from = t.panes.findIndex((p) => p.id === paneId)
+        if (from === -1) return t
+        const panes = [...t.panes]
+        const [moved] = panes.splice(from, 1)
+        panes.splice(Math.max(0, Math.min(toIndex, panes.length)), 0, moved)
+        return { ...t, panes }
+      })
+    })),
   swapPanes: (tabId, paneIdA, paneIdB) =>
     set((s) => ({
       tabs: s.tabs.map((t) => {

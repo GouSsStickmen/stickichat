@@ -68,6 +68,17 @@ export interface ChatMessage {
   giftFrom?: string
   /** first message we've seen from this login since we joined this channel this session */
   isFirstInSession?: boolean
+  /**
+   * A 7TV emote set changed. Kept structured rather than baked into a sentence so the line can
+   * show the emotes themselves — the name alone tells you nothing about what was added, which is
+   * the one thing you actually want to see.
+   */
+  emoteEvent?: {
+    kind: 'added' | 'removed'
+    /** who did it, when 7TV says */
+    actor?: string
+    emotes: { code: string; url?: string }[]
+  }
   /** channel-point redemption (custom reward / highlighted message) */
   redeemed?: boolean
   /** redemption reward name (shown instead of a generic "redeems" label) */
@@ -877,6 +888,15 @@ export interface Pane {
   channel: string // login
   /** account used for sending + mod actions in this pane; null = read-only */
   accountId: string | null
+  /**
+   * Whether this pane moves with the scroll-sync group.
+   *
+   * Sync used to be one switch for the whole tab, which is wrong the moment one of the panes is a
+   * channel you are only half watching: you either dragged everything along or gave up pairing
+   * the two you actually cared about. It is per pane now, and opt-in — chats scroll on their own
+   * until you say otherwise, which is what anyone expects the first time they split the view.
+   */
+  syncScroll?: boolean
 }
 
 export interface Tab {

@@ -4100,7 +4100,10 @@ button:has(> svg) {
   gap: 8px;
   padding: 10px 12px;
   background: var(--surface-3);
-  border: 1px solid var(--accent-strong);
+  /* the frame colour is the train's identity, named once so every state can ask for it rather
+     than restate it — which is how the "ended" rule below used to erase the flavour */
+  --hype-accent: var(--accent-strong);
+  border: 1px solid var(--hype-accent);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   z-index: 200;
@@ -4112,14 +4115,14 @@ button:has(> svg) {
  * engine and the clock are the same instrument in all four.
  */
 .hype-train.flav-shared {
-  border-color: #29b6f6;
+  --hype-accent: #29b6f6;
   box-shadow: var(--shadow), inset 0 0 0 1px color-mix(in srgb, #29b6f6 35%, transparent);
 }
 .hype-train.flav-shared .hype-loco-wrap {
   --loco-body: #4fc3f7;
 }
 .hype-train.flav-golden {
-  border-color: #ffc53d;
+  --hype-accent: #ffc53d;
   background: linear-gradient(160deg, color-mix(in srgb, #ffc53d 14%, var(--surface-3)), var(--surface-3));
   box-shadow: var(--shadow), 0 0 18px color-mix(in srgb, #ffc53d 30%, transparent);
 }
@@ -4136,7 +4139,7 @@ button:has(> svg) {
   --loco-body: #ffc53d;
 }
 .hype-train.flav-community {
-  border-color: #66bb6a;
+  --hype-accent: #66bb6a;
 }
 .hype-train.flav-community .hype-fill {
   background: #66bb6a;
@@ -4145,27 +4148,54 @@ button:has(> svg) {
   --loco-body: #81c784;
 }
 
-/* it is over, but it is still the thing you are reading — fading it out mid-animation made
-   the panel look like it was failing rather than finishing */
-.hype-train.ended {
-  border-color: var(--border);
-}
+/* It is over, but it is still the thing you are reading, and it is still the same train: the
+   frame does not change at all when it ends. This rule used to repaint the border — first to
+   `--border` outright, which erased the flavour, then to a muted mix, which was still a visible
+   change at the exact moment you were watching the engine pull away. Nothing to override. */
 .hype-head {
   display: flex;
-  align-items: center;
+  /* the clock and the close button sit against the TOP of the stacked title/level block, not
+     against its middle — centred, they drifted down as soon as the block grew a second line */
+  align-items: flex-start;
   gap: 6px;
 }
-.hype-head .spacer {
+.hype-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
   flex: 1;
 }
+/* No spacer here any more. It also carried `flex: 1`, so it and the title block split the free
+   width between them — which is why the name still wrapped after being given its own line. The
+   title block grows on its own and pushes the clock and the close button to the edge. */
 .hype-level {
   font-size: var(--fs-sm);
   color: var(--accent-strong);
   font-weight: 700;
+  /* one line, always. The panel is 320px and some flavour names are long ("Гайп трейн
+     спільноти"), so without this the level was the thing that wrapped — on some trains, and only
+     at some widths, which is why it looked like an animation bug rather than a layout one. */
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* With the level on its own line the name has the full width and no longer needs clipping. It is
+   still allowed to wrap rather than be cut, because the name is what tells you which train it is
+   — a truncated "Гайп трейн спільно…" and a truncated "Гайп трейн спільноти" read the same. */
+.hype-title {
+  min-width: 0;
+  line-height: 1.25;
+  /* The title had no size of its own and inherited 21px, while everything else in this panel is
+     drawn from the 10-14px scale — the level right underneath it is 11px. That was an accident of
+     inheritance, not a decision, and it is why the longest flavour name needed 219px of the 219px
+     available and wrapped by a fraction. At the top of the scale it is still clearly the title,
+     and every name fits on one line. */
+  font-size: var(--fs-xl);
 }
 .hype-clock {
   font-size: var(--fs-sm);
   color: var(--text-muted);
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 /* the track: a rail, the filled part behind the engine, and the engine itself riding on top */
@@ -4445,9 +4475,12 @@ button:has(> svg) {
  * Deliberately NOT inside the message list: a card in the list is a row that changed height,
  * and every scroll bug this feature ever had came from that.
  */
-.link-card {
+/* carries the position, never the zoom — see LinkCard.tsx */
+.link-card-anchor {
   position: fixed;
   z-index: 60;
+}
+.link-card {
   max-width: min(440px, calc(100vw - 16px));
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -5236,4 +5269,123 @@ button:has(> svg) {
   .ov-card-actions {
     margin-left: auto;
   }
+}
+
+/**
+ * A 7TV set change, as a card rather than a sentence.
+ *
+ * The old line named codes in grey text, which is no use at all: a code you have never seen tells
+ * you nothing about the emote, and the emote is the only thing anyone wants from this message.
+ * Framed like Twitch's own event notices — a titled header strip over a body — so it reads as an
+ * event and not as somebody talking.
+ */
+.msg.emote-event {
+  display: block;
+  margin: 4px 6px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.msg.emote-event .ee-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border);
+}
+.msg.emote-event .ee-spacer {
+  flex: 1;
+}
+.stv-mark {
+  width: 18px;
+  height: 14px;
+  flex-shrink: 0;
+  /* 7TV's own blue when something arrived, muted when something left */
+  color: #29b6f6;
+}
+.msg.emote-event.removed .stv-mark {
+  color: var(--text-faint);
+}
+.msg.emote-event .ee-title {
+  font-weight: 700;
+  color: var(--text);
+}
+.msg.emote-event .ee-actor {
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.msg.emote-event .ee-head .ts {
+  margin: 0;
+}
+.msg.emote-event .ee-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+}
+.msg.emote-event .ee-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.msg.emote-event .ee-emote {
+  /* a fixed box so a slow image cannot re-wrap the row after it lands — the chat list measures
+     these rows, and a late resize is what "the chat jumped" is made of */
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.msg.emote-event .ee-emote-missing {
+  display: inline-block;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+}
+.msg.emote-event .ee-text {
+  color: var(--text-dim);
+}
+.msg.emote-event .ee-text b {
+  color: var(--text);
+}
+.msg.emote-event.removed .ee-emote {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+
+/* the pane being dragged to a new spot in the grid — the same "lifted" feel as a tab */
+.pane-header.dragging {
+  cursor: grabbing;
+  background: var(--surface-3);
+}
+.pane:has(.pane-header.dragging) {
+  opacity: 0.75;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* the split view's own controls, above the chats — see SplitGrid */
+.split-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 4px 8px 0 8px;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+.split-bar-label {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.split-bar select {
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+/* a finished train keeps the clock's space but not its reading — see HypeTrainPopup */
+.hype-clock.spent {
+  visibility: hidden;
 }

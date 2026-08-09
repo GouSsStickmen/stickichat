@@ -15,6 +15,7 @@ import ModToolbar from './ModToolbar'
 import ChattersList from './ChattersList'
 import HighlightSidebar from './HighlightSidebar'
 import { AddPaneForm } from './SplitGrid'
+import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
 import { EyeIcon, ClockIcon, GameIcon } from './Icons'
 
@@ -78,6 +79,13 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const addBtnRef = useRef<HTMLButtonElement>(null)
   const [addPanePos, setAddPanePos] = useState<{ top: number; right: number } | null>(null)
   const [scrollLocked, setScrollLocked] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editPos, setEditPos] = useState<{ top: number; right: number } | null>(null)
+  const editBtnRef = useRef<HTMLButtonElement>(null)
+  const [dragging, setDragging] = useState(false)
+  const paneCount = useLayoutStore((s) => s.tabs.find((x) => x.id === tabId)?.panes.length ?? 1)
+  // opt-in: a split view starts with every chat scrolling on its own
+  const paneSynced = pane.syncScroll === true
   const [searchOpen, setSearchOpen] = useState(false)
   // hold-to-pause: chat is paused only while the hotkey is held down (separate from the toggle)
   const [holdPaused, setHoldPaused] = useState(false)
@@ -157,7 +165,28 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
 
   return (
     <div className="pane" onMouseEnter={bindHotkeys} onMouseLeave={unbindHotkeys}>
-      <div className="pane-header" ref={headRef}>
+      <div
+        className={`pane-header ${dragging ? 'dragging' : ''}`}
+        ref={headRef}
+        onPointerDown={(e) => {
+          // buttons, the channel name and anything else interactive keep their own behaviour
+          if ((e.target as HTMLElement).closest('button, input, select, a, .channel-name')) return
+          const grid = headRef.current?.closest('.split-grid') as HTMLElement | null
+          if (!grid) return
+          const panes = useLayoutStore.getState().tabs.find((x) => x.id === tabId)?.panes ?? []
+          if (panes.length < 2) return
+          startPointerReorder({
+            e,
+            container: grid,
+            itemSelector: '.pane',
+            index: panes.findIndex((x) => x.id === pane.id),
+            // a split grid wraps, so dragging is not one-dimensional the way a tab strip is
+            axis: 'both',
+            onMove: (_from, to) => useLayoutStore.getState().movePane(tabId, pane.id, to),
+            onDragState: setDragging
+          })
+        }}
+      >
         <span
           className="channel-name clickable"
           title={t('pane.openStreamerCard')}
@@ -227,6 +256,39 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             </div>
           )}
         </span>
+        <span>
+          <button
+            ref={editBtnRef}
+            className="icon-btn"
+            title={t('pane.changeChannel')}
+            onClick={() => {
+              const r = editBtnRef.current?.getBoundingClientRect()
+              if (r) setEditPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })
+              setEditOpen((v) => !v)
+            }}
+          >
+            ✎
+          </button>
+          {editOpen && (
+            <div
+              className="popover add-pane-pop"
+              style={{ position: 'fixed', top: editPos?.top ?? 40, right: editPos?.right ?? 8 }}
+            >
+              <AddPaneForm tabId={tabId} editPane={pane} onDone={() => setEditOpen(false)} />
+            </div>
+          )}
+        </span>
+        {paneCount > 1 && (
+          <button
+            className={`icon-btn ${paneSynced ? 'on' : ''}`}
+            title={t(paneSynced ? 'pane.syncMemberOn' : 'pane.syncMemberOff')}
+            onClick={() =>
+              useLayoutStore.getState().updatePane(tabId, pane.id, { syncScroll: !paneSynced })
+            }
+          >
+            {paneSynced ? '🔗' : '⛓️‍💥'}
+          </button>
+        )}
         <button
           className={`icon-btn ${scrollLocked ? 'active' : ''}`}
           title={t('pane.scrollLock')}

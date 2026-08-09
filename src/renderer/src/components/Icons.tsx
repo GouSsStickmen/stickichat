@@ -275,3 +275,19 @@ export function InfoIcon({ size }: { size?: number }): React.JSX.Element {
     </Glyph>
   )
 }
+
+/** the 7TV wordmark, for the emote-set-change card */
+export function SevenTvMark(): React.JSX.Element {
+  return (
+    <svg className="stv-mark" viewBox="0 0 109.6 80.9" aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M84.1 22.2 88 15.5l3.7-6.3.4-.8c.1-.2 0-.4-.2-.4H60.7c-.2 0-.4.2-.4.4v11.9c0 .2.2.4.4.4h23.2c.1 0 .2-.2.2-.5zM53.4 8H20.6c-.2 0-.4.1-.5.3l-3.9 6.7-3.7 6.3-.4.8c-.1.2 0 .4.2.4h32.8c.2 0 .4-.1.5-.3l3.9-6.7 3.7-6.3.4-.8c.1-.2 0-.4-.2-.4zM60.3 72.6l3.9-6.7 3.7-6.3.4-.8c.1-.2 0-.4-.2-.4H35.3c-.2 0-.4.1-.5.3l-3.9 6.7-3.7 6.3-.4.8c-.1.2 0 .4.2.4h32.8c.2 0 .4-.1.5-.3z"
+      />
+      <path
+        fill="currentColor"
+        d="m8.1 30.3 3.9 6.7 3.7 6.3.4.8c.1.2.3.3.5.3h32.8c.2 0 .3-.2.2-.4l-.4-.8-3.7-6.3-3.9-6.7c-.1-.2-.3-.3-.5-.3H8.3c-.2 0-.3.2-.2.4zM97.5 30.2H64.7c-.2 0-.4.1-.5.3l-3.9 6.7-3.7 6.3-.4.8c-.1.2 0 .4.2.4h32.8c.2 0 .4-.1.5-.3l3.9-6.7 3.7-6.3.4-.8c.1-.2 0-.4-.2-.4z"
+      />
+    </svg>
+  )
+}

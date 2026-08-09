@@ -110,7 +110,6 @@ interface UiState {
   hypeDismissed: string | null
   whispersOpen: boolean
   /** split mode: scrolling one pane scrolls the others by the same amount */
-  scrollSync: boolean
   /** accounts whose token died and need a full re-authorization (persistent banner) */
   reauthAccounts: { id: string; login: string }[]
   setSettingsOpen: (v: boolean) => void
@@ -127,7 +126,6 @@ interface UiState {
   dismissHypeTrain: () => void
   allowHypeTrain: () => void
   setWhispersOpen: (v: boolean) => void
-  toggleScrollSync: () => void
   markReauthNeeded: (id: string, login: string) => void
   clearReauthNeeded: (id: string) => void
 }
@@ -159,7 +157,6 @@ export const useUiStore = create<UiState>()((set) => ({
   hypeTrain: null,
   hypeDismissed: null,
   whispersOpen: false,
-  scrollSync: false,
   reauthAccounts: [],
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setSettingsSection: (settingsSection) => set({ settingsSection }),
@@ -191,7 +188,6 @@ export const useUiStore = create<UiState>()((set) => ({
     set((s) => ({ hypeTrain: null, hypeDismissed: s.hypeTrain?.channel ?? s.hypeDismissed })),
   allowHypeTrain: () => set({ hypeDismissed: null }),
   setWhispersOpen: (whispersOpen) => set({ whispersOpen }),
-  toggleScrollSync: () => set((s) => ({ scrollSync: !s.scrollSync })),
   markReauthNeeded: (id, login) =>
     set((s) =>
       s.reauthAccounts.some((a) => a.id === id)

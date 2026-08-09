@@ -35,8 +35,6 @@ export const en = {
   'tab.filter.all': 'Showing all tabs — click to show only live',
   'tab.filter.online': 'Showing only live tabs — click to show only offline',
   'tab.filter.offline': 'Showing only offline tabs — click to show all',
-  'pane.syncScrollOn': 'Sync scrolling across chats',
-  'pane.syncScrollOff': 'Turn off synced scrolling',
   'tab.zoomIn': 'Bigger tabs',
   'tab.zoomOut': 'Smaller tabs',
   'tab.rename': 'Rename tab',
@@ -144,6 +142,10 @@ export const en = {
   'set.caseSensitiveNicks': 'Case-sensitive nickname matching',
   'set.announceEmoteChanges': 'Announce new 7TV emotes in chat',
   'hint.announceEmoteChanges': 'Posts a chat line when an emote is added to or removed from the channel set. The emote starts working right away — no restart needed.',
+  'info.emoteCardAdded': 'Added Emote',
+  'info.emoteCardRemoved': 'Removed Emote',
+  'info.emoteCardInSet': 'was added to the set',
+  'info.emoteCardOutSet': 'was removed from the set',
   'info.emoteAdded': '😃 New 7TV emotes: {emotes}',
   'info.emoteRemoved': '🗑 Removed 7TV emotes: {emotes}',
   'info.emoteBy': ' (by {user})',
@@ -1116,6 +1118,9 @@ export const en = {
   'misc.chatCleared': 'Chat was cleared',
   'misc.newMessages': 'New messages below',
   'misc.reconnecting': '🔄 Reconnecting…',
+  'pane.changeChannel': 'Change the channel in this pane',
+  'pane.syncMemberOn': 'This pane follows scroll sync — turn it off here',
+  'pane.syncMemberOff': 'This pane scrolls on its own — join scroll sync',
   'pane.scrollLock': 'Lock auto-scroll (Ctrl+L)'
 }
 

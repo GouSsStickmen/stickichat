@@ -35,7 +35,6 @@ export default function TabBar(): React.JSX.Element {
   const unreadWhispers = useWhispersStore((s) => s.unread)
   const whispersOpen = useUiStore((s) => s.whispersOpen)
   const hypeChannel = useUiStore((s) => (s.hypeTrain?.ended ? null : (s.hypeTrain?.channel ?? null)))
-  const scrollSync = useUiStore((s) => s.scrollSync)
 
   const activeTab = tabs.find((x) => x.id === activeTabId)
 
@@ -131,32 +130,10 @@ export default function TabBar(): React.JSX.Element {
           <ZoomIcon dir="in" />
         </button>
       </span>
-      {activeTab && activeTab.panes.length > 1 && (
-        <button
-          className={`icon-btn ${scrollSync ? 'on' : ''}`}
-          title={t(scrollSync ? 'pane.syncScrollOff' : 'pane.syncScrollOn')}
-          onClick={() => useUiStore.getState().toggleScrollSync()}
-        >
-          {scrollSync ? '🔗' : '⛓️‍💥'}
-        </button>
-      )}
-      {activeTab && activeTab.panes.length > 1 && (
-        <select
-          title={t('pane.columns')}
-          style={{ padding: '3px 6px', fontSize: 12 }}
-          value={activeTab.columns}
-          onChange={(e) =>
-            useLayoutStore.getState().setColumns(activeTab.id, parseInt(e.target.value, 10))
-          }
-        >
-          <option value={0}>{t('pane.auto')}</option>
-          {[1, 2, 3, 4].map((c) => (
-            <option key={c} value={c}>
-              {c} ⬚
-            </option>
-          ))}
-        </select>
-      )}
+      {/* Scroll-sync and the column count used to live here, in the tab bar. Both belong to the
+          split view, and the tab bar does not exist in a detached window — so a chat pulled out
+          into its own window could not be given columns or paired with anything. They sit above
+          the chats now, where they are always reachable. */}
       <span style={{ position: 'relative' }}>
         <button
           className={`icon-btn whisper-btn ${whispersOpen ? 'active' : ''}`}

@@ -1568,6 +1568,13 @@ class ChatService {
     this.queue(channel, this.systemMessage(channel, text))
   }
 
+  /** a 7TV set change, carrying the emotes so the line can draw them */
+  localEmoteEvent(channel: string, event: NonNullable<ChatMessage['emoteEvent']>, text: string): void {
+    const msg = this.systemMessage(channel, text)
+    msg.emoteEvent = event
+    this.queue(channel, msg)
+  }
+
   /**
    * Losing the connection used to be completely silent: the chat simply stopped moving, with
    * no line, no indicator and nothing in the log. A user described it as "messages disappear

@@ -207,7 +207,8 @@ export default function MessageList({
       // scroll-sync: broadcast the wheel delta so sibling panes move by the SAME amount.
       // Driving it off the wheel (not the scroll event) keeps it user-initiated, so panes
       // can't echo each other into a feedback loop.
-      if (useUiStore.getState().scrollSync) {
+      // only panes that opted in lead, and only they follow — see Pane.syncScroll
+      if (pane.syncScroll) {
         window.dispatchEvent(
           new CustomEvent<SyncScrollDetail>('sticki:syncscroll', {
             detail: { fromPaneId: pane.id, deltaY: e.deltaY }
@@ -218,7 +219,7 @@ export default function MessageList({
     // ...and follow someone else's wheel when sync is on
     const onSync = (ev: Event): void => {
       const d = (ev as CustomEvent<SyncScrollDetail>).detail
-      if (d.fromPaneId === pane.id || !useUiStore.getState().scrollSync) return
+      if (d.fromPaneId === pane.id || !pane.syncScroll) return
       const sc = listRef.current?.scroller()
       if (!sc) return
       if (d.deltaY < 0) stopFollowing()
@@ -233,7 +234,7 @@ export default function MessageList({
       el?.removeEventListener('wheel', onWheel)
       window.removeEventListener('sticki:syncscroll', onSync)
     }
-  }, [scrollLocked, pane.id, smoothScroll])
+  }, [scrollLocked, pane.id, pane.syncScroll, smoothScroll])
 
   // jump-to-message requests (clicking a reply reference)
   useEffect(() => {

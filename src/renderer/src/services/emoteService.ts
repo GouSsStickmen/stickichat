@@ -47,14 +47,18 @@ const sevenTvEvents = new SevenTvEvents(({ channel, added, removed, actor }) => 
   const by = actor ? translate(lang, 'info.emoteBy', { user: actor }) : ''
   void import('./chatService').then(({ chatService }) => {
     if (added.length) {
-      chatService.localInfo(
+      chatService.localEmoteEvent(
         channel,
+        // the url travels with the line: the emote may be gone from the set again by the time
+        // anyone scrolls back to this, and the picture is the whole point of the message
+        { kind: 'added', actor, emotes: added.map((e) => ({ code: e.code, url: e.url })) },
         translate(lang, 'info.emoteAdded', { emotes: added.map((e) => e.code).join(', ') }) + by
       )
     }
     if (removed.length) {
-      chatService.localInfo(
+      chatService.localEmoteEvent(
         channel,
+        { kind: 'removed', actor, emotes: removed.map((code) => ({ code, url: cur.get(code)?.url })) },
         translate(lang, 'info.emoteRemoved', { emotes: removed.join(', ') }) + by
       )
     }

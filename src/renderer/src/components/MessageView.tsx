@@ -10,6 +10,7 @@ import { openUserCard as openCard } from '../lib/openUserCard'
 import { useSettingsStore, favKey } from '../store/settings'
 import { isDarkTheme } from '../lib/themes'
 import { useUiStore } from '../store/ui'
+import { SevenTvMark } from './Icons'
 import { runModButton } from '../services/modActions'
 import { banUser, deleteChatMessage } from '../lib/helix'
 import BtnIcon from './BtnIcon'
@@ -575,6 +576,58 @@ function MessageViewInner({
   )
 
   if (msg.system === 'info') {
+    /**
+     * A 7TV set change, drawn as a card with the emotes in it.
+     *
+     * It used to be one grey sentence naming codes — and a code you have never seen tells you
+     * nothing at all, which made the announcement useless exactly when it was most interesting.
+     * Showing the picture is the whole point, so the emote comes with the line rather than being
+     * looked up later: by the time anyone scrolls back, a removed emote is no longer in the set.
+     */
+    if (msg.emoteEvent) {
+      const ev = msg.emoteEvent
+      return (
+        <div className={`msg emote-event ${ev.kind}`} style={customBg ? { background: customBg } : undefined}>
+          <div className="ee-head">
+            <SevenTvMark />
+            <span className="ee-title">{t(ev.kind === 'added' ? 'info.emoteCardAdded' : 'info.emoteCardRemoved')}</span>
+            <span className="ee-spacer" />
+            {ev.actor && <span className="ee-actor">{ev.actor}</span>}
+            {settings.showTimestamps && (
+              <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>
+            )}
+          </div>
+          <div className="ee-body">
+            {ev.emotes.map((e) => (
+              <div className="ee-row" key={e.code}>
+                {e.url ? (
+                  <img
+                    className="ee-emote"
+                    src={e.url}
+                    alt={e.code}
+                    loading="lazy"
+                    onMouseEnter={(me) =>
+                      useUiStore.getState().setEmotePreview({
+                        url: e.url as string,
+                        code: e.code,
+                        x: me.clientX,
+                        y: me.clientY
+                      })
+                    }
+                    onMouseLeave={() => useUiStore.getState().setEmotePreview(null)}
+                  />
+                ) : (
+                  <span className="ee-emote ee-emote-missing" />
+                )}
+                <span className="ee-text">
+                  <b>{e.code}</b> {t(ev.kind === 'added' ? 'info.emoteCardInSet' : 'info.emoteCardOutSet')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
     // channel-point redemption: real points icon + colored nick + reward name + cost,
     // instead of an emoji and a generic "redeems" label
     if (msg.redeemed && msg.rewardTitle) {
