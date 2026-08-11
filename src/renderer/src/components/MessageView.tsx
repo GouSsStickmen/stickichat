@@ -349,11 +349,31 @@ function LinkChip({ url }: { url: string }): React.JSX.Element | null {
       alive = false
     }
   }, [url])
-  // the tag arriving can push the message onto a second line — the one height change left in
-  // this feature, and it is announced before the frame is painted so the list absorbs it in
-  // the same frame rather than one later
+  /**
+   * Announce a height change only when the tag actually appears or goes away.
+   *
+   * It used to fire on every change of `data`, and the first of those is the mount, where `data`
+   * is still null and this component draws nothing at all. That lands in the SAME commit as the
+   * message itself — before its first paint — and the list reads the signal as "a row changed on
+   * purpose", which is its cue to pin instantly instead of gliding. So every message containing a
+   * link snapped into place while every other message slid in.
+   *
+   * When the tag really does arrive, a frame or two later, this fires for real and the list
+   * absorbs it in the same frame rather than one after — which is the whole reason the signal
+   * exists. By then the message has finished its glide and the correction is invisible.
+   */
+  const tagShown = useRef(false)
   useLayoutEffect(() => {
-    window.dispatchEvent(new CustomEvent('sticki:rowresized'))
+    const shown = !!data
+    if (shown === tagShown.current) return
+    tagShown.current = shown
+    // Content that arrived by itself, NOT a gesture. The distinction decides whether the list
+    // jumps to the bottom or glides there: a card the reader opened is the page changing under
+    // their hand and must land at once, but a preview tag turning up on a message that is still
+    // sliding in is just more of that message. Measured: with a cached preview the tag lands
+    // inside the same frame as the message, and the instant pin turned a 4px-per-frame glide
+    // into one 102px jump.
+    window.dispatchEvent(new CustomEvent('sticki:rowresized', { detail: { deliberate: false } }))
   }, [data])
   if (!data) return null
   const label = data.title ?? data.siteName ?? t('misc.linkShort')

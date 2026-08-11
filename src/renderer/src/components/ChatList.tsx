@@ -242,8 +242,12 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
    * this arrives a frame later, and a frame is exactly what "the chat jumped" is made of.
    */
   useEffect(() => {
-    const onRowResized = (): void => {
-      deliberate.current = true
+    const onRowResized = (e: Event): void => {
+      // Both kinds need the same-frame re-render — that is what this signal is for. Only a
+      // deliberate one also means "put it there NOW"; content arriving on its own is left to the
+      // glide, which is already travelling to the bottom and picks the extra height up on its way.
+      const detail = (e as CustomEvent<{ deliberate?: boolean }>).detail
+      if (detail?.deliberate !== false) deliberate.current = true
       rerender()
     }
     window.addEventListener('sticki:rowresized', onRowResized)
@@ -620,7 +624,22 @@ const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(
     // see. Applied exactly, it is invisible.
     /** the anchor still describes where the view belongs — do not overwrite it below */
     let stillHeld = false
-    if (following.current && !locked && (!smooth || opened || corrected)) {
+    /**
+     * A row correcting its own height must not cancel a glide that is still in flight.
+     *
+     * `corrected` exists for the late correction — an emote, a badge or a link preview landing
+     * after the message has already arrived and settled. Pinning exactly is right THEN: without
+     * it the extra height starts a second, tiny glide a moment after the first ended, which reads
+     * as the message creeping a little further for no reason.
+     *
+     * But the same flag fires while the first glide is still travelling, and pinning there spends
+     * the entire remaining distance in one frame. Measured on this channel: a sent message with a
+     * link moved 4, 6, then 87 pixels, while the identical message without one arrived in steps of
+     * 4, 4, 3, 4, 3… The glide is already going to the bottom and picks the growth up on the way,
+     * so it only needs to be left alone.
+     */
+    const settled = el.scrollHeight - el.clientHeight - el.scrollTop <= 2
+    if (following.current && !locked && (!smooth || opened || (corrected && settled))) {
       pin(el, el.scrollHeight)
       stillHeld = true // pin re-anchors itself, in the same breath
     } else if (moved) {
