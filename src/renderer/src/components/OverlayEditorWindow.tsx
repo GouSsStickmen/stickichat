@@ -4,6 +4,7 @@ import { useLayoutStore } from '../store/layout'
 import { useT } from '../i18n'
 import { PlayIcon, CloseIcon } from './Icons'
 import { ChatOverlayConfig, DEFAULT_CHAT_OVERLAY, OverlayDecor, OverlayFill, OverlayTrigger } from '../types'
+import OverlayBetaEditor from './OverlayBetaEditor'
 import { OVERLAY_PRESETS, randomizeOverlay } from '../lib/overlayPresets'
 import { ColorField, FontPicker, NickListArea, Toggle } from './settings/SettingsModal'
 import { nextId } from '../store/layout'
@@ -499,6 +500,15 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
           onChange={(e) => update({ name: e.target.value })}
         />
         <div className="spacer" />
+        {/* The beta is a MODE, not a replacement: the classic controls stay exactly where they
+            were, and an overlay only starts being drawn from elements once its owner asks. */}
+        <button
+          className={ov.editMode === 'beta' ? 'active' : 'ghost'}
+          title="Режим редагування (бета): елементи, шари, вільне розміщення"
+          onClick={() => update({ editMode: ov.editMode === 'beta' ? 'classic' : 'beta' })}
+        >
+          🧪 Бета
+        </button>
         <button
           onClick={() => window.sticki.copyText(obsUrl)}
           title={obsUrl}
@@ -508,6 +518,17 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
         <button className="ghost" onClick={() => window.close()}>✕</button>
       </div>
 
+      {ov.editMode === 'beta' ? (
+        <div className="oe-body" style={{ padding: 8 }}>
+          <OverlayBetaEditor
+            overlay={ov}
+            onChange={update}
+            port={settings.overlayPort}
+            channel={channel}
+            canvas={canvas}
+          />
+        </div>
+      ) : (
       <div className="oe-body">
         {/* ---------------- left: control sections ---------------- */}
         <div className="oe-side">
@@ -1822,6 +1843,7 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
           <p className="hint oe-note">{t('oe.note')}</p>
         </div>
       </div>
+      )}
     </div>
   )
 }

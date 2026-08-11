@@ -25,6 +25,7 @@ import ChannelPrompt from './components/ChannelPrompt'
 import HypeTrainPopup from './components/HypeTrainPopup'
 import ReauthBanner from './components/ReauthBanner'
 import { buildChannelSeed, injectChannelSeed } from './lib/detachSeed'
+import { compileScene } from './lib/overlayNodeStyle'
 import { hexToRgba } from './lib/tokenize'
 import { hotkeyFor, matchHotkey } from './lib/hotkeys'
 import { applyTheme } from './lib/themes'
@@ -324,7 +325,13 @@ export default function App(): React.JSX.Element | null {
     for (const o of settings.chatOverlays) {
       // uploaded fonts travel to the OBS page as a data URL (@font-face there)
       const custom = settings.customFonts.find((f) => f.name === o.font)
-      styles[o.id] = { ...o, fontData: custom?.data }
+      // the beta's elements go over already compiled: the page cannot run our placement maths,
+      // and a second copy of it there would drift from this one the first time either is touched
+      styles[o.id] = {
+        ...o,
+        fontData: custom?.data,
+        sceneCompiled: o.editMode === 'beta' ? compileScene(o.scene) : undefined
+      }
     }
     window.sticki.overlayConfigure(settings.overlayEnabled, settings.overlayPort, styles)
   }, [settings.overlayEnabled, settings.overlayPort, settings.chatOverlays, settings.customFonts, special])

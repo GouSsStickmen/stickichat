@@ -484,8 +484,16 @@ const OVERLAY_HTML = `<!doctype html>
 <style id="fontFace"></style>
 <style id="fxCss"></style>
 </head>
+<style>
+  /* the beta's element layer: pinned to the source, never intercepting anything */
+  #scene { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  .sc-node { position: absolute; }
+  .sc-image { display: block; object-fit: contain; }
+  .sc-text { white-space: pre-wrap; }
+</style>
 <body>
 <div id="zone"></div>
+<div id="scene"></div>
 <div id="fx"></div>
 <script>
 (function () {
@@ -495,6 +503,9 @@ const OVERLAY_HTML = `<!doctype html>
   var profile = p.get('profile') || ''
   var preview = p.get('preview') === '1'
   var editMode = p.get('edit') === '1'
+  // the beta editor uses this page as the backdrop under its own canvas, and draws the elements
+  // itself — without this they would be drawn twice, once live and once under the handles
+  var noScene = p.get('noscene') === '1'
   var zone = document.getElementById('zone')
   var customCss = document.getElementById('customCss')
   var fontFace = document.getElementById('fontFace')
@@ -1568,6 +1579,40 @@ const OVERLAY_HTML = `<!doctype html>
   }
 
   var fxBox = document.getElementById('fx')
+  var sceneBox = document.getElementById('scene')
+
+  /**
+   * Draw the beta's scene-space elements.
+   *
+   * The nodes arrive already compiled — a style object per element — because the placement maths
+   * lives in the app, where the editor's canvas uses the very same function. Two implementations
+   * would drift, and a preview that lies about where something will be is worse than none.
+   *
+   * Rebuilt wholesale on every config change. There are a handful of these, they change only when
+   * somebody is editing, and a diff would buy nothing but a chance to be subtly wrong.
+   */
+  function applyScene() {
+    var compiled = cfg.sceneCompiled
+    sceneBox.textContent = ''
+    if (noScene) return
+    if (!compiled || !compiled.scene || !compiled.scene.length) return
+    for (var i = 0; i < compiled.scene.length; i++) {
+      var n = compiled.scene[i]
+      if (n.hidden) continue
+      // a trigger is not drawn until its word turns up in a message
+      if (n.kind === 'trigger') continue
+      var el = n.kind === 'image' ? document.createElement('img') : document.createElement('div')
+      el.className = 'sc-node sc-' + n.kind
+      el.dataset.node = n.id
+      if (n.kind === 'image' && n.image) el.src = n.image
+      if (n.kind === 'text') el.textContent = n.bind === 'static' ? (n.text || '') : ''
+      for (var k in n.css) {
+        if (n.css[k] === undefined || n.css[k] === null) continue
+        try { el.style[k] = n.css[k] } catch (err) { /* a property this build does not know */ }
+      }
+      sceneBox.appendChild(el)
+    }
+  }
   var activeTriggers = {}
   /**
    * Apply a trigger's size/anchor/offsets to its box. Split out of spawnTrigger so the LIVE
@@ -1684,6 +1729,7 @@ const OVERLAY_HTML = `<!doctype html>
 
   // ---------- config application ----------
   function applyCfg() {
+    applyScene()
     fontFace.textContent = cfg.fontData
       ? "@font-face { font-family: '" + (cfg.font || 'OverlayFont').replace(/'/g, '') + "'; src: url('" + cfg.fontData + "'); }"
       : ''

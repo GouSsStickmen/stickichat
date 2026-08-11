@@ -5389,3 +5389,222 @@ button:has(> svg) {
 .hype-clock.spent {
   visibility: hidden;
 }
+
+/* ---------- overlay beta editor: canvas, handles, layers ---------- */
+.osc-host {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(45deg, var(--surface-3) 25%, transparent 25%) 0 0 / 16px 16px,
+    linear-gradient(-45deg, var(--surface-3) 25%, transparent 25%) 0 8px / 16px 16px,
+    linear-gradient(45deg, transparent 75%, var(--surface-3) 75%) 8px -8px / 16px 16px,
+    linear-gradient(-45deg, transparent 75%, var(--surface-3) 75%) -8px 0 / 16px 16px,
+    var(--surface-2);
+  /* the checkerboard says "this is transparent in OBS" without anyone having to be told */
+  user-select: none;
+}
+.osc-backdrop {
+  position: absolute;
+  inset: 0;
+  /* it is a reference, not a target: clicks belong to the elements and the empty canvas */
+  pointer-events: none;
+  /* dimmed, so an element being placed reads as being IN FRONT of the chat rather than lost in
+     it — full strength made a dark decoration indistinguishable from the messages behind it */
+  opacity: 0.6;
+}
+.obe-plate-hint {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+}
+.osc-node {
+  cursor: move;
+}
+.osc-node.locked {
+  cursor: not-allowed;
+}
+.osc-box,
+.osc-avatar {
+  width: 100%;
+  height: 100%;
+}
+.osc-avatar {
+  background: var(--surface-3);
+  min-width: 32px;
+  min-height: 32px;
+}
+.osc-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.osc-text {
+  white-space: pre-wrap;
+}
+.osc-badge-dot {
+  display: inline-block;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  opacity: 0.8;
+}
+/* the frame lives outside the element so it is never rotated, faded or blended with it */
+.osc-frame {
+  position: absolute;
+  pointer-events: none;
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+}
+.osc-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -5px 0 0 -5px;
+  background: var(--surface-1);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  pointer-events: auto;
+}
+.osc-handle.h-tl { left: 0; top: 0; }
+.osc-handle.h-top { left: 50%; top: 0; }
+.osc-handle.h-tr { left: 100%; top: 0; }
+.osc-handle.h-left { left: 0; top: 50%; }
+.osc-handle.h-right { left: 100%; top: 50%; }
+.osc-handle.h-bl { left: 0; top: 100%; }
+.osc-handle.h-bottom { left: 50%; top: 100%; }
+.osc-handle.h-br { left: 100%; top: 100%; }
+.osc-rotate {
+  position: absolute;
+  left: 50%;
+  top: -22px;
+  width: 11px;
+  height: 11px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: var(--surface-1);
+  border: 1px solid var(--accent);
+  cursor: grab;
+  pointer-events: auto;
+}
+.osc-rotate::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 11px;
+  width: 1px;
+  height: 11px;
+  background: var(--accent);
+}
+.osc-guide {
+  position: absolute;
+  background: var(--danger, #ff5c5c);
+  pointer-events: none;
+}
+.osc-guide.x { top: 0; bottom: 0; width: 1px; }
+.osc-guide.y { left: 0; right: 0; height: 1px; }
+
+/* ---- layers ---- */
+.obe {
+  display: grid;
+  grid-template-columns: 190px 1fr 260px;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+.obe-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.obe-col > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+.obe-scroll {
+  overflow-y: auto;
+  padding: 6px;
+  min-height: 0;
+}
+.obe-layer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--fs-md);
+}
+.obe-layer:hover {
+  background: var(--surface-3);
+}
+.obe-layer.sel {
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+}
+.obe-layer .obe-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.obe-layer .obe-mini {
+  opacity: 0.6;
+  font-size: var(--fs-xs);
+}
+.obe-stage {
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 10px;
+  background: var(--surface-1);
+}
+.obe-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+.obe-row > label {
+  width: 92px;
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+.obe-row input[type='number'],
+.obe-row input[type='text'],
+.obe-row select {
+  width: 100%;
+  min-width: 0;
+}
+.obe-grid9 {
+  display: grid;
+  grid-template-columns: repeat(3, 18px);
+  gap: 2px;
+}
+.obe-grid9 button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 3px;
+}
+.obe-grid9 button.on {
+  background: var(--accent);
+}
+.obe-empty {
+  padding: 16px 8px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}

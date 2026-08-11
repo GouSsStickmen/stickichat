@@ -282,6 +282,8 @@ export interface OverlayFill {
   stops?: { color: string; at: number }[]
 }
 
+import type { OverlayScene } from './lib/overlayScene'
+
 /** a decorative PNG pinned to a corner/edge of each message plate or the whole chat zone */
 export interface OverlayDecor {
   id: string
@@ -562,6 +564,18 @@ export interface ChatOverlayConfig {
 
   // ----- word/symbol triggers -----
   triggers: OverlayTrigger[]
+
+  /**
+   * The element/layer document, for the beta edit mode.
+   *
+   * Optional and additive on purpose: an overlay without one behaves exactly as it always has,
+   * and turning the beta on converts what is already there rather than starting blank. Nothing
+   * reads this until `editMode` says so, so the flat fields above stay authoritative until the
+   * user opts in — which is what makes this safe to ship half-built.
+   */
+  scene?: OverlayScene
+  /** which editor drives this overlay; absent = classic */
+  editMode?: 'classic' | 'beta'
   /** id of the trigger being edited: the overlay pins it permanently so its position can be
    *  dialled in live instead of waiting for someone to type the word. Never persisted. */
   triggerPreviewId?: string | null
