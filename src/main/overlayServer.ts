@@ -1112,6 +1112,75 @@ const OVERLAY_HTML = `<!doctype html>
     return img
   }
 
+  /**
+   * Draw the beta's TEMPLATE elements inside one message plate.
+   *
+   * The host is the box that hugs the plate — the same one decorations anchor to — so an element
+   * pinned to the right edge is pinned to the edge of THIS message, whatever length it turned
+   * out to be. That is the whole reason the template is a separate space from the scene: there
+   * are thirty of these on screen and they all move.
+   *
+   * Fields are filled from the line rather than being separate node kinds, because the only
+   * thing that differs between a nick and a timestamp is which string to read. The message body
+   * is the one that goes in as HTML: it is already built and escaped upstream, emotes and all,
+   * and re-escaping it here would print the tags.
+   *
+   * NOTE: no backticks anywhere in here. This whole page is a TypeScript template literal, and
+   * one of them ends it — which is exactly how this function failed to compile the first time.
+   */
+  function addTemplateNodes(host, d) {
+    var compiled = cfg.sceneCompiled
+    if (noScene || !compiled || !compiled.template || !compiled.template.length) return
+    for (var i = 0; i < compiled.template.length; i++) {
+      var n = compiled.template[i]
+      if (n.hidden || n.kind === 'group') continue
+      if (n.kind === 'trigger') continue // word triggers are not placed, they are provoked
+      var el
+      if (n.kind === 'image' || n.kind === 'avatar') {
+        el = document.createElement('img')
+        if (n.kind === 'image') { if (n.image) el.src = n.image }
+        else if (d.avatar) el.src = d.avatar
+      } else if (n.kind === 'badges') {
+        el = document.createElement('div')
+        el.style.display = 'flex'
+        el.style.flexDirection = n.direction || 'row'
+        el.style.gap = (n.gap || 0) + 'px'
+        var list = d.badges || []
+        for (var b = 0; b < list.length; b++) {
+          var bi = document.createElement('img')
+          bi.src = list[b]
+          bi.style.width = (n.itemSize || 18) + 'px'
+          bi.style.height = (n.itemSize || 18) + 'px'
+          el.appendChild(bi)
+        }
+      } else if (n.kind === 'text') {
+        el = document.createElement('div')
+        if (n.bind === 'message') el.innerHTML = d.body || ''
+        else if (n.bind === 'nick') el.textContent = d.nick || ''
+        else if (n.bind === 'timestamp') el.textContent = fmtTs(d.ts)
+        else if (n.bind === 'channel') el.textContent = channel
+        else if (n.bind === 'event') el.textContent = d.sys || ''
+        else el.textContent = n.text || ''
+        if (n.bind === 'nick' && n.useChatColor) el.style.color = nickColorFor(d)
+        if (n.maxLines) {
+          el.style.display = '-webkit-box'
+          el.style.webkitBoxOrient = 'vertical'
+          el.style.webkitLineClamp = String(n.maxLines)
+          el.style.overflow = 'hidden'
+        }
+      } else {
+        el = document.createElement('div')
+      }
+      el.className = 'sc-node sc-' + n.kind
+      el.dataset.node = n.id
+      for (var k in n.css) {
+        if (n.css[k] === undefined || n.css[k] === null) continue
+        try { el.style[k] = n.css[k] } catch (err) { /* a property this build does not know */ }
+      }
+      host.appendChild(el)
+    }
+  }
+
   function assemble(d) {
     var el = document.createElement('div')
     el.className = 'line'
@@ -1191,6 +1260,7 @@ const OVERLAY_HTML = `<!doctype html>
     wrap.appendChild(content)
     el.appendChild(wrap)
     addDecors(wrap, 'message')
+    addTemplateNodes(wrap, d)
 
     // zone-level alignment of fit plates
     if (cfg.layout !== 'horizontal') {
