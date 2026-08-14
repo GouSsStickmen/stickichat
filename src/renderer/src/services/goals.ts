@@ -2,7 +2,7 @@ import { GoalOverlayConfig, OverlayLineData } from '../types'
 import { useSettingsStore } from '../store/settings'
 import { useAccountsStore } from '../store/accounts'
 import { useChatStore } from '../store/chat'
-import { getFollowerTotal, getSubTotal } from '../lib/helix'
+import { getFollowerTotal, getSubTotal, getUsers } from '../lib/helix'
 import { diagWarn } from '../lib/diag'
 
 /**
@@ -48,10 +48,33 @@ function setProgress(id: string, value: number): void {
  */
 function channelOf(g: GoalOverlayConfig): string {
   if (g.channel) return g.channel.toLowerCase()
-  const ids = useChatStore.getState().channelIds
   const mine = useAccountsStore.getState().accounts.find((a) => a._accessToken)?.login?.toLowerCase()
-  if (mine && ids[mine]) return mine
-  return Object.keys(ids)[0] ?? ''
+  if (mine) return mine
+  return Object.keys(useChatStore.getState().channelIds)[0] ?? ''
+}
+
+/**
+ * login → broadcaster id, for channels whose chat is not open.
+ *
+ * The app normally learns ids from ROOMSTATE, which only arrives on joining a chat — so a goal
+ * could only ever watch a channel that happened to have a tab open, and said so with a message
+ * about an id it did not have. Asking Twitch directly removes the dependency entirely. Ids never
+ * change, so one lookup per login for the life of the session is enough.
+ */
+const idCache = new Map<string, string>()
+
+async function broadcasterId(channel: string): Promise<string | null> {
+  const known = useChatStore.getState().channelIds[channel]
+  if (known) return known
+  const cached = idCache.get(channel)
+  if (cached) return cached
+  const account = useAccountsStore.getState().accounts.find((a) => a._accessToken)
+  if (!account) return null
+  const users = await getUsers(account, { logins: [channel] })
+  const id = users[0]?.id
+  if (!id) return null
+  idCache.set(channel, id)
+  return id
 }
 
 /** what the last attempt to read this goal's number did; the editor shows it */
@@ -113,9 +136,9 @@ export async function refreshGoal(g: GoalOverlayConfig): Promise<GoalStatus> {
     return mark(true, 'Рахується з подій чату')
   }
   const ch = channelOf(g)
-  if (!ch) return mark(false, 'Немає каналу — відкрий чат каналу або обери його в цьому оверлеї')
-  const broadcasterId = useChatStore.getState().channelIds[ch]
-  if (!broadcasterId) return mark(false, `Канал ${ch} не підключений — id ще невідомий`)
+  if (!ch) return mark(false, 'Немає каналу — обери його в цьому оверлеї')
+  const bid = await broadcasterId(ch)
+  if (!bid) return mark(false, `Не вдалось дізнатись id каналу ${ch} — перевір назву та авторизацію акаунта`)
   const accounts = useAccountsStore.getState().accounts
   // the subscriber total is broadcaster-only and the follower total wants the broadcaster or one
   // of its mods, so the account that IS this channel is the one to ask with
@@ -125,9 +148,7 @@ export async function refreshGoal(g: GoalOverlayConfig): Promise<GoalStatus> {
   if (!account) return mark(false, 'Немає авторизованого акаунта')
   try {
     const total =
-      g.metric === 'followers'
-        ? await getFollowerTotal(account, broadcasterId)
-        : await getSubTotal(account, broadcasterId)
+      g.metric === 'followers' ? await getFollowerTotal(account, bid) : await getSubTotal(account, bid)
     if (typeof total !== 'number') {
       return mark(
         false,

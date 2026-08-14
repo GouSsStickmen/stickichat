@@ -1,6 +1,7 @@
 import { HttpResponse, httpGet, httpJson, retryAfterMs } from './http'
 import { Account, Cheermote } from '../types'
 import { useSettingsStore } from '../store/settings'
+import { useUiStore } from '../store/ui'
 import { ensureFreshToken, refreshAccountToken } from './twitchAuth'
 import { diagWarn } from './diag'
 
@@ -40,8 +41,19 @@ async function helixRequest(
       token = await refreshAccountToken(clientId, account)
       res = await doCall(token)
     } catch (e) {
-      console.warn('[helix] token refresh failed, keeping original 401', e)
+      /**
+       * A rejected refresh token is terminal, not transient: nothing this account asks Twitch will
+       * ever succeed again until somebody signs in. Only warning to the console meant every Helix
+       * feature — follower totals, subscriber counts, stream info, avatars — quietly returned
+       * nothing, with the chat still connected on the socket it had already authenticated, so
+       * there was no outward sign at all that the account had gone stale.
+       */
+      useUiStore.getState().markReauthNeeded(account.id, account.login)
+      diagWarn('helix', `refresh rejected for ${account.login}: ${String(e)}`)
     }
+  } else if (res.ok) {
+    // it works again — a re-auth, or a refresh that finally went through
+    useUiStore.getState().clearReauthNeeded(account.id)
   }
   noteRateLimit(path, res)
   return res
