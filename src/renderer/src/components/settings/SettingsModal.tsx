@@ -7,6 +7,8 @@ import {
   ChatOverlayConfig,
   CustomTheme,
   DEFAULT_CHAT_OVERLAY,
+  DEFAULT_EMOTE_OVERLAY,
+  DEFAULT_GOAL_OVERLAY,
   DEFAULT_HOTKEYS,
   DEFAULT_OVERLAY_STYLE,
   HighlightKind,
@@ -15,6 +17,9 @@ import {
   MESSAGE_ONLY_TYPES,
   ModActionType,
   ModButton,
+  OverlayBase,
+  OverlayConfig,
+  OverlayKind,
   OverlayProfile,
   SOUND_PRESETS,
   Settings,
@@ -2834,13 +2839,13 @@ function OverlaySection(): React.JSX.Element {
   const safeName = (s2: string): string => s2.replace(/[^\w\-. ]+/g, '_').trim() || 'overlay'
   // pictures and fonts live as files now; a shared overlay has to carry the bytes, so expand the
   // asset references on the way out (see main/assets.ts)
-  const exportOne = async (o: ChatOverlayConfig): Promise<void> => {
-    const full = (await window.sticki.inlineAssets(o)) as ChatOverlayConfig
+  const exportOne = async (o: OverlayConfig): Promise<void> => {
+    const full = (await window.sticki.inlineAssets(o)) as OverlayConfig
     downloadJson(exportOverlayJson(full), `${safeName(o.name)}.stickichat-overlay.json`)
   }
   const exportAll = async (): Promise<void> => {
     if (!settings.chatOverlays.length) return
-    const full = (await window.sticki.inlineAssets(settings.chatOverlays)) as ChatOverlayConfig[]
+    const full = (await window.sticki.inlineAssets(settings.chatOverlays)) as OverlayConfig[]
     downloadJson(exportOverlayJson(full), `stickichat-overlays-${new Date().toISOString().slice(0, 10)}.json`)
   }
   const importFile = (file: File | undefined): void => {
@@ -2860,17 +2865,27 @@ function OverlaySection(): React.JSX.Element {
 
   const firstChannel = tabs.flatMap((tb) => tb.panes)[0]?.channel ?? ''
   const openChannels = [...new Set(tabs.flatMap((tb) => tb.panes).map((pn) => pn.channel).filter(Boolean))]
-  const urlFor = (o: ChatOverlayConfig): string =>
+  const urlFor = (o: OverlayConfig): string =>
     `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(o.channel || firstChannel || 'КАНАЛ')}&profile=${encodeURIComponent(o.id)}`
-  const patchOverlay = (id: string, patch: Partial<ChatOverlayConfig>): void =>
+  const patchOverlay = (id: string, patch: Partial<OverlayBase>): void =>
     set({ chatOverlays: useSettingsStore.getState().settings.chatOverlays.map((o) => (o.id === id ? { ...o, ...patch } : o)) })
 
-  const addOverlay = (): void => {
+  /** what each kind is called and how it is drawn in the list */
+  const KINDS: { kind: OverlayKind; icon: string; label: string; hint: string }[] = [
+    { kind: 'chat', icon: '💬', label: t('oe.chatOverlay'), hint: 'Повідомлення чату на екрані.' },
+    { kind: 'emotes', icon: '🎉', label: 'Святкування', hint: 'Емоути з чату розсипаються по всьому екрану.' },
+    { kind: 'goal', icon: '🎯', label: 'Ціль', hint: 'Смуга прогресу: фоловери, підписки, бітси.' }
+  ]
+
+  const addOverlay = (kind: OverlayKind): void => {
     const id = nextId('ov')
+    const meta = KINDS.find((k) => k.kind === kind)!
+    const base =
+      kind === 'emotes' ? DEFAULT_EMOTE_OVERLAY : kind === 'goal' ? DEFAULT_GOAL_OVERLAY : DEFAULT_CHAT_OVERLAY
     set({
       chatOverlays: [
         ...settings.chatOverlays,
-        { ...DEFAULT_CHAT_OVERLAY, id, name: `${t('oe.chatOverlay')} ${settings.chatOverlays.length + 1}` }
+        { ...base, id, name: `${meta.label} ${settings.chatOverlays.length + 1}` } as OverlayConfig
       ]
     })
     setPickerOpen(false)
@@ -2906,7 +2921,9 @@ function OverlaySection(): React.JSX.Element {
       {settings.chatOverlays.map((o) => (
         <div key={o.id} className="ov-card">
           <div className="ov-card-main">
-            <span className="ov-type">💬 {t('oe.chatOverlay')}</span>
+            <span className="ov-type" title={KINDS.find((k) => k.kind === o.type)?.hint}>
+              {KINDS.find((k) => k.kind === o.type)?.icon ?? '💬'} {KINDS.find((k) => k.kind === o.type)?.label ?? t('oe.chatOverlay')}
+            </span>
             <b>{o.name}</b>
             <select
               className="ov-chan"
@@ -2959,10 +2976,12 @@ function OverlaySection(): React.JSX.Element {
       ) : (
         <div className="ov-picker">
           <p className="hint" style={{ marginTop: 0 }}>{t('oe.pickType')}</p>
-          <button className="ov-type-btn" onClick={addOverlay}>
-            💬 {t('oe.chatOverlay')}
-            <span className="hint">{t('oe.chatOverlay.desc')}</span>
-          </button>
+          {KINDS.map((k) => (
+            <button key={k.kind} className="ov-type-btn" onClick={() => addOverlay(k.kind)}>
+              {k.icon} {k.label}
+              <span className="hint">{k.kind === 'chat' ? t('oe.chatOverlay.desc') : k.hint}</span>
+            </button>
+          ))}
           <button className="ghost" onClick={() => setPickerOpen(false)}>{t('oe.cancel')}</button>
         </div>
       )}

@@ -11,9 +11,27 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-/** message body → safe HTML (emotes/cheers as <img class="emote">, everything else escaped) */
-function bodyHtml(msg: ChatMessage): string {
+/**
+ * How many subscriptions one line is worth to a goal.
+ *
+ * The mass-gift header ("X дарує 20 підписок") is an announcement: the twenty gifts arrive as
+ * their own lines right behind it, so counting the header as well would double every batch.
+ */
+function subsWorth(msg: ChatMessage): number | undefined {
+  if (!msg.subEvent) return undefined
+  return msg.giftGroupId ? 0 : 1
+}
+
+/**
+ * message body → safe HTML (emotes/cheers as <img class="emote">, everything else escaped)
+ *
+ * The emote urls come back alongside it: the celebration overlay wants the pictures on their own,
+ * and they are already in hand here. Pulling them out of the finished HTML afterwards would mean
+ * parsing our own markup to recover what this loop just had.
+ */
+function bodyHtml(msg: ChatMessage): { html: string; emotes: string[] } {
   let out = ''
+  const emotes: string[] = []
   const tokens = tokenizeMessage(
     msg,
     lookupEmote(msg.channel),
@@ -30,6 +48,7 @@ function bodyHtml(msg: ChatMessage): string {
       case 'emote':
         // zero-width emotes are LAYERS on the base one — the overlay used to render only the
         // base, so a combo built in chat lost its decoration on stream
+        emotes.push(tk.emote.url)
         if (tk.overlays.length) {
           out +=
             `<span class="emote-stack">` +
@@ -63,12 +82,13 @@ function bodyHtml(msg: ChatMessage): string {
         out += `<b>${esc(tk.name)}</b>`
         break
       case 'cheer':
+        if (tk.url) emotes.push(tk.url)
         out += tk.url ? `<img class="emote" src="${esc(tk.url)}">` : ''
         out += `<b style="color:${esc(tk.color)}">${tk.bits}</b>`
         break
     }
   }
-  return out
+  return { html: out, emotes }
 }
 
 /**
@@ -105,7 +125,10 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
     }
   }
 
-  const cosmetic = s.sevenTvNickColors && msg.userId ? ensureSevenTvCosmetic(msg.userId) : undefined
+  // NOT gated by the app's own `sevenTvNickColors`: that switch is about how the chat window
+  // looks to the streamer, and it was quietly deciding what the stream showed to everyone else.
+  // The paint always travels; the overlay's own toggle decides whether to wear it.
+  const cosmetic = msg.userId ? ensureSevenTvCosmetic(msg.userId) : undefined
   const color = ensureReadable(cosmetic?.color || msg.color || fallbackColor(msg.login), true)
 
   const badges: string[] = []
@@ -120,6 +143,7 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
     }
   }
 
+  const rendered = msg.text ? bodyHtml(msg) : { html: '', emotes: [] }
   const line: OverlayLineData = {
     id: msg.id,
     user: msg.userId,
@@ -127,18 +151,27 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
     nick: msg.displayName,
     color,
     paint: cosmetic?.paint,
+    paintSize: cosmetic?.paintSize,
+    paintRepeat: cosmetic?.paintRepeat,
+    paintShadow: cosmetic?.paintShadow,
+    firstMsg: msg.isFirstMsg || undefined,
+    firstStream: msg.isFirstInSession || undefined,
     avatar: ensureAvatar(msg.login),
     badges,
     badgeSets,
     badgeVers,
-    body: msg.text ? bodyHtml(msg) : '',
+    body: rendered.html,
+    emotes: rendered.emotes.length ? rendered.emotes : undefined,
     text: msg.text,
     act: msg.isAction || undefined,
     kind: 'msg',
     ts: msg.timestamp,
     redeem: !!msg.redeemed,
     bits: !!msg.bits,
+    bitsAmount: msg.bits || undefined,
     sub: msg.system === 'usernotice',
+    subCount: subsWorth(msg),
+    subGift: msg.giftFrom ? true : undefined,
     cmd: /^!/.test(msg.text)
   }
   if (msg.system === 'usernotice' && msg.systemText) line.sys = esc(msg.systemText)

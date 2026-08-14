@@ -136,6 +136,25 @@ export interface TextStyle {
  */
 export interface NodeBase {
   id: string
+  /**
+   * This element sits in the plate's normal flow instead of being pinned.
+   *
+   * Something has to give the plate its size. Everything absolutely positioned contributes
+   * nothing to it, so a plate made only of pinned parts collapses to nothing and the message
+   * has no box to sit in. Exactly one element per template is the one that grows — normally the
+   * message text — and every other part is pinned around whatever size it turns out to be.
+   * That is also what "the plate follows the message" has always meant here.
+   */
+  flow?: boolean
+  /**
+   * Cover the whole container instead of having a size of its own.
+   *
+   * The plate is the reason this exists: it has to be exactly as big as the message turned out to
+   * be, which is not a number anybody can type. Without it the converted plate came out with no
+   * width and no height and would have collapsed to nothing the moment it reached OBS — the kind
+   * of thing that makes someone turn the whole mode off and not come back.
+   */
+  stretch?: boolean
   /** shown in the layer list; free text, defaults to the type's name */
   name: string
   hidden?: boolean
@@ -195,6 +214,16 @@ export interface TextNode extends NodeBase {
   bind: 'static' | 'nick' | 'message' | 'timestamp' | 'channel' | 'event'
   text?: string
   style: TextStyle
+  /**
+   * A background behind THIS text, with its own padding.
+   *
+   * A separate box node would have to be told the text's size, and told again every time the
+   * message changes — which is a plate that is always one message behind. Carried here it simply
+   * grows with the words, which is what a plate under the nick or under the message has to do.
+   */
+  box?: BoxStyle
+  padX?: number
+  padY?: number
   /** nick only: use the chatter's own colour instead of `style.color` */
   useChatColor?: boolean
   /** how many lines before it clips; 0 = unlimited */
@@ -220,9 +249,11 @@ export interface AvatarNode extends NodeBase {
   style?: BoxStyle
 }
 
-/** a picture that appears when a message contains a word */
+/** a picture that appears when a message contains a word — or when the message is an occasion */
 export interface TriggerNode extends NodeBase {
   kind: 'trigger'
+  /** absent = a word in the message */
+  on?: 'word' | 'firstMsg' | 'firstStream'
   word: string
   image: string
   anim: 'pop' | 'bounce' | 'fade' | 'slide' | 'wiggle'

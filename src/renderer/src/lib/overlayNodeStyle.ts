@@ -122,6 +122,17 @@ export function textStyleCss(style: TextStyle | undefined): Record<string, strin
  * to a corner pivots on the corner instead of wandering away from it.
  */
 export function layoutCss(node: NodeBase): Record<string, string | number | undefined> {
+  if (node.stretch) {
+    // no anchors, no origin, no size: it simply is the container
+    return {
+      position: 'absolute',
+      inset: 0,
+      transform: node.rotate ? `rotate(${node.rotate}deg)` : undefined,
+      opacity: node.opacity !== 1 ? node.opacity : undefined,
+      mixBlendMode: node.blend && node.blend !== 'normal' ? node.blend : undefined,
+      display: node.hidden ? 'none' : undefined
+    }
+  }
   const a = anchorFractions(node.anchor)
   const o = anchorFractions(node.origin)
   const parts = [
@@ -154,6 +165,7 @@ export function nodeRect(
   container: { w: number; h: number },
   measured?: { w: number; h: number }
 ): { x: number; y: number; w: number; h: number } {
+  if (node.stretch) return { x: 0, y: 0, w: container.w, h: container.h }
   const a = anchorFractions(node.anchor)
   const o = anchorFractions(node.origin)
   const w = (node.w ?? measured?.w ?? 0) * node.scale
@@ -196,6 +208,8 @@ export interface CompiledNode {
   id: string
   kind: string
   css: Record<string, string | number | undefined>
+  /** sits in the plate's normal flow and gives it its size */
+  flow?: boolean
   hidden?: boolean
   image?: string
   bind?: string
@@ -230,11 +244,22 @@ function compileOne(node: OverlayNodeLike): CompiledNode {
   }
   if (node.kind === 'text') {
     Object.assign(css, textStyleCss(node.style))
+    // a text element's own plate: it grows with the words rather than being a box someone has to
+    // keep resizing to match them
+    if (node.box) Object.assign(css, boxStyleCss(node.box))
+    if (node.padX || node.padY) css.padding = (node.padY ?? 0) + 'px ' + (node.padX ?? 0) + 'px'
+  }
+  // the flow element is what the plate sizes itself to, so it is NOT taken out of the flow
+  if (node.flow) {
+    css.position = 'relative'
+    css.left = undefined
+    css.top = undefined
   }
   return {
     id: node.id,
     kind: node.kind,
     css,
+    flow: node.flow,
     hidden: node.hidden,
     image: node.image,
     bind: node.bind,
@@ -255,6 +280,9 @@ function compileOne(node: OverlayNodeLike): CompiledNode {
 /** the loose shape compileOne reads — every optional field of every node kind */
 type OverlayNodeLike = NodeBase & {
   kind: string
+  box?: BoxStyle
+  padX?: number
+  padY?: number
   style?: BoxStyle & TextStyle
   image?: string
   bind?: string

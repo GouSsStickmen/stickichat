@@ -3,8 +3,16 @@ import { useSettingsStore } from '../store/settings'
 import { useLayoutStore } from '../store/layout'
 import { useT } from '../i18n'
 import { PlayIcon, CloseIcon } from './Icons'
-import { ChatOverlayConfig, DEFAULT_CHAT_OVERLAY, OverlayDecor, OverlayFill, OverlayTrigger } from '../types'
+import {
+  ChatOverlayConfig,
+  DEFAULT_CHAT_OVERLAY,
+  OverlayConfig,
+  OverlayDecor,
+  OverlayFill,
+  OverlayTrigger
+} from '../types'
 import OverlayBetaEditor from './OverlayBetaEditor'
+import OverlayAltEditor from './OverlayAltEditors'
 import { OVERLAY_PRESETS, randomizeOverlay } from '../lib/overlayPresets'
 import { ColorField, FontPicker, NickListArea, Toggle } from './settings/SettingsModal'
 import { nextId } from '../store/layout'
@@ -16,14 +24,14 @@ import { nextId } from '../store/layout'
  * is pushed to the overlay server immediately, on top of the normal debounced settings save.
  */
 
-function readFile(file: File | undefined, maxMb: number, cb: (dataUrl: string) => void): void {
+export function readFile(file: File | undefined, maxMb: number, cb: (dataUrl: string) => void): void {
   if (!file || file.size > maxMb * 1024 * 1024) return
   const reader = new FileReader()
   reader.onload = () => cb(String(reader.result))
   reader.readAsDataURL(file)
 }
 
-function Row({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }): React.JSX.Element {
+export function Row({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }): React.JSX.Element {
   return (
     <div className="set-row" title={hint}>
       <label className={hint ? 'has-hint' : undefined}>{label}</label>
@@ -85,7 +93,7 @@ const BADGE_REPLACE_LABEL: Record<string, string> = Object.fromEntries(
   BADGE_REPLACE_CHOICES.map((c) => [c.id, c.label])
 )
 
-function Num({
+export function Num({
   v,
   on,
   min = 0,
@@ -172,7 +180,7 @@ function Num({
   )
 }
 
-function Sec({ title, children, defaultOpen }: { title: string; children: React.ReactNode; defaultOpen?: boolean }): React.JSX.Element {
+export function Sec({ title, children, defaultOpen }: { title: string; children: React.ReactNode; defaultOpen?: boolean }): React.JSX.Element {
   return (
     <details className="oe-sec" open={defaultOpen}>
       <summary>{title}</summary>
@@ -193,7 +201,7 @@ function fillStops(f: OverlayFill): { color: string; at: number }[] {
 }
 
 /** solid/gradient fill editor: kind toggle, multi-stop colors, opacity, angle presets + swatch */
-function FillEditor({ value, onChange }: { value: OverlayFill; onChange: (f: OverlayFill) => void }): React.JSX.Element {
+export function FillEditor({ value, onChange }: { value: OverlayFill; onChange: (f: OverlayFill) => void }): React.JSX.Element {
   const t = useT()
   const f = value
   const stops = fillStops(f)
@@ -330,6 +338,8 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   panPosRef.current = pvPan
   const pushTimer = useRef<number | null>(null)
   const cssRef = useRef<HTMLTextAreaElement>(null)
+  const bigCssRef = useRef<HTMLTextAreaElement>(null)
+  const [cssBig, setCssBig] = useState(false)
   // Ctrl+Z: undo stack of config snapshots (grouped — at most one snapshot per 500ms burst)
   const undoStack = useRef<ChatOverlayConfig[]>([])
   const redoStack = useRef<ChatOverlayConfig[]>([])
@@ -415,7 +425,14 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
     )
   }
 
-  const update = (patch: Partial<ChatOverlayConfig>): void => {
+  /** write the big editor's text back, and keep the small box in step so they never disagree */
+  const applyBigCss = (): void => {
+    const text = bigCssRef.current?.value ?? ''
+    update({ customCss: text })
+    if (cssRef.current) cssRef.current.value = text
+  }
+
+  const update = (patch: Partial<OverlayConfig>): void => {
     const fresh = useSettingsStore.getState().settings
     const cur = fresh.chatOverlays.find((o) => o.id === overlayId)
     if (cur && !undoing.current && Date.now() - lastSnap.current > 500) {
@@ -424,7 +441,9 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
       redoStack.current = []
       lastSnap.current = Date.now()
     }
-    const next = fresh.chatOverlays.map((o) => (o.id === overlayId ? { ...o, ...patch } : o))
+    // the cast is the price of one editor driving three shapes: a patch is only ever applied to
+    // the overlay it came from, but spreading it over the union widens `type` past the discriminant
+    const next = fresh.chatOverlays.map((o) => (o.id === overlayId ? ({ ...o, ...patch } as OverlayConfig) : o))
     set({ chatOverlays: next })
     // push to the overlay server slightly debounced: every cfg event makes the page rebuild
     // all visible lines, and doing that on EVERY keystroke/slider tick froze the preview
@@ -435,7 +454,8 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
       const s2 = useSettingsStore.getState().settings
       const styles: Record<string, unknown> = {}
       for (const o of s2.chatOverlays) {
-        const custom = s2.customFonts.find((f) => f.name === o.font)
+        const font = o.type === 'chat' || o.type === 'goal' ? o.font : undefined
+        const custom = font ? s2.customFonts.find((f) => f.name === font) : undefined
         styles[o.id] = { ...o, fontData: custom?.data }
       }
       window.sticki.overlayConfigure(true, s2.overlayPort, styles)
@@ -468,6 +488,26 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
     }
   }
 
+  /**
+   * The other overlay kinds get their own panel.
+   *
+   * Everything below this line is about a chat plate — nick, badges, layout, triggers — and none
+   * of it means anything to a celebration or a goal. The narrowing is also what lets the rest of
+   * this component keep treating `ov` as a chat overlay without a cast on every line.
+   */
+  if (ov.type !== 'chat') {
+    return (
+      <OverlayAltEditor
+        ov={ov}
+        update={update}
+        channel={channel}
+        setChannel={setChannel}
+        channels={channels}
+        port={settings.overlayPort}
+      />
+    )
+  }
+
   const applyPreset = (patch: Partial<ChatOverlayConfig>): void => {
     // a preset is a full restart from defaults + its own overrides — predictable results
     update({ ...DEFAULT_CHAT_OVERLAY, ...patch, id: ov.id, name: ov.name, channel: ov.channel, type: 'chat' })
@@ -488,6 +528,25 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
 
   const updTrigger = (id: string, patch: Partial<OverlayTrigger>): void =>
     update({ triggers: ov.triggers.map((x) => (x.id === id ? { ...x, ...patch } : x)) })
+
+  /**
+   * The three first-message marks, which used to be one single-choice field.
+   *
+   * An overlay carrying only `hlFirstMode` is read through it, so the switches show what is
+   * really being drawn rather than resetting to a default the streamer never chose. Touching any
+   * of them writes all three at once — that is the moment the old field stops being consulted.
+   * The overlay page derives this the same way (`firstFx`); the two have to stay in step.
+   */
+  const hlFx =
+    ov.hlFirstBorder != null || ov.hlFirstGlow != null || ov.hlFirstFill != null
+      ? { border: !!ov.hlFirstBorder, glow: !!ov.hlFirstGlow, fill: !!ov.hlFirstFill }
+      : {
+          border: !ov.hlFirstMode || ov.hlFirstMode === 'border' || ov.hlFirstMode === 'both',
+          glow: ov.hlFirstMode === 'glow' || ov.hlFirstMode === 'both',
+          fill: ov.hlFirstMode === 'tint' || ov.hlFirstMode === 'plate'
+        }
+  const setHlFx = (patch: Partial<ChatOverlayConfig>): void =>
+    update({ hlFirstBorder: hlFx.border, hlFirstGlow: hlFx.glow, hlFirstFill: hlFx.fill, ...patch })
 
   return (
     <div className="app oe-root">
@@ -518,6 +577,24 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
         <button className="ghost" onClick={() => window.close()}>✕</button>
       </div>
 
+      {cssBig && (
+        <div className="oe-css-modal">
+          <div className="oe-css-head">
+            <b>Власний CSS — {ov.name}</b>
+            <div className="spacer" />
+            <button onClick={() => applyBigCss()}>{t('oe.css.apply')}</button>
+            <button className="ghost" onClick={() => { applyBigCss(); setCssBig(false) }}>✕</button>
+          </div>
+          <textarea
+            ref={bigCssRef}
+            className="oe-css-big"
+            spellCheck={false}
+            autoFocus
+            defaultValue={ov.customCss}
+            onBlur={() => applyBigCss()}
+          />
+        </div>
+      )}
       {ov.editMode === 'beta' ? (
         <div className="oe-body" style={{ padding: 8 }}>
           <OverlayBetaEditor
@@ -1127,6 +1204,15 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 <option value="palette">{t('oe.nickColor.palette')}</option>
               </select>
             </Row>
+            {ov.nickColorMode === 'twitch' && (
+              <Row label="Кольорові ніки 7TV" hint="Градієнтна фарба 7TV на ніку. Окремо від такого ж перемикача для вікна чату — той стосується лише того, що бачиш ти.">
+                <input
+                  type="checkbox"
+                  checked={ov.nickPaint !== false}
+                  onChange={(e) => update({ nickPaint: e.target.checked })}
+                />
+              </Row>
+            )}
             {ov.nickColorMode === 'fixed' && (
               <Row label={t('oe.nickFixed')}>
                 <ColorField value={ov.nickFixedColor} defaultValue="#a970ff" onChange={(v) => update({ nickFixedColor: v })} />
@@ -1520,15 +1606,28 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               >
                 <img src={tr.image} alt="" />
                 <div className="oe-decor-ctl">
-                  <textarea
-                    placeholder={t('oe.triggers.word')}
-                    title={t('oe.triggers.word.hint')}
-                    value={tr.word}
-                    spellCheck={false}
-                    rows={2}
-                    style={{ width: 130, resize: 'vertical', minHeight: 34 }}
-                    onChange={(e) => updTrigger(tr.id, { word: e.target.value })}
-                  />
+                  <select
+                    title="Що викликає реакцію"
+                    value={tr.on ?? 'word'}
+                    onChange={(e) => updTrigger(tr.id, { on: e.target.value as OverlayTrigger['on'] })}
+                  >
+                    <option value="word">На слово</option>
+                    <option value="firstMsg">Перше повідомлення</option>
+                    <option value="firstStream">Перше за етер</option>
+                  </select>
+                  {/* an occasion has no word to type — hiding the field says so better than a
+                      disabled box the streamer keeps trying to fill in */}
+                  {(tr.on ?? 'word') === 'word' && (
+                    <textarea
+                      placeholder={t('oe.triggers.word')}
+                      title={t('oe.triggers.word.hint')}
+                      value={tr.word}
+                      spellCheck={false}
+                      rows={2}
+                      style={{ width: 130, resize: 'vertical', minHeight: 34 }}
+                      onChange={(e) => updTrigger(tr.id, { word: e.target.value })}
+                    />
+                  )}
                   <select
                     title={t('oe.triggers.attach')}
                     value={tr.attach ?? 'screen'}
@@ -1590,6 +1689,132 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
             <Toggle label={t('overlay.showBits')} value={ov.showBits} onChange={(v) => update({ showBits: v })} />
             <Toggle label={t('overlay.showSubs')} value={ov.showSubs} onChange={(v) => update({ showSubs: v })} />
             <Toggle label={t('overlay.showModActions')} value={ov.showModActions} onChange={(v) => update({ showModActions: v })} />
+            <div className="set-group-title" style={{ marginTop: 10 }}>Перші повідомлення</div>
+            <Toggle
+              label="Перше повідомлення юзера"
+              hint="Позначити повідомлення людини, яка пише в цьому каналі вперше за весь час. Виграє в «першого за етер», якщо збіглися — бо перше за весь час завжди є і першим за етер."
+              value={!!ov.hlFirstMsg}
+              onChange={(v) => update({ hlFirstMsg: v })}
+            />
+            {ov.hlFirstMsg && (
+              <Row label="Колір">
+                <ColorField value={ov.hlFirstMsgColor} defaultValue="#7a5cff" onChange={(v) => update({ hlFirstMsgColor: v })} />
+              </Row>
+            )}
+            <Toggle
+              label="Перше за етер"
+              hint="Позначити перше повідомлення людини на цьому етері. Новачків, які пишуть у каналі вперше за весь час, ця позначка не бере — вони з категорії вище."
+              value={!!ov.hlFirstStream}
+              onChange={(v) => update({ hlFirstStream: v })}
+            />
+            {ov.hlFirstStream && (
+              <Row label="Колір">
+                <ColorField value={ov.hlFirstStreamColor} defaultValue="#12b886" onChange={(v) => update({ hlFirstStreamColor: v })} />
+              </Row>
+            )}
+            {(ov.hlFirstMsg || ov.hlFirstStream) && (
+              <>
+                <Toggle
+                  label="Рамка"
+                  hint="Обвід по краю плашки — бере її форму й заокруглення, нічого не зсуває."
+                  value={hlFx.border}
+                  onChange={(v) => setHlFx({ hlFirstBorder: v })}
+                />
+                <Toggle
+                  label="Сяйво"
+                  hint="Світиться по силуету плашки."
+                  value={hlFx.glow}
+                  onChange={(v) => setHlFx({ hlFirstGlow: v })}
+                />
+                <Toggle
+                  label="Заливка"
+                  hint="Шар кольору поверх плашки. На 100% повністю перекриває її колір — це і є «інший колір плашки»."
+                  value={hlFx.fill}
+                  onChange={(v) => setHlFx({ hlFirstFill: v })}
+                />
+                {hlFx.border && (
+                  <Row label="Товщина рамки">
+                    <input
+                      type="range"
+                      min={1}
+                      max={12}
+                      value={ov.hlFirstSize ?? 2}
+                      onChange={(e) => update({ hlFirstSize: Number(e.target.value) })}
+                    />
+                    <span className="hint">{ov.hlFirstSize ?? 2}px</span>
+                  </Row>
+                )}
+                {hlFx.glow && (
+                  <Row label="Сила сяйва">
+                    <input
+                      type="range"
+                      min={2}
+                      max={60}
+                      value={ov.hlFirstGlowSize ?? (ov.hlFirstSize ?? 2) * 4}
+                      onChange={(e) => update({ hlFirstGlowSize: Number(e.target.value) })}
+                    />
+                    <span className="hint">{ov.hlFirstGlowSize ?? (ov.hlFirstSize ?? 2) * 4}px</span>
+                  </Row>
+                )}
+                {hlFx.fill && (
+                  <Row label="Насиченість" hint="Менше — видно градієнт чи картинку плашки під заливкою. 100% — суцільний колір.">
+                    <input
+                      type="range"
+                      min={5}
+                      max={100}
+                      value={Math.round((ov.hlFirstOpacity ?? 0.35) * 100)}
+                      onChange={(e) => update({ hlFirstOpacity: Number(e.target.value) / 100 })}
+                    />
+                    <span className="hint">{Math.round((ov.hlFirstOpacity ?? 0.35) * 100)}%</span>
+                  </Row>
+                )}
+                <Toggle
+                  label="Свій колір тексту"
+                  hint="Перефарбовує текст повідомлення. Нік лишається своїм — це те, за чим людину впізнають."
+                  value={!!ov.hlFirstTextColor}
+                  onChange={(v) => update({ hlFirstTextColor: v ? '#ffffff' : '' })}
+                />
+                {!!ov.hlFirstTextColor && (
+                  <Row label="Колір тексту">
+                    <ColorField
+                      value={ov.hlFirstTextColor}
+                      defaultValue="#ffffff"
+                      onChange={(v) => update({ hlFirstTextColor: v })}
+                    />
+                  </Row>
+                )}
+                <Toggle
+                  label="Пульсація"
+                  hint="Кілька секунд повідомлення дихає яскравістю — щоб його помітили в рухомому чаті."
+                  value={!!ov.hlFirstPulse}
+                  onChange={(v) => update({ hlFirstPulse: v })}
+                />
+                <Toggle
+                  label="Підпис над повідомленням"
+                  hint="Маленький рядок кольором підсвітки всередині плашки. Працює на будь-якому стилі, навіть коли рамку не видно."
+                  value={!!ov.hlFirstLabel}
+                  onChange={(v) => update({ hlFirstLabel: v })}
+                />
+                {ov.hlFirstLabel && ov.hlFirstMsg && (
+                  <Row label="Підпис: вперше">
+                    <input
+                      value={ov.hlFirstMsgLabel ?? ''}
+                      placeholder="Перше повідомлення"
+                      onChange={(e) => update({ hlFirstMsgLabel: e.target.value })}
+                    />
+                  </Row>
+                )}
+                {ov.hlFirstLabel && ov.hlFirstStream && (
+                  <Row label="Підпис: за етер">
+                    <input
+                      value={ov.hlFirstStreamLabel ?? ''}
+                      placeholder="Перше за етер"
+                      onChange={(e) => update({ hlFirstStreamLabel: e.target.value })}
+                    />
+                  </Row>
+                )}
+              </>
+            )}
             <Toggle label={t('oe.sound')} hint={t('oe.sound.hint')} value={ov.msgSoundEnabled} onChange={(v) => update({ msgSoundEnabled: v })} />
             {ov.msgSoundEnabled && (
               <Row label={t('oe.sound.file')}>
@@ -1660,9 +1885,17 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
               placeholder={'.line { }\n.content { }\n.nick { }\n.body { }\n.avatar { }\n.meta { }'}
               onBlur={() => update({ customCss: cssRef.current?.value ?? '' })}
             />
-            <button style={{ marginTop: 6 }} onClick={() => update({ customCss: cssRef.current?.value ?? '' })}>
-              {t('oe.css.apply')}
-            </button>
+            <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+              <button onClick={() => update({ customCss: cssRef.current?.value ?? '' })}>
+                {t('oe.css.apply')}
+              </button>
+              {/* A stylesheet does not fit in a sidebar box. The column is a couple of hundred
+                  pixels wide and CSS is written in lines, so anything real has scrolled out of
+                  sight by the fourth rule — this is where it actually gets edited. */}
+              <button className="ghost" onClick={() => setCssBig(true)}>
+                ⤢ На весь екран
+              </button>
+            </div>
           </Sec>
         </div>
 

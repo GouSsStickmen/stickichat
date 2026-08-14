@@ -69,9 +69,26 @@ function forTheWire<T>(value: T): T {
   return value
 }
 
+/**
+ * The style for one OBS source, found by the profile id baked into its URL.
+ *
+ * There used to be a fallback to the first overlay whenever that id was not found, and it is why
+ * deleting an overlay reshuffled every browser source in OBS: a source whose profile had gone
+ * quietly put on somebody else's costume, and since the fallback was always "whichever is first",
+ * the whole set appeared to rotate through each other in the order they were created. A URL is a
+ * promise that THIS source shows THIS overlay — guessing is worse than admitting it is gone.
+ *
+ * An EMPTY profile is a different case: that is a URL from before profiles existed, and the first
+ * overlay is the only thing it can possibly mean.
+ */
 function styleFor(profile: string): OverlayStyle | undefined {
-  const style = styles[profile] ?? Object.values(styles)[0]
+  const style = profile ? styles[profile] : Object.values(styles)[0]
   return style ? forTheWire(style) : undefined
+}
+
+/** the id was named and is not among the overlays — the source outlived what it pointed at */
+function profileMissing(profile: string): boolean {
+  return !!profile && !styles[profile]
 }
 
 export function overlayPush(channel: string, line: OverlayLine): void {
@@ -110,6 +127,15 @@ export function overlayDelete(channel: string, del: OverlayDelete): void {
 
 function broadcastStyles(): void {
   for (const c of clients) {
+    if (profileMissing(c.profile)) {
+      // say so out loud rather than leaving it wearing the last look it happened to receive
+      try {
+        c.res.write('event: gone\ndata: {}\n\n')
+      } catch {
+        clients.delete(c)
+      }
+      continue
+    }
     const style = styleFor(c.profile)
     if (!style) continue
     try {
@@ -150,8 +176,17 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
   server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`)
     if (url.pathname === '/overlay') {
+      /**
+       * Which page an OBS source gets is decided by the overlay it points at.
+       *
+       * The kind is resolved here rather than inside one page that branches at runtime, because
+       * these three share nothing but the SSE connection: a chat log, a particle engine and a
+       * progress bar have different DOM, different CSS and different loops. One page holding all
+       * three would ship every one of them to every source and grow a condition around each line.
+       */
+      const kind = (styleFor(url.searchParams.get('profile') ?? '') as { type?: string } | null)?.type
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(OVERLAY_HTML)
+      res.end(kind === 'emotes' ? EMOTE_HTML : kind === 'goal' ? GOAL_HTML : OVERLAY_HTML)
       return
     }
     if (url.pathname === '/events') {
@@ -167,6 +202,7 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
       // this overlay's config first, then the backlog so the page isn't empty on connect
       const style = styleFor(profile)
       if (style) res.write(`event: cfg\ndata: ${JSON.stringify(style)}\n\n`)
+      else if (profileMissing(profile)) res.write('event: gone\ndata: {}\n\n')
       for (const line of backlog.get(channel) ?? []) {
         res.write(`data: ${JSON.stringify(line)}\n\n`)
       }
@@ -260,6 +296,9 @@ const OVERLAY_HTML = `<!doctype html>
      never clipped; slant = skewed layer, notch = clipped layer with drop-shadow outline */
   .content.shaped { isolation: isolate; background: transparent !important; border: none !important; clip-path: none !important; box-shadow: none !important; }
   .plate-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+  /* the shaped plate's paint and its clip; the filters stay on .plate-bg above it, see
+     applyShapedLayer — a clip-path cuts away the drop-shadows of its own element */
+  .plate-shape { position: absolute; inset: 0; box-sizing: border-box; }
   /* diagonal sheen for the glass effect — strength comes from --gloss (plateGloss) */
   .has-gloss { position: relative; overflow: hidden; }
   .has-gloss::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; z-index: 0;
@@ -279,6 +318,18 @@ const OVERLAY_HTML = `<!doctype html>
   .nick { font-weight: 700; }
   .ts { opacity: 0.85; font-size: 0.8em; }
   .sysline { font-style: italic; opacity: 0.9; }
+  /* first-message caption — inside the plate, above the words, in the mark's own colour */
+  .firstcap { font-size: 0.72em; font-weight: 700; letter-spacing: 0.03em; line-height: 1.35; opacity: 0.95; }
+  /* the mark's own fill layer. It is a LAYER and not the element's background because the plate
+     may already be using that background for a picture drawn in a ::before, or may have handed
+     its visuals to a .plate-bg entirely — in both cases a background set here is simply covered */
+  .content.firsthl { isolation: isolate; }
+  .firsthl-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit; }
+  /* frame + glow for a MASKED plate, which clips its own outline and shadow away with everything
+     else; the wrapper hugs the same box and is not masked */
+  .firsthl-ring { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+  /* a few breaths and then still: enough to catch the eye in a moving chat, not a strobe */
+  @keyframes fhl-pulse { 0%, 100% { filter: none } 50% { filter: brightness(1.35) saturate(1.15) } }
   .body img.emote { height: var(--emote-h, 1.4em); vertical-align: -0.3em; margin: 0 1px; }
   /* a badge replaced by TEXT: a compact pill that lines up with the image badges */
   .badges .badge-text { display: inline-block; padding: 0 5px; margin: 0 2px; border-radius: 4px;
@@ -487,6 +538,11 @@ const OVERLAY_HTML = `<!doctype html>
 <style>
   /* the beta's element layer: pinned to the source, never intercepting anything */
   #scene { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #gone {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 99;
+    padding: 8px 12px; font: 600 14px/1.3 'Segoe UI', sans-serif;
+    color: #fff; background: rgba(180, 30, 30, 0.92);
+  }
   .sc-node { position: absolute; }
   .sc-image { display: block; object-fit: contain; }
   .sc-text { white-space: pre-wrap; }
@@ -551,6 +607,10 @@ const OVERLAY_HTML = `<!doctype html>
     avatarShow: false, avatarPos: 'left', avatarSize: 28, avatarRadius: 50,
     badgesShow: true, badgesPos: 'before', badgeSize: 18,
     tsShow: false, tsSeconds: false, tsColor: '#b8b8c0', tsPos: 'after',
+    nickPaint: true,
+    hlFirstMsg: false, hlFirstMsgColor: '#7a5cff', hlFirstMsgLabel: '',
+    hlFirstStream: false, hlFirstStreamColor: '#12b886', hlFirstStreamLabel: '',
+    hlFirstMode: 'border', hlFirstSize: 2, hlFirstOpacity: 0.35, hlFirstLabel: false, hlFirstPulse: false,
     decors: [], triggers: [], triggerPreviewId: null, hiddenUsers: [],
     hideCommands: false, showRedeems: true, showBits: true, showSubs: true, showModActions: false,
     customCss: ''
@@ -615,6 +675,34 @@ const OVERLAY_HTML = `<!doctype html>
       parts.push('0 0 ' + cfg.glowSize * 2 + 'px ' + cfg.glowColor)
     }
     return parts.length ? parts.join(', ') : 'none'
+  }
+  /**
+   * The same outline, shadow and glow as textShadow(), but as FILTERS.
+   *
+   * This is what a painted nick needs, and the reason the paints looked like solid coloured bars.
+   * A 7TV paint is the element's background clipped to the glyphs, and backgrounds paint BELOW
+   * text shadows. The outline is a ring of zero-blur copies of the text in every direction, so
+   * their union covers the letters completely — it painted right over the paint, and the glyphs
+   * themselves are transparent, so what reached the screen was a solid outline-coloured blob the
+   * shape of the name. With the default black outline that read as "the 7TV nicks are black".
+   *
+   * A filter runs on the finished element instead, so the paint stays on top and still gets its
+   * outline. Four zero-blur drop-shadows are enough for a square dilation: each one shadows the
+   * result of the previous, so the horizontal pair widens the shape and the vertical pair then
+   * grows the already-widened shape into the corners.
+   */
+  function paintedNickFilter(own) {
+    var parts = own ? [own] : []
+    var w = cfg.outlineWidth
+    if (w > 0) {
+      parts.push('drop-shadow(' + w + 'px 0 0 ' + cfg.outlineColor + ')')
+      parts.push('drop-shadow(-' + w + 'px 0 0 ' + cfg.outlineColor + ')')
+      parts.push('drop-shadow(0 ' + w + 'px 0 ' + cfg.outlineColor + ')')
+      parts.push('drop-shadow(0 -' + w + 'px 0 ' + cfg.outlineColor + ')')
+    }
+    if (cfg.shadowBlur > 0) parts.push('drop-shadow(0 2px ' + cfg.shadowBlur + 'px ' + cfg.shadowColor + ')')
+    if (cfg.glowSize > 0) parts.push('drop-shadow(0 0 ' + cfg.glowSize + 'px ' + cfg.glowColor + ')')
+    return parts.join(' ')
   }
   function nickColorFor(d) {
     if (cfg.nickColorMode === 'fixed') return cfg.nickFixedColor
@@ -708,6 +796,25 @@ const OVERLAY_HTML = `<!doctype html>
       layer.className = 'plate-bg'
       el.insertBefore(layer, el.firstChild)
     }
+    /**
+     * Two nested elements, and the split is the whole point.
+     *
+     * clip-path is applied to the element AFTER its filters, so a drop-shadow grown around a
+     * clipped shape is cut away by the very same shape. The notch plate drew its border and its
+     * glow exactly that way and neither of them ever reached the screen — measured at 18 stray
+     * pixels against 772 for the same border on a rectangle.
+     *
+     * So the shape lives on the inner element and the filters on the outer one, which has no clip
+     * of its own: the outer renders the already-clipped octagon and grows the shadow around it.
+     * Slant needs the same split for the mark's own drop-shadows, and gets it for free.
+     */
+    var paint = layer.querySelector(':scope > .plate-shape')
+    if (!paint) {
+      paint = document.createElement('div')
+      paint.className = 'plate-shape'
+      layer.appendChild(paint)
+    }
+    layer.style.filter = ''
     el.classList.add('shaped')
     var s = cfg.plateShapeSize == null ? 12 : cfg.plateShapeSize
     var bcol = hexToRgba(cfg.plateBorderColor, cfg.plateBorderOpacity == null ? 1 : cfg.plateBorderOpacity)
@@ -716,36 +823,37 @@ const OVERLAY_HTML = `<!doctype html>
     var imgs = []
     if (cfg.plateImage) imgs.push("url('" + cfg.plateImage + "')")
     if (bg.indexOf('gradient') !== -1) imgs.push(bg)
-    layer.style.backgroundColor = bg.indexOf('gradient') === -1 ? bg : 'transparent'
-    layer.style.backgroundImage = imgs.join(', ')
-    layer.style.backgroundSize = cfg.plateImageFit === 'contain' ? 'contain' : cfg.plateImageFit === 'stretch' ? '100% 100%' : 'cover'
-    layer.style.backgroundPosition = 'center'
-    layer.style.backgroundRepeat = 'no-repeat'
-    layer.style.opacity = ''
+    paint.style.backgroundColor = bg.indexOf('gradient') === -1 ? bg : 'transparent'
+    paint.style.backgroundImage = imgs.join(', ')
+    paint.style.backgroundSize = cfg.plateImageFit === 'contain' ? 'contain' : cfg.plateImageFit === 'stretch' ? '100% 100%' : 'cover'
+    paint.style.backgroundPosition = 'center'
+    paint.style.backgroundRepeat = 'no-repeat'
+    paint.style.opacity = ''
     var r = cfg.plateRadius || [8, 8, 8, 8]
     if (cfg.plateShape === 'slant') {
       // shape size = skew strength (px of horizontal drift, converted to an angle-ish skew)
       var deg = Math.max(-45, Math.min(45, s))
-      layer.style.transform = 'skewX(' + -deg + 'deg)'
-      layer.style.clipPath = ''
-      layer.style.borderRadius = r[0] + 'px ' + r[1] + 'px ' + r[2] + 'px ' + r[3] + 'px'
-      layer.style.border = cfg.plateBorderWidth > 0 ? cfg.plateBorderWidth + 'px ' + cfg.plateBorderStyle + ' ' + bcol : ''
+      paint.style.transform = 'skewX(' + -deg + 'deg)'
+      paint.style.clipPath = ''
+      paint.style.borderRadius = r[0] + 'px ' + r[1] + 'px ' + r[2] + 'px ' + r[3] + 'px'
+      paint.style.border = cfg.plateBorderWidth > 0 ? cfg.plateBorderWidth + 'px ' + cfg.plateBorderStyle + ' ' + bcol : ''
       var sh = []
       if (cfg.plateShadowBlur > 0) sh.push((cfg.plateShadowX || 0) + 'px ' + (cfg.plateShadowY == null ? 2 : cfg.plateShadowY) + 'px ' + cfg.plateShadowBlur + 'px ' + cfg.plateShadowColor)
       if (cfg.plateGlowSize > 0) { sh.push('0 0 ' + cfg.plateGlowSize + 'px ' + cfg.plateGlowColor); sh.push('0 0 ' + cfg.plateGlowSize * 2 + 'px ' + cfg.plateGlowColor) }
-      layer.style.boxShadow = sh.length ? sh.join(', ') : ''
-      layer.style.filter = ''
-      // the animated border effect runs on the layer (its border/glow are the visible ones)
-      layer.style.animation = cfg.plateAnim && cfg.plateAnim !== 'none'
+      paint.style.boxShadow = sh.length ? sh.join(', ') : ''
+      // the animated border effect runs on the painted element (its border/glow are the visible ones)
+      paint.style.animation = cfg.plateAnim && cfg.plateAnim !== 'none'
         ? 'pa-fx ' + (cfg.plateAnimSpeed || 2) + 's infinite ' + (cfg.plateAnim === 'blink' ? 'step-end' : 'linear')
         : ''
     } else {
-      // notch: octagon clip; outline + glow via drop-shadow (they follow the clip shape)
-      layer.style.transform = ''
-      layer.style.borderRadius = ''
-      layer.style.border = ''
-      layer.style.boxShadow = ''
-      layer.style.clipPath = shapeClip('notch')
+      // notch: octagon clip on the inner element; outline + glow as drop-shadows on the OUTER one,
+      // where the clip can no longer cut them off
+      paint.style.transform = ''
+      paint.style.borderRadius = ''
+      paint.style.border = ''
+      paint.style.boxShadow = ''
+      paint.style.animation = ''
+      paint.style.clipPath = shapeClip('notch')
       var f = []
       var bw = cfg.plateBorderWidth
       if (bw > 0) {
@@ -756,7 +864,6 @@ const OVERLAY_HTML = `<!doctype html>
       }
       if (cfg.plateGlowSize > 0) f.push('drop-shadow(0 0 ' + cfg.plateGlowSize + 'px ' + cfg.plateGlowColor + ')')
       if (cfg.plateShadowBlur > 0) f.push('drop-shadow(' + (cfg.plateShadowX || 0) + 'px ' + (cfg.plateShadowY == null ? 2 : cfg.plateShadowY) + 'px ' + cfg.plateShadowBlur + 'px ' + cfg.plateShadowColor + ')')
-      // drop-shadow clips inside the layer box — give the effects room around the clip
       layer.style.filter = f.length ? f.join(' ') : ''
       layer.style.animation = ''
     }
@@ -888,6 +995,134 @@ const OVERLAY_HTML = `<!doctype html>
     }
   }
 
+  /**
+   * Which of the three marks are on.
+   *
+   * They used to be one single-choice field, so an overlay that only carries hlFirstMode is read
+   * through it and keeps the look it had. The editor writes all three the moment one is touched.
+   */
+  function firstFx() {
+    if (cfg.hlFirstBorder != null || cfg.hlFirstGlow != null || cfg.hlFirstFill != null) {
+      return { border: !!cfg.hlFirstBorder, glow: !!cfg.hlFirstGlow, fill: !!cfg.hlFirstFill }
+    }
+    var m = cfg.hlFirstMode || 'border'
+    return {
+      border: m === 'border' || m === 'both',
+      glow: m === 'glow' || m === 'both',
+      fill: m === 'tint' || m === 'plate'
+    }
+  }
+
+  /**
+   * Mark a first message ON the plate the overlay already has.
+   *
+   * The mark has to survive whatever the plate is, and that is the whole difficulty: the plate
+   * has three different ways of drawing itself, and painting onto the element works for only one
+   * of them.
+   *
+   *   slant / notch   the visuals live on a .plate-bg layer and the .shaped rule wipes the
+   *                   element's own background and box-shadow with !important. A fill or a glow
+   *                   set here was thrown away — which is exactly what "does not work on some
+   *                   presets" was. Those marks go onto that layer instead, as extra backgrounds
+   *                   and extra drop-shadows, so they take the polygon's real silhouette.
+   *   picture plate   the image is a ::before, so a background set on the element is behind it.
+   *                   The fill is therefore its own layer, placed last so it covers the picture.
+   *   mask / feather  a mask clips the element's outline and shadow away with everything else,
+   *                   so the frame and the glow move to the wrapper, which hugs the same box.
+   *
+   * When there is no plate at all the mark has nothing to be a frame around — it would shrink to
+   * the letters and read as an accident — so it borrows a little padding and a radius first.
+   */
+  function markFirst(el, wrap, color, label) {
+    var fx = firstFx()
+    var size = cfg.hlFirstSize == null ? 2 : cfg.hlFirstSize
+    // the glow gets its own number: a 2px frame next to a 40px halo is a perfectly reasonable
+    // thing to want, and one slider driving both could never say it
+    var glow = cfg.hlFirstGlowSize == null ? size * 4 : cfg.hlFirstGlowSize
+    var op = cfg.hlFirstOpacity == null ? 0.35 : cfg.hlFirstOpacity
+    var boxed = cfg.plateMode === 'fit' || cfg.plateMode === 'line'
+    var shape = el.querySelector(':scope > .plate-bg')
+    // the shaped plate paints on its inner element and filters on the outer one — the fill has to
+    // land on the paint, the frame and the glow on the filters
+    var paint = shape ? shape.querySelector(':scope > .plate-shape') : null
+    var masked = boxed && !shape && (cfg.plateMask || cfg.plateEdgeBlur > 0)
+    el.classList.add('firsthl')
+    if (!boxed && (fx.border || fx.fill)) {
+      el.style.padding = '2px 7px'
+      el.style.borderRadius = '6px'
+    }
+    if (cfg.hlFirstTextColor) {
+      // the message text only: the nick carries who somebody is, and repainting it would throw
+      // away their own colour or their 7TV paint
+      var body = el.querySelector('.body')
+      if (body) body.style.color = cfg.hlFirstTextColor
+      var sys = el.querySelector('.sysline')
+      if (sys) sys.style.color = cfg.hlFirstTextColor
+    }
+    if (fx.fill) {
+      var wash = hexToRgba(color, op)
+      if (paint) {
+        var grad = 'linear-gradient(' + wash + ', ' + wash + ')'
+        paint.style.backgroundImage = paint.style.backgroundImage
+          ? grad + ', ' + paint.style.backgroundImage
+          : grad
+      } else {
+        var bg = document.createElement('div')
+        bg.className = 'firsthl-bg'
+        bg.style.background = wash
+        // last of the negative-z children, so it covers the plate's own picture as well
+        el.appendChild(bg)
+      }
+    }
+    if (fx.border || fx.glow) {
+      if (shape) {
+        // the silhouette is a polygon: an outline would trace the element's rectangle instead.
+        // Four tight drop-shadows grow the shape itself, the same trick the painted nicks use
+        var f = []
+        if (fx.border) {
+          f.push('drop-shadow(' + size + 'px 0 0 ' + color + ')')
+          f.push('drop-shadow(-' + size + 'px 0 0 ' + color + ')')
+          f.push('drop-shadow(0 ' + size + 'px 0 ' + color + ')')
+          f.push('drop-shadow(0 -' + size + 'px 0 ' + color + ')')
+        }
+        if (fx.glow) f.push('drop-shadow(0 0 ' + glow + 'px ' + color + ')')
+        shape.style.filter = shape.style.filter ? shape.style.filter + ' ' + f.join(' ') : f.join(' ')
+      } else {
+        var host = el
+        if (masked) {
+          host = document.createElement('div')
+          host.className = 'firsthl-ring'
+          // the wrapper has no radius of its own — borrow the plate's so the ring still fits it
+          host.style.borderRadius = el.style.borderRadius
+          wrap.appendChild(host)
+        }
+        // an outline, not a border: it sits OUTSIDE the box, so it never eats a pixel of the
+        // plate's own design, never changes the message's size, and Chromium bends it around the
+        // plate's border-radius on its own
+        if (fx.border) {
+          host.style.outline = size + 'px solid ' + color
+          host.style.outlineOffset = '0px'
+        }
+        if (fx.glow) {
+          host.style.boxShadow = '0 0 ' + glow + 'px ' + color + ', 0 0 ' + glow * 2 + 'px ' + color +
+            (host.style.boxShadow ? ', ' + host.style.boxShadow : '')
+        }
+      }
+    }
+    if (cfg.hlFirstPulse) {
+      // animation is a LIST — appended, so a plate that already animates keeps doing so
+      var pulse = 'fhl-pulse 1.6s ease-in-out 4'
+      el.style.animation = el.style.animation ? el.style.animation + ', ' + pulse : pulse
+    }
+    if (cfg.hlFirstLabel && label) {
+      var cap = document.createElement('div')
+      cap.className = 'firstcap'
+      cap.textContent = label
+      cap.style.color = color
+      el.insertBefore(cap, el.firstChild)
+    }
+  }
+
   function addDecors(el, scope) {
     var ds = cfg.decors || []
     for (var i = 0; i < ds.length; i++) {
@@ -960,12 +1195,21 @@ const OVERLAY_HTML = `<!doctype html>
     nick.style.fontWeight = cfg.nickBold ? '700' : '400'
     nick.style.fontStyle = cfg.nickItalic ? 'italic' : 'normal'
     nick.style.fontSize = cfg.nickScale !== 100 ? (cfg.nickScale / 100) + 'em' : ''
-    if (cfg.nickColorMode === 'twitch' && d.paint) {
+    if (cfg.nickPaint !== false && cfg.nickColorMode === 'twitch' && d.paint) {
+      // the text is about to be made transparent so the paint shows through it, so the paint has
+      // to be complete: a URL paint without its size and repeat paints nothing, and an invisible
+      // nick is exactly what "the 7TV nicks are black" looked like
       nick.style.background = d.paint
+      if (d.paintSize) nick.style.backgroundSize = d.paintSize
+      if (d.paintRepeat) nick.style.backgroundRepeat = d.paintRepeat
       nick.style.webkitBackgroundClip = 'text'
       nick.style.backgroundClip = 'text'
       nick.style.color = 'transparent'
       nick.style.webkitTextFillColor = 'transparent'
+      // and the line's text-shadow has to go: see paintedNickFilter
+      nick.style.textShadow = 'none'
+      var pf = paintedNickFilter(d.paintShadow)
+      if (pf) nick.style.filter = pf
     } else {
       nick.style.color = nickColorFor(d)
     }
@@ -1128,9 +1372,14 @@ const OVERLAY_HTML = `<!doctype html>
    * NOTE: no backticks anywhere in here. This whole page is a TypeScript template literal, and
    * one of them ends it — which is exactly how this function failed to compile the first time.
    */
+  function hasTemplate() {
+    var c = cfg.sceneCompiled
+    return !noScene && !!c && !!c.template && c.template.length > 0
+  }
+
   function addTemplateNodes(host, d) {
     var compiled = cfg.sceneCompiled
-    if (noScene || !compiled || !compiled.template || !compiled.template.length) return
+    if (!hasTemplate()) return
     for (var i = 0; i < compiled.template.length; i++) {
       var n = compiled.template[i]
       if (n.hidden || n.kind === 'group') continue
@@ -1259,7 +1508,30 @@ const OVERLAY_HTML = `<!doctype html>
     wrap.style.maxWidth = '100%'
     wrap.appendChild(content)
     el.appendChild(wrap)
+    /**
+     * First-message marks. After the wrapper exists, because a masked plate needs it.
+     *
+     * The first-EVER one wins, and it has to: somebody's first words in the channel are also,
+     * always, their first words this stream. Letting the per-stream mark take them showed the
+     * streamer the smaller of the two facts and hid the bigger one — a brand new viewer looked
+     * exactly like a regular who had just come back.
+     *
+     * So "first this stream" means first today and NOT their first ever, which is what the app's
+     * own highlight rules have always meant by it. A newcomer therefore belongs to the other
+     * category even when only this one is switched on, rather than being quietly mislabelled.
+     */
+    if (d.kind === 'msg') {
+      if (cfg.hlFirstMsg && d.firstMsg) markFirst(content, wrap, cfg.hlFirstMsgColor, cfg.hlFirstMsgLabel)
+      else if (cfg.hlFirstStream && d.firstStream && !d.firstMsg) markFirst(content, wrap, cfg.hlFirstStreamColor, cfg.hlFirstStreamLabel)
+    }
     addDecors(wrap, 'message')
+    // A template REPLACES the classic plate contents rather than sitting over them. Drawing both
+    // was the first thing anyone noticed: every nick and every message appeared twice, once where
+    // the old settings put it and once where the editor did.
+    if (hasTemplate()) {
+      content.style.display = 'none'
+      wrap.style.width = 'fit-content'
+    }
     addTemplateNodes(wrap, d)
 
     // zone-level alignment of fit plates
@@ -1617,8 +1889,8 @@ const OVERLAY_HTML = `<!doctype html>
       } catch (err) { /* noop */ }
     }
     // word/symbol trigger reactions
-    if (!restyling && d.kind === 'msg' && d.text && cfg.triggers && cfg.triggers.length) {
-      var tl = String(d.text).toLowerCase()
+    if (!restyling && d.kind === 'msg' && cfg.triggers && cfg.triggers.length) {
+      var tl = String(d.text || '').toLowerCase()
       var nickl = String(d.login || d.nick || '').toLowerCase()
       // ONE reaction per message, and the winner is decided by the MESSAGE, not by the order
       // the triggers were added: whichever trigger word appears EARLIEST in the text fires.
@@ -1627,19 +1899,30 @@ const OVERLAY_HTML = `<!doctype html>
       var best = null, bestAt = Infinity
       for (var ti = 0; ti < cfg.triggers.length; ti++) {
         var tg = cfg.triggers[ti]
-        if (!tg.word || !tg.image) continue
-        // one trigger can hold MANY words/phrases/nicks — one per line
-        // NB: this whole page lives in a TS template literal — regex escapes like \\n get
-        // mangled there, so split on the raw newline char code instead
-        var words = String(tg.word).split(String.fromCharCode(10))
+        if (!tg.image) continue
         var at = Infinity
-        for (var wi = 0; wi < words.length; wi++) {
-          var w = words[wi].trim().toLowerCase()
-          if (!w) continue
-          var asNick = w.replace(/^@/, '')
-          if (asNick && nickl === asNick) { at = -1; break }
-          var idx = tl.indexOf(w)
-          if (idx !== -1 && idx < at) at = idx
+        var on = tg.on || 'word'
+        if (on !== 'word') {
+          // A reaction to the OCCASION rather than to a word. It beats every word match, because
+          // it is a fact about the whole message rather than about something inside it — and the
+          // first-ever case takes precedence over first-this-stream for the same reason the mark
+          // does: it is always both, and the bigger fact is the one worth reacting to.
+          if (on === 'firstMsg' ? !d.firstMsg : !(d.firstStream && !d.firstMsg)) continue
+          at = -2
+        } else {
+          if (!tg.word || !d.text) continue
+          // one trigger can hold MANY words/phrases/nicks — one per line
+          // NB: this whole page lives in a TS template literal — regex escapes like \\n get
+          // mangled there, so split on the raw newline char code instead
+          var words = String(tg.word).split(String.fromCharCode(10))
+          for (var wi = 0; wi < words.length; wi++) {
+            var w = words[wi].trim().toLowerCase()
+            if (!w) continue
+            var asNick = w.replace(/^@/, '')
+            if (asNick && nickl === asNick) { at = -1; break }
+            var idx = tl.indexOf(w)
+            if (idx !== -1 && idx < at) at = idx
+          }
         }
         if (at < bestAt) { bestAt = at; best = tg }
       }
@@ -1650,6 +1933,19 @@ const OVERLAY_HTML = `<!doctype html>
 
   var fxBox = document.getElementById('fx')
   var sceneBox = document.getElementById('scene')
+
+  var goneBox = null
+  function gone(on) {
+    if (!on) {
+      if (goneBox) { goneBox.remove(); goneBox = null }
+      return
+    }
+    if (goneBox) return
+    goneBox = document.createElement('div')
+    goneBox.id = 'gone'
+    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
+    document.body.appendChild(goneBox)
+  }
 
   /**
    * Draw the beta's scene-space elements.
@@ -1899,8 +2195,16 @@ const OVERLAY_HTML = `<!doctype html>
   function connect() {
     var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
     es.addEventListener('cfg', function (e) {
-      try { cfg = Object.assign(cfg, JSON.parse(e.data)); applyCfg() } catch (err) { /* noop */ }
+      try { cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false); applyCfg() } catch (err) { /* noop */ }
     })
+    /**
+     * This source points at an overlay that no longer exists.
+     *
+     * Silence here is what made deleting an overlay so confusing: the source kept whatever look
+     * it last received and appeared to have become a different overlay. Better to say it, in the
+     * source itself, where the person looking for the problem actually is.
+     */
+    es.addEventListener('gone', function () { gone(true) })
     es.addEventListener('del', function (e) {
       try {
         var d = JSON.parse(e.data)
@@ -1929,12 +2233,17 @@ const OVERLAY_HTML = `<!doctype html>
   var EMOTE = 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/2.0'
   function demoLines() {
     return [
-      { nick: 'Bobik069', color: '#ff69b4', badges: [BADGE_MOD], body: 'привіт чат! <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f49c.png">', av: 'B' },
-      { nick: 'Pinuses', color: '#5cb2ff', badges: [], body: 'that timing was clean <img class="emote" src="' + EMOTE + '">', av: 'P' },
+      // two of the samples carry the first-message flags, so the marks can be dialled in while
+      // looking at them instead of waiting for a stranger to turn up on stream
+      { nick: 'Bobik069', color: '#ff69b4', badges: [BADGE_MOD], body: 'привіт чат! <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f49c.png">', av: 'B', first: 'msg' },
+      { nick: 'Pinuses', color: '#5cb2ff', badges: [], body: 'that timing was clean <img class="emote" src="' + EMOTE + '">', av: 'P', first: 'stream' },
       { nick: 'Meme_gavgav', color: '#7cff5c', badges: [BADGE_VIP], body: 'гав гав гав <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f436.png">', av: 'M' },
       { nick: 'I_Love_Vladyslav', color: '#ffd75c', badges: [], body: 'Їжте щедрі ґрона! Quick brown fox 0123', av: 'I' },
       { nick: 'Ivan_In_My_Ass', color: '#ff8a5c', badges: [], body: 'хто тут головний по мемах?', av: 'I' },
-      { nick: 'n1cole_cat', color: '#5cffd7', badges: [BADGE_VIP], body: 'мур-мур <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f63a.png"> клас стрим', av: 'N' },
+      // one sample wears a 7TV paint, because a paint is a background clipped to the letters and
+      // it is the one thing the outline and glow settings can quietly destroy — better to find
+      // that out here than on stream
+      { nick: 'n1cole_cat', color: '#5cffd7', badges: [BADGE_VIP], body: 'мур-мур <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f63a.png"> клас стрим', av: 'N', paint: 'linear-gradient(90deg, #ff5cae 0%, #ffd75c 50%, #5cffe0 100%)' },
       { nick: 'Mira_Cat', color: '#c95cff', badges: [BADGE_MOD, BADGE_VIP], body: 'дуже класний оверлей вийшов <img class="emoji-img" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/1f431.png">', av: 'M' }
     ]
   }
@@ -1953,6 +2262,9 @@ const OVERLAY_HTML = `<!doctype html>
         avatar: svgAvatar(s.av, s.color),
         badges: s.badges,
         body: s.body,
+        paint: s.paint,
+        firstMsg: s.first === 'msg',
+        firstStream: s.first === 'stream',
         kind: 'msg',
         ts: Date.now()
       })
@@ -2109,6 +2421,589 @@ const OVERLAY_HTML = `<!doctype html>
   else if (preview) startDemo()
   // debug hook (harmless in OBS): lets diagnostics poke the page state from devtools
   window.__oe = { cfg: cfg, applyCfg: applyCfg, append: append, zone: zone }
+})()
+</script>
+</body>
+</html>`
+
+/**
+ * The celebration overlay: emotes from chat scattering over the stream.
+ *
+ * Its own page rather than a mode of the chat one. They share only the SSE connection — this has
+ * no lines, no plates and no layout, just a particle loop over absolutely positioned images, and
+ * folding it into the chat page would ship a physics engine to every chat source.
+ *
+ * Animated emotes need nothing special: the url is the same GIF or WebP chat shows, and an <img>
+ * plays it. That is also why the sprites are images and not a canvas — a canvas would have to
+ * decode and step every animation by hand.
+ *
+ * NOTE: like every page here, this lives inside a TypeScript template literal. No backticks, and
+ * no dollar-brace, anywhere below.
+ */
+const EMOTE_HTML = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>StickiChat Emotes</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  #stage { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+  .sp { position: absolute; left: 0; top: 0; will-change: transform, opacity; transform-origin: 50% 50%; }
+  .sp img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .sp.shadow img { filter: drop-shadow(0 2px 6px rgba(0,0,0,.55)); }
+  #gone { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: #b91c1c; color: #fff;
+    font: 600 14px/1.4 Inter, Segoe UI, sans-serif; padding: 8px 14px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+(function () {
+  var p = new URLSearchParams(location.search)
+  var channel = (p.get('channel') || '').toLowerCase()
+  var profile = p.get('profile') || ''
+  var preview = p.get('preview') === '1'
+  var stage = document.getElementById('stage')
+
+  var cfg = {
+    onChat: true, minEmotes: 1, onBits: false, bitsMin: 100, onSubs: false, onRedeems: false,
+    words: '', allowUsers: '', perMessage: 3, copies: 1, burstMax: 12,
+    maxOnScreen: 60, lifetimeS: 0,
+    sizeMin: 48, sizeMax: 96, opacity: 1, shadow: true, rainbow: false,
+    motion: 'fall', from: 'top', speedMin: 60, speedMax: 160, spread: 30,
+    gravity: 900, bounce: 0.55, spin: 90, wobble: 24, scaleIn: true, fadeOut: true
+  }
+
+  var sprites = []
+  var W = window.innerWidth, H = window.innerHeight
+  window.addEventListener('resize', function () { W = window.innerWidth; H = window.innerHeight })
+
+  function rnd(a, b) { return a + Math.random() * (b - a) }
+  function pick(list) { return list[Math.floor(Math.random() * list.length)] }
+
+  /** where a sprite comes from, and which way it is heading, for the chosen motion */
+  function launch(sp) {
+    var size = sp.size
+    var edge = cfg.from === 'random' ? pick(['top', 'bottom', 'left', 'right']) : cfg.from
+    var speed = rnd(cfg.speedMin, cfg.speedMax)
+    var spread = (cfg.spread || 0) * Math.PI / 180
+    var ang
+    if (cfg.motion === 'burst') {
+      // everything leaves one point in every direction; the "from" setting picks the point
+      if (edge === 'center') { sp.x = W / 2 - size / 2; sp.y = H / 2 - size / 2 }
+      else if (edge === 'top') { sp.x = W / 2 - size / 2; sp.y = -size }
+      else if (edge === 'bottom') { sp.x = W / 2 - size / 2; sp.y = H }
+      else if (edge === 'left') { sp.x = -size; sp.y = H / 2 - size / 2 }
+      else { sp.x = W; sp.y = H / 2 - size / 2 }
+      ang = Math.random() * Math.PI * 2
+    } else if (cfg.motion === 'rise') {
+      sp.x = rnd(-size / 2, W - size / 2); sp.y = H + rnd(0, size)
+      ang = -Math.PI / 2 + rnd(-spread, spread)
+    } else if (cfg.motion === 'fall') {
+      sp.x = rnd(-size / 2, W - size / 2); sp.y = -size - rnd(0, size)
+      ang = Math.PI / 2 + rnd(-spread, spread)
+    } else {
+      // float / fly / physics all enter from an edge and head across
+      if (edge === 'center') { sp.x = W / 2 - size / 2; sp.y = H / 2 - size / 2; ang = Math.random() * Math.PI * 2 }
+      else if (edge === 'top') { sp.x = rnd(-size / 2, W - size / 2); sp.y = -size; ang = Math.PI / 2 + rnd(-spread, spread) }
+      else if (edge === 'bottom') { sp.x = rnd(-size / 2, W - size / 2); sp.y = H; ang = -Math.PI / 2 + rnd(-spread, spread) }
+      else if (edge === 'left') { sp.x = -size; sp.y = rnd(-size / 2, H - size / 2); ang = 0 + rnd(-spread, spread) }
+      else { sp.x = W; sp.y = rnd(-size / 2, H - size / 2); ang = Math.PI + rnd(-spread, spread) }
+    }
+    sp.vx = Math.cos(ang) * speed
+    sp.vy = Math.sin(ang) * speed
+  }
+
+  function spawn(url) {
+    if (sprites.length >= cfg.maxOnScreen) {
+      // the oldest leaves so the newest can arrive: a hard cap that drops the NEW one makes a
+      // busy chat look broken exactly when it is busiest
+      var old = sprites.shift()
+      if (old) old.el.remove()
+    }
+    var size = Math.round(rnd(cfg.sizeMin, cfg.sizeMax))
+    var el = document.createElement('div')
+    el.className = 'sp' + (cfg.shadow ? ' shadow' : '')
+    el.style.width = size + 'px'
+    el.style.height = size + 'px'
+    el.style.opacity = String(cfg.opacity == null ? 1 : cfg.opacity)
+    var img = document.createElement('img')
+    img.src = url
+    img.alt = ''
+    if (cfg.rainbow) img.style.filter = 'hue-rotate(' + Math.floor(Math.random() * 360) + 'deg)'
+    el.appendChild(img)
+    var sp = {
+      el: el, size: size, x: 0, y: 0, vx: 0, vy: 0,
+      rot: cfg.spin ? rnd(0, 360) : 0,
+      vrot: cfg.spin ? rnd(-cfg.spin, cfg.spin) : 0,
+      born: performance.now(),
+      wobPhase: Math.random() * Math.PI * 2,
+      scale: cfg.scaleIn ? 0.2 : 1
+    }
+    launch(sp)
+    draw(sp)
+    stage.appendChild(el)
+    sprites.push(sp)
+  }
+
+  function draw(sp) {
+    sp.el.style.transform = 'translate3d(' + sp.x.toFixed(1) + 'px,' + sp.y.toFixed(1) + 'px,0) rotate(' +
+      sp.rot.toFixed(1) + 'deg) scale(' + sp.scale.toFixed(3) + ')'
+  }
+
+  var last = performance.now()
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000)
+    last = now
+    var life = (cfg.lifetimeS || 0) * 1000
+    for (var i = sprites.length - 1; i >= 0; i--) {
+      var sp = sprites[i]
+      var age = now - sp.born
+      if (cfg.motion === 'physics') {
+        sp.vy += cfg.gravity * dt
+        sp.x += sp.vx * dt
+        sp.y += sp.vy * dt
+        var floor = H - sp.size
+        if (sp.y > floor && sp.vy > 0) { sp.y = floor; sp.vy = -sp.vy * cfg.bounce; sp.vx *= 0.98 }
+        if (sp.x < 0 && sp.vx < 0) { sp.x = 0; sp.vx = -sp.vx * cfg.bounce }
+        if (sp.x > W - sp.size && sp.vx > 0) { sp.x = W - sp.size; sp.vx = -sp.vx * cfg.bounce }
+      } else {
+        sp.x += sp.vx * dt
+        sp.y += sp.vy * dt
+        if (cfg.wobble > 0) {
+          sp.wobPhase += dt * 2
+          sp.x += Math.sin(sp.wobPhase) * cfg.wobble * dt
+        }
+      }
+      sp.rot += sp.vrot * dt
+      if (sp.scale < 1) sp.scale = Math.min(1, sp.scale + dt * 4)
+      // fade the last stretch of a timed life; an untimed sprite simply leaves the screen
+      if (life > 0 && cfg.fadeOut) {
+        var left = life - age
+        if (left < 600) sp.el.style.opacity = String(Math.max(0, left / 600) * (cfg.opacity == null ? 1 : cfg.opacity))
+      }
+      draw(sp)
+      var out = sp.y > H + sp.size * 2 || sp.y < -sp.size * 4 || sp.x < -sp.size * 3 || sp.x > W + sp.size * 3
+      if ((life > 0 && age > life) || (life === 0 && out)) {
+        sp.el.remove()
+        sprites.splice(i, 1)
+      }
+    }
+    requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
+
+  function listOf(s) {
+    var out = []
+    var parts = String(s || '').split(String.fromCharCode(10))
+    for (var i = 0; i < parts.length; i++) {
+      var v = parts[i].trim().toLowerCase()
+      if (v) out.push(v)
+    }
+    return out
+  }
+
+  /** does this line get to throw a party, and with how many emotes */
+  function wanted(d) {
+    if (d.kind !== 'msg') return null
+    var allow = listOf(cfg.allowUsers)
+    if (allow.length && allow.indexOf(String(d.login || '').toLowerCase()) === -1) return null
+    var emotes = d.emotes || []
+    var words = listOf(cfg.words)
+    var hitWord = false
+    if (words.length && d.text) {
+      var tl = String(d.text).toLowerCase()
+      for (var i = 0; i < words.length; i++) { if (tl.indexOf(words[i]) !== -1) { hitWord = true; break } }
+    }
+    var ok = false
+    if (cfg.onChat && emotes.length >= (cfg.minEmotes || 1)) ok = true
+    if (cfg.onBits && d.bits && (d.bitsAmount || 0) >= (cfg.bitsMin || 0)) ok = true
+    if (cfg.onSubs && d.sub) ok = true
+    if (cfg.onRedeems && d.redeem) ok = true
+    if (hitWord) ok = true
+    if (!ok) return null
+    if (!emotes.length) return null
+    return emotes.slice(0, Math.max(1, cfg.perMessage || 1))
+  }
+
+  function celebrate(d) {
+    var list = wanted(d)
+    if (!list) return
+    var budget = Math.max(1, cfg.burstMax || 12)
+    var n = 0
+    for (var i = 0; i < list.length; i++) {
+      for (var c = 0; c < Math.max(1, cfg.copies || 1); c++) {
+        if (n >= budget) return
+        spawn(list[i])
+        n++
+      }
+    }
+  }
+
+  var goneBox = null
+  function gone(on) {
+    if (!on) { if (goneBox) { goneBox.remove(); goneBox = null } return }
+    if (goneBox) return
+    goneBox = document.createElement('div')
+    goneBox.id = 'gone'
+    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
+    document.body.appendChild(goneBox)
+  }
+
+  function connect() {
+    var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
+    es.addEventListener('cfg', function (e) {
+      try { cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false) } catch (err) { /* noop */ }
+    })
+    es.addEventListener('gone', function () { gone(true) })
+    es.onmessage = function (e) {
+      try { celebrate(JSON.parse(e.data)) } catch (err) { /* noop */ }
+    }
+    es.onerror = function () { es.close(); setTimeout(connect, 3000) }
+  }
+  connect()
+
+  if (preview) {
+    var DEMO = [
+      'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/3.0',
+      'https://static-cdn.jtvnw.net/emoticons/v2/1/default/dark/3.0',
+      'https://static-cdn.jtvnw.net/emoticons/v2/88/default/dark/3.0',
+      'https://static-cdn.jtvnw.net/emoticons/v2/354/default/dark/3.0'
+    ]
+    setInterval(function () {
+      celebrate({ kind: 'msg', login: 'demo', text: 'demo', emotes: [pick(DEMO), pick(DEMO)] })
+    }, 900)
+  }
+
+  window.__oe = { cfg: cfg, spawn: spawn, celebrate: celebrate, sprites: sprites }
+})()
+</script>
+</body>
+</html>`
+
+/**
+ * The goal overlay: a bar, a ring or plain numbers, moving towards a target.
+ *
+ * The number itself is not worked out here. The app owns it — it polls Twitch for follower and
+ * subscriber totals and adds up cheers it sees in chat — and pushes it down with the config. An
+ * OBS source restarts whenever the scene does, and a counter that lived on the page would reset
+ * with it; a bar that forgets what it was showing is worse than no bar.
+ *
+ * NOTE: same rule as every page here — no backticks, no dollar-brace.
+ */
+const GOAL_HTML = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>StickiChat Goal</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font-family: Inter, 'Segoe UI', sans-serif; }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #goal { position: relative; }
+  #title { font-weight: 700; margin-bottom: 6px; }
+  .bar { position: relative; overflow: hidden; box-sizing: border-box; }
+  .track { position: absolute; inset: 0; }
+  .fillbar { position: absolute; left: 0; top: 0; bottom: 0; width: 0; transition: width var(--anim, 600ms) cubic-bezier(.22,.9,.3,1); }
+  .nums { position: relative; display: flex; align-items: center; justify-content: center; height: 100%;
+    font-variant-numeric: tabular-nums; font-weight: 700; }
+  .outside { text-align: center; margin-top: 6px; font-variant-numeric: tabular-nums; font-weight: 700; }
+  svg { display: block; overflow: visible; }
+  .ringnums { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+  @keyframes goal-pulse { 0%, 100% { transform: scale(1) } 45% { transform: scale(1.045) } }
+  @keyframes goal-pop { 0% { transform: scale(1) } 30% { transform: scale(1.14) } 60% { transform: scale(0.97) } 100% { transform: scale(1) } }
+  @keyframes goal-shake { 0%, 100% { transform: translateX(0) } 20% { transform: translateX(-7px) } 40% { transform: translateX(6px) } 60% { transform: translateX(-4px) } 80% { transform: translateX(2px) } }
+  @keyframes goal-flash { 0%, 100% { filter: none } 40% { filter: brightness(1.8) saturate(1.3) } }
+  .gain-pulse { animation: goal-pulse 520ms ease-in-out; }
+  .gain-pop { animation: goal-pop 480ms cubic-bezier(.2,1.4,.4,1); }
+  .gain-shake { animation: goal-shake 460ms ease-in-out; }
+  .gain-flash { animation: goal-flash 520ms ease-in-out; }
+  /* the amount just gained, drifting up and away */
+  @keyframes goal-rise { from { opacity: 0; transform: translate(-50%, 6px) scale(.8) } 20% { opacity: 1 }
+    to { opacity: 0; transform: translate(-50%, -34px) scale(1.1) } }
+  .gainlbl { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); font-weight: 800;
+    pointer-events: none; animation: goal-rise 1200ms ease-out forwards; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+  /* pictures: beside the bar, inside it, or filling it */
+  .goalrow { display: flex; align-items: center; gap: 10px; }
+  .goalrow.col { flex-direction: column; }
+  .goalimg { display: block; flex: 0 0 auto; object-fit: contain; }
+  .inimg { position: absolute; top: 50%; transform: translateY(-50%); object-fit: contain; pointer-events: none; }
+  .fillimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+  #gone { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: #b91c1c; color: #fff;
+    font: 600 14px/1.4 Inter, 'Segoe UI', sans-serif; padding: 8px 14px; border-radius: 8px; }
+</style>
+<style id="userCss"></style>
+</head>
+<body>
+<div id="wrap"><div id="goal"></div></div>
+<script>
+(function () {
+  var p = new URLSearchParams(location.search)
+  var channel = (p.get('channel') || '').toLowerCase()
+  var profile = p.get('profile') || ''
+  var preview = p.get('preview') === '1'
+  var host = document.getElementById('goal')
+  var userCss = document.getElementById('userCss')
+
+  var cfg = {
+    metric: 'followers', source: 'auto', base: 0, target: 100, progress: 0, countGifts: true,
+    title: 'Ціль', doneText: '', font: 'Inter', fontSize: 18, textColor: '#ffffff',
+    numbers: 'both', showTitle: true, textInside: false,
+    shape: 'bar', width: 420, height: 34, radius: 17, ringWidth: 14,
+    customText: '',
+    trackFill: { kind: 'solid', color: '#000000', opacity: 0.5 },
+    barFill: { kind: 'gradient', color: '#9147ff', color2: '#5cffe0', angle: 90, opacity: 1 },
+    doneFill: { kind: 'gradient', color: '#12b886', color2: '#c7f464', angle: 90, opacity: 1 },
+    borderWidth: 0, borderColor: '#ffffff', glowSize: 0, glowColor: '#9147ff',
+    animMs: 600, pulseOnGain: true, gainFx: 'pulse', gainLabel: true, gainColor: '#ffe066',
+    image: '', imagePlace: 'left', imageSize: 56, imageOpacity: 1, doneImage: '',
+    customCss: ''
+  }
+  var lastValue = null
+
+  function hexToRgba(hex, op) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '')
+    if (!m) return 'rgba(0,0,0,' + (op == null ? 1 : op) + ')'
+    var n = parseInt(m[1], 16)
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + (op == null ? 1 : op) + ')'
+  }
+  function fill(f) {
+    if (!f) return 'transparent'
+    if (f.opacity <= 0) return 'transparent'
+    if (f.kind === 'gradient') {
+      return 'linear-gradient(' + (f.angle || 0) + 'deg, ' + hexToRgba(f.color, f.opacity) + ', ' + hexToRgba(f.color2, f.opacity) + ')'
+    }
+    return hexToRgba(f.color, f.opacity)
+  }
+  /** a gradient needs a single colour when it has to be an SVG stroke */
+  function flat(f) { return hexToRgba(f && f.color, f && f.opacity == null ? 1 : f.opacity) }
+
+  function value() { return Math.max(0, (cfg.progress || 0) - (cfg.base || 0)) }
+  function target() { return Math.max(1, cfg.target || 1) }
+  function ratio() { return Math.max(0, Math.min(1, value() / target())) }
+
+  function numbersText() {
+    var v = value(), t = target()
+    var pct = Math.round(ratio() * 100)
+    // the streamer's own wording wins, with the numbers written in wherever they put the tokens
+    if (cfg.customText) {
+      return String(cfg.customText)
+        .split('{value}').join(String(v))
+        .split('{target}').join(String(t))
+        .split('{left}').join(String(Math.max(0, t - v)))
+        .split('{percent}').join(pct + '%')
+    }
+    if (cfg.numbers === 'none') return ''
+    if (cfg.numbers === 'percent') return pct + '%'
+    if (cfg.numbers === 'value') return v + ' / ' + t
+    return v + ' / ' + t + '  ·  ' + pct + '%'
+  }
+
+  /**
+   * Wrap the bar (or the ring) with a picture beside it.
+   *
+   * The inside placements are handled by the caller because they belong to the bar's own box; the
+   * ones out here need a row or a column around it, and the wrapper only appears when there is
+   * actually something to put in it.
+   */
+  function placeAround(node, done) {
+    var place = cfg.imagePlace
+    if (!cfg.image && !(done && cfg.doneImage)) return node
+    if (place !== 'left' && place !== 'right' && place !== 'above' && place !== 'below') return node
+    var img = makeImage(done)
+    if (!img) return node
+    var row = document.createElement('div')
+    row.className = 'goalrow' + (place === 'above' || place === 'below' ? ' col' : '')
+    if (place === 'left' || place === 'above') { row.appendChild(img); row.appendChild(node) }
+    else { row.appendChild(node); row.appendChild(img) }
+    return row
+  }
+
+  /** the goal's picture, placed where the config says */
+  function makeImage(done) {
+    var src = done && cfg.doneImage ? cfg.doneImage : cfg.image
+    if (!src) return null
+    var img = document.createElement('img')
+    img.src = src
+    img.alt = ''
+    img.style.opacity = String(cfg.imageOpacity == null ? 1 : cfg.imageOpacity)
+    var s = cfg.imageSize || 56
+    if (cfg.imagePlace === 'fill') {
+      img.className = 'fillimg'
+    } else if (cfg.imagePlace === 'inLeft' || cfg.imagePlace === 'inRight') {
+      img.className = 'inimg'
+      img.style.height = s + 'px'
+      if (cfg.imagePlace === 'inLeft') img.style.left = '6px'
+      else img.style.right = '6px'
+    } else {
+      img.className = 'goalimg'
+      img.style.height = s + 'px'
+      img.style.maxWidth = s * 2 + 'px'
+    }
+    return img
+  }
+
+  function render() {
+    var done = value() >= target()
+    var barCss = fill(done ? cfg.doneFill : cfg.barFill)
+    host.style.font = (cfg.fontSize || 18) + 'px ' + (cfg.font ? "'" + cfg.font + "'" : 'Inter') + ', Inter, sans-serif'
+    host.style.color = cfg.textColor || '#fff'
+    host.style.setProperty('--anim', (cfg.animMs == null ? 600 : cfg.animMs) + 'ms')
+    host.innerHTML = ''
+
+    if (cfg.showTitle && cfg.title) {
+      var t = document.createElement('div')
+      t.id = 'title'
+      t.textContent = cfg.title
+      host.appendChild(t)
+    }
+
+    var label = done && cfg.doneText ? cfg.doneText : numbersText()
+
+    if (cfg.shape === 'text') {
+      var only = document.createElement('div')
+      only.className = 'outside'
+      only.style.marginTop = '0'
+      only.style.fontSize = '1.4em'
+      only.textContent = label
+      host.appendChild(only)
+    } else if (cfg.shape === 'ring') {
+      var size = Math.max(40, cfg.width || 200)
+      var sw = Math.max(2, cfg.ringWidth || 14)
+      var r = (size - sw) / 2
+      var c = 2 * Math.PI * r
+      var box = document.createElement('div')
+      box.style.position = 'relative'
+      box.style.width = size + 'px'
+      box.style.height = size + 'px'
+      var ns = 'http://www.w3.org/2000/svg'
+      var svg = document.createElementNS(ns, 'svg')
+      svg.setAttribute('width', String(size))
+      svg.setAttribute('height', String(size))
+      var bg = document.createElementNS(ns, 'circle')
+      bg.setAttribute('cx', String(size / 2)); bg.setAttribute('cy', String(size / 2)); bg.setAttribute('r', String(r))
+      bg.setAttribute('fill', 'none'); bg.setAttribute('stroke', flat(cfg.trackFill)); bg.setAttribute('stroke-width', String(sw))
+      var fg = document.createElementNS(ns, 'circle')
+      fg.setAttribute('cx', String(size / 2)); fg.setAttribute('cy', String(size / 2)); fg.setAttribute('r', String(r))
+      fg.setAttribute('fill', 'none'); fg.setAttribute('stroke', flat(done ? cfg.doneFill : cfg.barFill))
+      fg.setAttribute('stroke-width', String(sw)); fg.setAttribute('stroke-linecap', 'round')
+      fg.setAttribute('stroke-dasharray', String(c))
+      fg.setAttribute('stroke-dashoffset', String(c * (1 - ratio())))
+      fg.setAttribute('transform', 'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')')
+      fg.style.transition = 'stroke-dashoffset var(--anim, 600ms) cubic-bezier(.22,.9,.3,1)'
+      if (cfg.glowSize > 0) svg.style.filter = 'drop-shadow(0 0 ' + cfg.glowSize + 'px ' + cfg.glowColor + ')'
+      svg.appendChild(bg); svg.appendChild(fg)
+      box.appendChild(svg)
+      var rn = document.createElement('div')
+      rn.className = 'ringnums'
+      rn.textContent = label
+      box.appendChild(rn)
+      var rimg = makeImage(done)
+      if (rimg && cfg.imagePlace === 'fill') box.insertBefore(rimg, box.firstChild)
+      host.appendChild(placeAround(box, done))
+    } else {
+      var bar = document.createElement('div')
+      bar.className = 'bar'
+      bar.style.width = (cfg.width || 420) + 'px'
+      bar.style.height = (cfg.height || 34) + 'px'
+      bar.style.borderRadius = (cfg.radius || 0) + 'px'
+      if (cfg.borderWidth > 0) bar.style.border = cfg.borderWidth + 'px solid ' + cfg.borderColor
+      if (cfg.glowSize > 0) bar.style.boxShadow = '0 0 ' + cfg.glowSize + 'px ' + cfg.glowColor + ', 0 0 ' + cfg.glowSize * 2 + 'px ' + cfg.glowColor
+      var track = document.createElement('div')
+      track.className = 'track'
+      track.style.background = fill(cfg.trackFill)
+      var f = document.createElement('div')
+      f.className = 'fillbar'
+      f.style.background = barCss
+      bar.appendChild(track)
+      bar.appendChild(f)
+      // a picture that fills the bar goes under the fill; one that sits inside it goes over
+      var bimg = makeImage(done)
+      if (bimg && cfg.imagePlace === 'fill') bar.insertBefore(bimg, bar.firstChild)
+      if (cfg.textInside && label) {
+        var inn = document.createElement('div')
+        inn.className = 'nums'
+        inn.textContent = label
+        bar.appendChild(inn)
+      }
+      if (bimg && (cfg.imagePlace === 'inLeft' || cfg.imagePlace === 'inRight')) bar.appendChild(bimg)
+      host.appendChild(placeAround(bar, done))
+      if (!cfg.textInside && label) {
+        var out = document.createElement('div')
+        out.className = 'outside'
+        out.textContent = label
+        host.appendChild(out)
+      }
+      // The transition needs a start value that the browser has actually seen, so the zero is
+      // forced through a synchronous reflow rather than waiting for a frame. A browser source
+      // that OBS is not currently drawing gets no frames at all, and the version of this that
+      // waited for one left the bar empty until the scene came back.
+      f.style.width = '0%'
+      void bar.offsetWidth
+      f.style.width = (ratio() * 100).toFixed(2) + '%'
+    }
+
+    /**
+     * The number went up — somebody followed, subscribed or cheered.
+     *
+     * No separate alert feed is needed for this: the count travels with the config, so a value
+     * larger than the last one IS the event, and it still works after the browser source has been
+     * restarted mid-stream.
+     */
+    var fx = cfg.gainFx == null ? (cfg.pulseOnGain ? 'pulse' : 'none') : cfg.gainFx
+    if (lastValue !== null && value() > lastValue) {
+      var gained = value() - lastValue
+      if (fx && fx !== 'none') {
+        host.className = ''
+        void host.offsetWidth
+        host.className = 'gain-' + fx
+      }
+      if (cfg.gainLabel) {
+        var lbl = document.createElement('div')
+        lbl.className = 'gainlbl'
+        lbl.textContent = '+' + gained
+        lbl.style.color = cfg.gainColor || '#ffe066'
+        lbl.style.fontSize = Math.round((cfg.fontSize || 18) * 1.1) + 'px'
+        host.appendChild(lbl)
+        setTimeout(function () { lbl.remove() }, 1300)
+      }
+    }
+    lastValue = value()
+    userCss.textContent = cfg.customCss || ''
+  }
+
+  var goneBox = null
+  function gone(on) {
+    if (!on) { if (goneBox) { goneBox.remove(); goneBox = null } return }
+    if (goneBox) return
+    goneBox = document.createElement('div')
+    goneBox.id = 'gone'
+    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
+    document.body.appendChild(goneBox)
+  }
+
+  function connect() {
+    var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
+    es.addEventListener('cfg', function (e) {
+      try { cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false); render() } catch (err) { /* noop */ }
+    })
+    es.addEventListener('gone', function () { gone(true) })
+    es.onerror = function () { es.close(); setTimeout(connect, 3000) }
+  }
+  render()
+  connect()
+
+  if (preview) {
+    // the editor shows it moving, because a bar frozen at one number tells you nothing about
+    // whether the colours work
+    setInterval(function () {
+      cfg.progress = (cfg.base || 0) + ((value() + Math.ceil(target() / 12)) % (target() + 1))
+      render()
+    }, 1400)
+  }
+
+  window.__oe = { cfg: cfg, render: render }
 })()
 </script>
 </body>

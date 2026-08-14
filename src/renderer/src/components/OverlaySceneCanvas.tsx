@@ -323,7 +323,16 @@ function NodeBody({ node }: { node: OverlayNode }): React.JSX.Element | null {
       )
     case 'text':
       return (
-        <div className="osc-text" style={textStyleCss(node.style) as React.CSSProperties}>
+        <div
+          className="osc-text"
+          style={
+            {
+              ...textStyleCss(node.style),
+              ...(node.box ? boxStyleCss(node.box) : {}),
+              padding: node.padX || node.padY ? `${node.padY ?? 0}px ${node.padX ?? 0}px` : undefined
+            } as React.CSSProperties
+          }
+        >
           {node.bind === 'static' ? (node.text ?? '') : SAMPLE[node.bind]}
         </div>
       )

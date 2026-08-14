@@ -305,6 +305,13 @@ export interface OverlayDecor {
  *  the chat with a cute animation, at a configurable position */
 export interface OverlayTrigger {
   id: string
+  /**
+   * What provokes it. Absent means 'word', so every trigger that already exists keeps working.
+   *
+   * The event kinds ignore `word` entirely — a first message is not a string anyone can type,
+   * and asking the streamer to invent one would be a puzzle with no answer.
+   */
+  on?: 'word' | 'firstMsg' | 'firstStream'
   /** the word/emoji/symbols to react to (case-insensitive substring) */
   word: string
   /** data URL of the image/GIF */
@@ -323,15 +330,25 @@ export interface OverlayTrigger {
 }
 
 /**
- * One OBS overlay instance. `type` is future-proofing — today only 'chat' exists, later
- * alerts/goals/etc. get their own config shapes under the same manager.
+ * What every overlay carries, whatever it draws.
+ *
+ * The manager, the URL, the live-config push and the delete-detection all work on this much and
+ * nothing more — which is what lets a new kind of overlay be a new config shape and a new page,
+ * instead of another pass through every one of those places.
  */
-export interface ChatOverlayConfig {
+export interface OverlayBase {
   id: string
   name: string
-  type: 'chat'
   /** channel baked into the OBS URL; empty/undefined = first open chat */
   channel?: string
+}
+
+/** every overlay kind there is; the discriminant of the OverlayConfig union */
+export type OverlayKind = 'chat' | 'emotes' | 'goal'
+
+/** One OBS chat overlay instance. */
+export interface ChatOverlayConfig extends OverlayBase {
+  type: 'chat'
 
   // ----- layout -----
   /** list = classic rows · bubble = card per message with nick header · horizontal = one
@@ -562,6 +579,60 @@ export interface ChatOverlayConfig {
   // ----- decor -----
   decors: OverlayDecor[]
 
+  /**
+   * Wear the chatter's 7TV paint on their nick.
+   *
+   * Its own switch, because the app-wide one is about the streamer's chat window and had no
+   * business deciding what the stream shows — turning paints off to make the client readable
+   * silently turned them off on stream too.
+   */
+  nickPaint: boolean
+  /**
+   * Mark a user's very first message in the channel.
+   *
+   * This one WINS over the per-stream mark when both are true, because it always is: somebody's
+   * first words ever are also their first words today. Marking that as "first this stream" tells
+   * the streamer the smaller of the two facts and hides the bigger one.
+   */
+  hlFirstMsg: boolean
+  hlFirstMsgColor: string
+  /** the chip's words for this category; empty = no chip even when chips are on */
+  hlFirstMsgLabel: string
+  /** mark their first message of this stream */
+  hlFirstStream: boolean
+  hlFirstStreamColor: string
+  hlFirstStreamLabel: string
+  /**
+   * HOW a first message is marked — three switches that stack in any combination.
+   *
+   * Everything is drawn onto the plate the overlay already has, never instead of it: the frame
+   * takes the plate's own corner radius and shape, the glow follows its silhouette, the fill
+   * keeps the gradient or picture underneath visible until its opacity reaches the top, where it
+   * becomes simply a differently coloured plate. A mark that ignored the design would look like
+   * a second overlay had leaked in.
+   *
+   * They are optional because `hlFirstMode` came first and was single-choice. An overlay that
+   * only has the old field is read through it, so nothing changes look on update; the editor
+   * writes all three the moment one is touched.
+   */
+  hlFirstBorder?: boolean
+  hlFirstGlow?: boolean
+  hlFirstFill?: boolean
+  /** legacy single choice, still read when none of the three switches above exist */
+  hlFirstMode: 'tint' | 'border' | 'glow' | 'both' | 'plate'
+  /** frame thickness, px */
+  hlFirstSize: number
+  /** glow spread, px — its own number, because a thin frame with a wide halo is a normal want */
+  hlFirstGlowSize?: number
+  /** strength of the fill, 0..1; at 1 it covers the plate's own colours entirely */
+  hlFirstOpacity: number
+  /** repaint the message text; empty = leave it as the overlay draws it */
+  hlFirstTextColor?: string
+  /** a small caption above the message ("Перше повідомлення") in the accent colour */
+  hlFirstLabel: boolean
+  /** breathe the mark for a few seconds so it is noticed in a moving chat */
+  hlFirstPulse: boolean
+
   // ----- word/symbol triggers -----
   triggers: OverlayTrigger[]
 
@@ -592,7 +663,265 @@ export interface ChatOverlayConfig {
   customCss: string
 }
 
+/**
+ * Emotes scattering across the screen — the celebration overlay.
+ *
+ * Every emote that goes through chat can become a sprite flying over the stream. Animated ones
+ * stay animated, because they arrive as the same GIF or WebP the chat uses and an <img> plays it
+ * without being asked.
+ *
+ * The motion is deliberately not one canned effect. "Confetti" and "a slow drift" and "thrown in
+ * from the left" are different feelings, and a celebration overlay that can only do one of them
+ * gets used once.
+ */
+export interface EmoteRainOverlayConfig extends OverlayBase {
+  type: 'emotes'
+
+  // ----- what sets it off -----
+  /** ordinary chat messages contribute their emotes */
+  onChat: boolean
+  /** ignore messages with fewer than this many emotes; 1 = every emote counts */
+  minEmotes: number
+  /** cheers, and how many bits it takes */
+  onBits: boolean
+  bitsMin: number
+  /** subs, resubs and gifts */
+  onSubs: boolean
+  /** channel-point redemptions */
+  onRedeems: boolean
+  /** newline-separated words that set it off on their own; empty = off */
+  words: string
+  /** only these people can set it off (logins, newline-separated); empty = everyone */
+  allowUsers: string
+  /** at most this many distinct emotes taken from one message */
+  perMessage: number
+  /** how many sprites each emote spawns */
+  copies: number
+  /** biggest celebration a single message may cause, sprites */
+  burstMax: number
+
+  // ----- how many, how long -----
+  maxOnScreen: number
+  /** seconds before a sprite fades out; 0 = until it leaves the screen */
+  lifetimeS: number
+
+  // ----- how they look -----
+  /** px; each sprite picks a random size in this range */
+  sizeMin: number
+  sizeMax: number
+  opacity: number
+  /** a soft drop shadow so light emotes stay visible on a light scene */
+  shadow: boolean
+  /** hue-rotate every sprite by a random amount — parties, not accuracy */
+  rainbow: boolean
+
+  // ----- how they move -----
+  /**
+   * fall     from above, like snow or confetti
+   * rise     up from the bottom, like bubbles
+   * burst    thrown out from one point in every direction
+   * float    drifting across, entering from a random edge
+   * fly      straight across the screen from one side
+   * physics  thrown with gravity, bouncing off the floor and walls
+   */
+  motion: 'fall' | 'rise' | 'burst' | 'float' | 'fly' | 'physics'
+  /** where they come in from; `burst` uses it as the centre of the explosion */
+  from: 'top' | 'bottom' | 'left' | 'right' | 'random' | 'center'
+  /** px per second, randomised per sprite */
+  speedMin: number
+  speedMax: number
+  /** how much of a spread the direction gets, degrees */
+  spread: number
+  /** px/s² for the physics mode */
+  gravity: number
+  /** 0..1 — how much speed a bounce keeps */
+  bounce: number
+  /** max degrees per second; each sprite picks its own and its own direction */
+  spin: number
+  /** sideways sway, px */
+  wobble: number
+  /** grow in on spawn / fade out at the end */
+  scaleIn: boolean
+  fadeOut: boolean
+}
+
+/**
+ * A goal bar — followers, subs, bits, or anything counted by hand.
+ *
+ * The count is a base plus what the app has seen since, rather than a number fetched from Twitch:
+ * the totals that matter here either need scopes the streamer may not have granted or do not
+ * exist as an API at all (bits this stream). A base the streamer types once, plus honest live
+ * counting, works for every metric and never shows a number nobody can explain.
+ */
+export interface GoalOverlayConfig extends OverlayBase {
+  type: 'goal'
+
+  metric: 'followers' | 'subs' | 'bits' | 'custom'
+  /**
+   * Where the number comes from.
+   *
+   * `auto` asks Twitch for the real total, which only exists for followers and subscribers, and
+   * only for an account that is the broadcaster (or a mod, for followers). `events` counts what
+   * chat announces since the last reset — the only thing possible for bits, and the fallback
+   * whenever the scope was never granted. Saying which one is in use beats a goal that silently
+   * sits at zero.
+   */
+  source: 'auto' | 'events'
+  /** where the count starts — today's followers, this month's subs, whatever the goal means */
+  base: number
+  target: number
+  /** counted since `base` was set; the editor can reset it */
+  progress: number
+  /** gifted subs add their whole batch rather than one */
+  countGifts: boolean
+
+  // ----- text -----
+  title: string
+  /** shown once the target is reached; empty = keep showing the numbers */
+  doneText: string
+  font: string
+  fontSize: number
+  textColor: string
+  /** current/target, a percentage, both, or nothing */
+  numbers: 'value' | 'percent' | 'both' | 'none'
+  showTitle: boolean
+  /** put the words inside the bar instead of above it */
+  textInside: boolean
+  /**
+   * Words of the streamer's own, with the numbers written in where they want them.
+   *
+   * `{value} {target} {left} {percent}` are replaced as they are drawn. Empty falls back to the
+   * plain "17 / 100 · 17%", which is fine but says nothing about what the goal is for.
+   */
+  customText: string
+
+  // ----- shape -----
+  shape: 'bar' | 'ring' | 'text'
+  width: number
+  height: number
+  radius: number
+  /** ring only: how thick the stroke is */
+  ringWidth: number
+
+  // ----- colours -----
+  trackFill: OverlayFill
+  barFill: OverlayFill
+  doneFill: OverlayFill
+  borderWidth: number
+  borderColor: string
+  glowSize: number
+  glowColor: string
+  /** ms for the bar to travel to a new value */
+  animMs: number
+  /** legacy single switch; `gainFx` takes over once it exists */
+  pulseOnGain: boolean
+  /**
+   * What happens when the number goes up — a new follower, a sub, a cheer.
+   *
+   * The page needs no separate event feed for this: the count arrives with the config, so a value
+   * bigger than the last one IS the event. That also means it survives a source restart, which a
+   * fire-and-forget alert would not.
+   */
+  gainFx: 'none' | 'pulse' | 'flash' | 'shake' | 'pop'
+  /** float the amount gained ("+1", "+100") above the bar */
+  gainLabel: boolean
+  gainColor: string
+
+  /** a picture or GIF that belongs to the goal — a mascot, an emote, a trophy */
+  image: string
+  /** where it goes: inside the bar, beside it, or filling the bar's background */
+  imagePlace: 'left' | 'right' | 'inLeft' | 'inRight' | 'above' | 'below' | 'fill'
+  /** px; the height for the beside/inside placements */
+  imageSize: number
+  imageOpacity: number
+  /** a second picture shown only once the goal is reached */
+  doneImage: string
+
+  customCss: string
+}
+
+/**
+ * Any overlay in the manager. `type` is the discriminant — narrow on it before touching
+ * anything that is not on OverlayBase.
+ */
+export type OverlayConfig = ChatOverlayConfig | EmoteRainOverlayConfig | GoalOverlayConfig
+
 export const DEFAULT_FILL: OverlayFill = { kind: 'solid', color: '#000000', opacity: 0.45, color2: '#3a0ca3', angle: 135 }
+
+export const DEFAULT_EMOTE_OVERLAY: Omit<EmoteRainOverlayConfig, 'id' | 'name'> = {
+  type: 'emotes',
+  onChat: true,
+  minEmotes: 1,
+  onBits: false,
+  bitsMin: 100,
+  onSubs: false,
+  onRedeems: false,
+  words: '',
+  allowUsers: '',
+  perMessage: 3,
+  copies: 1,
+  burstMax: 12,
+  maxOnScreen: 60,
+  lifetimeS: 0,
+  sizeMin: 48,
+  sizeMax: 96,
+  opacity: 1,
+  shadow: true,
+  rainbow: false,
+  motion: 'fall',
+  from: 'top',
+  speedMin: 60,
+  speedMax: 160,
+  spread: 30,
+  gravity: 900,
+  bounce: 0.55,
+  spin: 90,
+  wobble: 24,
+  scaleIn: true,
+  fadeOut: true
+}
+
+export const DEFAULT_GOAL_OVERLAY: Omit<GoalOverlayConfig, 'id' | 'name'> = {
+  type: 'goal',
+  metric: 'followers',
+  source: 'auto',
+  base: 0,
+  target: 100,
+  progress: 0,
+  countGifts: true,
+  title: 'Ціль підписників',
+  doneText: 'Ціль досягнута!',
+  font: 'Inter',
+  fontSize: 18,
+  textColor: '#ffffff',
+  numbers: 'both',
+  showTitle: true,
+  textInside: false,
+  customText: '',
+  shape: 'bar',
+  width: 420,
+  height: 34,
+  radius: 17,
+  ringWidth: 14,
+  trackFill: { kind: 'solid', color: '#000000', opacity: 0.5, color2: '#3a0ca3', angle: 135 },
+  barFill: { kind: 'gradient', color: '#9147ff', opacity: 1, color2: '#5cffe0', angle: 90 },
+  doneFill: { kind: 'gradient', color: '#12b886', opacity: 1, color2: '#c7f464', angle: 90 },
+  borderWidth: 0,
+  borderColor: '#ffffff',
+  glowSize: 0,
+  glowColor: '#9147ff',
+  animMs: 600,
+  pulseOnGain: true,
+  gainFx: 'pulse',
+  gainLabel: true,
+  gainColor: '#ffe066',
+  image: '',
+  imagePlace: 'left',
+  imageSize: 56,
+  imageOpacity: 1,
+  doneImage: '',
+  customCss: ''
+}
 
 export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   type: 'chat',
@@ -724,6 +1053,23 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   tsColor: '#b8b8c0',
   tsPos: 'after',
   decors: [],
+  nickPaint: true,
+  hlFirstMsg: false,
+  hlFirstMsgColor: '#7a5cff',
+  hlFirstMsgLabel: 'Перше повідомлення',
+  hlFirstStream: false,
+  hlFirstStreamColor: '#12b886',
+  hlFirstStreamLabel: 'Перше за етер',
+  hlFirstBorder: true,
+  hlFirstGlow: false,
+  hlFirstFill: false,
+  hlFirstMode: 'border',
+  hlFirstSize: 2,
+  hlFirstGlowSize: 10,
+  hlFirstOpacity: 0.35,
+  hlFirstTextColor: '',
+  hlFirstLabel: false,
+  hlFirstPulse: false,
   triggers: [],
   hiddenUsers: [],
   hideCommands: false,
@@ -751,6 +1097,18 @@ export interface OverlayLineData {
   act?: boolean
   /** 7TV paint — CSS background value clipped to the nick text */
   paint?: string
+  /**
+   * The rest of the paint. A URL paint is an IMAGE, and an image background without its size and
+   * repeat draws nothing — with the text already made transparent to show it through, the nick
+   * simply vanished. Sending only the background was why 7TV nicks came out black.
+   */
+  paintSize?: string
+  paintRepeat?: string
+  paintShadow?: string
+  /** this user's very first message in this channel, ever */
+  firstMsg?: boolean
+  /** their first message of THIS stream */
+  firstStream?: boolean
   avatar?: string
   /** badge image urls */
   badges: string[]
@@ -760,6 +1118,14 @@ export interface OverlayLineData {
   badgeVers?: string[]
   /** message body as safe HTML (emotes/cheers as <img>) */
   body: string
+  /**
+   * The emote image urls of this message, in the order they were typed.
+   *
+   * Separate from `body` because the celebration overlay needs the pictures without the sentence
+   * around them, and digging them back out of the HTML on the page would mean parsing our own
+   * markup to recover something we already had.
+   */
+  emotes?: string[]
   /** plain message text (for word/symbol triggers on the page) */
   text?: string
   /** system/usernotice header text (escaped) — sub, redeem name, raid… */
@@ -773,6 +1139,14 @@ export interface OverlayLineData {
   sub?: boolean
   mod?: boolean
   cmd?: boolean
+  /** how many bits were cheered — goals count them, the celebration gates on them */
+  bitsAmount?: number
+  /** how many subscriptions this one line represents; a mass-gift header is worth 0, see subsWorth */
+  subCount?: number
+  /** this sub was a gift, so a goal that only counts self-subs can skip it */
+  subGift?: boolean
+  /** a follow, for goal overlays; carried on an info line */
+  follow?: boolean
 }
 
 /** @deprecated legacy v1 style — replaced by ChatOverlayConfig; kept until settings UI migrates */
@@ -1234,7 +1608,8 @@ export interface Settings {
   /** keep the overlay live preview pinned to the bottom of the settings while scrolling options */
   overlayPreviewPinned: boolean
   /** OBS overlays v2 — full editor; each overlay has its own /overlay URL */
-  chatOverlays: ChatOverlayConfig[]
+  /** every OBS overlay, of every kind; the name predates there being more than one kind */
+  chatOverlays: OverlayConfig[]
   /** user-saved overlay presets (full config snapshots minus id/name/type) */
   overlayUserPresets: { id: string; name: string; patch: Partial<ChatOverlayConfig> }[]
   /** monotonically increasing revision, bumped on every settings change — save paths use it

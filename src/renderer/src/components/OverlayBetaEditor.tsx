@@ -97,9 +97,17 @@ export default function OverlayBetaEditor({ overlay, onChange, port, channel, ca
       {/* ---------------- layers ---------------- */}
       <div className="obe-col">
         <header>
-          <select value={space} onChange={(e) => { setSpace(e.target.value as 'scene' | 'template'); setSelected(null) }}>
-            <option value="scene">Сцена (екран)</option>
-            <option value="template">Плашка повідомлення</option>
+          <select
+            value={space}
+            title={
+              space === 'scene'
+                ? 'Сцена — це весь екран OBS. Тут живе те, чого по одному: декор, реакції на слова, рамки.'
+                : 'Повідомлення — це нутрощі ОДНІЄЇ плашки, яка повторюється на кожне повідомлення: нік, бейджі, аватар, текст.'
+            }
+            onChange={(e) => { setSpace(e.target.value as 'scene' | 'template'); setSelected(null) }}
+          >
+            <option value="scene">Екран (одне на все)</option>
+            <option value="template">Повідомлення (кожне)</option>
           </select>
         </header>
         <div className="obe-scroll">
@@ -182,10 +190,21 @@ export default function OverlayBetaEditor({ overlay, onChange, port, channel, ca
         <div className="obe-scroll">
           {sceneIsEmpty(overlay.scene) && (
             <div className="obe-empty">
-              <p>Бета працює з елементами замість фіксованих полів.</p>
+              <p style={{ textAlign: 'left' }}>
+                Бета редагує <b>той самий</b> оверлей, тільки елементами замість форми. Почни з
+                перенесення — нік, плашка, бейджі, аватар, час і текст стануть елементами з тими
+                самими розмірами й кольорами, які в тебе зараз.
+              </p>
               <button className="primary" onClick={startFromCurrent}>
-                Перенести поточні декор і тригери
+                Перенести мій оверлей у бету
               </button>
+            </div>
+          )}
+          {!sceneIsEmpty(overlay.scene) && !sel && (
+            <div className="obe-empty" style={{ textAlign: 'left' }}>
+              <p><b>Екран</b> — весь кадр OBS: декор, реакції на слова.</p>
+              <p><b>Повідомлення</b> — нутрощі однієї плашки; повторюється на кожне повідомлення.</p>
+              <p>Вибери елемент на полотні або в списку зліва.</p>
             </div>
           )}
 
@@ -296,6 +315,95 @@ export default function OverlayBetaEditor({ overlay, onChange, port, channel, ca
                       onChange={(e) => patchSel({ style: { ...sel.style, color: e.target.value } } as Partial<OverlayNode>)}
                     />
                   </div>
+                  <div className="obe-row">
+                    <label>Шрифт</label>
+                    <input
+                      value={sel.style?.font ?? ''}
+                      placeholder="як в оверлеї"
+                      onChange={(e) => patchSel({ style: { ...sel.style, font: e.target.value } } as Partial<OverlayNode>)}
+                    />
+                  </div>
+                  <div className="obe-row">
+                    <label>Жирність</label>
+                    <select
+                      value={String(sel.style?.weight ?? 400)}
+                      onChange={(e) => patchSel({ style: { ...sel.style, weight: Number(e.target.value) } } as Partial<OverlayNode>)}
+                    >
+                      {[300, 400, 500, 600, 700, 800, 900].map((w) => (
+                        <option key={w} value={w}>{w}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="obe-row">
+                    <label>Курсив</label>
+                    <input
+                      type="checkbox"
+                      checked={!!sel.style?.italic}
+                      onChange={(e) => patchSel({ style: { ...sel.style, italic: e.target.checked } } as Partial<OverlayNode>)}
+                    />
+                  </div>
+                  <div className="obe-row">
+                    <label>Регістр</label>
+                    <select
+                      value={sel.style?.case ?? 'none'}
+                      onChange={(e) => patchSel({ style: { ...sel.style, case: e.target.value } } as Partial<OverlayNode>)}
+                    >
+                      <option value="none">як є</option>
+                      <option value="upper">ВЕЛИКІ</option>
+                      <option value="lower">малі</option>
+                    </select>
+                  </div>
+                  <div className="obe-row">
+                    <label>Обведення</label>
+                    <input
+                      type="number"
+                      style={{ width: 56 }}
+                      value={sel.style?.outline?.width ?? 0}
+                      onChange={(e) =>
+                        patchSel({
+                          style: {
+                            ...sel.style,
+                            outline: { width: Number(e.target.value), color: sel.style?.outline?.color ?? '#000000' }
+                          }
+                        } as Partial<OverlayNode>)
+                      }
+                    />
+                    <input
+                      type="color"
+                      value={sel.style?.outline?.color ?? '#000000'}
+                      onChange={(e) =>
+                        patchSel({
+                          style: {
+                            ...sel.style,
+                            outline: { width: sel.style?.outline?.width ?? 1, color: e.target.value }
+                          }
+                        } as Partial<OverlayNode>)
+                      }
+                    />
+                  </div>
+                  {sel.bind === 'nick' && (
+                    <div className="obe-row">
+                      <label>Колір чату</label>
+                      <input
+                        type="checkbox"
+                        checked={!!sel.useChatColor}
+                        onChange={(e) => patchSel({ useChatColor: e.target.checked } as Partial<OverlayNode>)}
+                      />
+                    </div>
+                  )}
+                  {/* a plate under THIS text — what "плашка під ніком" means, and it grows with it */}
+                  <div className="set-group-title" style={{ marginTop: 8 }}>Плашка під текстом</div>
+                  <FillEditor
+                    fill={sel.box?.fill}
+                    onChange={(fill) => patchSel({ box: { ...sel.box, fill } } as Partial<OverlayNode>)}
+                  />
+                  <Num
+                    label="Заокруглення"
+                    value={typeof sel.box?.radius === 'number' ? sel.box.radius : undefined}
+                    onChange={(v) => patchSel({ box: { ...sel.box, radius: v ?? 0 } } as Partial<OverlayNode>)}
+                  />
+                  <Num label="Відступ ↔" value={sel.padX} onChange={(v) => patchSel({ padX: v } as Partial<OverlayNode>)} />
+                  <Num label="Відступ ↕" value={sel.padY} onChange={(v) => patchSel({ padY: v } as Partial<OverlayNode>)} />
                 </>
               )}
               {(sel.kind === 'image' || sel.kind === 'trigger') && (

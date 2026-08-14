@@ -324,17 +324,25 @@ export default function App(): React.JSX.Element | null {
     const styles: Record<string, unknown> = {}
     for (const o of settings.chatOverlays) {
       // uploaded fonts travel to the OBS page as a data URL (@font-face there)
-      const custom = settings.customFonts.find((f) => f.name === o.font)
+      const font = o.type === 'chat' || o.type === 'goal' ? o.font : undefined
+      const custom = font ? settings.customFonts.find((f) => f.name === font) : undefined
       // the beta's elements go over already compiled: the page cannot run our placement maths,
       // and a second copy of it there would drift from this one the first time either is touched
       styles[o.id] = {
         ...o,
         fontData: custom?.data,
-        sceneCompiled: o.editMode === 'beta' ? compileScene(o.scene) : undefined
+        sceneCompiled: o.type === 'chat' && o.editMode === 'beta' ? compileScene(o.scene) : undefined
       }
     }
     window.sticki.overlayConfigure(settings.overlayEnabled, settings.overlayPort, styles)
   }, [settings.overlayEnabled, settings.overlayPort, settings.chatOverlays, settings.customFonts, special])
+
+  // goal overlays that follow a real Twitch total need somebody to ask for it (main window only)
+  useEffect(() => {
+    if (special) return
+    void import('./services/goals').then((m) => m.startGoals())
+    return () => void import('./services/goals').then((m) => m.stopGoals())
+  }, [special])
 
   /**
    * Optional: freeze animated emotes while this window isn't focused.

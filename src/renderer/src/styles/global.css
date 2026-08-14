@@ -5509,10 +5509,16 @@ button:has(> svg) {
 /* ---- layers ---- */
 .obe {
   display: grid;
-  grid-template-columns: 190px 1fr 260px;
+  /* the side columns have a floor AND a ceiling: fixed widths clipped the inspector's labels at
+     a narrow window (the delete button sat outside its own column), and letting them grow ate
+     the canvas, which is the part being judged */
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr) minmax(250px, 320px);
   gap: 8px;
   height: 100%;
   min-height: 0;
+}
+.obe > .obe-col {
+  min-width: 0;
 }
 .obe-col {
   display: flex;
@@ -5534,6 +5540,8 @@ button:has(> svg) {
 }
 .obe-scroll {
   overflow-y: auto;
+  /* never sideways: a control that does not fit must wrap, not push the column wider */
+  overflow-x: hidden;
   padding: 6px;
   min-height: 0;
 }
@@ -5576,11 +5584,18 @@ button:has(> svg) {
   gap: 6px;
   padding: 3px 0;
 }
+.obe-row {
+  flex-wrap: wrap;
+}
 .obe-row > label {
   width: 92px;
   flex-shrink: 0;
   font-size: var(--fs-sm);
   color: var(--text-dim);
+}
+/* every control gives way before the column does — nothing may push a horizontal scrollbar */
+.obe-row > * {
+  min-width: 0;
 }
 .obe-row input[type='number'],
 .obe-row input[type='text'],
@@ -5607,4 +5622,43 @@ button:has(> svg) {
   text-align: center;
   color: var(--text-faint);
   font-size: var(--fs-sm);
+}
+
+/* the custom-CSS editor, full screen — the sidebar box is for glancing, this is for writing */
+.oe-css-modal {
+  position: fixed;
+  inset: 0;
+  /* above everything the editor draws, including its own title row — at a lower layer the two
+     headers landed on the same line and the text sat on top of itself */
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  /* an explicit opaque colour: the surface token carries transparency in some themes, and a
+     see-through "full screen" editor shows the page it is supposed to be covering */
+  background: var(--surface-1, #14161a);
+  box-shadow: 0 0 0 100vmax var(--surface-1, #14161a);
+}
+.oe-css-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2, #1b1e24);
+  flex-shrink: 0;
+}
+.oe-css-head .spacer {
+  flex: 1;
+}
+.oe-css-big {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  padding: 12px;
+  font-family: 'Cascadia Code', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
 }

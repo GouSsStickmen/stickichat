@@ -471,6 +471,34 @@ export async function getFollowDate(
   return data[0]?.followed_at ?? null
 }
 
+/**
+ * How many followers the channel has, for goal overlays.
+ *
+ * `total` comes back on the first page, so one row is asked for and the rest is never fetched.
+ * Same scope as getFollowDate: the account has to be the broadcaster or one of its mods.
+ */
+export async function getFollowerTotal(account: Account, broadcasterId: string): Promise<number | null> {
+  const res = await helixRequest(account, 'GET', '/channels/followers', {
+    broadcaster_id: broadcasterId,
+    moderator_id: account.id,
+    first: '1'
+  })
+  if (!res.ok) return null
+  const total = (res.json as { total?: number } | null)?.total
+  return typeof total === 'number' ? total : null
+}
+
+/** subscriber count; channel:read:subscriptions, and only the broadcaster's own channel */
+export async function getSubTotal(account: Account, broadcasterId: string): Promise<number | null> {
+  const res = await helixRequest(account, 'GET', '/subscriptions', {
+    broadcaster_id: broadcasterId,
+    first: '1'
+  })
+  if (!res.ok) return null
+  const total = (res.json as { total?: number } | null)?.total
+  return typeof total === 'number' ? total : null
+}
+
 export interface SubInfo {
   tier: string
   is_gift: boolean

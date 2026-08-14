@@ -591,6 +591,29 @@ class ChatService {
           key: `sho:${cid}`,
           channelLogin: ch
         })
+        /**
+         * Follows, but only when something is actually counting them.
+         *
+         * A follow leaves no trace in chat, so a follower goal set to count events could never
+         * move — this is the only place the app can learn about one. It is asked for on demand
+         * rather than always because every subscription is a real socket topic, and nobody needs
+         * a follow feed for a channel they merely moderate.
+         */
+        const wantsFollows = useSettingsStore
+          .getState()
+          .settings.chatOverlays.some(
+            (o) => o.type === 'goal' && o.metric === 'followers' && (o.channel ? o.channel.toLowerCase() === ch : true)
+          )
+        if (wantsFollows) {
+          out.push({
+            account: modAccount,
+            type: 'channel.follow',
+            version: '2',
+            condition: { broadcaster_user_id: cid, moderator_user_id: modAccount.id },
+            key: `follow:${cid}`,
+            channelLogin: ch
+          })
+        }
       }
     }
     return out
@@ -656,6 +679,9 @@ class ChatService {
       this.handleModerateEvent(event, envelopeId)
     } else if (type === 'channel.shoutout.create') {
       this.handleShoutout(event)
+    } else if (type === 'channel.follow') {
+      const ch = String(event.broadcaster_user_login ?? '').toLowerCase()
+      if (ch) void import('./goals').then((m) => m.countFollow(ch))
     }
   }
 
@@ -1487,7 +1513,7 @@ class ChatService {
           const { awaitSevenTvCosmetic } = await import('../lib/seventvCosmetics')
           waits.push(awaitSevenTvCosmetic(msg.userId))
         }
-        if (st.chatOverlays.some((o) => o.avatarShow) && msg.login && !msg.system) {
+        if (st.chatOverlays.some((o) => o.type === 'chat' && o.avatarShow) && msg.login && !msg.system) {
           const { awaitAvatar } = await import('../lib/twitchAvatars')
           waits.push(awaitAvatar(msg.login))
         }
@@ -1495,7 +1521,13 @@ class ChatService {
           await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 1500))])
         }
         const line = buildOverlayLine(msg)
-        if (line) window.sticki.overlayPush(channel, line)
+        if (line) {
+          window.sticki.overlayPush(channel, line)
+          // goal overlays that count events rather than polling Twitch get their number here,
+          // where every cheer and every sub already passes through exactly once
+          const { countGoalEvent } = await import('./goals')
+          countGoalEvent(channel, line)
+        }
       })
     }
   }
