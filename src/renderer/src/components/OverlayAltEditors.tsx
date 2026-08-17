@@ -979,13 +979,13 @@ function RoulettePanel({
               </span>
               <ColorField value={s.color} defaultValue="#9147ff" onChange={(v) => upd(s.id, { color: v })} />
               <ColorField value={s.textColor} defaultValue="#ffffff" onChange={(v) => upd(s.id, { textColor: v })} />
-              <label className="ghost" style={{ cursor: 'pointer' }} title="Картинка або гіфка в секторі">
+              <label className="ghost" style={{ cursor: 'pointer' }} title="Картинка, гіфка або відео в секторі">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   style={{ display: 'none' }}
                   onChange={(e) => {
-                    readFile(e.target.files?.[0], 3, (url) => upd(s.id, { media: url }))
+                    readFile(e.target.files?.[0], 8, (url) => upd(s.id, { media: url }))
                     e.target.value = ''
                   }}
                 />

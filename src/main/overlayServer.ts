@@ -3640,7 +3640,7 @@ const WHEEL_HTML = `<!doctype html>
       svg.appendChild(path)
 
       // a wedge may carry its own picture, clipped to its own shape
-      if (sl.s.media && !isVideo(sl.s.media)) {
+      if (sl.s.media) {
         var cid = 'clip' + i
         var cp = document.createElementNS(NS, 'clipPath')
         cp.setAttribute('id', cid)
@@ -3648,13 +3648,31 @@ const WHEEL_HTML = `<!doctype html>
         cpp.setAttribute('d', arcPath(r, r, r - (cfg.rimWidth || 0) / 2, base + sl.from, base + sl.to))
         cp.appendChild(cpp)
         defs.appendChild(cp)
-        var im = document.createElementNS(NS, 'image')
-        im.setAttribute('href', sl.s.media)
-        im.setAttribute('x', '0'); im.setAttribute('y', '0')
-        im.setAttribute('width', String(size)); im.setAttribute('height', String(size))
-        im.setAttribute('preserveAspectRatio', 'xMidYMid slice')
-        im.setAttribute('clip-path', 'url(#' + cid + ')')
-        svg.appendChild(im)
+        if (isVideo(sl.s.media)) {
+          /**
+           * A video cannot live in an svg <image> — that tag paints one still and nothing moves.
+           * foreignObject hands the wedge a real html <video>, and the same clip-path keeps it
+           * inside the slice, so a moving wedge behaves like any other.
+           */
+          var fo = document.createElementNS(NS, 'foreignObject')
+          fo.setAttribute('x', '0'); fo.setAttribute('y', '0')
+          fo.setAttribute('width', String(size)); fo.setAttribute('height', String(size))
+          fo.setAttribute('clip-path', 'url(#' + cid + ')')
+          var vid = mediaEl(sl.s.media)
+          vid.style.width = '100%'
+          vid.style.height = '100%'
+          vid.style.objectFit = 'cover'
+          fo.appendChild(vid)
+          svg.appendChild(fo)
+        } else {
+          var im = document.createElementNS(NS, 'image')
+          im.setAttribute('href', sl.s.media)
+          im.setAttribute('x', '0'); im.setAttribute('y', '0')
+          im.setAttribute('width', String(size)); im.setAttribute('height', String(size))
+          im.setAttribute('preserveAspectRatio', 'xMidYMid slice')
+          im.setAttribute('clip-path', 'url(#' + cid + ')')
+          svg.appendChild(im)
+        }
       }
 
       var label = String(sl.s.label == null ? '' : sl.s.label)
