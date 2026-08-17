@@ -1012,6 +1012,11 @@ export interface WheelSection {
   textColor: string
   /** an image, GIF or video drawn inside the wedge */
   media: string
+  /** how big that picture is drawn, per cent of the wheel; 100 = exactly covers it */
+  mediaScale?: number
+  /** and where its centre sits, in pixels from the middle of the wheel */
+  mediaX?: number
+  mediaY?: number
   /** remove this wedge once it has won — for giveaways that should not repeat */
   removeOnWin: boolean
 }
@@ -1067,9 +1072,17 @@ export interface RouletteOverlayConfig extends OverlayBase {
   /** the disc in the middle: a logo, an avatar, anything */
   hubMedia: string
   hubSize: number
+  /**
+   * One picture across the whole disc, turning with it.
+   *
+   * Different thing from the backdrop: this one is the wheel's own face, clipped to the circle and
+   * spinning, so a drawn wheel can be used as-is with the wedges left as invisible geometry.
+   */
+  faceMedia?: string
+  faceOpacity?: number
 
   // ----- around it -----
-  /** image, GIF or video behind the whole wheel */
+  /** image, GIF or video behind the whole wheel; it does not turn */
   backdrop: string
   backdropFit: 'cover' | 'contain' | 'stretch'
   backdropOpacity: number
@@ -1079,9 +1092,18 @@ export interface RouletteOverlayConfig extends OverlayBase {
   resultColor: string
 
   // ----- sound -----
-  /** loops for as long as the wheel is turning */
+  /**
+   * Which sound plays while it turns.
+   *
+   * `tick` is the one people expect from a wheel: a click each time a wedge passes the pointer,
+   * which slows down as the wheel does — it cannot go out of step with the picture the way a
+   * recording of clicks would, and it has no length to run out of.
+   */
+  spinSoundKind?: 'none' | 'tick' | 'whoosh' | 'drumroll' | 'custom'
+  /** an uploaded loop, used when the kind is `custom` */
   spinSound: string
-  /** one shot when it lands */
+  winSoundKind?: 'none' | 'fanfare' | 'chime' | 'coin' | 'custom'
+  /** one shot when it lands, used when the kind is `custom` */
   winSound: string
   soundVolume: number
 
@@ -1233,13 +1255,17 @@ export const DEFAULT_ROULETTE_OVERLAY: Omit<RouletteOverlayConfig, 'id' | 'name'
   pointerColor: '#ffffff',
   hubMedia: '',
   hubSize: 90,
+  faceMedia: '',
+  faceOpacity: 1,
   backdrop: '',
   backdropFit: 'cover',
   backdropOpacity: 1,
   resultShow: true,
   resultSize: 42,
   resultColor: '#ffffff',
+  spinSoundKind: 'tick',
   spinSound: '',
+  winSoundKind: 'fanfare',
   winSound: '',
   soundVolume: 0.6,
   offsetX: 0,

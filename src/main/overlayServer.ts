@@ -185,7 +185,16 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
        * of them would ship every one to every source and grow a condition around each line.
        */
       const kind = (styleFor(url.searchParams.get('profile') ?? '') as { type?: string } | null)?.type
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      /**
+       * Never cached. Which page an overlay gets depends on its kind, and its kind can change under
+       * a source that is already pointed at it — a browser holding yesterday's copy would keep
+       * running a page for an overlay that is no longer that shape, and look simply broken.
+       */
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store, must-revalidate',
+        Pragma: 'no-cache'
+      })
       res.end(
         kind === 'emotes'
           ? EMOTE_HTML
@@ -3438,20 +3447,29 @@ const ALERT_HTML = `<!doctype html>
     pump()
   }
 
-  var goneBox = null
-  function gone(on) {
-    if (!on) { if (goneBox) { goneBox.remove(); goneBox = null } return }
-    if (goneBox) return
-    goneBox = document.createElement('div')
-    goneBox.id = 'gone'
-    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
-    document.body.appendChild(goneBox)
+  /**
+   * Say why nothing is showing.
+   *
+   * An alert overlay is blank between alerts, so blank-because-broken and blank-because-quiet look
+   * exactly alike. Only the page can tell them apart, so it says so.
+   */
+  var noteBox = null
+  function note(text) {
+    if (!text) { if (noteBox) { noteBox.remove(); noteBox = null } return }
+    if (!noteBox) {
+      noteBox = document.createElement('div')
+      noteBox.id = 'gone'
+      document.body.appendChild(noteBox)
+    }
+    noteBox.textContent = text
   }
+  function gone(on) { note(on ? 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.' : '') }
 
+  var gotCfg = false
   function connect() {
     var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
     es.addEventListener('cfg', function (e) {
-      try { cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false); applyStage() } catch (err) { /* noop */ }
+      try { gotCfg = true; cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false); applyStage() } catch (err) { /* noop */ }
     })
     es.addEventListener('gone', function () { gone(true) })
     es.onmessage = function (e) {
@@ -3462,7 +3480,11 @@ const ALERT_HTML = `<!doctype html>
         if (d && d.follow && Date.now() - (d.ts || 0) < 30000) enqueue(d)
       } catch (err) { /* noop */ }
     }
-    es.onerror = function () { es.close(); setTimeout(connect, 3000) }
+    es.onerror = function () {
+      es.close()
+      if (!gotCfg) note('StickiChat не відповідає. Запусти застосунок, тоді онови це джерело в OBS.')
+      setTimeout(connect, 3000)
+    }
   }
   applyStage()
   connect()
@@ -3545,13 +3567,15 @@ const WHEEL_HTML = `<!doctype html>
     sections: [], spinS: 6, turns: 5, easing: 'smooth', resultS: 4,
     size: 460, rimWidth: 10, rimColor: '#ffffff', dividerWidth: 2, dividerColor: '#00000055',
     font: 'Inter', fontSize: 20, textRadial: true, pointer: 'triangle', pointerColor: '#ffffff',
-    hubMedia: '', hubSize: 90, backdrop: '', backdropFit: 'cover', backdropOpacity: 1,
+    hubMedia: '', hubSize: 90, faceMedia: '', faceOpacity: 1,
+    backdrop: '', backdropFit: 'cover', backdropOpacity: 1,
     resultShow: true, resultSize: 42, resultColor: '#ffffff',
-    spinSound: '', winSound: '', soundVolume: 0.6, offsetX: 0, offsetY: 0, customCss: ''
+    spinSoundKind: 'tick', spinSound: '', winSoundKind: 'fanfare', winSound: '',
+    soundVolume: 0.6, offsetX: 0, offsetY: 0, customCss: ''
   }
   var angle = 0        // where the wheel currently sits, degrees
   var spinning = false
-  var spinAudio = null
+  var stopSpinSound = null
 
   // NB: string tests, not a regex. This page is a TS template literal, and every backslash in a
   // regex literal here is eaten before the browser ever sees it, which turned the pattern into a
@@ -3607,6 +3631,40 @@ const WHEEL_HTML = `<!doctype html>
       ' A ' + r + ' ' + r + ' 0 ' + big + ' 1 ' + x1 + ' ' + y1 + ' Z'
   }
 
+  /**
+   * Where a wedge picture sits.
+   *
+   * The box is square and centred on the wheel by default, so a picture with no settings covers
+   * the wedge exactly as before; scale and offset move it inside the clip, which is how a mascot
+   * ends up leaning against the rim instead of stretched across the whole slice.
+   */
+  function mediaBox(sec, size) {
+    var scale = Math.max(1, sec.mediaScale == null ? 100 : sec.mediaScale) / 100
+    var w = size * scale
+    return { x: (size - w) / 2 + (sec.mediaX || 0), y: (size - w) / 2 + (sec.mediaY || 0), w: w }
+  }
+
+  /** the same picture-or-video choice the rest of the page makes, clipped to a shape in the svg */
+  function clippedMedia(src, clipId, box) {
+    var el
+    if (isVideo(src)) {
+      el = document.createElementNS(NS, 'foreignObject')
+      var vid = mediaEl(src)
+      vid.style.width = '100%'
+      vid.style.height = '100%'
+      vid.style.objectFit = 'cover'
+      el.appendChild(vid)
+    } else {
+      el = document.createElementNS(NS, 'image')
+      el.setAttribute('href', src)
+      el.setAttribute('preserveAspectRatio', 'xMidYMid slice')
+    }
+    el.setAttribute('x', String(box.x)); el.setAttribute('y', String(box.y))
+    el.setAttribute('width', String(box.w)); el.setAttribute('height', String(box.w))
+    el.setAttribute('clip-path', 'url(#' + clipId + ')')
+    return el
+  }
+
   function render() {
     var size = Math.max(80, cfg.size || 460)
     var r = size / 2
@@ -3628,6 +3686,8 @@ const WHEEL_HTML = `<!doctype html>
     var list = slices()
     // the pointer sits at the top, so wedge 0 starts there rather than at three o'clock
     var base = -90
+    // the words go in last, after any picture across the face, or the face would bury them
+    var labels = document.createElementNS(NS, 'g')
     for (var i = 0; i < list.length; i++) {
       var sl = list[i]
       var path = document.createElementNS(NS, 'path')
@@ -3639,7 +3699,12 @@ const WHEEL_HTML = `<!doctype html>
       }
       svg.appendChild(path)
 
-      // a wedge may carry its own picture, clipped to its own shape
+      /**
+       * A wedge may carry its own picture, clipped to its own shape.
+       *
+       * A video goes through foreignObject rather than an svg <image>, because that tag paints one
+       * still and nothing moves.
+       */
       if (sl.s.media) {
         var cid = 'clip' + i
         var cp = document.createElementNS(NS, 'clipPath')
@@ -3648,31 +3713,7 @@ const WHEEL_HTML = `<!doctype html>
         cpp.setAttribute('d', arcPath(r, r, r - (cfg.rimWidth || 0) / 2, base + sl.from, base + sl.to))
         cp.appendChild(cpp)
         defs.appendChild(cp)
-        if (isVideo(sl.s.media)) {
-          /**
-           * A video cannot live in an svg <image> — that tag paints one still and nothing moves.
-           * foreignObject hands the wedge a real html <video>, and the same clip-path keeps it
-           * inside the slice, so a moving wedge behaves like any other.
-           */
-          var fo = document.createElementNS(NS, 'foreignObject')
-          fo.setAttribute('x', '0'); fo.setAttribute('y', '0')
-          fo.setAttribute('width', String(size)); fo.setAttribute('height', String(size))
-          fo.setAttribute('clip-path', 'url(#' + cid + ')')
-          var vid = mediaEl(sl.s.media)
-          vid.style.width = '100%'
-          vid.style.height = '100%'
-          vid.style.objectFit = 'cover'
-          fo.appendChild(vid)
-          svg.appendChild(fo)
-        } else {
-          var im = document.createElementNS(NS, 'image')
-          im.setAttribute('href', sl.s.media)
-          im.setAttribute('x', '0'); im.setAttribute('y', '0')
-          im.setAttribute('width', String(size)); im.setAttribute('height', String(size))
-          im.setAttribute('preserveAspectRatio', 'xMidYMid slice')
-          im.setAttribute('clip-path', 'url(#' + cid + ')')
-          svg.appendChild(im)
-        }
+        svg.appendChild(clippedMedia(sl.s.media, cid, mediaBox(sl.s, size)))
       }
 
       var label = String(sl.s.label == null ? '' : sl.s.label)
@@ -3698,9 +3739,30 @@ const WHEEL_HTML = `<!doctype html>
           t.setAttribute('transform', 'rotate(' + rot + ' ' + tx + ' ' + ty + ')')
         }
         t.textContent = label
-        svg.appendChild(t)
+        labels.appendChild(t)
       }
     }
+
+    /**
+     * The wheel's own face: one picture across the whole disc, turning with it.
+     *
+     * Not the same thing as the backdrop, which stays put behind the wheel. This is for a wheel
+     * that was drawn somewhere else and only needs the wedges underneath as geometry.
+     */
+    if (cfg.faceMedia) {
+      var fcp = document.createElementNS(NS, 'clipPath')
+      fcp.setAttribute('id', 'clipface')
+      var fc = document.createElementNS(NS, 'circle')
+      fc.setAttribute('cx', String(r)); fc.setAttribute('cy', String(r))
+      fc.setAttribute('r', String(r - (cfg.rimWidth || 0) / 2))
+      fcp.appendChild(fc)
+      defs.appendChild(fcp)
+      var face = clippedMedia(cfg.faceMedia, 'clipface', { x: 0, y: 0, w: size })
+      face.setAttribute('opacity', String(cfg.faceOpacity == null ? 1 : cfg.faceOpacity))
+      svg.appendChild(face)
+    }
+
+    svg.appendChild(labels)
 
     if (cfg.rimWidth > 0) {
       var rim = document.createElementNS(NS, 'circle')
@@ -3771,6 +3833,206 @@ const WHEEL_HTML = `<!doctype html>
     return 'cubic-bezier(.16,.84,.24,1)'
   }
 
+  /* ---------------------------------- sound ----------------------------------
+   *
+   * The built-in sounds are synthesized rather than shipped as files, and the spin sound is not a
+   * loop at all by default: it is one click per wedge going past the pointer, driven by the real
+   * rotation. A recording has a length, and a wheel does not — anything looped either runs out or
+   * has to be cut, and it drifts out of step with the picture as the wheel slows down. Clicks that
+   * follow the wheel cannot drift, and they end exactly when it stops, however long it turned.
+   */
+  var actx = null
+  function audio() {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)()
+      if (actx.state === 'suspended') actx.resume().catch(function () { /* noop */ })
+    } catch (err) { actx = null }
+    return actx
+  }
+  function vol() { return Math.max(0, Math.min(1, cfg.soundVolume == null ? 0.6 : cfg.soundVolume)) }
+
+  var noiseBuf = null
+  function noise(a) {
+    if (noiseBuf) return noiseBuf
+    var n = Math.floor(a.sampleRate * 2)
+    noiseBuf = a.createBuffer(1, n, a.sampleRate)
+    var d = noiseBuf.getChannelData(0)
+    for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1
+    return noiseBuf
+  }
+
+  /** the peg going past the pointer */
+  function click() {
+    var a = audio()
+    if (!a) return
+    var t = a.currentTime
+    var osc = a.createOscillator()
+    var g = a.createGain()
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(1500, t)
+    osc.frequency.exponentialRampToValueAtTime(300, t + 0.045)
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.35 * vol()), t + 0.004)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06)
+    osc.connect(g).connect(a.destination)
+    osc.start(t)
+    osc.stop(t + 0.08)
+  }
+
+  function tone(a, freq, at, dur, type, peak) {
+    var osc = a.createOscillator()
+    var g = a.createGain()
+    osc.type = type || 'sine'
+    osc.frequency.setValueAtTime(freq, at)
+    g.gain.setValueAtTime(0.0001, at)
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), at + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
+    osc.connect(g).connect(a.destination)
+    osc.start(at)
+    osc.stop(at + dur + 0.05)
+  }
+
+  /** the loops: both are continuous by construction, so there is nothing to run out */
+  function startWhoosh() {
+    var a = audio()
+    if (!a) return null
+    var src = a.createBufferSource(); src.buffer = noise(a); src.loop = true
+    var f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 0.9
+    var g = a.createGain(); g.gain.value = 0.18 * vol()
+    var lfo = a.createOscillator(); lfo.frequency.value = 0.6
+    var lg = a.createGain(); lg.gain.value = 380
+    lfo.connect(lg); lg.connect(f.frequency)
+    src.connect(f); f.connect(g); g.connect(a.destination)
+    src.start(); lfo.start()
+    return function () { try { src.stop(); lfo.stop() } catch (err) { /* noop */ } }
+  }
+
+  function startDrumroll() {
+    var a = audio()
+    if (!a) return null
+    var src = a.createBufferSource(); src.buffer = noise(a); src.loop = true
+    var f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2400
+    var g = a.createGain(); g.gain.value = 0
+    var lfo = a.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 24
+    var lg = a.createGain(); lg.gain.value = 0.1 * vol()
+    var base = a.createConstantSource(); base.offset.value = 0.1 * vol()
+    lfo.connect(lg); lg.connect(g.gain); base.connect(g.gain)
+    src.connect(f); f.connect(g); g.connect(a.destination)
+    src.start(); lfo.start(); base.start()
+    return function () { try { src.stop(); lfo.stop(); base.stop() } catch (err) { /* noop */ } }
+  }
+
+  /** an uploaded loop, decoded once and looped in the graph so it never gaps at the seam */
+  function startCustomLoop(url) {
+    var a = audio()
+    if (!a) return null
+    var node = null
+    var dead = false
+    fetch(url).then(function (r) { return r.arrayBuffer() })
+      .then(function (b) { return a.decodeAudioData(b) })
+      .then(function (buf) {
+        if (dead) return
+        node = a.createBufferSource()
+        node.buffer = buf
+        node.loop = true
+        var g = a.createGain(); g.gain.value = vol()
+        node.connect(g); g.connect(a.destination)
+        node.start()
+      })
+      .catch(function () { /* an unreadable upload simply stays silent */ })
+    return function () { dead = true; if (node) { try { node.stop() } catch (err) { /* noop */ } } }
+  }
+
+  function playWin() {
+    var kind = cfg.winSoundKind == null ? (cfg.winSound ? 'custom' : 'fanfare') : cfg.winSoundKind
+    if (kind === 'none') return
+    if (kind === 'custom') {
+      if (!cfg.winSound) return
+      try {
+        var au = new Audio(cfg.winSound)
+        au.volume = vol()
+        au.play().catch(function () { /* noop */ })
+      } catch (err) { /* noop */ }
+      return
+    }
+    var a = audio()
+    if (!a) return
+    var t = a.currentTime
+    var p = 0.22 * vol()
+    if (kind === 'coin') {
+      tone(a, 988, t, 0.07, 'square', p)
+      tone(a, 1319, t + 0.07, 0.28, 'square', p)
+      return
+    }
+    if (kind === 'chime') {
+      tone(a, 784, t, 0.3, 'sine', p)
+      tone(a, 1047, t + 0.1, 0.3, 'sine', p)
+      tone(a, 1319, t + 0.2, 0.45, 'sine', p)
+      return
+    }
+    // fanfare: a bright major triad, then the octave held
+    tone(a, 523, t, 0.16, 'triangle', p)
+    tone(a, 659, t + 0.11, 0.16, 'triangle', p)
+    tone(a, 784, t + 0.22, 0.18, 'triangle', p)
+    tone(a, 1047, t + 0.34, 0.55, 'triangle', p)
+    tone(a, 784, t + 0.34, 0.55, 'sine', p * 0.6)
+  }
+
+  /**
+   * The ticks, read off the real rotation.
+   *
+   * Chasing the computed transform rather than a timer means the clicks follow whatever easing the
+   * wheel was given, and they thin out as it slows exactly the way the wedges do.
+   */
+  var tickRaf = 0
+  function startTicks(list, from) {
+    var svg = document.getElementById('wheel')
+    if (!svg || !list.length) return null
+    var prev = from
+    var counted = crossings(from, list)
+    var step = function () {
+      var m = matrixAngle(svg)
+      if (m != null) {
+        var k = Math.round((prev - m) / 360)
+        var now = m + 360 * k
+        if (now < prev) now += 360
+        prev = now
+        var c = crossings(now, list)
+        // a fast wheel can pass several pegs inside one frame; three is as many as an ear reads
+        var n = Math.min(3, c - counted)
+        counted = c
+        for (var i = 0; i < n; i++) click()
+      }
+      tickRaf = requestAnimationFrame(step)
+    }
+    tickRaf = requestAnimationFrame(step)
+    return function () { if (tickRaf) cancelAnimationFrame(tickRaf); tickRaf = 0 }
+  }
+
+  /** how many wedge edges have gone past the pointer by rotation R */
+  function crossings(R, list) {
+    var n = 0
+    for (var i = 0; i < list.length; i++) n += Math.floor((R + list[i].from) / 360)
+    return n
+  }
+
+  function matrixAngle(el) {
+    var tr = getComputedStyle(el).transform
+    if (!tr || tr === 'none') return null
+    var nums = tr.slice(tr.indexOf('(') + 1, tr.lastIndexOf(')')).split(',')
+    if (nums.length < 4) return null
+    return Math.atan2(parseFloat(nums[1]), parseFloat(nums[0])) * 180 / Math.PI
+  }
+
+  function startSpinSound(list, from) {
+    var kind = cfg.spinSoundKind == null ? (cfg.spinSound ? 'custom' : 'tick') : cfg.spinSoundKind
+    if (kind === 'none') return null
+    if (kind === 'whoosh') return startWhoosh()
+    if (kind === 'drumroll') return startDrumroll()
+    if (kind === 'custom') return cfg.spinSound ? startCustomLoop(cfg.spinSound) : null
+    return startTicks(list, from)
+  }
+
   /**
    * Turn to the wedge the app picked.
    *
@@ -3786,6 +4048,7 @@ const WHEEL_HTML = `<!doctype html>
     var current = ((angle % 360) + 360) % 360
     var target = (360 - mid) % 360
     var delta = ((target - current) + 360) % 360
+    var from = angle
     angle = angle + Math.max(0, turns || 5) * 360 + delta
     spinning = true
 
@@ -3794,27 +4057,14 @@ const WHEEL_HTML = `<!doctype html>
       svg.style.transition = 'transform ' + spinMs + 'ms ' + easingCurve()
       svg.style.transform = 'rotate(' + angle + 'deg)'
     }
-    if (cfg.spinSound) {
-      try {
-        spinAudio = new Audio(cfg.spinSound)
-        spinAudio.loop = true
-        spinAudio.volume = Math.max(0, Math.min(1, cfg.soundVolume == null ? 0.6 : cfg.soundVolume))
-        spinAudio.play().catch(function () {})
-      } catch (err) { /* noop */ }
-    }
+    stopSpinSound = startSpinSound(list, from)
     setTimeout(function () { land(list[i].s.label) }, spinMs)
   }
 
   function land(label) {
     spinning = false
-    if (spinAudio) { try { spinAudio.pause() } catch (err) { /* noop */ } spinAudio = null }
-    if (cfg.winSound) {
-      try {
-        var au = new Audio(cfg.winSound)
-        au.volume = Math.max(0, Math.min(1, cfg.soundVolume == null ? 0.6 : cfg.soundVolume))
-        au.play().catch(function () {})
-      } catch (err) { /* noop */ }
-    }
+    if (stopSpinSound) { try { stopSpinSound() } catch (err) { /* noop */ } stopSpinSound = null }
+    playWin()
     if (!cfg.resultShow) return
     var res = document.getElementById('result')
     if (!res) return
@@ -3823,21 +4073,32 @@ const WHEEL_HTML = `<!doctype html>
     setTimeout(function () { res.classList.remove('on') }, Math.max(0, (cfg.resultS || 0) * 1000))
   }
 
-  var goneBox = null
-  function gone(on) {
-    if (!on) { if (goneBox) { goneBox.remove(); goneBox = null } return }
-    if (goneBox) return
-    goneBox = document.createElement('div')
-    goneBox.id = 'gone'
-    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
-    document.body.appendChild(goneBox)
+  /**
+   * Say why the wheel is not there.
+   *
+   * An overlay that shows nothing looks the same whether it was deleted, whether StickiChat is
+   * closed, or whether the page was loaded while the server was down — and only the last of those
+   * is fixed by refreshing the source, so the page has to name which one it is.
+   */
+  var noteBox = null
+  function note(text) {
+    if (!text) { if (noteBox) { noteBox.remove(); noteBox = null } return }
+    if (!noteBox) {
+      noteBox = document.createElement('div')
+      noteBox.id = 'gone'
+      document.body.appendChild(noteBox)
+    }
+    noteBox.textContent = text
   }
+  function gone(on) { note(on ? 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.' : '') }
 
   var seen = {}
+  var gotCfg = false
   function connect() {
     var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
     es.addEventListener('cfg', function (e) {
       try {
+        gotCfg = true
         cfg = Object.assign(cfg, JSON.parse(e.data))
         gone(false)
         // never redraw mid-spin: rebuilding the svg would drop the running transition and the
@@ -3857,7 +4118,11 @@ const WHEEL_HTML = `<!doctype html>
         spinTo(d.wheel.index, d.wheel.spinMs, d.wheel.turns)
       } catch (err) { /* noop */ }
     }
-    es.onerror = function () { es.close(); setTimeout(connect, 3000) }
+    es.onerror = function () {
+      es.close()
+      if (!gotCfg) note('StickiChat не відповідає. Запусти застосунок, тоді онови це джерело в OBS.')
+      setTimeout(connect, 3000)
+    }
   }
   render()
   connect()
@@ -3873,7 +4138,11 @@ const WHEEL_HTML = `<!doctype html>
     }, Math.max(2000, ((cfg.spinS || 6) + (cfg.resultS || 4) + 1) * 1000))
   }
 
-  window.__oe = { cfg: cfg, render: render, spinTo: spinTo, slices: slices, angleOf: function () { return angle } }
+  window.__oe = {
+    cfg: cfg, render: render, spinTo: spinTo, slices: slices,
+    angleOf: function () { return angle },
+    playWin: playWin, click: click, startSpinSound: startSpinSound
+  }
 })()
 </script>
 </body>

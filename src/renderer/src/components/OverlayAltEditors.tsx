@@ -533,8 +533,48 @@ function FollowPanel({
   }
   const testUrl = `http://127.0.0.1:${port}/overlay?channel=${encodeURIComponent(channel)}&profile=${encodeURIComponent(ov.id)}&preview=1`
   void testUrl
+  const [testMsg, setTestMsg] = useState('')
+  /**
+   * A real follow, sent down the real pipe.
+   *
+   * The preview in this window renders the same page, but it is not what OBS is showing, and the
+   * only way to know an alert looks right on stream is to make one happen on stream.
+   */
+  const fireTest = (): void => {
+    const names = ['Bobik069', 'Pinuses', 'Mira_Cat', 'n1cole_cat']
+    const nick = names[Math.floor(Math.random() * names.length)]
+    window.sticki.overlayPush(channel, {
+      id: `test-follow-${Date.now()}`,
+      user: 'test',
+      login: nick.toLowerCase(),
+      nick,
+      color: '#c7a6ff',
+      badges: [],
+      body: '',
+      kind: 'info',
+      ts: Date.now(),
+      follow: true
+    })
+    setTestMsg(`Надіслано: ${nick}`)
+    window.setTimeout(() => setTestMsg(''), 4000)
+  }
   return (
     <>
+      <Sec title="🧪 Перевірка" defaultOpen>
+        <div className="set-row">
+          <label>Тестове сповіщення</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="primary" onClick={fireTest}>
+              💜 Показати в OBS
+            </button>
+            {!!testMsg && <span className="hint">{testMsg}</span>}
+          </div>
+        </div>
+        <div className="hint" style={{ padding: '0 12px 8px' }}>
+          Летить у всі джерела цього оверлея — і в OBS, і в прев&apos;ю тут.
+        </div>
+      </Sec>
+
       <Sec title="✏️ Текст" defaultOpen>
         <Row label="Заголовок" hint="{user} — нік фоловера, {channel} — канал.">
           <input value={ov.title} onChange={(e) => update({ title: e.target.value })} />
@@ -1011,6 +1051,26 @@ function RoulettePanel({
                 ✕
               </button>
             </div>
+            {!!s.media && (
+              <div className="oe-decor-ctl" style={{ flexWrap: 'wrap' }}>
+                <span className="hint" title="Розмір картинки у відсотках колеса">
+                  🔍
+                </span>
+                <Num
+                  v={s.mediaScale ?? 100}
+                  on={(n) => upd(s.id, { mediaScale: n })}
+                  min={5}
+                  max={400}
+                  w={58}
+                  def={100}
+                />
+                <span className="hint" title="Зсув картинки від центра колеса">
+                  ✥
+                </span>
+                <Num v={s.mediaX ?? 0} on={(n) => upd(s.id, { mediaX: n })} min={-2000} max={2000} w={58} def={0} />
+                <Num v={s.mediaY ?? 0} on={(n) => upd(s.id, { mediaY: n })} min={-2000} max={2000} w={58} def={0} />
+              </div>
+            )}
           </div>
         ))}
         <button
@@ -1156,6 +1216,39 @@ function RoulettePanel({
             <Num v={ov.hubSize} on={(n) => update({ hubSize: n })} min={0} max={600} w={60} def={90} />
           </div>
         </Row>
+        <Row
+          label="Картинка на все колесо"
+          hint="Одне зображення на весь диск — обертається разом з колесом. Сектори під ним лишаються, просто їх не видно."
+        >
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 12, (url) => update({ faceMedia: url }))
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 Обрати</span>
+            </label>
+            {!!ov.faceMedia && (
+              <button className="danger" onClick={() => update({ faceMedia: '' })}>
+                ✕
+              </button>
+            )}
+            {!!ov.faceMedia && (
+              <input
+                type="range"
+                min={5}
+                max={100}
+                value={Math.round((ov.faceOpacity ?? 1) * 100)}
+                onChange={(e) => update({ faceOpacity: Number(e.target.value) / 100 })}
+              />
+            )}
+          </div>
+        </Row>
         <Row label="Зсув">
           <Num v={ov.offsetX} on={(n) => update({ offsetX: n })} min={-2000} max={2000} w={64} def={0} />
           <Num v={ov.offsetY} on={(n) => update({ offsetY: n })} min={-2000} max={2000} w={64} def={0} />
@@ -1218,48 +1311,79 @@ function RoulettePanel({
       </Sec>
 
       <Sec title="🔔 Звук">
-        <Row label="Під час обертання" hint="Зациклюється, поки колесо крутиться.">
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label className="ghost" style={{ cursor: 'pointer' }}>
-              <input
-                type="file"
-                accept="audio/*"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  readFile(e.target.files?.[0], 3, (url) => update({ spinSound: url }))
-                  e.target.value = ''
-                }}
-              />
-              <span className="hint">📁 Обрати</span>
-            </label>
-            {ov.spinSound && (
-              <button className="danger" onClick={() => update({ spinSound: '' })}>
-                ✕
-              </button>
-            )}
-          </div>
+        <Row
+          label="Під час обертання"
+          hint="«Цокіт» — клац на кожному секторі, що проходить повз вказівник. Він іде за самим колесом, тому не збивається і не закінчується, скільки б воно не крутилось."
+        >
+          <select
+            value={ov.spinSoundKind ?? (ov.spinSound ? 'custom' : 'tick')}
+            onChange={(e) => update({ spinSoundKind: e.target.value as RouletteOverlayConfig['spinSoundKind'] })}
+          >
+            <option value="tick">Цокіт</option>
+            <option value="whoosh">Гул</option>
+            <option value="drumroll">Барабанний дріб</option>
+            <option value="custom">Свій файл</option>
+            <option value="none">Без звуку</option>
+          </select>
         </Row>
+        {(ov.spinSoundKind ?? (ov.spinSound ? 'custom' : 'tick')) === 'custom' && (
+          <Row label="Файл обертання" hint="Зациклюється без шва, поки колесо крутиться.">
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label className="ghost" style={{ cursor: 'pointer' }}>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    readFile(e.target.files?.[0], 3, (url) => update({ spinSound: url }))
+                    e.target.value = ''
+                  }}
+                />
+                <span className="hint">{ov.spinSound ? '📁 Замінити' : '📁 Обрати'}</span>
+              </label>
+              {ov.spinSound && (
+                <button className="danger" onClick={() => update({ spinSound: '' })}>
+                  ✕
+                </button>
+              )}
+            </div>
+          </Row>
+        )}
         <Row label="На результат">
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label className="ghost" style={{ cursor: 'pointer' }}>
-              <input
-                type="file"
-                accept="audio/*"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  readFile(e.target.files?.[0], 3, (url) => update({ winSound: url }))
-                  e.target.value = ''
-                }}
-              />
-              <span className="hint">📁 Обрати</span>
-            </label>
-            {ov.winSound && (
-              <button className="danger" onClick={() => update({ winSound: '' })}>
-                ✕
-              </button>
-            )}
-          </div>
+          <select
+            value={ov.winSoundKind ?? (ov.winSound ? 'custom' : 'fanfare')}
+            onChange={(e) => update({ winSoundKind: e.target.value as RouletteOverlayConfig['winSoundKind'] })}
+          >
+            <option value="fanfare">Фанфари</option>
+            <option value="chime">Дзвіночок</option>
+            <option value="coin">Монетка</option>
+            <option value="custom">Свій файл</option>
+            <option value="none">Без звуку</option>
+          </select>
         </Row>
+        {(ov.winSoundKind ?? (ov.winSound ? 'custom' : 'fanfare')) === 'custom' && (
+          <Row label="Файл результату">
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label className="ghost" style={{ cursor: 'pointer' }}>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    readFile(e.target.files?.[0], 3, (url) => update({ winSound: url }))
+                    e.target.value = ''
+                  }}
+                />
+                <span className="hint">{ov.winSound ? '📁 Замінити' : '📁 Обрати'}</span>
+              </label>
+              {ov.winSound && (
+                <button className="danger" onClick={() => update({ winSound: '' })}>
+                  ✕
+                </button>
+              )}
+            </div>
+          </Row>
+        )}
         <Row label="Гучність">
           <input
             type="range"
