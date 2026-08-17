@@ -696,6 +696,15 @@ function MessageViewInner({
   // size/repeat matter for URL paints (a bare tile covered a corner of the nick) and the
   // shadow chain is a big part of how a paint actually looks on 7TV.
   const paintStyle = settings.sevenTvNickColors ? paintStyleOf(stvCosmetic, dark) : undefined
+  /**
+   * The same paint for a /me line, minus the halo.
+   *
+   * The nick's legibility halo is drawn with a filter, and a filter on the message text would
+   * take every emote in it with it — a drop-shadow around each picture, which is not what the
+   * paint says. Text on the message line is also bigger and never sits on a badge, so it does
+   * not need the halo the nick does.
+   */
+  const actionPaint = paintStyle ? { ...paintStyle, filter: undefined } : undefined
   const classes = ['msg']
   // shared chat: visitors from the partner channel get a subtle tint + origin tag
   if (msg.sourceRoomId) classes.push('shared-msg')
@@ -1061,9 +1070,18 @@ function MessageViewInner({
             </span>
           ) : (
             <span
+              /**
+               * A /me line is the nick's own colour, so it is the nick's own paint too.
+               *
+               * Twitch colours the whole action in the writer's colour, and for somebody with a
+               * 7TV paint that colour is a flat approximation of a gradient everyone can see on
+               * their nick two words earlier. The same remount trick as the nick: Chromium keeps
+               * the old text clip on a live element and paints the gradient as a solid bar.
+               */
+              key={msg.isAction ? actionPaint?.background ?? 'plain' : undefined}
               className={`msg-text ${brailleArt ? 'ascii-art' : ''}`}
               style={{
-                ...(msg.isAction ? { color } : undefined),
+                ...(msg.isAction ? actionPaint ?? { color } : undefined),
                 ...(brailleArt ? { width: Math.ceil(getBrailleCellWidth() * artCols) } : undefined)
               }}
             >

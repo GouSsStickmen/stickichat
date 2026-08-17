@@ -1519,8 +1519,29 @@ const OVERLAY_HTML = `<!doctype html>
         text.style.display = 'inline-block'
         text.style.translate = (cfg.textOffsetX || 0) + 'px ' + (cfg.textOffsetY || 0) + 'px'
       }
-      // /me action: tint the text with the user's color (like chat) unless set to plain
-      if (d.act && cfg.meStyle !== 'plain') text.style.color = nickColorFor(d)
+      /**
+       * /me action: the writer's own colour, and their own paint if they have one.
+       *
+       * The line already wears their nick two words earlier; tinting the action with a flat
+       * approximation of the gradient right beside the gradient itself is the odd one out. The
+       * text-shadow has to go for the same reason it goes on the nick — it is drawn over the
+       * clipped paint — but there is no filter here: a filter would put a halo around every emote
+       * in the message as well.
+       */
+      if (d.act && cfg.meStyle !== 'plain') {
+        if (cfg.nickPaint !== false && cfg.nickColorMode === 'twitch' && d.paint) {
+          text.style.background = d.paint
+          if (d.paintSize) text.style.backgroundSize = d.paintSize
+          if (d.paintRepeat) text.style.backgroundRepeat = d.paintRepeat
+          text.style.webkitBackgroundClip = 'text'
+          text.style.backgroundClip = 'text'
+          text.style.color = 'transparent'
+          text.style.webkitTextFillColor = 'transparent'
+          text.style.textShadow = 'none'
+        } else {
+          text.style.color = nickColorFor(d)
+        }
+      }
       text.style.fontStyle = cfg.italic ? 'italic' : 'normal'
       text.style.textTransform = cfg.textTransform === 'upper' ? 'uppercase' : cfg.textTransform === 'lower' ? 'lowercase' : 'none'
       body.appendChild(text)
