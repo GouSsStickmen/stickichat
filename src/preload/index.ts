@@ -55,6 +55,7 @@ const api = {
   overlayDelete: (channel: string, del: { id?: string; user?: string; all?: boolean }): Promise<void> =>
     ipcRenderer.invoke('overlay:delete', channel, del),
   overlayRestart: (): Promise<void> => ipcRenderer.invoke('overlay:restart'),
+  overlayClients: (): Promise<Record<string, number>> => ipcRenderer.invoke('overlay:clients'),
   closeWindow: (): Promise<void> => ipcRenderer.invoke('window:close'),
   notifyConfigChanged: (): Promise<void> => ipcRenderer.invoke('app:notifyConfigChanged'),
   onConfigChanged: (cb: () => void): (() => void) => {

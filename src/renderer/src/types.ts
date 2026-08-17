@@ -351,6 +351,13 @@ export interface OverlayBase {
   name: string
   /** channel baked into the OBS URL; empty/undefined = first open chat */
   channel?: string
+  /**
+   * Whether the editor's preview keeps acting things out by itself.
+   *
+   * Only the preview reads this — an OBS source has no demo to switch off. A wheel that spins
+   * every few seconds while its colours are being picked is unusable, so it can be stopped.
+   */
+  previewDemo?: boolean
 }
 
 /** every overlay kind there is; the discriminant of the OverlayConfig union */
@@ -821,6 +828,13 @@ export interface GoalOverlayConfig extends OverlayBase {
   borderColor: string
   glowSize: number
   glowColor: string
+  /**
+   * Paint the outline and the glow with the bar's own fill.
+   *
+   * Same idea as the alert plate: a gradient bar with a one-colour ring around it always looks
+   * like the colour was picked wrong, and with more than two stops there is no right answer.
+   */
+  fxFromFill?: boolean
   /** ms for the bar to travel to a new value */
   animMs: number
   /** legacy single switch; `gainFx` takes over once it exists */
@@ -981,6 +995,17 @@ export interface FollowOverlayConfig extends OverlayBase {
   plateMedia: string
   plateMediaFit: 'cover' | 'contain' | 'stretch'
   plateMediaOpacity: number
+  /** a ready-made outline for the plate; `rect` keeps plateRadius */
+  plateShape: PlateShape
+  /** a PNG whose alpha cuts the plate instead, when a preset is not the shape you meant */
+  plateMask: string
+  /**
+   * Paint the outline and the glow with the plate's own fill.
+   *
+   * A gradient plate ringed in one flat colour picked out of it always looks like a mistake, and
+   * picking the "right" one by hand is impossible once the gradient has more than two stops.
+   */
+  plateFxFromFill: boolean
   plateRadius: number
   platePadX: number
   platePadY: number
@@ -995,6 +1020,27 @@ export interface FollowOverlayConfig extends OverlayBase {
 
   customCss: string
 }
+
+/**
+ * The ready-made plate outlines.
+ *
+ * Shared by every overlay that draws a plate, so a shape learned in one editor means the same
+ * thing in the next one. `rect` is the plain rounded box and the only one that reads a radius.
+ */
+export type PlateShape =
+  | 'rect'
+  | 'pill'
+  | 'circle'
+  | 'notch'
+  | 'hexagon'
+  | 'hexflat'
+  | 'ribbon'
+  | 'ticket'
+  | 'banner'
+  | 'shield'
+  | 'tag'
+  | 'slant'
+  | 'blob'
 
 /** one wedge of the wheel */
 export interface WheelSection {
@@ -1212,6 +1258,9 @@ export const DEFAULT_FOLLOW_OVERLAY: Omit<FollowOverlayConfig, 'id' | 'name'> = 
   plateMedia: '',
   plateMediaFit: 'cover',
   plateMediaOpacity: 1,
+  plateShape: 'rect',
+  plateMask: '',
+  plateFxFromFill: false,
   plateRadius: 18,
   platePadX: 28,
   platePadY: 20,
@@ -1302,6 +1351,7 @@ export const DEFAULT_GOAL_OVERLAY: Omit<GoalOverlayConfig, 'id' | 'name'> = {
   borderColor: '#ffffff',
   glowSize: 0,
   glowColor: '#9147ff',
+  fxFromFill: false,
   animMs: 600,
   pulseOnGain: true,
   gainFx: 'pulse',

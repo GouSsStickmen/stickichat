@@ -35,6 +35,8 @@ export interface StickiApi {
   overlayPush(channel: string, line: unknown): Promise<void>
   openOverlayEditor(overlayId: string): Promise<void>
   overlayRestart(): Promise<void>
+  /** how many OBS browser sources are connected to each overlay id right now */
+  overlayClients(): Promise<Record<string, number>>
   overlayDelete(channel: string, del: { id?: string; user?: string; all?: boolean }): Promise<void>
   closeWindow(): Promise<void>
   notifyConfigChanged(): Promise<void>

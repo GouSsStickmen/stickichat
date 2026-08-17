@@ -91,6 +91,19 @@ function profileMissing(profile: string): boolean {
   return !!profile && !styles[profile]
 }
 
+/**
+ * How many browser sources are listening to each overlay right now.
+ *
+ * An overlay that shows nothing in OBS has two very different causes — the page is not running, or
+ * it is running and nothing is being sent — and from inside the app they look identical. This is
+ * the difference, and it is the first thing to check when a source has gone blank.
+ */
+export function overlayClients(): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const c of clients) out[c.profile] = (out[c.profile] ?? 0) + 1
+  return out
+}
+
 export function overlayPush(channel: string, line: OverlayLine): void {
   const list = backlog.get(channel) ?? []
   list.push(line)
@@ -2690,6 +2703,7 @@ const EMOTE_HTML = `<!doctype html>
       'https://static-cdn.jtvnw.net/emoticons/v2/354/default/dark/3.0'
     ]
     setInterval(function () {
+      if (cfg.previewDemo === false) return
       celebrate({ kind: 'msg', login: 'demo', text: 'demo', emotes: [pick(DEMO), pick(DEMO)] })
     }, 900)
   }
@@ -2774,7 +2788,7 @@ const GOAL_HTML = `<!doctype html>
     trackFill: { kind: 'solid', color: '#000000', opacity: 0.5 },
     barFill: { kind: 'gradient', color: '#9147ff', color2: '#5cffe0', angle: 90, opacity: 1 },
     doneFill: { kind: 'gradient', color: '#12b886', color2: '#c7f464', angle: 90, opacity: 1 },
-    borderWidth: 0, borderColor: '#ffffff', glowSize: 0, glowColor: '#9147ff',
+    borderWidth: 0, borderColor: '#ffffff', glowSize: 0, glowColor: '#9147ff', fxFromFill: false,
     animMs: 600, pulseOnGain: true, gainFx: 'pulse', gainLabel: true, gainColor: '#ffe066',
     image: '', imagePlace: 'left', imageSize: 56, imageOpacity: 1, doneImage: '',
     customCss: ''
@@ -2927,16 +2941,42 @@ const GOAL_HTML = `<!doctype html>
       bar.style.width = (cfg.width || 420) + 'px'
       bar.style.height = (cfg.height || 34) + 'px'
       bar.style.borderRadius = (cfg.radius || 0) + 'px'
-      if (cfg.borderWidth > 0) bar.style.border = cfg.borderWidth + 'px solid ' + cfg.borderColor
-      if (cfg.glowSize > 0) bar.style.boxShadow = '0 0 ' + cfg.glowSize + 'px ' + cfg.glowColor + ', 0 0 ' + cfg.glowSize * 2 + 'px ' + cfg.glowColor
+      /**
+       * The outline and the glow can take the bar's own fill.
+       *
+       * A border is one colour and a box-shadow is one colour, so a gradient bar ringed by either
+       * has to pick a single stop out of the gradient and always looks like the wrong one. With
+       * the switch on, the ring becomes a painted layer behind the bar and the glow a blurred copy
+       * of it, both carrying the same gradient.
+       */
+      var edge = cfg.fxFromFill ? barCss : null
+      var bw = Math.max(0, cfg.borderWidth || 0)
+      if (edge && bw > 0) bar.style.background = edge
+      if (!edge) {
+        if (bw > 0) bar.style.border = bw + 'px solid ' + cfg.borderColor
+        if (cfg.glowSize > 0) bar.style.boxShadow = '0 0 ' + cfg.glowSize + 'px ' + cfg.glowColor + ', 0 0 ' + cfg.glowSize * 2 + 'px ' + cfg.glowColor
+      }
       var track = document.createElement('div')
       track.className = 'track'
       track.style.background = fill(cfg.trackFill)
       var f = document.createElement('div')
       f.className = 'fillbar'
       f.style.background = barCss
-      bar.appendChild(track)
-      bar.appendChild(f)
+      if (edge && bw > 0) {
+        // the ring is the bar's own background; the track and the fill move inside it, in a box
+        // of their own so the fill's percentage still measures the part people can see
+        var inner = document.createElement('div')
+        inner.style.position = 'absolute'
+        inner.style.inset = bw + 'px'
+        inner.style.overflow = 'hidden'
+        inner.style.borderRadius = Math.max(0, (cfg.radius || 0) - bw) + 'px'
+        inner.appendChild(track)
+        inner.appendChild(f)
+        bar.appendChild(inner)
+      } else {
+        bar.appendChild(track)
+        bar.appendChild(f)
+      }
       // a picture that fills the bar goes under the fill; one that sits inside it goes over
       var bimg = makeImage(done)
       if (bimg && cfg.imagePlace === 'fill') bar.insertBefore(bimg, bar.firstChild)
@@ -2947,7 +2987,28 @@ const GOAL_HTML = `<!doctype html>
         bar.appendChild(inn)
       }
       if (bimg && (cfg.imagePlace === 'inLeft' || cfg.imagePlace === 'inRight')) bar.appendChild(bimg)
-      host.appendChild(placeAround(bar, done))
+      /**
+       * A gradient glow has to live outside the bar.
+       *
+       * The bar clips its own contents so the track keeps its rounded corners, which would cut the
+       * halo off at the same edge — so the blurred copy goes in a wrapper around it instead.
+       */
+      var barBox = bar
+      if (edge && cfg.glowSize > 0) {
+        barBox = document.createElement('div')
+        barBox.style.position = 'relative'
+        barBox.style.display = 'inline-block'
+        var gl = document.createElement('div')
+        gl.style.position = 'absolute'
+        gl.style.inset = -Math.round(cfg.glowSize / 3) + 'px'
+        gl.style.background = edge
+        gl.style.borderRadius = (cfg.radius || 0) + 'px'
+        gl.style.filter = 'blur(' + cfg.glowSize + 'px)'
+        gl.style.pointerEvents = 'none'
+        barBox.appendChild(gl)
+        barBox.appendChild(bar)
+      }
+      host.appendChild(placeAround(barBox, done))
       if (!cfg.textInside && label) {
         var out = document.createElement('div')
         out.className = 'outside'
@@ -3015,8 +3076,10 @@ const GOAL_HTML = `<!doctype html>
 
   if (preview) {
     // the editor shows it moving, because a bar frozen at one number tells you nothing about
-    // whether the colours work
+    // whether the colours work — but it can be stopped, because a number that will not sit still
+    // is no help either when the numbers themselves are what is being set
     setInterval(function () {
+      if (cfg.previewDemo === false) return
       cfg.progress = (cfg.base || 0) + ((value() + Math.ceil(target() / 12)) % (target() + 1))
       render()
     }, 1400)
@@ -3135,6 +3198,7 @@ const ALERT_HTML = `<!doctype html>
     textAnchor: 'center', textX: 0, textY: 0,
     plate: false, plateFill: { kind: 'solid', color: '#18181b', opacity: 0.8 },
     plateMedia: '', plateMediaFit: 'cover', plateMediaOpacity: 1,
+    plateShape: 'rect', plateMask: '', plateFxFromFill: false,
     plateRadius: 18, platePadX: 28, platePadY: 20,
     plateBorderWidth: 0, plateBorderColor: '#9147ff', plateGlowSize: 0, plateGlowColor: '#9147ff',
     soundData: '', soundVolume: 0.6, customCss: ''
@@ -3225,13 +3289,57 @@ const ALERT_HTML = `<!doctype html>
     return el
   }
 
+  /**
+   * The shapes, as clip-paths.
+   *
+   * Percentages throughout, so one shape fits a picture, a wide plate and a tall one without a
+   * separate set of numbers for each — the corner cuts move with the box instead of staying the
+   * pixel size they were drawn at.
+   */
   function shapeOf(s) {
     if (s === 'circle') return 'circle(50% at 50% 50%)'
     if (s === 'rounded') return 'inset(0 round 18px)'
+    if (s === 'pill') return 'inset(0 round 999px)'
     if (s === 'hexagon') return 'polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)'
+    if (s === 'hexflat') return 'polygon(6% 0, 94% 0, 100% 50%, 94% 100%, 6% 100%, 0 50%)'
     if (s === 'star') return 'polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'
     if (s === 'blob') return 'polygon(20% 4%, 74% 0, 100% 28%, 96% 78%, 62% 100%, 16% 92%, 0 54%, 4% 20%)'
+    if (s === 'notch') return 'polygon(0 18%, 6% 0, 94% 0, 100% 18%, 100% 82%, 94% 100%, 6% 100%, 0 82%)'
+    if (s === 'ribbon') return 'polygon(0 0, 100% 0, 94% 50%, 100% 100%, 0 100%, 6% 50%)'
+    if (s === 'ticket') return 'polygon(0 0, 100% 0, 100% 38%, 97% 50%, 100% 62%, 100% 100%, 0 100%, 0 62%, 3% 50%, 0 38%)'
+    if (s === 'banner') return 'polygon(0 0, 100% 0, 100% 78%, 50% 100%, 0 78%)'
+    if (s === 'shield') return 'polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%)'
+    if (s === 'tag') return 'polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%)'
+    if (s === 'slant') return 'polygon(5% 0, 100% 0, 95% 100%, 0 100%)'
     return ''
+  }
+
+  /**
+   * One layer of the plate: the same outline, painted however the caller wants it.
+   *
+   * The plate is built as stacked copies of one shape rather than a border and a box-shadow,
+   * because a border is a colour and a box-shadow is a colour, and neither can be the gradient the
+   * plate itself is filled with. Three copies of the shape — blurred, painted, inset — give a glow
+   * and an outline that follow the fill.
+   */
+  function plateLayer(paint, inset) {
+    var el = document.createElement('div')
+    el.style.position = 'absolute'
+    el.style.inset = (inset || 0) + 'px'
+    el.style.background = paint
+    el.style.pointerEvents = 'none'
+    var shape = cfg.plateMask ? '' : shapeOf(cfg.plateShape)
+    if (cfg.plateMask) {
+      el.style.webkitMaskImage = "url('" + cfg.plateMask + "')"
+      el.style.maskImage = "url('" + cfg.plateMask + "')"
+      el.style.webkitMaskSize = '100% 100%'
+      el.style.maskSize = '100% 100%'
+    } else if (shape) {
+      el.style.clipPath = shape
+    } else {
+      el.style.borderRadius = (cfg.plateRadius || 0) + 'px'
+    }
+    return el
   }
 
   /**
@@ -3263,16 +3371,29 @@ const ALERT_HTML = `<!doctype html>
     card.style.translate = (cfg.offsetX || 0) + 'px ' + (cfg.offsetY || 0) + 'px'
     if (cfg.plate) {
       card.style.position = card.style.position || 'relative'
-      card.style.overflow = 'hidden'
-      card.style.background = fill(cfg.plateFill)
-      card.style.borderRadius = (cfg.plateRadius || 0) + 'px'
       card.style.padding = (cfg.platePadY || 0) + 'px ' + (cfg.platePadX || 0) + 'px'
-      if (cfg.plateBorderWidth > 0) card.style.border = cfg.plateBorderWidth + 'px solid ' + cfg.plateBorderColor
+
+      // the outline and the glow follow the plate's own fill when asked, so a gradient plate does
+      // not end up ringed in one flat colour picked out of it
+      var facePaint = fill(cfg.plateFill)
+      var edgePaint = cfg.plateFxFromFill ? facePaint : null
+      var bw = Math.max(0, cfg.plateBorderWidth || 0)
+
       if (cfg.plateGlowSize > 0) {
-        card.style.boxShadow = '0 0 ' + cfg.plateGlowSize + 'px ' + cfg.plateGlowColor +
-          ', 0 0 ' + cfg.plateGlowSize * 2 + 'px ' + cfg.plateGlowColor
+        var glow = plateLayer(edgePaint || cfg.plateGlowColor || '#fff', -Math.round(cfg.plateGlowSize / 3))
+        glow.style.filter = 'blur(' + cfg.plateGlowSize + 'px)'
+        glow.style.zIndex = '0'
+        card.appendChild(glow)
       }
-      // a picture, GIF or video for the plate, under everything the card holds
+      if (bw > 0) {
+        var ring = plateLayer(edgePaint || cfg.plateBorderColor || '#fff', 0)
+        ring.style.zIndex = '0'
+        card.appendChild(ring)
+      }
+      var face = plateLayer(facePaint, bw)
+      face.style.zIndex = '0'
+      face.style.overflow = 'hidden'
+      // a picture, GIF or video for the plate, inside the shape and under everything else
       var pm = mediaEl(cfg.plateMedia)
       if (pm) {
         pm.style.position = 'absolute'
@@ -3282,9 +3403,9 @@ const ALERT_HTML = `<!doctype html>
         pm.style.objectFit = cfg.plateMediaFit === 'stretch' ? 'fill' : cfg.plateMediaFit || 'cover'
         pm.style.opacity = String(cfg.plateMediaOpacity == null ? 1 : cfg.plateMediaOpacity)
         pm.style.pointerEvents = 'none'
-        pm.style.zIndex = '0'
-        card.appendChild(pm)
+        face.appendChild(pm)
       }
+      card.appendChild(face)
     }
 
     if (cfg.image && cfg.layout !== 'textOnly') {
@@ -3315,6 +3436,10 @@ const ALERT_HTML = `<!doctype html>
         pic.style.animation = 'l-' + cfg.imageLoop + ' ' +
           (cfg.imageLoop === 'spin' ? '6s linear' : '2.4s ease-in-out') + ' infinite'
       }
+      // above the plate: the plate layers are positioned, and a static picture would be painted
+      // under them however late it was added
+      pic.style.position = 'relative'
+      pic.style.zIndex = '1'
       card.appendChild(pic)
     }
 
@@ -3376,9 +3501,25 @@ const ALERT_HTML = `<!doctype html>
       var wt = placeAt(words, cfg.textAnchor, cfg.textX, cfg.textY)
       words.style.transform = wt
       words.style.zIndex = '1'
-    } else if (words.style.position !== 'absolute') {
+    } else {
       words.style.position = 'relative'
       words.style.zIndex = '1'
+      /**
+       * In the arranged layouts the same numbers nudge instead of pin.
+       *
+       * They used to do nothing at all outside free placement, which reads as broken: the fields
+       * are right there and dragging them moves nothing. A row or a column can still be leaned on
+       * a few pixels, and that is what they now do.
+       */
+      if (pic) {
+        var nudge = []
+        if (cfg.imageX || cfg.imageY) nudge.push('translate(' + (cfg.imageX || 0) + 'px, ' + (cfg.imageY || 0) + 'px)')
+        if (cfg.imageRotate) nudge.push('rotate(' + cfg.imageRotate + 'deg)')
+        if (nudge.length) pic.style.transform = nudge.join(' ')
+      }
+      if (cfg.textX || cfg.textY) {
+        words.style.transform = 'translate(' + (cfg.textX || 0) + 'px, ' + (cfg.textY || 0) + 'px)'
+      }
     }
     return card
   }
@@ -3493,6 +3634,7 @@ const ALERT_HTML = `<!doctype html>
     var NAMES = ['Bobik069', 'Pinuses', 'Mira_Cat', 'n1cole_cat']
     var n = 0
     var demo = function () {
+      if (cfg.previewDemo === false) return
       var name = NAMES[n++ % NAMES.length]
       enqueue({
         follow: true, ts: Date.now(), nick: name, login: name.toLowerCase(),
@@ -4130,7 +4272,7 @@ const WHEEL_HTML = `<!doctype html>
   if (preview) {
     var n = 0
     setInterval(function () {
-      if (spinning) return
+      if (spinning || cfg.previewDemo === false) return
       var list = slices()
       if (!list.length) return
       n = (n + 1) % list.length

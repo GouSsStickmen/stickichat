@@ -2,7 +2,16 @@ import { ipcMain, safeStorage, shell, app, BrowserWindow, desktopCapturer, scree
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
 import { inlineAssets } from './assets'
-import { overlayConfigure, overlayDelete, overlayPush, overlayRestart, OverlayDelete, OverlayStyle, OverlayLine } from './overlayServer'
+import {
+  overlayClients,
+  overlayConfigure,
+  overlayDelete,
+  overlayPush,
+  overlayRestart,
+  OverlayDelete,
+  OverlayStyle,
+  OverlayLine
+} from './overlayServer'
 import { buildReport, log, logDir, tailLog, watchWindow } from './diagnostics'
 
 function rememberEnabled(): boolean {
@@ -458,6 +467,7 @@ export function registerIpc(): void {
   ipcMain.handle('overlay:restart', () => {
     overlayRestart()
   })
+  ipcMain.handle('overlay:clients', () => overlayClients())
 
   // All HTTP goes through the main process so the renderer never hits CORS walls
   ipcMain.handle('clipboard:write', (_e, text: string) => {

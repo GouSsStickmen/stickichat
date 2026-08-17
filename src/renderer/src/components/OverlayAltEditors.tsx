@@ -7,6 +7,7 @@ import {
   FollowOverlayConfig,
   GoalOverlayConfig,
   OverlayConfig,
+  PlateShape,
   RouletteOverlayConfig,
   WheelSection
 } from '../types'
@@ -25,6 +26,23 @@ const KIND_CHIP: Record<Exclude<OverlayConfig, ChatOverlayConfig>['type'], strin
   follow: '💜 Алерт фолова',
   roulette: '🎡 Рулетка'
 }
+
+/** the ready-made plate outlines, in the order they are offered */
+const PLATE_SHAPES: { v: PlateShape; label: string }[] = [
+  { v: 'rect', label: '▭ Прямокутник' },
+  { v: 'pill', label: '⬭ Капсула' },
+  { v: 'circle', label: '◯ Коло' },
+  { v: 'notch', label: '⬡ Зрізані кути' },
+  { v: 'hexagon', label: '⬢ Шестикутник' },
+  { v: 'hexflat', label: '⬣ Витягнутий шестикутник' },
+  { v: 'ribbon', label: '🎀 Стрічка' },
+  { v: 'ticket', label: '🎟 Квиток' },
+  { v: 'banner', label: '🚩 Вимпел' },
+  { v: 'shield', label: '🛡 Щит' },
+  { v: 'tag', label: '🏷 Бирка' },
+  { v: 'slant', label: '⏢ Косий' },
+  { v: 'blob', label: '🫧 Пляма' }
+]
 
 /** the nine points a freely placed part can be measured from */
 const ANCHOR9: { v: string; label: string }[] = [
@@ -375,6 +393,12 @@ function GoalPanel({
           <Num v={ov.glowSize} on={(n) => update({ glowSize: n })} min={0} max={80} w={54} def={0} />
           <ColorField value={ov.glowColor} defaultValue="#9147ff" onChange={(v) => update({ glowColor: v })} />
         </Row>
+        <Toggle
+          label="Рамка і сяйво за заливкою"
+          hint="Якщо смуга градієнтна — рамка і сяйво беруть той самий градієнт замість одного плаского кольору."
+          value={!!ov.fxFromFill}
+          onChange={(v) => update({ fxFromFill: v })}
+        />
         <Row label="Плавність, мс" hint="Скільки часу смуга їде до нового значення.">
           <Num v={ov.animMs} on={(n) => update({ animMs: n })} min={0} max={4000} w={72} def={600} />
         </Row>
@@ -800,8 +824,8 @@ function FollowPanel({
         <Row label="Відступ між частинами">
           <Num v={ov.gap} on={(n) => update({ gap: n })} min={0} max={200} w={54} def={12} />
         </Row>
-        {ov.layout === 'free' && (
-          <>
+        <>
+          {ov.layout === 'free' && (
             <Row
               label="Картинка: кут"
               hint="Від якого кута екрана рахуються координати. Картинка, прикріплена до кута, лишається там і на іншій роздільності."
@@ -817,7 +841,16 @@ function FollowPanel({
                 ))}
               </select>
             </Row>
-            <Row label="Картинка: X / Y">
+          )}
+          <>
+            <Row
+              label="Картинка: X / Y"
+              hint={
+                ov.layout === 'free'
+                  ? 'Координати від обраного кута.'
+                  : 'У звичайних розкладках це зсув від того місця, де картинка стоїть за розкладкою.'
+              }
+            >
               <Num v={ov.imageX} on={(n) => update({ imageX: n })} min={-4000} max={4000} w={64} def={0} />
               <Num v={ov.imageY} on={(n) => update({ imageY: n })} min={-4000} max={4000} w={64} def={0} />
             </Row>
@@ -831,24 +864,26 @@ function FollowPanel({
                 onChange={(e) => update({ imageOpacity: Number(e.target.value) / 100 })}
               />
             </Row>
-            <Row label="Текст: кут">
-              <select
-                value={ov.textAnchor}
-                onChange={(e) => update({ textAnchor: e.target.value as FollowOverlayConfig['textAnchor'] })}
-              >
-                {ANCHOR9.map((a) => (
-                  <option key={a.v} value={a.v}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
-            </Row>
+            {ov.layout === 'free' && (
+              <Row label="Текст: кут">
+                <select
+                  value={ov.textAnchor}
+                  onChange={(e) => update({ textAnchor: e.target.value as FollowOverlayConfig['textAnchor'] })}
+                >
+                  {ANCHOR9.map((a) => (
+                    <option key={a.v} value={a.v}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+            )}
             <Row label="Текст: X / Y">
               <Num v={ov.textX} on={(n) => update({ textX: n })} min={-4000} max={4000} w={64} def={0} />
               <Num v={ov.textY} on={(n) => update({ textY: n })} min={-4000} max={4000} w={64} def={0} />
             </Row>
           </>
-        )}
+        </>
       </Sec>
 
       <Sec title="🎨 Плашка">
@@ -898,6 +933,45 @@ function FollowPanel({
                 />
               </Row>
             )}
+            <Row label="Форма" hint="Готові обриси плашки. «Прямокутник» — єдиний, що читає заокруглення нижче.">
+              <select
+                value={ov.plateShape ?? 'rect'}
+                onChange={(e) => update({ plateShape: e.target.value as PlateShape })}
+              >
+                {PLATE_SHAPES.map((s) => (
+                  <option key={s.v} value={s.v}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </Row>
+            <Row label="Своя маска" hint="PNG: де прозоро — там плашки нема. Замінює форму вище.">
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label className="ghost" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      readFile(e.target.files?.[0], 4, (url) => update({ plateMask: url }))
+                      e.target.value = ''
+                    }}
+                  />
+                  <span className="hint">{ov.plateMask ? '📁 Замінити' : '📁 Обрати'}</span>
+                </label>
+                {!!ov.plateMask && (
+                  <button className="danger" onClick={() => update({ plateMask: '' })}>
+                    ✕
+                  </button>
+                )}
+              </div>
+            </Row>
+            <Toggle
+              label="Обводка і сяйво за заливкою"
+              hint="Якщо плашка градієнтна — рамка і сяйво беруть той самий градієнт замість одного плаского кольору."
+              value={!!ov.plateFxFromFill}
+              onChange={(v) => update({ plateFxFromFill: v })}
+            />
             <Row label="Заокруглення">
               <Num v={ov.plateRadius} on={(n) => update({ plateRadius: n })} min={0} max={200} w={64} def={18} />
             </Row>
@@ -1459,6 +1533,18 @@ export default function OverlayAltEditor({
                 </option>
               ))}
             </select>
+            <label
+              className="hint"
+              style={{ display: 'flex', gap: 4, alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              title="Прев'ю саме програє події, щоб було видно рух. Вимкни, щоб воно просто стояло, поки налаштовуєш."
+            >
+              <input
+                type="checkbox"
+                checked={ov.previewDemo !== false}
+                onChange={(e) => update({ previewDemo: e.target.checked })}
+              />
+              ▶ Демо
+            </label>
             <code className="oe-note" title={obsUrl} style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {obsUrl}
             </code>

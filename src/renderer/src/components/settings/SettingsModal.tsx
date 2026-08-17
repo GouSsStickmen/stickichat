@@ -2871,6 +2871,30 @@ function OverlaySection(): React.JSX.Element {
     reader.readAsText(file)
   }
 
+  /**
+   * How many OBS sources are actually on each overlay right now.
+   *
+   * Polled rather than pushed: it is only looked at while this tab is open, and a source coming
+   * and going is not worth a channel of its own. It answers the question that otherwise takes a
+   * round trip through OBS — is the browser source even running, or is it the overlay that is
+   * quiet.
+   */
+  const [sources, setSources] = useState<Record<string, number>>({})
+  useEffect(() => {
+    let alive = true
+    const tick = (): void => {
+      void window.sticki.overlayClients().then((m) => {
+        if (alive) setSources(m || {})
+      })
+    }
+    tick()
+    const t = window.setInterval(tick, 2000)
+    return () => {
+      alive = false
+      window.clearInterval(t)
+    }
+  }, [])
+
   const firstChannel = tabs.flatMap((tb) => tb.panes)[0]?.channel ?? ''
   const openChannels = [...new Set(tabs.flatMap((tb) => tb.panes).map((pn) => pn.channel).filter(Boolean))]
   const urlFor = (o: OverlayConfig): string =>
@@ -2958,6 +2982,17 @@ function OverlaySection(): React.JSX.Element {
               ))}
             </select>
             <span className="ov-url" title={urlFor(o)}>{urlFor(o)}</span>
+            <span
+              className="hint"
+              style={{ whiteSpace: 'nowrap', color: sources[o.id] ? 'var(--ok, #12b886)' : 'var(--text-faint)' }}
+              title={
+                sources[o.id]
+                  ? 'Стільки джерел OBS зараз відкрили цю сторінку.'
+                  : 'Жодне джерело OBS не підключене. Якщо воно додане — онови кеш сторінки в його властивостях.'
+              }
+            >
+              {sources[o.id] ? `● ${sources[o.id]}` : '○ 0'}
+            </span>
           </div>
           <div className="ov-card-actions">
             <button
