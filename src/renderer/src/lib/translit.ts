@@ -32,6 +32,14 @@ const SHIFTED: [string, string][] = [
   ['<', 'Б'],
   ['>', 'Ю'],
   ['~', '₴'],
+  /**
+   * The "/?" key carries BOTH the full stop and the comma on the Ukrainian layout, and only the
+   * unshifted half was here. Shift+/ therefore fell straight through as a literal "?" — the one
+   * key on the whole keyboard where the converter silently did nothing.
+   */
+  ['?', ','],
+  // Shift+\ is "/" on the Ukrainian layout, not the pipe
+  ['|', '/'],
   // digit-row shifts that differ between the US and Ukrainian layouts
   ['@', '"'], // shift+2
   ['#', '№'], // shift+3
@@ -75,9 +83,8 @@ export function swapLayout(text: string): string {
   const exclude = new Set(
     useSettingsStore.getState().settings.translitExcludeWords.map((w) => w.toLowerCase())
   )
-  // …and so are EMOTE CODES. Converting "Kappa" into "Клзздф" turns a working emote into
-  // gibberish, which is never what the layout fix is for. Covers Twitch, 7TV, BTTV and FFZ,
-  // since they all live in the same lookup.
+  // …and so are TWITCH emote codes. Converting "Kappa" into "Клзздф" turns a working emote into
+  // gibberish, which is never what the layout fix is for.
   const isEmote = emoteChecker()
   return text
     .split(/(\s+)/)
@@ -88,15 +95,23 @@ export function swapLayout(text: string): string {
 }
 
 /**
- * "Is this word an emote?" across every open channel plus the global sets — the converter runs
- * on a field, not on a specific chat, so it can't know which channel the text is destined for.
+ * "Is this word a TWITCH emote?" across every open channel plus the global sets — the converter
+ * runs on a field, not on a specific chat, so it can't know which channel the text is destined for.
+ *
+ * Only Twitch, on purpose. Third-party sets are full of one- and two-letter codes — W, L, F, E, O,
+ * N are all real 7TV emotes — and protecting those meant that fixing a mistyped sentence left
+ * random words in Latin, with nothing on screen to explain why. Twitch's own codes are long enough
+ * ("Kappa", "PogChamp") that shielding them costs nothing.
  */
 function emoteChecker(): (code: string) => boolean {
   const st = useEmotesStore.getState()
   return (code) => {
     if (!code) return false
-    if (st.globalEmotes.has(code)) return true
-    for (const map of Object.values(st.channelEmotes)) if (map.has(code)) return true
+    if (st.globalEmotes.get(code)?.provider === 'twitch') return true
+    for (const map of Object.values(st.channelEmotes)) {
+      if (map.get(code)?.provider === 'twitch') return true
+    }
+    // the per-account lists are Twitch subscriber/global emotes by definition
     for (const list of Object.values(st.twitchByAccount)) {
       if (list.some((e) => e.code === code)) return true
     }

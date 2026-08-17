@@ -91,6 +91,14 @@ export interface ChatMessage {
   watchStreak?: boolean
   /** sub / resub / gifted-sub usernotice (the highlights "subs" tab) */
   subEvent?: boolean
+  /**
+   * Somebody followed the channel.
+   *
+   * Unlike every other event here there is no chat message behind it — Twitch never sends one —
+   * so the line is built locally from the EventSub payload, and `login`/`displayName` carry the
+   * follower so the events panel and the usercard work on it like on any other entry.
+   */
+  follow?: boolean
   /** Twitch shared chat: origin broadcaster id when the message came from the partner channel */
   sourceRoomId?: string
   /** bits cheered in this message (from the IRC `bits` tag) */
@@ -188,10 +196,12 @@ export type HighlightKind =
   | 'sharedChat'
   /** subscriptions, resubs, gifts and gift upgrades — the whole sub family */
   | 'subEvent'
+  /** somebody followed the channel — the only category with no message behind it */
+  | 'follow'
 
 /** kinds that don't need a value input (the category itself is the match) */
 export const VALUELESS_HL_KINDS: ReadonlySet<HighlightKind> = new Set([
-  'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat', 'subEvent'
+  'own', 'redeem', 'bits', 'raider', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat', 'subEvent', 'follow'
 ])
 
 export interface HighlightRule {
@@ -840,11 +850,135 @@ export interface GoalOverlayConfig extends OverlayBase {
   customCss: string
 }
 
+/** the entrance/exit animations a follow alert can use; `custom` runs uploaded keyframes */
+export type AlertAnim =
+  | 'none'
+  | 'fade'
+  | 'slideUp'
+  | 'slideDown'
+  | 'slideLeft'
+  | 'slideRight'
+  | 'pop'
+  | 'zoom'
+  | 'bounce'
+  | 'flip'
+  | 'swing'
+  | 'blur'
+  | 'glitch'
+  | 'wipe'
+  | 'custom'
+
+export const ALERT_ANIMS: AlertAnim[] = [
+  'none', 'fade', 'slideUp', 'slideDown', 'slideLeft', 'slideRight',
+  'pop', 'zoom', 'bounce', 'flip', 'swing', 'blur', 'glitch', 'wipe', 'custom'
+]
+
+/**
+ * A follow alert: somebody followed, so something appears on stream and then leaves.
+ *
+ * Built out of slots rather than one canned card — a picture, an avatar, a headline and a second
+ * line, each of which can be turned off, moved and sized. That is what makes it possible to build
+ * something that does not look like every other alert, which is the whole reason a streamer would
+ * use their own client's overlay instead of the usual service.
+ */
+export interface FollowOverlayConfig extends OverlayBase {
+  type: 'follow'
+
+  // ----- timing -----
+  /** seconds on screen, not counting the animations */
+  durationS: number
+  animInMs: number
+  animOutMs: number
+  /** alerts queue instead of overlapping; extra pause between them, ms */
+  gapMs: number
+  /** most alerts kept waiting; older ones are dropped when a raid floods the queue */
+  queueMax: number
+
+  // ----- animation -----
+  animIn: AlertAnim
+  animOut: AlertAnim
+  /**
+   * Uploaded keyframes, used when an animation is set to `custom`.
+   *
+   * The CSS is injected as-is and referenced by name, so anything a browser can animate works —
+   * which is the only honest way to let somebody bring their own animation to a web overlay.
+   */
+  customAnimCss: string
+  customAnimInName: string
+  customAnimOutName: string
+
+  // ----- the picture -----
+  image: string
+  /** px width; 0 = natural size */
+  imageWidth: number
+  /** a PNG whose alpha cuts the picture's shape, or one of the built-in shapes */
+  mask: string
+  maskShape: 'none' | 'circle' | 'rounded' | 'hexagon' | 'star' | 'blob'
+  /** soften the mask edge, px */
+  maskFeather: number
+  /** the picture keeps animating on its own while the alert is up */
+  imageLoop: 'none' | 'float' | 'pulse' | 'spin' | 'shake'
+
+  // ----- the follower's avatar -----
+  avatarShow: boolean
+  avatarSize: number
+  avatarRound: boolean
+  avatarRing: number
+  avatarRingColor: string
+
+  // ----- words -----
+  /** {user} is replaced with the follower's display name */
+  title: string
+  subtitle: string
+  font: string
+  titleSize: number
+  subtitleSize: number
+  titleColor: string
+  subtitleColor: string
+  /** paint the name inside the title differently from the rest of it */
+  nameColor: string
+  outlineWidth: number
+  outlineColor: string
+  shadowBlur: number
+  shadowColor: string
+
+  // ----- arrangement -----
+  /** where the whole alert sits on the screen */
+  anchor: 'top' | 'center' | 'bottom'
+  align: 'left' | 'center' | 'right'
+  offsetX: number
+  offsetY: number
+  /** picture above the words, or beside them */
+  layout: 'imageTop' | 'imageLeft' | 'imageRight' | 'imageBehind' | 'textOnly'
+  gap: number
+
+  // ----- the plate behind it -----
+  plate: boolean
+  plateFill: OverlayFill
+  plateRadius: number
+  platePadX: number
+  platePadY: number
+  plateBorderWidth: number
+  plateBorderColor: string
+  plateGlowSize: number
+  plateGlowColor: string
+
+  // ----- sound -----
+  soundData: string
+  soundVolume: number
+
+  customCss: string
+}
+
 /**
  * Any overlay in the manager. `type` is the discriminant — narrow on it before touching
  * anything that is not on OverlayBase.
  */
-export type OverlayConfig = ChatOverlayConfig | EmoteRainOverlayConfig | GoalOverlayConfig
+export type OverlayConfig =
+  | ChatOverlayConfig
+  | EmoteRainOverlayConfig
+  | GoalOverlayConfig
+  | FollowOverlayConfig
 
 export const DEFAULT_FILL: OverlayFill = { kind: 'solid', color: '#000000', opacity: 0.45, color2: '#3a0ca3', angle: 135 }
 
@@ -879,6 +1013,61 @@ export const DEFAULT_EMOTE_OVERLAY: Omit<EmoteRainOverlayConfig, 'id' | 'name'> 
   wobble: 24,
   scaleIn: true,
   fadeOut: true
+}
+
+export const DEFAULT_FOLLOW_OVERLAY: Omit<FollowOverlayConfig, 'id' | 'name'> = {
+  type: 'follow',
+  durationS: 5,
+  animInMs: 600,
+  animOutMs: 500,
+  gapMs: 400,
+  queueMax: 8,
+  animIn: 'slideUp',
+  animOut: 'fade',
+  customAnimCss: '',
+  customAnimInName: '',
+  customAnimOutName: '',
+  image: '',
+  imageWidth: 220,
+  mask: '',
+  maskShape: 'none',
+  maskFeather: 0,
+  imageLoop: 'float',
+  avatarShow: true,
+  avatarSize: 84,
+  avatarRound: true,
+  avatarRing: 3,
+  avatarRingColor: '#9147ff',
+  title: 'Новий фоловер!',
+  subtitle: '{user}',
+  font: 'Inter',
+  titleSize: 30,
+  subtitleSize: 40,
+  titleColor: '#ffffff',
+  subtitleColor: '#ffffff',
+  nameColor: '#c7a6ff',
+  outlineWidth: 0,
+  outlineColor: '#000000',
+  shadowBlur: 14,
+  shadowColor: '#000000',
+  anchor: 'center',
+  align: 'center',
+  offsetX: 0,
+  offsetY: 0,
+  layout: 'imageTop',
+  gap: 12,
+  plate: false,
+  plateFill: { kind: 'solid', color: '#18181b', opacity: 0.8, color2: '#3a0ca3', angle: 135 },
+  plateRadius: 18,
+  platePadX: 28,
+  platePadY: 20,
+  plateBorderWidth: 0,
+  plateBorderColor: '#9147ff',
+  plateGlowSize: 0,
+  plateGlowColor: '#9147ff',
+  soundData: '',
+  soundVolume: 0.6,
+  customCss: ''
 }
 
 export const DEFAULT_GOAL_OVERLAY: Omit<GoalOverlayConfig, 'id' | 'name'> = {
@@ -1562,6 +1751,13 @@ export interface Settings {
   showBits: boolean
   /** tag messages that were channel-point redemptions */
   showRedeems: boolean
+  /**
+   * Write a line in chat when somebody follows.
+   *
+   * Off by default, and separate from the events panel on purpose: the panel keeps every follow
+   * either way, while a busy channel may not want its chat interrupted by them.
+   */
+  announceFollows: boolean
   /** users whose messages are hidden or dimmed */
   mutedUsers: MutedUser[]
   /** user-saved palette colors (hex) shown next to every color field */
@@ -1761,6 +1957,7 @@ export const DEFAULT_SETTINGS: Settings = {
   raidPromptDest: 'split',
   showBits: true,
   showRedeems: true,
+  announceFollows: false,
   mutedUsers: [],
   savedColors: [],
   recentColors: [],

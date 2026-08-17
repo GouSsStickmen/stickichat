@@ -1255,6 +1255,12 @@ function ChatSection(): React.JSX.Element {
       <div className="set-group-title">{t('set.group.events')}</div>
       <Toggle label={t('set.showBits')} hint={t('hint.showBits')} value={settings.showBits} onChange={(v) => set({ showBits: v })} />
       <Toggle label={t('set.showRedeems')} hint={t('hint.showRedeems')} value={settings.showRedeems} onChange={(v) => set({ showRedeems: v })} />
+      <Toggle
+        label={t('set.announceFollows')}
+        hint={t('hint.announceFollows')}
+        value={settings.announceFollows}
+        onChange={(v) => set({ announceFollows: v })}
+      />
       <div className="set-group-title">{t('set.group.input')}</div>
       <div className="set-row" title={t('hint.inputAccountDisplay')}>
         <label className="has-hint">{t('set.inputAccountDisplay')}</label>
@@ -2292,7 +2298,7 @@ const BADGE_OPTIONS: { id: string; labelKey: string }[] = [
 /* 'raider' is deliberately absent: the category never actually matched anything, so offering
    it was offering a rule that silently does nothing. The kind stays in the type so old saved
    rules still parse — they're dropped on load below. */
-const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'subEvent', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat']
+const HL_KINDS: HighlightKind[] = ['badge', 'nick', 'own', 'redeem', 'bits', 'subEvent', 'follow', 'firstMsg', 'firstStream', 'watchStreak', 'sharedChat']
 
 function HighlightsSection(): React.JSX.Element {
   const t = useT()

@@ -281,6 +281,8 @@ class ChatService {
   /** "channel:target" raids we've already announced/prompted (PubSub + EventSub overlap) */
   private raidAnnounced = new Map<string, number>()
   private shoutoutAnnounced = new Map<string, number>()
+  /** "channel:login" follows already recorded — EventSub redelivers */
+  private followSeen = new Map<string, number>()
 
   /** outgoing raid seen on PubSub — catches raids started from the Twitch page instantly */
   private handlePubSubRaid(e: RaidEvent): void {
@@ -592,17 +594,21 @@ class ChatService {
           channelLogin: ch
         })
         /**
-         * Follows, but only when something is actually counting them.
+         * Follows, but only when something is actually listening for them.
          *
-         * A follow leaves no trace in chat, so a follower goal set to count events could never
-         * move — this is the only place the app can learn about one. It is asked for on demand
-         * rather than always because every subscription is a real socket topic, and nobody needs
-         * a follow feed for a channel they merely moderate.
+         * A follow leaves no trace in chat, so this subscription is the only place the app can
+         * learn about one — a follower goal, the chat announcement, the events panel and a follow
+         * overlay all depend on it. It stays demand-driven because every subscription is a real
+         * socket topic, and nobody needs a follow feed for a channel they merely moderate.
          */
-        const wantsFollows = useSettingsStore
-          .getState()
-          .settings.chatOverlays.some(
-            (o) => o.type === 'goal' && o.metric === 'followers' && (o.channel ? o.channel.toLowerCase() === ch : true)
+        const s = useSettingsStore.getState()
+        const wantsFollows =
+          s.settings.announceFollows ||
+          s.highlightRules.some((r) => r.enabled && r.kind === 'follow') ||
+          s.settings.chatOverlays.some(
+            (o) =>
+              (o.type === 'goal' && o.metric === 'followers' && (o.channel ? o.channel.toLowerCase() === ch : true)) ||
+              (o.type === 'follow' && (o.channel ? o.channel.toLowerCase() === ch : true))
           )
         if (wantsFollows) {
           out.push({
@@ -680,9 +686,40 @@ class ChatService {
     } else if (type === 'channel.shoutout.create') {
       this.handleShoutout(event)
     } else if (type === 'channel.follow') {
-      const ch = String(event.broadcaster_user_login ?? '').toLowerCase()
-      if (ch) void import('./goals').then((m) => m.countFollow(ch))
+      this.handleFollow(event)
     }
+  }
+
+  /**
+   * channel.follow — the only event with no chat message behind it.
+   *
+   * Twitch sends nothing to IRC when somebody follows, so the line is built here from the payload.
+   * The follower goes in as `login`/`displayName` rather than only into the text, which is what
+   * lets the events panel say who it was and the usercard open on them like on any other entry.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private handleFollow(event: Record<string, any>): void {
+    const channel = String(event.broadcaster_user_login ?? '').toLowerCase()
+    const login = String(event.user_login ?? '').toLowerCase()
+    if (!channel) return
+    void import('./goals').then((m) => m.countFollow(channel))
+    if (!login) return
+    // EventSub can redeliver; the same person following twice within a minute is a duplicate
+    const key = `${channel}:${login}`
+    if (Date.now() - (this.followSeen.get(key) ?? 0) < 60_000) return
+    this.followSeen.set(key, Date.now())
+    if (!allOpenChannels(useLayoutStore.getState().tabs).includes(channel)) return
+    const st = useSettingsStore.getState()
+    const name = String(event.user_name || event.user_login)
+    const msg = this.systemMessage(channel, translate(st.settings.language, 'info.follow', { user: name }))
+    msg.follow = true
+    msg.login = login
+    msg.displayName = name
+    msg.userId = String(event.user_id ?? '')
+    // The events panel keeps every follow regardless; the setting only decides whether the line
+    // also appears in the chat itself, which is the part that can get in the way during a raid.
+    if (st.settings.announceFollows) this.queue(channel, msg)
+    else hlIngest(channel, msg)
   }
 
   /** channel.shoutout.create — the broadcaster gave a shoutout; show it + offer to open the target */

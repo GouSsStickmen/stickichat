@@ -9,9 +9,9 @@ export interface HighlightContext {
 export function highlightRuleMatches(msg: ChatMessage, rule: HighlightRule, ctx: HighlightContext): boolean {
   if (!rule.enabled) return false
   // category rules apply to usernotice messages too (watch streaks arrive as usernotice);
-  // plain info/system lines never get highlighted — EXCEPT redemption lines, which are
-  // system-built but must honor the redeem highlight rule
-  if (msg.system && msg.system !== 'usernotice' && !msg.redeemed) return false
+  // plain info/system lines never get highlighted — EXCEPT redemption and follow lines, which
+  // are system-built (a follow has no chat message at all) but must honor their own rule
+  if (msg.system && msg.system !== 'usernotice' && !msg.redeemed && !msg.follow) return false
   switch (rule.kind) {
     case 'nick': {
       // the rule value may be typed in any case — always compare case-insensitively
@@ -41,6 +41,8 @@ export function highlightRuleMatches(msg: ChatMessage, rule: HighlightRule, ctx:
     case 'subEvent':
       // every flavour of subscription notice: new, resub, gifted, upgraded
       return !!msg.subEvent
+    case 'follow':
+      return !!msg.follow
   }
 }
 

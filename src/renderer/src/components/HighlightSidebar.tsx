@@ -13,7 +13,7 @@ import { ZoomIcon } from './Icons'
 import { useSevenTvColors, ensureSevenTvCosmetic, paintStyleOf } from '../lib/seventvCosmetics'
 import { isDarkTheme } from '../lib/themes'
 
-type Mode = 'highlights' | 'mentions' | 'redeems' | 'subs'
+type Mode = 'highlights' | 'mentions' | 'redeems' | 'subs' | 'follows'
 type Order = 'newest-top' | 'newest-bottom'
 
 /**
@@ -133,9 +133,10 @@ export default function HighlightSidebar({
       const men = !!(m.isMention || m.replyToMe)
       const red = !!m.redeemed
       const sub = !!m.subEvent
+      const fol = !!m.follow
       const hl = isHighlightedMessage(m, highlightRules, { caseSensitiveNicks })
-      if (!men && !red && !hl && !sub) continue
-      map.set(m.id, { ...m, _men: men, _hl: hl, _sub: sub } as HlSavedItem)
+      if (!men && !red && !hl && !sub && !fol) continue
+      map.set(m.id, { ...m, _men: men, _hl: hl, _sub: sub, _fol: fol } as HlSavedItem)
       added = true
     }
     if (added) {
@@ -154,7 +155,9 @@ export default function HighlightSidebar({
           ? all.filter((m) => m.redeemed)
           : mode === 'subs'
             ? all.filter((m) => m._sub || m.subEvent)
-            : all.filter((m) => m._hl)
+            : mode === 'follows'
+              ? all.filter((m) => m._fol || m.follow)
+              : all.filter((m) => m._hl)
     const latest = filtered.slice(-150)
     return order === 'newest-top' ? [...latest].reverse() : latest
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,6 +224,12 @@ export default function HighlightSidebar({
           onClick={() => setMode('subs')}
         >
           {t('highlights.subs')}
+        </button>
+        <button
+          className={`picker-tab-btn ${mode === 'follows' ? 'active' : ''}`}
+          onClick={() => setMode('follows')}
+        >
+          {t('highlights.follows')}
         </button>
         <button
           className="ghost"

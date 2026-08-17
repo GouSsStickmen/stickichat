@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { EmoteRainOverlayConfig, GoalOverlayConfig, OverlayConfig } from '../types'
+import { ChatOverlayConfig, EmoteRainOverlayConfig, GoalOverlayConfig, OverlayConfig } from '../types'
 import { ColorField, FontPicker, NickListArea, Toggle } from './settings/SettingsModal'
 import { Row, Num, Sec, FillEditor, readFile } from './OverlayEditorWindow'
 
@@ -13,7 +13,8 @@ import { Row, Num, Sec, FillEditor, readFile } from './OverlayEditorWindow'
  */
 
 export interface AltEditorProps {
-  ov: EmoteRainOverlayConfig | GoalOverlayConfig
+  /** every kind except chat, which keeps its own editor */
+  ov: Exclude<OverlayConfig, ChatOverlayConfig>
   update: (patch: Partial<OverlayConfig>) => void
   channel: string
   setChannel: (c: string) => void
@@ -484,8 +485,12 @@ export default function OverlayAltEditor({
         <div className="oe-side">
           {ov.type === 'emotes' ? (
             <EmoteRainPanel ov={ov} update={update} />
-          ) : (
+          ) : ov.type === 'goal' ? (
             <GoalPanel ov={ov} update={update} />
+          ) : (
+            // the follow alert's own panel is the next piece of work; the kind is deliberately
+            // absent from the manager's "add" list until it exists, so this is unreachable
+            <p className="hint">Панель цього типу ще будується.</p>
           )}
         </div>
         <div className="oe-main">

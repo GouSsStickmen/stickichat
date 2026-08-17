@@ -14,6 +14,7 @@ export interface HlSavedItem extends ChatMessage {
   _men?: boolean
   _hl?: boolean
   _sub?: boolean
+  _fol?: boolean
 }
 
 export const hlSavedKey = (channel: string): string => `sticki:hlSaved:${channel}`
@@ -98,12 +99,15 @@ export function hlIngest(channel: string, msg: ChatMessage): void {
   const men = !!(msg.isMention || msg.replyToMe || kwHit)
   const red = !!msg.redeemed
   const sub = !!msg.subEvent
+  // Follows are recorded whether or not any rule asks for them: a follow is the one event with no
+  // chat message behind it, so if the panel does not keep it there is nowhere left to look it up.
+  const fol = !!msg.follow
   const hl =
     isHighlightedMessage(msg, st.highlightRules, { caseSensitiveNicks: st.settings.caseSensitiveNicks }) || kwHit
-  if (!men && !red && !hl && !sub) return
+  if (!men && !red && !hl && !sub && !fol) return
   const map = loadSavedMap(channel)
   if (map.has(msg.id)) return
-  map.set(msg.id, { ...msg, _men: men, _hl: hl, _sub: sub })
+  map.set(msg.id, { ...msg, _men: men, _hl: hl, _sub: sub, _fol: fol })
   persistSaved(channel)
   window.dispatchEvent(new CustomEvent('sticki:hlsaved', { detail: { channel } }))
 }
