@@ -4,6 +4,7 @@ import { registerIpc } from './ipc'
 import { initAutoUpdater } from './updater'
 import { readConfig, readWindowState, writeWindowState, compactConfig } from './storage'
 import { registerAssetScheme, serveAssetProtocol } from './assets'
+import { overlayConfigure } from './overlayServer'
 import { startDiagnostics, watchWindow } from './diagnostics'
 
 // The dev build and the installed app resolve to the SAME userData dir (Windows paths are
@@ -153,6 +154,34 @@ if (app.isPackaged) {
   })
 }
 
+/**
+ * Open the overlay port before anything else needs to happen.
+ *
+ * The renderer used to be the first thing to mention overlays, so between the app starting and its
+ * window finishing its first render — seconds, on a cold start — the port was simply closed. A
+ * browser source that reloads in that window (OBS reloads them when a scene becomes active, and
+ * the streamer reloads them by hand) gets a refused connection, and a document that failed to load
+ * never retries: the source stays blank until somebody notices and refreshes it again.
+ *
+ * The config on disk already holds every overlay, so the server can be up before the window is.
+ * The renderer still pushes the same styles moments later, with the uploaded fonts and the
+ * compiled scenes that only it can produce; this is the same map, minus those.
+ */
+function serveOverlaysEarly(): void {
+  try {
+    const cfg = readConfig() as {
+      settings?: { overlayEnabled?: boolean; overlayPort?: number; chatOverlays?: { id: string }[] }
+    } | null
+    const s = cfg?.settings
+    if (!s || s.overlayEnabled === false) return
+    const styles: Record<string, unknown> = {}
+    for (const o of s.chatOverlays ?? []) styles[o.id] = o
+    overlayConfigure(true, Math.max(1024, Math.min(65535, s.overlayPort || 4715)), styles as never)
+  } catch {
+    /* a config we cannot read is the renderer's problem to report, not a reason to fail startup */
+  }
+}
+
 app.whenReady().then(() => {
   // no application menu at all: with autoHideMenuBar the default File/Edit/View bar still
   // pops in on Alt, which the user doesn't want (and we have our own context menus)
@@ -173,6 +202,7 @@ app.whenReady().then(() => {
   // shrink whatever the config still carries inline before any window can save it back
   compactConfig()
   registerIpc()
+  serveOverlaysEarly()
   createWindow()
   initAutoUpdater()
 
