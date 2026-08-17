@@ -6,10 +6,38 @@ import {
   EmoteRainOverlayConfig,
   FollowOverlayConfig,
   GoalOverlayConfig,
-  OverlayConfig
+  OverlayConfig,
+  RouletteOverlayConfig,
+  WheelSection
 } from '../types'
+import { useSettingsStore } from '../store/settings'
+import { nextId } from '../store/layout'
 import { ColorField, FontPicker, NickListArea, Toggle } from './settings/SettingsModal'
 import { Row, Num, Sec, FillEditor, readFile } from './OverlayEditorWindow'
+
+/** wedge colours a new section cycles through, so a fresh wheel is not four identical slices */
+const PALETTE = ['#9147ff', '#12b886', '#ff5c8a', '#ffd75c', '#5cb2ff', '#c95cff', '#5cffe0', '#ff8a5c']
+
+/** what the editor's own title bar calls the overlay it is editing */
+const KIND_CHIP: Record<Exclude<OverlayConfig, ChatOverlayConfig>['type'], string> = {
+  emotes: '🎉 Святкування',
+  goal: '🎯 Ціль',
+  follow: '💜 Алерт фолова',
+  roulette: '🎡 Рулетка'
+}
+
+/** the nine points a freely placed part can be measured from */
+const ANCHOR9: { v: string; label: string }[] = [
+  { v: 'tl', label: '↖ Згори зліва' },
+  { v: 'top', label: '↑ Згори' },
+  { v: 'tr', label: '↗ Згори справа' },
+  { v: 'left', label: '← Зліва' },
+  { v: 'center', label: '· По центру' },
+  { v: 'right', label: '→ Справа' },
+  { v: 'bl', label: '↙ Знизу зліва' },
+  { v: 'bottom', label: '↓ Знизу' },
+  { v: 'br', label: '↘ Знизу справа' }
+]
 
 /**
  * The editors for the overlay kinds that are not chat.
@@ -601,15 +629,15 @@ function FollowPanel({
       </Sec>
 
       <Sec title="🖼 Картинка й маска">
-        <Row label="Файл" hint="PNG, GIF або WebP. Анімовані лишаються анімованими.">
+        <Row label="Файл" hint="PNG, GIF, WebP або відео. Анімовані лишаються анімованими.">
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             <label className="ghost" style={{ cursor: 'pointer' }}>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*"
                 style={{ display: 'none' }}
                 onChange={(e) => {
-                  readFile(e.target.files?.[0], 4, (url) => update({ image: url }))
+                  readFile(e.target.files?.[0], 12, (url) => update({ image: url }))
                   e.target.value = ''
                 }}
               />
@@ -708,6 +736,7 @@ function FollowPanel({
             <option value="imageRight">Картинка справа</option>
             <option value="imageBehind">Картинка позаду</option>
             <option value="textOnly">Тільки текст</option>
+            <option value="free">Вільно (координати)</option>
           </select>
         </Row>
         <Row label="По вертикалі">
@@ -731,6 +760,55 @@ function FollowPanel({
         <Row label="Відступ між частинами">
           <Num v={ov.gap} on={(n) => update({ gap: n })} min={0} max={200} w={54} def={12} />
         </Row>
+        {ov.layout === 'free' && (
+          <>
+            <Row
+              label="Картинка: кут"
+              hint="Від якого кута екрана рахуються координати. Картинка, прикріплена до кута, лишається там і на іншій роздільності."
+            >
+              <select
+                value={ov.imageAnchor}
+                onChange={(e) => update({ imageAnchor: e.target.value as FollowOverlayConfig['imageAnchor'] })}
+              >
+                {ANCHOR9.map((a) => (
+                  <option key={a.v} value={a.v}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+            </Row>
+            <Row label="Картинка: X / Y">
+              <Num v={ov.imageX} on={(n) => update({ imageX: n })} min={-4000} max={4000} w={64} def={0} />
+              <Num v={ov.imageY} on={(n) => update({ imageY: n })} min={-4000} max={4000} w={64} def={0} />
+            </Row>
+            <Row label="Картинка: поворот / прозорість">
+              <Num v={ov.imageRotate} on={(n) => update({ imageRotate: n })} min={-180} max={180} w={60} def={0} />
+              <input
+                type="range"
+                min={5}
+                max={100}
+                value={Math.round((ov.imageOpacity ?? 1) * 100)}
+                onChange={(e) => update({ imageOpacity: Number(e.target.value) / 100 })}
+              />
+            </Row>
+            <Row label="Текст: кут">
+              <select
+                value={ov.textAnchor}
+                onChange={(e) => update({ textAnchor: e.target.value as FollowOverlayConfig['textAnchor'] })}
+              >
+                {ANCHOR9.map((a) => (
+                  <option key={a.v} value={a.v}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+            </Row>
+            <Row label="Текст: X / Y">
+              <Num v={ov.textX} on={(n) => update({ textX: n })} min={-4000} max={4000} w={64} def={0} />
+              <Num v={ov.textY} on={(n) => update({ textY: n })} min={-4000} max={4000} w={64} def={0} />
+            </Row>
+          </>
+        )}
       </Sec>
 
       <Sec title="🎨 Плашка">
@@ -740,6 +818,46 @@ function FollowPanel({
             <Row label="Заповнення">
               <FillEditor value={ov.plateFill} onChange={(f) => update({ plateFill: f })} />
             </Row>
+            <Row label="Підкладка" hint="Картинка, гіфка або відео замість заливки. Відео важить у рази менше за ту саму гіфку.">
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label className="ghost" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      readFile(e.target.files?.[0], 12, (url) => update({ plateMedia: url }))
+                      e.target.value = ''
+                    }}
+                  />
+                  <span className="hint">📁 Обрати</span>
+                </label>
+                {ov.plateMedia && (
+                  <button className="danger" onClick={() => update({ plateMedia: '' })}>
+                    ✕
+                  </button>
+                )}
+              </div>
+            </Row>
+            {!!ov.plateMedia && (
+              <Row label="Підкладка: вписування">
+                <select
+                  value={ov.plateMediaFit}
+                  onChange={(e) => update({ plateMediaFit: e.target.value as FollowOverlayConfig['plateMediaFit'] })}
+                >
+                  <option value="cover">Заповнити</option>
+                  <option value="contain">Вмістити</option>
+                  <option value="stretch">Розтягнути</option>
+                </select>
+                <input
+                  type="range"
+                  min={5}
+                  max={100}
+                  value={Math.round((ov.plateMediaOpacity ?? 1) * 100)}
+                  onChange={(e) => update({ plateMediaOpacity: Number(e.target.value) / 100 })}
+                />
+              </Row>
+            )}
             <Row label="Заокруглення">
               <Num v={ov.plateRadius} on={(n) => update({ plateRadius: n })} min={0} max={200} w={64} def={18} />
             </Row>
@@ -815,6 +933,358 @@ function FollowPanel({
   )
 }
 
+/**
+ * The wheel's panel.
+ *
+ * The section list comes first and stays first: everything else is decoration around what the
+ * wheel actually says. Weights are shown as a live percentage next to each row, because a column
+ * of raw numbers tells nobody what the odds are — which is the one thing a wheel exists to show.
+ */
+function RoulettePanel({
+  ov,
+  update,
+  channel
+}: {
+  ov: RouletteOverlayConfig
+  update: (patch: Partial<RouletteOverlayConfig>) => void
+  channel: string
+}): React.JSX.Element {
+  const [spinMsg, setSpinMsg] = useState('')
+  const total = ov.sections.reduce((a, s) => a + Math.max(0.0001, s.weight || 1), 0)
+  const upd = (id: string, patch: Partial<WheelSection>): void =>
+    update({ sections: ov.sections.map((s) => (s.id === id ? { ...s, ...patch } : s)) })
+  const spinNow = async (): Promise<void> => {
+    const m = await import('../services/wheel')
+    const fresh = useSettingsStore.getState().settings.chatOverlays.find((o) => o.id === ov.id)
+    if (!fresh || fresh.type !== 'roulette') return
+    const res = m.spinWheel(fresh, channel, true)
+    setSpinMsg(res.ok ? `Випало: ${res.label}` : res.reason || '')
+    window.setTimeout(() => setSpinMsg(''), 4000)
+  }
+  return (
+    <>
+      <Sec title="🎡 Секції" defaultOpen>
+        {ov.sections.map((s) => (
+          <div key={s.id} className="oe-decor">
+            <div className="oe-decor-ctl" style={{ flexWrap: 'wrap' }}>
+              <input
+                value={s.label}
+                placeholder="Текст"
+                style={{ width: 150 }}
+                onChange={(e) => upd(s.id, { label: e.target.value })}
+              />
+              <Num v={s.weight} on={(n) => upd(s.id, { weight: n })} min={0} max={1000} w={54} def={1} />
+              <span className="hint" style={{ minWidth: 44 }}>
+                {Math.round((Math.max(0.0001, s.weight || 1) / total) * 100)}%
+              </span>
+              <ColorField value={s.color} defaultValue="#9147ff" onChange={(v) => upd(s.id, { color: v })} />
+              <ColorField value={s.textColor} defaultValue="#ffffff" onChange={(v) => upd(s.id, { textColor: v })} />
+              <label className="ghost" style={{ cursor: 'pointer' }} title="Картинка або гіфка в секторі">
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    readFile(e.target.files?.[0], 3, (url) => upd(s.id, { media: url }))
+                    e.target.value = ''
+                  }}
+                />
+                <span className="hint">{s.media ? '🖼✓' : '🖼'}</span>
+              </label>
+              {s.media && (
+                <button className="ghost" title="Прибрати картинку" onClick={() => upd(s.id, { media: '' })}>
+                  ⌫
+                </button>
+              )}
+              <label className="hint" title="Прибрати сектор, коли він виграє — для розіграшів без повторів">
+                <input
+                  type="checkbox"
+                  checked={s.removeOnWin}
+                  onChange={(e) => upd(s.id, { removeOnWin: e.target.checked })}
+                />{' '}
+                −
+              </label>
+              <button
+                className="danger"
+                onClick={() => update({ sections: ov.sections.filter((x) => x.id !== s.id) })}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        ))}
+        <button
+          onClick={() =>
+            update({
+              sections: [
+                ...ov.sections,
+                {
+                  id: nextId('ws'),
+                  label: 'Новий сектор',
+                  weight: 1,
+                  color: PALETTE[ov.sections.length % PALETTE.length],
+                  textColor: '#ffffff',
+                  media: '',
+                  removeOnWin: false
+                }
+              ]
+            })
+          }
+        >
+          + Сектор
+        </button>
+      </Sec>
+
+      <Sec title="▶ Запуск">
+        <Row label="Що крутить">
+          <select value={ov.trigger} onChange={(e) => update({ trigger: e.target.value as RouletteOverlayConfig['trigger'] })}>
+            <option value="manual">Лише кнопкою тут</option>
+            <option value="command">Команда в чаті</option>
+            <option value="redeem">Нагорода за бали</option>
+          </select>
+        </Row>
+        {ov.trigger === 'command' && (
+          <>
+            <Row label="Команда">
+              <input value={ov.command} onChange={(e) => update({ command: e.target.value })} />
+            </Row>
+            <Row label="Кому можна">
+              <select value={ov.who} onChange={(e) => update({ who: e.target.value as RouletteOverlayConfig['who'] })}>
+                <option value="broadcaster">Тільки мені</option>
+                <option value="mods">Модераторам</option>
+                <option value="everyone">Усім</option>
+              </select>
+            </Row>
+          </>
+        )}
+        {ov.trigger === 'redeem' && (
+          <Row label="Назва нагороди" hint="Точна назва нагороди за бали каналу.">
+            <input value={ov.redeemTitle} onChange={(e) => update({ redeemTitle: e.target.value })} />
+          </Row>
+        )}
+        <Row label="Перезарядка, с" hint="Не стосується кнопки нижче — вона для налаштування.">
+          <Num v={ov.cooldownS} on={(n) => update({ cooldownS: n })} min={0} max={3600} w={64} def={30} />
+        </Row>
+        <Toggle label="Писати результат у чат" value={ov.announce} onChange={(v) => update({ announce: v })} />
+        {ov.announce && (
+          <Row label="Текст" hint="{result} — те, що випало. Пишеться, коли колесо вже зупинилось.">
+            <input value={ov.announceText} onChange={(e) => update({ announceText: e.target.value })} />
+          </Row>
+        )}
+        <div className="set-row">
+          <label>Перевірити</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="primary" onClick={() => void spinNow()}>
+              🎡 Крутити
+            </button>
+            {spinMsg && <span className="hint">{spinMsg}</span>}
+          </div>
+        </div>
+      </Sec>
+
+      <Sec title="⏱ Обертання">
+        <Row label="Час, с">
+          <Num v={ov.spinS} on={(n) => update({ spinS: n })} min={0.5} max={60} w={54} def={6} />
+        </Row>
+        <Row label="Обертів" hint="Скільки повних кіл до того, як почне сповільнюватись.">
+          <Num v={ov.turns} on={(n) => update({ turns: n })} min={0} max={40} w={54} def={5} />
+        </Row>
+        <Row label="Сповільнення">
+          <select value={ov.easing} onChange={(e) => update({ easing: e.target.value as RouletteOverlayConfig['easing'] })}>
+            <option value="smooth">Плавне</option>
+            <option value="snappy">Різке</option>
+            <option value="heavy">Важке</option>
+          </select>
+        </Row>
+        <Row label="Показувати результат, с">
+          <Num v={ov.resultS} on={(n) => update({ resultS: n })} min={0} max={60} w={54} def={4} />
+        </Row>
+      </Sec>
+
+      <Sec title="🎨 Колесо">
+        <Row label="Розмір">
+          <Num v={ov.size} on={(n) => update({ size: n })} min={80} max={2000} w={72} def={460} />
+        </Row>
+        <Row label="Обід">
+          <Num v={ov.rimWidth} on={(n) => update({ rimWidth: n })} min={0} max={80} w={54} def={10} />
+          <ColorField value={ov.rimColor} defaultValue="#ffffff" onChange={(v) => update({ rimColor: v })} />
+        </Row>
+        <Row label="Розділювачі">
+          <Num v={ov.dividerWidth} on={(n) => update({ dividerWidth: n })} min={0} max={20} w={54} def={2} />
+          <ColorField value={ov.dividerColor} defaultValue="#000000" onChange={(v) => update({ dividerColor: v })} />
+        </Row>
+        <Row label="Шрифт">
+          <FontPicker value={ov.font} onChange={(v) => update({ font: v })} />
+        </Row>
+        <Row label="Розмір тексту">
+          <Num v={ov.fontSize} on={(n) => update({ fontSize: n })} min={6} max={120} w={54} def={20} />
+        </Row>
+        <Toggle
+          label="Текст вздовж радіуса"
+          hint="На вузькому секторі рівний текст перестає читатись значно раніше."
+          value={ov.textRadial}
+          onChange={(v) => update({ textRadial: v })}
+        />
+        <Row label="Вказівник">
+          <select value={ov.pointer} onChange={(e) => update({ pointer: e.target.value as RouletteOverlayConfig['pointer'] })}>
+            <option value="triangle">Трикутник</option>
+            <option value="arrow">Стрілка</option>
+            <option value="pin">Крапля</option>
+            <option value="none">Без нього</option>
+          </select>
+          <ColorField value={ov.pointerColor} defaultValue="#ffffff" onChange={(v) => update({ pointerColor: v })} />
+        </Row>
+        <Row label="Центр" hint="Картинка, гіфка або відео в центрі колеса.">
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 6, (url) => update({ hubMedia: url }))
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 Обрати</span>
+            </label>
+            {ov.hubMedia && (
+              <button className="danger" onClick={() => update({ hubMedia: '' })}>
+                ✕
+              </button>
+            )}
+            <Num v={ov.hubSize} on={(n) => update({ hubSize: n })} min={0} max={600} w={60} def={90} />
+          </div>
+        </Row>
+        <Row label="Зсув">
+          <Num v={ov.offsetX} on={(n) => update({ offsetX: n })} min={-2000} max={2000} w={64} def={0} />
+          <Num v={ov.offsetY} on={(n) => update({ offsetY: n })} min={-2000} max={2000} w={64} def={0} />
+        </Row>
+      </Sec>
+
+      <Sec title="🖼 Тло й результат">
+        <Row label="Тло" hint="Картинка, гіфка або відео позаду колеса. Воно не обертається разом з ним.">
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 12, (url) => update({ backdrop: url }))
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 Обрати</span>
+            </label>
+            {ov.backdrop && (
+              <button className="danger" onClick={() => update({ backdrop: '' })}>
+                ✕
+              </button>
+            )}
+          </div>
+        </Row>
+        {!!ov.backdrop && (
+          <>
+            <Row label="Вписування">
+              <select
+                value={ov.backdropFit}
+                onChange={(e) => update({ backdropFit: e.target.value as RouletteOverlayConfig['backdropFit'] })}
+              >
+                <option value="cover">Заповнити</option>
+                <option value="contain">Вмістити</option>
+                <option value="stretch">Розтягнути</option>
+              </select>
+            </Row>
+            <Row label="Прозорість">
+              <input
+                type="range"
+                min={5}
+                max={100}
+                value={Math.round((ov.backdropOpacity ?? 1) * 100)}
+                onChange={(e) => update({ backdropOpacity: Number(e.target.value) / 100 })}
+              />
+              <span className="hint">{Math.round((ov.backdropOpacity ?? 1) * 100)}%</span>
+            </Row>
+          </>
+        )}
+        <Toggle label="Показувати те, що випало" value={ov.resultShow} onChange={(v) => update({ resultShow: v })} />
+        {ov.resultShow && (
+          <Row label="Розмір і колір">
+            <Num v={ov.resultSize} on={(n) => update({ resultSize: n })} min={8} max={200} w={60} def={42} />
+            <ColorField value={ov.resultColor} defaultValue="#ffffff" onChange={(v) => update({ resultColor: v })} />
+          </Row>
+        )}
+      </Sec>
+
+      <Sec title="🔔 Звук">
+        <Row label="Під час обертання" hint="Зациклюється, поки колесо крутиться.">
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="audio/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 3, (url) => update({ spinSound: url }))
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 Обрати</span>
+            </label>
+            {ov.spinSound && (
+              <button className="danger" onClick={() => update({ spinSound: '' })}>
+                ✕
+              </button>
+            )}
+          </div>
+        </Row>
+        <Row label="На результат">
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="audio/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 3, (url) => update({ winSound: url }))
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 Обрати</span>
+            </label>
+            {ov.winSound && (
+              <button className="danger" onClick={() => update({ winSound: '' })}>
+                ✕
+              </button>
+            )}
+          </div>
+        </Row>
+        <Row label="Гучність">
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round((ov.soundVolume ?? 0.6) * 100)}
+            onChange={(e) => update({ soundVolume: Number(e.target.value) / 100 })}
+          />
+          <span className="hint">{Math.round((ov.soundVolume ?? 0.6) * 100)}%</span>
+        </Row>
+      </Sec>
+
+      <Sec title="🎛 Власний CSS">
+        <textarea
+          value={ov.customCss}
+          spellCheck={false}
+          rows={6}
+          style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace' }}
+          onChange={(e) => update({ customCss: e.target.value })}
+        />
+      </Sec>
+    </>
+  )
+}
+
 export default function OverlayAltEditor({
   ov,
   update,
@@ -829,7 +1299,7 @@ export default function OverlayAltEditor({
   return (
     <div className="app oe-root">
       <div className="modal-header">
-        {ov.type === 'emotes' ? '🎉 Святкування' : '🎯 Ціль'}
+        {KIND_CHIP[ov.type]}
         <input className="oe-name" value={ov.name} onChange={(e) => update({ name: e.target.value })} />
         <div className="spacer" />
         <button className="ghost" onClick={() => window.close()}>
@@ -842,8 +1312,10 @@ export default function OverlayAltEditor({
             <EmoteRainPanel ov={ov} update={update} />
           ) : ov.type === 'goal' ? (
             <GoalPanel ov={ov} update={update} />
-          ) : (
+          ) : ov.type === 'follow' ? (
             <FollowPanel ov={ov} update={update} port={port} channel={channel} />
+          ) : (
+            <RoulettePanel ov={ov} update={update} channel={channel} />
           )}
         </div>
         <div className="oe-main">

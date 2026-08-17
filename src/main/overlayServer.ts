@@ -193,7 +193,9 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
             ? GOAL_HTML
             : kind === 'follow'
               ? ALERT_HTML
-              : OVERLAY_HTML
+              : kind === 'roulette'
+                ? WHEEL_HTML
+                : OVERLAY_HTML
       )
       return
     }
@@ -3120,7 +3122,10 @@ const ALERT_HTML = `<!doctype html>
     titleSize: 30, subtitleSize: 40, titleColor: '#ffffff', subtitleColor: '#ffffff', nameColor: '#c7a6ff',
     outlineWidth: 0, outlineColor: '#000000', shadowBlur: 14, shadowColor: '#000000',
     anchor: 'center', align: 'center', offsetX: 0, offsetY: 0, layout: 'imageTop', gap: 12,
+    imageAnchor: 'center', imageX: 0, imageY: 0, imageRotate: 0, imageOpacity: 1,
+    textAnchor: 'center', textX: 0, textY: 0,
     plate: false, plateFill: { kind: 'solid', color: '#18181b', opacity: 0.8 },
+    plateMedia: '', plateMediaFit: 'cover', plateMediaOpacity: 1,
     plateRadius: 18, platePadX: 28, platePadY: 20,
     plateBorderWidth: 0, plateBorderColor: '#9147ff', plateGlowSize: 0, plateGlowColor: '#9147ff',
     soundData: '', soundVolume: 0.6, customCss: ''
@@ -3163,6 +3168,54 @@ const ALERT_HTML = `<!doctype html>
       .split('{channel}').join(channel)
   }
 
+  /**
+   * Pin one point of a box to one point of the stage.
+   *
+   * Free placement has to survive a resolution change: measuring from the CORNER the streamer
+   * chose means a mascot pinned bottom-right is still bottom-right at 1440p, which absolute
+   * coordinates from the top-left would not be.
+   */
+  function placeAt(el, anchor, x, y) {
+    var a = anchor || 'center'
+    var vert = a === 'tl' || a === 'top' || a === 'tr' ? 'top'
+      : a === 'bl' || a === 'bottom' || a === 'br' ? 'bottom' : 'mid'
+    var horz = a === 'tl' || a === 'left' || a === 'bl' ? 'left'
+      : a === 'tr' || a === 'right' || a === 'br' ? 'right' : 'mid'
+    el.style.position = 'absolute'
+    var tx = '0', ty = '0'
+    if (vert === 'top') el.style.top = (y || 0) + 'px'
+    else if (vert === 'bottom') el.style.bottom = (-(y || 0)) + 'px'
+    else { el.style.top = 'calc(50% + ' + (y || 0) + 'px)'; ty = '-50%' }
+    if (horz === 'left') el.style.left = (x || 0) + 'px'
+    else if (horz === 'right') el.style.right = (-(x || 0)) + 'px'
+    else { el.style.left = 'calc(50% + ' + (x || 0) + 'px)'; tx = '-50%' }
+    return 'translate(' + tx + ', ' + ty + ')'
+  }
+
+  /** a picture that might be a video — the kind is read off the source, never configured */
+  // NB: string tests, not a regex. This page is a TS template literal, and every backslash in a
+  // regex literal here is eaten before the browser ever sees it, which turned the pattern into a
+  // division and threw on the first plate picture.
+  function isVideo(src) {
+    var s = String(src || '').toLowerCase().split('?')[0]
+    if (s.indexOf('data:video/') === 0) return true
+    return s.slice(-4) === '.mp4' || s.slice(-5) === '.webm' || s.slice(-4) === '.mov'
+  }
+  function mediaEl(src) {
+    if (!src) return null
+    var el
+    if (isVideo(src)) {
+      el = document.createElement('video')
+      el.autoplay = true; el.loop = true; el.muted = true; el.playsInline = true
+      el.setAttribute('playsinline', '')
+    } else {
+      el = document.createElement('img')
+      el.alt = ''
+    }
+    el.src = src
+    return el
+  }
+
   function shapeOf(s) {
     if (s === 'circle') return 'circle(50% at 50% 50%)'
     if (s === 'rounded') return 'inset(0 round 18px)'
@@ -3200,6 +3253,8 @@ const ALERT_HTML = `<!doctype html>
     card.style.font = '400 16px ' + (cfg.font ? "'" + cfg.font + "'" : 'Inter') + ', Inter, sans-serif'
     card.style.translate = (cfg.offsetX || 0) + 'px ' + (cfg.offsetY || 0) + 'px'
     if (cfg.plate) {
+      card.style.position = card.style.position || 'relative'
+      card.style.overflow = 'hidden'
       card.style.background = fill(cfg.plateFill)
       card.style.borderRadius = (cfg.plateRadius || 0) + 'px'
       card.style.padding = (cfg.platePadY || 0) + 'px ' + (cfg.platePadX || 0) + 'px'
@@ -3208,14 +3263,26 @@ const ALERT_HTML = `<!doctype html>
         card.style.boxShadow = '0 0 ' + cfg.plateGlowSize + 'px ' + cfg.plateGlowColor +
           ', 0 0 ' + cfg.plateGlowSize * 2 + 'px ' + cfg.plateGlowColor
       }
+      // a picture, GIF or video for the plate, under everything the card holds
+      var pm = mediaEl(cfg.plateMedia)
+      if (pm) {
+        pm.style.position = 'absolute'
+        pm.style.inset = '0'
+        pm.style.width = '100%'
+        pm.style.height = '100%'
+        pm.style.objectFit = cfg.plateMediaFit === 'stretch' ? 'fill' : cfg.plateMediaFit || 'cover'
+        pm.style.opacity = String(cfg.plateMediaOpacity == null ? 1 : cfg.plateMediaOpacity)
+        pm.style.pointerEvents = 'none'
+        pm.style.zIndex = '0'
+        card.appendChild(pm)
+      }
     }
 
     if (cfg.image && cfg.layout !== 'textOnly') {
-      var pic = document.createElement('img')
+      var pic = mediaEl(cfg.image)
       pic.className = 'pic'
-      pic.src = cfg.image
-      pic.alt = ''
       if (cfg.layout !== 'imageBehind' && cfg.imageWidth > 0) pic.style.width = cfg.imageWidth + 'px'
+      pic.style.opacity = String(cfg.imageOpacity == null ? 1 : cfg.imageOpacity)
       /**
        * The mask. An uploaded PNG is its own alpha; a built-in shape is a clip-path; and the
        * feather has to be a mask rather than part of the clip, because clip-path edges cannot be
@@ -3280,11 +3347,37 @@ const ALERT_HTML = `<!doctype html>
       words.appendChild(h2)
     }
     card.appendChild(words)
+
+    /**
+     * Free placement.
+     *
+     * The five arrangements are a flex row or column and cannot express "the mascot leans in from
+     * the bottom-right while the words sit high and left". In this mode the card stops being a
+     * layout at all and becomes a stage the two blocks are pinned to.
+     */
+    if (cfg.layout === 'free') {
+      card.style.position = 'absolute'
+      card.style.inset = '0'
+      card.style.display = 'block'
+      card.style.translate = ''
+      if (pic) {
+        var pt = placeAt(pic, cfg.imageAnchor, cfg.imageX, cfg.imageY)
+        pic.style.transform = pt + (cfg.imageRotate ? ' rotate(' + cfg.imageRotate + 'deg)' : '')
+      }
+      var wt = placeAt(words, cfg.textAnchor, cfg.textX, cfg.textY)
+      words.style.transform = wt
+      words.style.zIndex = '1'
+    } else if (words.style.position !== 'absolute') {
+      words.style.position = 'relative'
+      words.style.zIndex = '1'
+    }
     return card
   }
 
   function applyStage() {
-    stage.className = (cfg.anchor || 'center') + ' ' + (cfg.align === 'center' ? 'center-x' : cfg.align || 'center-x')
+    stage.className = cfg.layout === 'free'
+      ? 'free'
+      : (cfg.anchor || 'center') + ' ' + (cfg.align === 'center' ? 'center-x' : cfg.align || 'center-x')
     animCss.textContent = cfg.customAnimCss || ''
     userCss.textContent = cfg.customCss || ''
   }
@@ -3294,8 +3387,21 @@ const ALERT_HTML = `<!doctype html>
   var busy = false
 
   function show(d) {
+    /**
+     * Build first, claim the queue second.
+     *
+     * The old order set busy before building, so one card that threw — a shape the config had
+     * never been through, a mask the browser refused — left busy stuck true and the overlay
+     * silently dead for the rest of the stream. Now a bad card costs exactly itself.
+     */
+    var card
+    try {
+      card = buildCard(d)
+    } catch (err) {
+      console.error('alert: could not build the card', err)
+      return
+    }
     busy = true
-    var card = buildCard(d)
     var nameIn = animName('in')
     var nameOut = animName('out')
     if (nameIn) card.style.animation = nameIn + ' ' + (cfg.animInMs || 600) + 'ms cubic-bezier(.2,.9,.3,1) both'
@@ -3379,6 +3485,377 @@ const ALERT_HTML = `<!doctype html>
   }
 
   window.__oe = { cfg: cfg, enqueue: enqueue, applyStage: applyStage, queue: queue }
+})()
+</script>
+</body>
+</html>`
+
+/**
+ * The wheel of fortune.
+ *
+ * It does not decide anything. The app picks the winner and sends the wedge index with the spin, so
+ * two browser sources pointed at the same overlay land identically and the result announced in chat
+ * is the word the wheel is showing. All this page does is turn.
+ *
+ * Wedges are drawn as SVG paths rather than conic-gradient slices because each one has to carry its
+ * own label, and possibly its own picture, at its own angle — a gradient can only ever be colour.
+ *
+ * NOTE: same rule as every page here — no backticks, no dollar-brace, anywhere below.
+ */
+const WHEEL_HTML = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>StickiChat Wheel</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font-family: Inter, 'Segoe UI', sans-serif; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #back { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+  #wrap { position: relative; }
+  #wheel { transform-origin: 50% 50%; display: block; }
+  #hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 50%;
+    object-fit: cover; pointer-events: none; }
+  #pointer { position: absolute; left: 50%; top: -2px; transform: translateX(-50%); pointer-events: none; }
+  #result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center;
+    font-weight: 800; pointer-events: none; opacity: 0; transition: opacity 240ms ease; white-space: nowrap; }
+  #result.on { opacity: 1; }
+  @keyframes res-pop { 0% { transform: translate(-50%, -50%) scale(.6) } 60% { transform: translate(-50%, -50%) scale(1.12) }
+    100% { transform: translate(-50%, -50%) scale(1) } }
+  #result.on { animation: res-pop 420ms cubic-bezier(.2,1.3,.4,1); }
+  #gone { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: #b91c1c; color: #fff;
+    font: 600 14px/1.4 Inter, 'Segoe UI', sans-serif; padding: 8px 14px; border-radius: 8px; }
+</style>
+<style id="userCss"></style>
+</head>
+<body>
+<div id="stage"><div id="wrap"></div></div>
+<script>
+(function () {
+  var p = new URLSearchParams(location.search)
+  var channel = (p.get('channel') || '').toLowerCase()
+  var profile = p.get('profile') || ''
+  var preview = p.get('preview') === '1'
+  var stage = document.getElementById('stage')
+  var wrap = document.getElementById('wrap')
+  var userCss = document.getElementById('userCss')
+  var NS = 'http://www.w3.org/2000/svg'
+
+  var cfg = {
+    sections: [], spinS: 6, turns: 5, easing: 'smooth', resultS: 4,
+    size: 460, rimWidth: 10, rimColor: '#ffffff', dividerWidth: 2, dividerColor: '#00000055',
+    font: 'Inter', fontSize: 20, textRadial: true, pointer: 'triangle', pointerColor: '#ffffff',
+    hubMedia: '', hubSize: 90, backdrop: '', backdropFit: 'cover', backdropOpacity: 1,
+    resultShow: true, resultSize: 42, resultColor: '#ffffff',
+    spinSound: '', winSound: '', soundVolume: 0.6, offsetX: 0, offsetY: 0, customCss: ''
+  }
+  var angle = 0        // where the wheel currently sits, degrees
+  var spinning = false
+  var spinAudio = null
+
+  // NB: string tests, not a regex. This page is a TS template literal, and every backslash in a
+  // regex literal here is eaten before the browser ever sees it, which turned the pattern into a
+  // division and threw on the first plate picture.
+  function isVideo(src) {
+    var s = String(src || '').toLowerCase().split('?')[0]
+    if (s.indexOf('data:video/') === 0) return true
+    return s.slice(-4) === '.mp4' || s.slice(-5) === '.webm' || s.slice(-4) === '.mov'
+  }
+
+  /** a picture that might be a video — the kind is read off the source, never configured */
+  function mediaEl(src, className) {
+    if (!src) return null
+    var el
+    if (isVideo(src)) {
+      el = document.createElement('video')
+      el.autoplay = true
+      el.loop = true
+      el.muted = true
+      el.playsInline = true
+      el.setAttribute('playsinline', '')
+    } else {
+      el = document.createElement('img')
+      el.alt = ''
+    }
+    el.src = src
+    if (className) el.className = className
+    return el
+  }
+
+  /** the weights, as running angles; a wedge is as wide as it is likely */
+  function slices() {
+    var list = (cfg.sections || []).filter(function (s) { return s && s.label !== undefined })
+    var total = 0
+    for (var i = 0; i < list.length; i++) total += Math.max(0.0001, list[i].weight || 1)
+    var out = []
+    var at = 0
+    for (var j = 0; j < list.length; j++) {
+      var w = Math.max(0.0001, list[j].weight || 1)
+      var span = (w / total) * 360
+      out.push({ s: list[j], from: at, to: at + span, mid: at + span / 2, span: span })
+      at += span
+    }
+    return out
+  }
+
+  function arcPath(cx, cy, r, a0, a1) {
+    var rad = Math.PI / 180
+    var x0 = cx + r * Math.cos(a0 * rad), y0 = cy + r * Math.sin(a0 * rad)
+    var x1 = cx + r * Math.cos(a1 * rad), y1 = cy + r * Math.sin(a1 * rad)
+    var big = a1 - a0 > 180 ? 1 : 0
+    return 'M ' + cx + ' ' + cy + ' L ' + x0 + ' ' + y0 +
+      ' A ' + r + ' ' + r + ' 0 ' + big + ' 1 ' + x1 + ' ' + y1 + ' Z'
+  }
+
+  function render() {
+    var size = Math.max(80, cfg.size || 460)
+    var r = size / 2
+    wrap.innerHTML = ''
+    wrap.style.width = size + 'px'
+    wrap.style.height = size + 'px'
+    wrap.style.translate = (cfg.offsetX || 0) + 'px ' + (cfg.offsetY || 0) + 'px'
+
+    var svg = document.createElementNS(NS, 'svg')
+    svg.id = 'wheel'
+    svg.setAttribute('width', String(size))
+    svg.setAttribute('height', String(size))
+    svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size)
+    svg.style.transform = 'rotate(' + angle + 'deg)'
+
+    var defs = document.createElementNS(NS, 'defs')
+    svg.appendChild(defs)
+
+    var list = slices()
+    // the pointer sits at the top, so wedge 0 starts there rather than at three o'clock
+    var base = -90
+    for (var i = 0; i < list.length; i++) {
+      var sl = list[i]
+      var path = document.createElementNS(NS, 'path')
+      path.setAttribute('d', arcPath(r, r, r - (cfg.rimWidth || 0) / 2, base + sl.from, base + sl.to))
+      path.setAttribute('fill', sl.s.color || '#333')
+      if (cfg.dividerWidth > 0) {
+        path.setAttribute('stroke', cfg.dividerColor || '#0006')
+        path.setAttribute('stroke-width', String(cfg.dividerWidth))
+      }
+      svg.appendChild(path)
+
+      // a wedge may carry its own picture, clipped to its own shape
+      if (sl.s.media && !isVideo(sl.s.media)) {
+        var cid = 'clip' + i
+        var cp = document.createElementNS(NS, 'clipPath')
+        cp.setAttribute('id', cid)
+        var cpp = document.createElementNS(NS, 'path')
+        cpp.setAttribute('d', arcPath(r, r, r - (cfg.rimWidth || 0) / 2, base + sl.from, base + sl.to))
+        cp.appendChild(cpp)
+        defs.appendChild(cp)
+        var im = document.createElementNS(NS, 'image')
+        im.setAttribute('href', sl.s.media)
+        im.setAttribute('x', '0'); im.setAttribute('y', '0')
+        im.setAttribute('width', String(size)); im.setAttribute('height', String(size))
+        im.setAttribute('preserveAspectRatio', 'xMidYMid slice')
+        im.setAttribute('clip-path', 'url(#' + cid + ')')
+        svg.appendChild(im)
+      }
+
+      var label = String(sl.s.label == null ? '' : sl.s.label)
+      if (label) {
+        var t = document.createElementNS(NS, 'text')
+        var mid = base + sl.mid
+        var rad = Math.PI / 180
+        var tr = r * 0.62
+        var tx = r + tr * Math.cos(mid * rad)
+        var ty = r + tr * Math.sin(mid * rad)
+        t.setAttribute('x', String(tx))
+        t.setAttribute('y', String(ty))
+        t.setAttribute('fill', sl.s.textColor || '#fff')
+        t.setAttribute('font-size', String(cfg.fontSize || 20))
+        t.setAttribute('font-weight', '700')
+        t.setAttribute('font-family', (cfg.font || 'Inter') + ', Inter, sans-serif')
+        t.setAttribute('text-anchor', 'middle')
+        t.setAttribute('dominant-baseline', 'middle')
+        if (cfg.textRadial) {
+          // along the radius: readable on a narrow wedge, which upright text stops being fast
+          var rot = mid
+          if (rot > 90 && rot < 270) rot -= 180
+          t.setAttribute('transform', 'rotate(' + rot + ' ' + tx + ' ' + ty + ')')
+        }
+        t.textContent = label
+        svg.appendChild(t)
+      }
+    }
+
+    if (cfg.rimWidth > 0) {
+      var rim = document.createElementNS(NS, 'circle')
+      rim.setAttribute('cx', String(r)); rim.setAttribute('cy', String(r))
+      rim.setAttribute('r', String(r - cfg.rimWidth / 2))
+      rim.setAttribute('fill', 'none')
+      rim.setAttribute('stroke', cfg.rimColor || '#fff')
+      rim.setAttribute('stroke-width', String(cfg.rimWidth))
+      svg.appendChild(rim)
+    }
+    wrap.appendChild(svg)
+
+    if (cfg.hubMedia) {
+      var hub = mediaEl(cfg.hubMedia)
+      if (hub) {
+        hub.id = 'hub'
+        hub.style.width = (cfg.hubSize || 90) + 'px'
+        hub.style.height = (cfg.hubSize || 90) + 'px'
+        wrap.appendChild(hub)
+      }
+    }
+
+    if (cfg.pointer && cfg.pointer !== 'none') {
+      var pt = document.createElementNS(NS, 'svg')
+      pt.id = 'pointer'
+      pt.setAttribute('width', '46'); pt.setAttribute('height', '52')
+      pt.setAttribute('viewBox', '0 0 46 52')
+      var shape = document.createElementNS(NS, 'path')
+      var d = cfg.pointer === 'arrow'
+        ? 'M23 50 L6 14 L18 18 L23 2 L28 18 L40 14 Z'
+        : cfg.pointer === 'pin'
+          ? 'M23 52 C10 30 6 24 6 17 A17 17 0 0 1 40 17 C40 24 36 30 23 52 Z'
+          : 'M4 2 H42 L23 44 Z'
+      shape.setAttribute('d', d)
+      shape.setAttribute('fill', cfg.pointerColor || '#fff')
+      shape.setAttribute('stroke', 'rgba(0,0,0,.35)')
+      shape.setAttribute('stroke-width', '2')
+      pt.appendChild(shape)
+      wrap.appendChild(pt)
+    }
+
+    var res = document.createElement('div')
+    res.id = 'result'
+    res.style.fontSize = (cfg.resultSize || 42) + 'px'
+    res.style.color = cfg.resultColor || '#fff'
+    res.style.fontFamily = (cfg.font || 'Inter') + ', Inter, sans-serif'
+    res.style.textShadow = '0 3px 14px rgba(0,0,0,.7)'
+    wrap.appendChild(res)
+
+    // the backdrop lives on the stage, not the wheel, so it does not turn with it
+    var old = document.getElementById('back')
+    if (old) old.remove()
+    if (cfg.backdrop) {
+      var bg = mediaEl(cfg.backdrop)
+      if (bg) {
+        bg.id = 'back'
+        bg.style.objectFit = cfg.backdropFit === 'stretch' ? 'fill' : cfg.backdropFit || 'cover'
+        bg.style.opacity = String(cfg.backdropOpacity == null ? 1 : cfg.backdropOpacity)
+        stage.insertBefore(bg, stage.firstChild)
+      }
+    }
+    userCss.textContent = cfg.customCss || ''
+  }
+
+  function easingCurve() {
+    if (cfg.easing === 'snappy') return 'cubic-bezier(.12,.85,.2,1)'
+    if (cfg.easing === 'heavy') return 'cubic-bezier(.1,.62,.12,1)'
+    return 'cubic-bezier(.16,.84,.24,1)'
+  }
+
+  /**
+   * Turn to the wedge the app picked.
+   *
+   * The wheel turns clockwise, so landing wedge N under the pointer means rotating by whole turns
+   * MINUS that wedge's middle angle — going the other way lands on its mirror image, which looks
+   * right until somebody checks it against the announcement in chat.
+   */
+  function spinTo(index, spinMs, turns) {
+    var list = slices()
+    if (!list.length) return
+    var i = Math.max(0, Math.min(index, list.length - 1))
+    var mid = list[i].mid
+    var current = ((angle % 360) + 360) % 360
+    var target = (360 - mid) % 360
+    var delta = ((target - current) + 360) % 360
+    angle = angle + Math.max(0, turns || 5) * 360 + delta
+    spinning = true
+
+    var svg = document.getElementById('wheel')
+    if (svg) {
+      svg.style.transition = 'transform ' + spinMs + 'ms ' + easingCurve()
+      svg.style.transform = 'rotate(' + angle + 'deg)'
+    }
+    if (cfg.spinSound) {
+      try {
+        spinAudio = new Audio(cfg.spinSound)
+        spinAudio.loop = true
+        spinAudio.volume = Math.max(0, Math.min(1, cfg.soundVolume == null ? 0.6 : cfg.soundVolume))
+        spinAudio.play().catch(function () {})
+      } catch (err) { /* noop */ }
+    }
+    setTimeout(function () { land(list[i].s.label) }, spinMs)
+  }
+
+  function land(label) {
+    spinning = false
+    if (spinAudio) { try { spinAudio.pause() } catch (err) { /* noop */ } spinAudio = null }
+    if (cfg.winSound) {
+      try {
+        var au = new Audio(cfg.winSound)
+        au.volume = Math.max(0, Math.min(1, cfg.soundVolume == null ? 0.6 : cfg.soundVolume))
+        au.play().catch(function () {})
+      } catch (err) { /* noop */ }
+    }
+    if (!cfg.resultShow) return
+    var res = document.getElementById('result')
+    if (!res) return
+    res.textContent = label || ''
+    res.classList.add('on')
+    setTimeout(function () { res.classList.remove('on') }, Math.max(0, (cfg.resultS || 0) * 1000))
+  }
+
+  var goneBox = null
+  function gone(on) {
+    if (!on) { if (goneBox) { goneBox.remove(); goneBox = null } return }
+    if (goneBox) return
+    goneBox = document.createElement('div')
+    goneBox.id = 'gone'
+    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
+    document.body.appendChild(goneBox)
+  }
+
+  var seen = {}
+  function connect() {
+    var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
+    es.addEventListener('cfg', function (e) {
+      try {
+        cfg = Object.assign(cfg, JSON.parse(e.data))
+        gone(false)
+        // never redraw mid-spin: rebuilding the svg would drop the running transition and the
+        // wheel would jump to its final angle instantly
+        if (!spinning) render()
+      } catch (err) { /* noop */ }
+    })
+    es.addEventListener('gone', function () { gone(true) })
+    es.onmessage = function (e) {
+      try {
+        var d = JSON.parse(e.data)
+        if (!d || !d.wheel) return
+        // the backlog replays on connect; a spin from before this source existed is history
+        if (Date.now() - (d.ts || 0) > 30000) return
+        if (seen[d.wheel.id]) return
+        seen[d.wheel.id] = 1
+        spinTo(d.wheel.index, d.wheel.spinMs, d.wheel.turns)
+      } catch (err) { /* noop */ }
+    }
+    es.onerror = function () { es.close(); setTimeout(connect, 3000) }
+  }
+  render()
+  connect()
+
+  if (preview) {
+    var n = 0
+    setInterval(function () {
+      if (spinning) return
+      var list = slices()
+      if (!list.length) return
+      n = (n + 1) % list.length
+      spinTo(n, Math.max(300, (cfg.spinS || 6) * 1000), cfg.turns || 5)
+    }, Math.max(2000, ((cfg.spinS || 6) + (cfg.resultS || 4) + 1) * 1000))
+  }
+
+  window.__oe = { cfg: cfg, render: render, spinTo: spinTo, slices: slices, angleOf: function () { return angle } }
 })()
 </script>
 </body>

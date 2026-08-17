@@ -10,6 +10,7 @@ import {
   DEFAULT_EMOTE_OVERLAY,
   DEFAULT_FOLLOW_OVERLAY,
   DEFAULT_GOAL_OVERLAY,
+  DEFAULT_ROULETTE_OVERLAY,
   DEFAULT_HOTKEYS,
   DEFAULT_OVERLAY_STYLE,
   HighlightKind,
@@ -2882,7 +2883,8 @@ function OverlaySection(): React.JSX.Element {
     { kind: 'chat', icon: '💬', label: t('oe.chatOverlay'), hint: 'Повідомлення чату на екрані.' },
     { kind: 'emotes', icon: '🎉', label: 'Святкування', hint: 'Емоути з чату розсипаються по всьому екрану.' },
     { kind: 'goal', icon: '🎯', label: 'Ціль', hint: 'Смуга прогресу: фоловери, підписки, бітси.' },
-    { kind: 'follow', icon: '💜', label: 'Алерт фолова', hint: 'Спливає на екрані, коли хтось зафоловився.' }
+    { kind: 'follow', icon: '💜', label: 'Алерт фолова', hint: 'Спливає на екрані, коли хтось зафоловився.' },
+    { kind: 'roulette', icon: '🎡', label: 'Рулетка', hint: 'Колесо фортуни: секції з вагою, картинками й звуком.' }
   ]
 
   const addOverlay = (kind: OverlayKind): void => {
@@ -2895,7 +2897,9 @@ function OverlaySection(): React.JSX.Element {
           ? DEFAULT_GOAL_OVERLAY
           : kind === 'follow'
             ? DEFAULT_FOLLOW_OVERLAY
-            : DEFAULT_CHAT_OVERLAY
+            : kind === 'roulette'
+              ? DEFAULT_ROULETTE_OVERLAY
+              : DEFAULT_CHAT_OVERLAY
     set({
       chatOverlays: [
         ...settings.chatOverlays,

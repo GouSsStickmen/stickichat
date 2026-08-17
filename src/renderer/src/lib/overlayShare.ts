@@ -3,6 +3,7 @@ import {
   DEFAULT_EMOTE_OVERLAY,
   DEFAULT_FOLLOW_OVERLAY,
   DEFAULT_GOAL_OVERLAY,
+  DEFAULT_ROULETTE_OVERLAY,
   OverlayConfig
 } from '../types'
 import { nextId } from '../store/layout'
@@ -27,6 +28,7 @@ function defaultsFor(type: unknown): Omit<OverlayConfig, 'id' | 'name'> {
   if (type === 'emotes') return DEFAULT_EMOTE_OVERLAY
   if (type === 'goal') return DEFAULT_GOAL_OVERLAY
   if (type === 'follow') return DEFAULT_FOLLOW_OVERLAY
+  if (type === 'roulette') return DEFAULT_ROULETTE_OVERLAY
   return DEFAULT_CHAT_OVERLAY
 }
 

@@ -1575,6 +1575,9 @@ class ChatService {
           const { countGoalEvent } = await import('./goals')
           countGoalEvent(channel, line)
         }
+        // a wheel listening for a command or a reward sees the same message
+        const { maybeSpinFromChat } = await import('./wheel')
+        maybeSpinFromChat(channel, msg)
       })
     }
   }

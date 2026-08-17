@@ -292,7 +292,7 @@ export interface OverlayFill {
   stops?: { color: string; at: number }[]
 }
 
-import type { OverlayScene } from './lib/overlayScene'
+import type { Anchor9, OverlayScene } from './lib/overlayScene'
 
 /** a decorative PNG pinned to a corner/edge of each message plate or the whole chat zone */
 export interface OverlayDecor {
@@ -354,7 +354,7 @@ export interface OverlayBase {
 }
 
 /** every overlay kind there is; the discriminant of the OverlayConfig union */
-export type OverlayKind = 'chat' | 'emotes' | 'goal' | 'follow'
+export type OverlayKind = 'chat' | 'emotes' | 'goal' | 'follow' | 'roulette'
 
 /** One OBS chat overlay instance. */
 export interface ChatOverlayConfig extends OverlayBase {
@@ -908,6 +908,7 @@ export interface FollowOverlayConfig extends OverlayBase {
   customAnimOutName: string
 
   // ----- the picture -----
+  /** an image, a GIF or a video — the kind is read off the data url, not configured */
   image: string
   /** px width; 0 = natural size */
   imageWidth: number
@@ -918,6 +919,22 @@ export interface FollowOverlayConfig extends OverlayBase {
   maskFeather: number
   /** the picture keeps animating on its own while the alert is up */
   imageLoop: 'none' | 'float' | 'pulse' | 'spin' | 'shake'
+  /**
+   * Free placement, used when `layout` is 'free'.
+   *
+   * The five arrangements cover the usual alert and nothing else; anything with a mascot leaning
+   * on the words from a corner needs real coordinates. The anchor is which point of the STAGE the
+   * offsets are measured from, so a picture pinned bottom-right stays there at any resolution.
+   */
+  imageAnchor: Anchor9
+  imageX: number
+  imageY: number
+  imageRotate: number
+  imageOpacity: number
+  /** the words get their own placement in free mode, or they would be stranded */
+  textAnchor: Anchor9
+  textX: number
+  textY: number
 
   // ----- the follower's avatar -----
   avatarShow: boolean
@@ -948,13 +965,22 @@ export interface FollowOverlayConfig extends OverlayBase {
   align: 'left' | 'center' | 'right'
   offsetX: number
   offsetY: number
-  /** picture above the words, or beside them */
-  layout: 'imageTop' | 'imageLeft' | 'imageRight' | 'imageBehind' | 'textOnly'
+  /** picture above the words, beside them, behind them — or placed by hand */
+  layout: 'imageTop' | 'imageLeft' | 'imageRight' | 'imageBehind' | 'textOnly' | 'free'
   gap: number
 
   // ----- the plate behind it -----
   plate: boolean
   plateFill: OverlayFill
+  /**
+   * A picture, GIF or video for the plate instead of a flat fill.
+   *
+   * Video because a looping MP4 is a fraction of the size of the same seconds as a GIF, and an
+   * alert backdrop is exactly the kind of short loop where that difference is the whole budget.
+   */
+  plateMedia: string
+  plateMediaFit: 'cover' | 'contain' | 'stretch'
+  plateMediaOpacity: number
   plateRadius: number
   platePadX: number
   platePadY: number
@@ -970,6 +996,100 @@ export interface FollowOverlayConfig extends OverlayBase {
   customCss: string
 }
 
+/** one wedge of the wheel */
+export interface WheelSection {
+  id: string
+  label: string
+  /**
+   * How likely this wedge is, and how wide it is drawn.
+   *
+   * The two are the same number on purpose: a wheel whose slices do not match their odds is a lie
+   * told to the viewers, and the whole appeal of spinning one on stream is that everybody can see
+   * the chances.
+   */
+  weight: number
+  color: string
+  textColor: string
+  /** an image, GIF or video drawn inside the wedge */
+  media: string
+  /** remove this wedge once it has won — for giveaways that should not repeat */
+  removeOnWin: boolean
+}
+
+/**
+ * The wheel of fortune.
+ *
+ * The winner is chosen in the app, not on the page: the result has to be announceable in chat and
+ * has to be the same for every browser source pointed at this overlay, and a page that rolled its
+ * own dice could guarantee neither.
+ */
+export interface RouletteOverlayConfig extends OverlayBase {
+  type: 'roulette'
+
+  sections: WheelSection[]
+
+  // ----- what makes it spin -----
+  /** a chat command, a channel-point reward, or only the editor's button */
+  trigger: 'command' | 'redeem' | 'manual'
+  command: string
+  /** who may use the command */
+  who: 'broadcaster' | 'mods' | 'everyone'
+  redeemTitle: string
+  /** seconds before it can be spun again; 0 = no limit */
+  cooldownS: number
+  /** write the result into chat when it lands */
+  announce: boolean
+  announceText: string
+
+  // ----- the spin -----
+  spinS: number
+  /** whole turns before it starts easing into the winner */
+  turns: number
+  /** how abruptly it settles; higher = longer glide at the end */
+  easing: 'smooth' | 'snappy' | 'heavy'
+  /** how long the winner stays up afterwards, seconds */
+  resultS: number
+
+  // ----- the wheel -----
+  size: number
+  rimWidth: number
+  rimColor: string
+  /** a line between the wedges */
+  dividerWidth: number
+  dividerColor: string
+  font: string
+  fontSize: number
+  /** text along the radius, or upright */
+  textRadial: boolean
+  /** the marker that picks the winner */
+  pointer: 'triangle' | 'arrow' | 'pin' | 'none'
+  pointerColor: string
+  /** the disc in the middle: a logo, an avatar, anything */
+  hubMedia: string
+  hubSize: number
+
+  // ----- around it -----
+  /** image, GIF or video behind the whole wheel */
+  backdrop: string
+  backdropFit: 'cover' | 'contain' | 'stretch'
+  backdropOpacity: number
+  /** the winner's name, drawn over the wheel when it stops */
+  resultShow: boolean
+  resultSize: number
+  resultColor: string
+
+  // ----- sound -----
+  /** loops for as long as the wheel is turning */
+  spinSound: string
+  /** one shot when it lands */
+  winSound: string
+  soundVolume: number
+
+  offsetX: number
+  offsetY: number
+  customCss: string
+}
+
 /**
  * Any overlay in the manager. `type` is the discriminant — narrow on it before touching
  * anything that is not on OverlayBase.
@@ -979,6 +1099,7 @@ export type OverlayConfig =
   | EmoteRainOverlayConfig
   | GoalOverlayConfig
   | FollowOverlayConfig
+  | RouletteOverlayConfig
 
 export const DEFAULT_FILL: OverlayFill = { kind: 'solid', color: '#000000', opacity: 0.45, color2: '#3a0ca3', angle: 135 }
 
@@ -1033,6 +1154,14 @@ export const DEFAULT_FOLLOW_OVERLAY: Omit<FollowOverlayConfig, 'id' | 'name'> = 
   maskShape: 'none',
   maskFeather: 0,
   imageLoop: 'float',
+  imageAnchor: 'center',
+  imageX: 0,
+  imageY: 0,
+  imageRotate: 0,
+  imageOpacity: 1,
+  textAnchor: 'center',
+  textX: 0,
+  textY: 0,
   avatarShow: true,
   avatarSize: 84,
   avatarRound: true,
@@ -1058,6 +1187,9 @@ export const DEFAULT_FOLLOW_OVERLAY: Omit<FollowOverlayConfig, 'id' | 'name'> = 
   gap: 12,
   plate: false,
   plateFill: { kind: 'solid', color: '#18181b', opacity: 0.8, color2: '#3a0ca3', angle: 135 },
+  plateMedia: '',
+  plateMediaFit: 'cover',
+  plateMediaOpacity: 1,
   plateRadius: 18,
   platePadX: 28,
   platePadY: 20,
@@ -1067,6 +1199,51 @@ export const DEFAULT_FOLLOW_OVERLAY: Omit<FollowOverlayConfig, 'id' | 'name'> = 
   plateGlowColor: '#9147ff',
   soundData: '',
   soundVolume: 0.6,
+  customCss: ''
+}
+
+export const DEFAULT_ROULETTE_OVERLAY: Omit<RouletteOverlayConfig, 'id' | 'name'> = {
+  type: 'roulette',
+  sections: [
+    { id: 'w1', label: 'Приз 1', weight: 1, color: '#9147ff', textColor: '#ffffff', media: '', removeOnWin: false },
+    { id: 'w2', label: 'Приз 2', weight: 1, color: '#12b886', textColor: '#ffffff', media: '', removeOnWin: false },
+    { id: 'w3', label: 'Приз 3', weight: 1, color: '#ff5c8a', textColor: '#ffffff', media: '', removeOnWin: false },
+    { id: 'w4', label: 'Нічого', weight: 2, color: '#3f3f46', textColor: '#ffffff', media: '', removeOnWin: false }
+  ],
+  trigger: 'manual',
+  command: '!рулетка',
+  who: 'broadcaster',
+  redeemTitle: '',
+  cooldownS: 30,
+  announce: true,
+  announceText: '🎡 Випало: {result}',
+  spinS: 6,
+  turns: 5,
+  easing: 'smooth',
+  resultS: 4,
+  size: 460,
+  rimWidth: 10,
+  rimColor: '#ffffff',
+  dividerWidth: 2,
+  dividerColor: '#00000055',
+  font: 'Inter',
+  fontSize: 20,
+  textRadial: true,
+  pointer: 'triangle',
+  pointerColor: '#ffffff',
+  hubMedia: '',
+  hubSize: 90,
+  backdrop: '',
+  backdropFit: 'cover',
+  backdropOpacity: 1,
+  resultShow: true,
+  resultSize: 42,
+  resultColor: '#ffffff',
+  spinSound: '',
+  winSound: '',
+  soundVolume: 0.6,
+  offsetX: 0,
+  offsetY: 0,
   customCss: ''
 }
 
@@ -1336,6 +1513,13 @@ export interface OverlayLineData {
   subGift?: boolean
   /** a follow, for goal overlays; carried on an info line */
   follow?: boolean
+  /**
+   * A wheel spin: which wedge won, and how long to take getting there.
+   *
+   * The app decides the winner and sends it, so every browser source pointed at the overlay lands
+   * on the same wedge and the result can be announced in chat as the same word the wheel shows.
+   */
+  wheel?: { index: number; label: string; spinMs: number; turns: number; id: string }
 }
 
 /** @deprecated legacy v1 style — replaced by ChatOverlayConfig; kept until settings UI migrates */
