@@ -113,15 +113,23 @@ export function buildOverlayLine(msg: ChatMessage): OverlayLineData | null {
       id: msg.id,
       user: msg.userId,
       login: msg.login,
-      nick: '',
-      color: '',
       badges: [],
       body: '',
       sys: esc(msg.systemText),
       kind: 'info',
       ts: msg.timestamp,
       redeem: !!msg.redeemed,
-      mod: !!msg.modAction
+      mod: !!msg.modAction,
+      /**
+       * A follow line carries who it was, unlike every other system line.
+       *
+       * The alert overlay needs the name and the picture, and this is the only place they exist —
+       * there is no chat message behind a follow to look them up from later.
+       */
+      follow: msg.follow || undefined,
+      nick: msg.follow ? msg.displayName : '',
+      avatar: msg.follow ? ensureAvatar(msg.login) : undefined,
+      color: msg.follow ? ensureReadable(msg.color || fallbackColor(msg.login), true) : ''
     }
   }
 

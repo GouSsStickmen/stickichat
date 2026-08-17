@@ -180,13 +180,21 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
        * Which page an OBS source gets is decided by the overlay it points at.
        *
        * The kind is resolved here rather than inside one page that branches at runtime, because
-       * these three share nothing but the SSE connection: a chat log, a particle engine and a
-       * progress bar have different DOM, different CSS and different loops. One page holding all
-       * three would ship every one of them to every source and grow a condition around each line.
+       * these share nothing but the SSE connection: a chat log, a particle engine, a progress bar
+       * and an alert have different DOM, different CSS and different loops. One page holding all
+       * of them would ship every one to every source and grow a condition around each line.
        */
       const kind = (styleFor(url.searchParams.get('profile') ?? '') as { type?: string } | null)?.type
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(kind === 'emotes' ? EMOTE_HTML : kind === 'goal' ? GOAL_HTML : OVERLAY_HTML)
+      res.end(
+        kind === 'emotes'
+          ? EMOTE_HTML
+          : kind === 'goal'
+            ? GOAL_HTML
+            : kind === 'follow'
+              ? ALERT_HTML
+              : OVERLAY_HTML
+      )
       return
     }
     if (url.pathname === '/events') {
@@ -3004,6 +3012,373 @@ const GOAL_HTML = `<!doctype html>
   }
 
   window.__oe = { cfg: cfg, render: render }
+})()
+</script>
+</body>
+</html>`
+
+/**
+ * The follow alert: somebody followed, so something appears, does its thing, and leaves.
+ *
+ * Built out of slots rather than one canned card — a picture, the follower's avatar, a headline and
+ * a second line — because an alert that can only look one way gets used once and then replaced by
+ * the usual service. Every slot can be switched off, and the whole thing is positioned, masked and
+ * animated by the config.
+ *
+ * Alerts QUEUE. A raid can land twenty follows in a second, and twenty cards fading through each
+ * other is not a celebration, it is a mess; they wait their turn, and the queue has a ceiling so a
+ * flood cannot leave the overlay busy for ten minutes.
+ *
+ * NOTE: same rule as every page here — no backticks, no dollar-brace, anywhere below.
+ */
+const ALERT_HTML = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>StickiChat Alert</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font-family: Inter, 'Segoe UI', sans-serif; }
+  #stage { position: fixed; inset: 0; display: flex; pointer-events: none; }
+  #stage.top { align-items: flex-start; }
+  #stage.center { align-items: center; }
+  #stage.bottom { align-items: flex-end; }
+  #stage.left { justify-content: flex-start; }
+  #stage.center-x { justify-content: center; }
+  #stage.right { justify-content: flex-end; }
+  .alert { display: flex; align-items: center; box-sizing: border-box; }
+  .alert.imageTop { flex-direction: column; }
+  .alert.imageLeft { flex-direction: row; }
+  .alert.imageRight { flex-direction: row-reverse; }
+  .alert.imageBehind { position: relative; }
+  .alert.imageBehind .pic { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: -1; }
+  .words { display: flex; flex-direction: column; align-items: center; }
+  .t1, .t2 { margin: 0; line-height: 1.15; white-space: nowrap; }
+  .pic { display: block; }
+  .av { display: block; object-fit: cover; flex: 0 0 auto; }
+  /* ---- entrances ---- */
+  @keyframes a-fade { from { opacity: 0 } }
+  @keyframes a-slideUp { from { opacity: 0; transform: translateY(60px) } }
+  @keyframes a-slideDown { from { opacity: 0; transform: translateY(-60px) } }
+  @keyframes a-slideLeft { from { opacity: 0; transform: translateX(80px) } }
+  @keyframes a-slideRight { from { opacity: 0; transform: translateX(-80px) } }
+  @keyframes a-pop { 0% { opacity: 0; transform: scale(.5) } 70% { transform: scale(1.08) } 100% { opacity: 1; transform: scale(1) } }
+  @keyframes a-zoom { from { opacity: 0; transform: scale(1.6) } }
+  @keyframes a-bounce { 0% { opacity: 0; transform: translateY(-90px) } 55% { opacity: 1; transform: translateY(0) }
+    72% { transform: translateY(-18px) } 88% { transform: translateY(0) } 95% { transform: translateY(-6px) } 100% { transform: translateY(0) } }
+  @keyframes a-flip { from { opacity: 0; transform: perspective(700px) rotateX(85deg) } }
+  @keyframes a-swing { 0% { opacity: 0; transform: rotate(-14deg) } 60% { opacity: 1; transform: rotate(8deg) }
+    80% { transform: rotate(-4deg) } 100% { transform: rotate(0) } }
+  @keyframes a-blur { from { opacity: 0; filter: blur(18px) } }
+  @keyframes a-glitch { 0% { opacity: 0; transform: translate(-8px, 4px) skewX(12deg) } 20% { opacity: 1; transform: translate(6px, -3px) skewX(-9deg) }
+    40% { transform: translate(-4px, 2px) skewX(5deg) } 60% { transform: translate(3px, -1px) skewX(-3deg) } 100% { transform: none } }
+  @keyframes a-wipe { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
+  /* ---- exits ---- */
+  @keyframes o-fade { to { opacity: 0 } }
+  @keyframes o-slideUp { to { opacity: 0; transform: translateY(-60px) } }
+  @keyframes o-slideDown { to { opacity: 0; transform: translateY(60px) } }
+  @keyframes o-slideLeft { to { opacity: 0; transform: translateX(-80px) } }
+  @keyframes o-slideRight { to { opacity: 0; transform: translateX(80px) } }
+  @keyframes o-pop { 0% { transform: scale(1) } 30% { transform: scale(1.1) } 100% { opacity: 0; transform: scale(.4) } }
+  @keyframes o-zoom { to { opacity: 0; transform: scale(1.7) } }
+  @keyframes o-bounce { 0% { transform: translateY(0) } 30% { transform: translateY(-20px) } 100% { opacity: 0; transform: translateY(120px) } }
+  @keyframes o-flip { to { opacity: 0; transform: perspective(700px) rotateX(-85deg) } }
+  @keyframes o-swing { 0% { transform: rotate(0) } 40% { transform: rotate(10deg) } 100% { opacity: 0; transform: rotate(-24deg) } }
+  @keyframes o-blur { to { opacity: 0; filter: blur(18px) } }
+  @keyframes o-glitch { 0% { transform: none } 30% { transform: translate(7px, -3px) skewX(-10deg) }
+    60% { transform: translate(-6px, 3px) skewX(8deg) } 100% { opacity: 0; transform: translate(10px, 0) skewX(-14deg) } }
+  @keyframes o-wipe { to { clip-path: inset(0 0 0 100%) } }
+  /* ---- the picture's own loop while the alert is up ---- */
+  @keyframes l-float { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-12px) } }
+  @keyframes l-pulse { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.06) } }
+  @keyframes l-spin { to { transform: rotate(360deg) } }
+  @keyframes l-shake { 0%, 100% { transform: translateX(0) } 25% { transform: translateX(-5px) } 75% { transform: translateX(5px) } }
+  #gone { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: #b91c1c; color: #fff;
+    font: 600 14px/1.4 Inter, 'Segoe UI', sans-serif; padding: 8px 14px; border-radius: 8px; }
+</style>
+<style id="animCss"></style>
+<style id="userCss"></style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+(function () {
+  var p = new URLSearchParams(location.search)
+  var channel = (p.get('channel') || '').toLowerCase()
+  var profile = p.get('profile') || ''
+  var preview = p.get('preview') === '1'
+  var stage = document.getElementById('stage')
+  var animCss = document.getElementById('animCss')
+  var userCss = document.getElementById('userCss')
+
+  var cfg = {
+    durationS: 5, animInMs: 600, animOutMs: 500, gapMs: 400, queueMax: 8,
+    animIn: 'slideUp', animOut: 'fade', customAnimCss: '', customAnimInName: '', customAnimOutName: '',
+    image: '', imageWidth: 220, mask: '', maskShape: 'none', maskFeather: 0, imageLoop: 'float',
+    avatarShow: true, avatarSize: 84, avatarRound: true, avatarRing: 3, avatarRingColor: '#9147ff',
+    title: 'Новий фоловер!', subtitle: '{user}', font: 'Inter',
+    titleSize: 30, subtitleSize: 40, titleColor: '#ffffff', subtitleColor: '#ffffff', nameColor: '#c7a6ff',
+    outlineWidth: 0, outlineColor: '#000000', shadowBlur: 14, shadowColor: '#000000',
+    anchor: 'center', align: 'center', offsetX: 0, offsetY: 0, layout: 'imageTop', gap: 12,
+    plate: false, plateFill: { kind: 'solid', color: '#18181b', opacity: 0.8 },
+    plateRadius: 18, platePadX: 28, platePadY: 20,
+    plateBorderWidth: 0, plateBorderColor: '#9147ff', plateGlowSize: 0, plateGlowColor: '#9147ff',
+    soundData: '', soundVolume: 0.6, customCss: ''
+  }
+
+  function hexToRgba(hex, op) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '')
+    if (!m) return 'rgba(0,0,0,' + (op == null ? 1 : op) + ')'
+    var n = parseInt(m[1], 16)
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + (op == null ? 1 : op) + ')'
+  }
+  function fill(f) {
+    if (!f || f.opacity <= 0) return 'transparent'
+    if (f.kind === 'gradient') {
+      return 'linear-gradient(' + (f.angle || 0) + 'deg, ' + hexToRgba(f.color, f.opacity) + ', ' + hexToRgba(f.color2, f.opacity) + ')'
+    }
+    return hexToRgba(f.color, f.opacity)
+  }
+  function textFx() {
+    var parts = []
+    var w = cfg.outlineWidth
+    if (w > 0) {
+      for (var x = -w; x <= w; x++) for (var y = -w; y <= w; y++) if (x || y) parts.push(x + 'px ' + y + 'px 0 ' + cfg.outlineColor)
+    }
+    if (cfg.shadowBlur > 0) parts.push('0 2px ' + cfg.shadowBlur + 'px ' + cfg.shadowColor)
+    return parts.length ? parts.join(', ') : 'none'
+  }
+  /** the animation name for a slot; 'custom' hands over to the uploaded keyframes */
+  function animName(which) {
+    var v = which === 'in' ? cfg.animIn : cfg.animOut
+    if (v === 'custom') return (which === 'in' ? cfg.customAnimInName : cfg.customAnimOutName) || ''
+    if (!v || v === 'none') return ''
+    return (which === 'in' ? 'a-' : 'o-') + v
+  }
+
+  /** {user} and a couple of friends, replaced as the words are drawn */
+  function fillTokens(s, d) {
+    return String(s || '')
+      .split('{user}').join(d.nick || d.login || '')
+      .split('{channel}').join(channel)
+  }
+
+  function shapeOf(s) {
+    if (s === 'circle') return 'circle(50% at 50% 50%)'
+    if (s === 'rounded') return 'inset(0 round 18px)'
+    if (s === 'hexagon') return 'polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)'
+    if (s === 'star') return 'polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'
+    if (s === 'blob') return 'polygon(20% 4%, 74% 0, 100% 28%, 96% 78%, 62% 100%, 16% 92%, 0 54%, 4% 20%)'
+    return ''
+  }
+
+  /**
+   * Write the line, giving the follower's name its own colour.
+   *
+   * Split into text nodes rather than innerHTML: the name comes from Twitch and must never be able
+   * to carry markup onto the stream.
+   */
+  function paintWithName(el, text, d) {
+    var name = d.nick || d.login || ''
+    var i = name ? text.indexOf(name) : -1
+    if (i === -1 || !cfg.nameColor) {
+      el.textContent = text
+      return
+    }
+    el.appendChild(document.createTextNode(text.slice(0, i)))
+    var b = document.createElement('span')
+    b.textContent = name
+    b.style.color = cfg.nameColor
+    el.appendChild(b)
+    el.appendChild(document.createTextNode(text.slice(i + name.length)))
+  }
+
+  function buildCard(d) {
+    var card = document.createElement('div')
+    card.className = 'alert ' + cfg.layout
+    card.style.gap = (cfg.gap || 0) + 'px'
+    card.style.font = '400 16px ' + (cfg.font ? "'" + cfg.font + "'" : 'Inter') + ', Inter, sans-serif'
+    card.style.translate = (cfg.offsetX || 0) + 'px ' + (cfg.offsetY || 0) + 'px'
+    if (cfg.plate) {
+      card.style.background = fill(cfg.plateFill)
+      card.style.borderRadius = (cfg.plateRadius || 0) + 'px'
+      card.style.padding = (cfg.platePadY || 0) + 'px ' + (cfg.platePadX || 0) + 'px'
+      if (cfg.plateBorderWidth > 0) card.style.border = cfg.plateBorderWidth + 'px solid ' + cfg.plateBorderColor
+      if (cfg.plateGlowSize > 0) {
+        card.style.boxShadow = '0 0 ' + cfg.plateGlowSize + 'px ' + cfg.plateGlowColor +
+          ', 0 0 ' + cfg.plateGlowSize * 2 + 'px ' + cfg.plateGlowColor
+      }
+    }
+
+    if (cfg.image && cfg.layout !== 'textOnly') {
+      var pic = document.createElement('img')
+      pic.className = 'pic'
+      pic.src = cfg.image
+      pic.alt = ''
+      if (cfg.layout !== 'imageBehind' && cfg.imageWidth > 0) pic.style.width = cfg.imageWidth + 'px'
+      /**
+       * The mask. An uploaded PNG is its own alpha; a built-in shape is a clip-path; and the
+       * feather has to be a mask rather than part of the clip, because clip-path edges cannot be
+       * softened at all.
+       */
+      if (cfg.mask) {
+        pic.style.webkitMaskImage = "url('" + cfg.mask + "')"
+        pic.style.maskImage = "url('" + cfg.mask + "')"
+        pic.style.webkitMaskSize = '100% 100%'
+        pic.style.maskSize = '100% 100%'
+      } else if (cfg.maskShape && cfg.maskShape !== 'none') {
+        pic.style.clipPath = shapeOf(cfg.maskShape)
+        if (cfg.maskFeather > 0) {
+          var f = cfg.maskFeather + 'px'
+          var g = 'radial-gradient(closest-side, black calc(100% - ' + f + '), transparent 100%)'
+          pic.style.webkitMaskImage = g
+          pic.style.maskImage = g
+        }
+      }
+      if (cfg.imageLoop && cfg.imageLoop !== 'none') {
+        pic.style.animation = 'l-' + cfg.imageLoop + ' ' +
+          (cfg.imageLoop === 'spin' ? '6s linear' : '2.4s ease-in-out') + ' infinite'
+      }
+      card.appendChild(pic)
+    }
+
+    var words = document.createElement('div')
+    words.className = 'words'
+    words.style.gap = Math.round((cfg.gap || 0) / 2) + 'px'
+    words.style.textShadow = textFx()
+
+    if (cfg.avatarShow && d.avatar) {
+      var av = document.createElement('img')
+      av.className = 'av'
+      av.src = d.avatar
+      av.alt = ''
+      av.style.width = (cfg.avatarSize || 84) + 'px'
+      av.style.height = (cfg.avatarSize || 84) + 'px'
+      av.style.borderRadius = cfg.avatarRound ? '50%' : '10%'
+      if (cfg.avatarRing > 0) av.style.border = cfg.avatarRing + 'px solid ' + cfg.avatarRingColor
+      words.appendChild(av)
+    }
+
+    var t1 = fillTokens(cfg.title, d)
+    if (t1) {
+      var h1 = document.createElement('div')
+      h1.className = 't1'
+      h1.style.fontSize = (cfg.titleSize || 30) + 'px'
+      h1.style.fontWeight = '700'
+      h1.style.color = cfg.titleColor
+      paintWithName(h1, t1, d)
+      words.appendChild(h1)
+    }
+    var t2 = fillTokens(cfg.subtitle, d)
+    if (t2) {
+      var h2 = document.createElement('div')
+      h2.className = 't2'
+      h2.style.fontSize = (cfg.subtitleSize || 40) + 'px'
+      h2.style.fontWeight = '800'
+      h2.style.color = cfg.subtitleColor
+      paintWithName(h2, t2, d)
+      words.appendChild(h2)
+    }
+    card.appendChild(words)
+    return card
+  }
+
+  function applyStage() {
+    stage.className = (cfg.anchor || 'center') + ' ' + (cfg.align === 'center' ? 'center-x' : cfg.align || 'center-x')
+    animCss.textContent = cfg.customAnimCss || ''
+    userCss.textContent = cfg.customCss || ''
+  }
+
+  // ---------- the queue ----------
+  var queue = []
+  var busy = false
+
+  function show(d) {
+    busy = true
+    var card = buildCard(d)
+    var nameIn = animName('in')
+    var nameOut = animName('out')
+    if (nameIn) card.style.animation = nameIn + ' ' + (cfg.animInMs || 600) + 'ms cubic-bezier(.2,.9,.3,1) both'
+    stage.appendChild(card)
+    if (cfg.soundData) {
+      try {
+        var au = new Audio(cfg.soundData)
+        au.volume = Math.max(0, Math.min(1, cfg.soundVolume == null ? 0.6 : cfg.soundVolume))
+        au.play().catch(function () {})
+      } catch (err) { /* noop */ }
+    }
+    var hold = (cfg.animInMs || 0) + Math.max(0, (cfg.durationS || 0) * 1000)
+    setTimeout(function () {
+      if (nameOut) card.style.animation = nameOut + ' ' + (cfg.animOutMs || 500) + 'ms ease both'
+      setTimeout(function () {
+        card.remove()
+        busy = false
+        setTimeout(pump, Math.max(0, cfg.gapMs || 0))
+      }, nameOut ? cfg.animOutMs || 500 : 0)
+    }, hold)
+  }
+
+  function pump() {
+    if (busy || !queue.length) return
+    show(queue.shift())
+  }
+
+  function enqueue(d) {
+    // a raid can land twenty follows in a second; the ceiling drops the OLDEST one still waiting,
+    // so the most recent follower is always among those who actually get seen
+    queue.push(d)
+    var max = Math.max(1, cfg.queueMax || 8)
+    while (queue.length > max) queue.shift()
+    pump()
+  }
+
+  var goneBox = null
+  function gone(on) {
+    if (!on) { if (goneBox) { goneBox.remove(); goneBox = null } return }
+    if (goneBox) return
+    goneBox = document.createElement('div')
+    goneBox.id = 'gone'
+    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
+    document.body.appendChild(goneBox)
+  }
+
+  function connect() {
+    var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
+    es.addEventListener('cfg', function (e) {
+      try { cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false); applyStage() } catch (err) { /* noop */ }
+    })
+    es.addEventListener('gone', function () { gone(true) })
+    es.onmessage = function (e) {
+      try {
+        var d = JSON.parse(e.data)
+        // the backlog is replayed on connect, so only something that JUST happened may fire an
+        // alert — a source restarting mid-stream must not replay this morning's followers
+        if (d && d.follow && Date.now() - (d.ts || 0) < 30000) enqueue(d)
+      } catch (err) { /* noop */ }
+    }
+    es.onerror = function () { es.close(); setTimeout(connect, 3000) }
+  }
+  applyStage()
+  connect()
+
+  if (preview) {
+    var NAMES = ['Bobik069', 'Pinuses', 'Mira_Cat', 'n1cole_cat']
+    var n = 0
+    var demo = function () {
+      var name = NAMES[n++ % NAMES.length]
+      enqueue({
+        follow: true, ts: Date.now(), nick: name, login: name.toLowerCase(),
+        avatar: 'data:image/svg+xml;base64,' + btoa(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">' +
+          '<rect width="64" height="64" fill="#9147ff"/><text x="32" y="43" font-size="34" font-family="Segoe UI"' +
+          ' font-weight="700" fill="#fff" text-anchor="middle">' + name[0] + '</text></svg>')
+      })
+    }
+    demo()
+    setInterval(demo, 4000)
+  }
+
+  window.__oe = { cfg: cfg, enqueue: enqueue, applyStage: applyStage, queue: queue }
 })()
 </script>
 </body>

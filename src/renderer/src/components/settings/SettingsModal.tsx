@@ -8,6 +8,7 @@ import {
   CustomTheme,
   DEFAULT_CHAT_OVERLAY,
   DEFAULT_EMOTE_OVERLAY,
+  DEFAULT_FOLLOW_OVERLAY,
   DEFAULT_GOAL_OVERLAY,
   DEFAULT_HOTKEYS,
   DEFAULT_OVERLAY_STYLE,
@@ -2880,14 +2881,21 @@ function OverlaySection(): React.JSX.Element {
   const KINDS: { kind: OverlayKind; icon: string; label: string; hint: string }[] = [
     { kind: 'chat', icon: '💬', label: t('oe.chatOverlay'), hint: 'Повідомлення чату на екрані.' },
     { kind: 'emotes', icon: '🎉', label: 'Святкування', hint: 'Емоути з чату розсипаються по всьому екрану.' },
-    { kind: 'goal', icon: '🎯', label: 'Ціль', hint: 'Смуга прогресу: фоловери, підписки, бітси.' }
+    { kind: 'goal', icon: '🎯', label: 'Ціль', hint: 'Смуга прогресу: фоловери, підписки, бітси.' },
+    { kind: 'follow', icon: '💜', label: 'Алерт фолова', hint: 'Спливає на екрані, коли хтось зафоловився.' }
   ]
 
   const addOverlay = (kind: OverlayKind): void => {
     const id = nextId('ov')
     const meta = KINDS.find((k) => k.kind === kind)!
     const base =
-      kind === 'emotes' ? DEFAULT_EMOTE_OVERLAY : kind === 'goal' ? DEFAULT_GOAL_OVERLAY : DEFAULT_CHAT_OVERLAY
+      kind === 'emotes'
+        ? DEFAULT_EMOTE_OVERLAY
+        : kind === 'goal'
+          ? DEFAULT_GOAL_OVERLAY
+          : kind === 'follow'
+            ? DEFAULT_FOLLOW_OVERLAY
+            : DEFAULT_CHAT_OVERLAY
     set({
       chatOverlays: [
         ...settings.chatOverlays,

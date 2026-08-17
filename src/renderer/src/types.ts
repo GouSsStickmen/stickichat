@@ -354,7 +354,7 @@ export interface OverlayBase {
 }
 
 /** every overlay kind there is; the discriminant of the OverlayConfig union */
-export type OverlayKind = 'chat' | 'emotes' | 'goal'
+export type OverlayKind = 'chat' | 'emotes' | 'goal' | 'follow'
 
 /** One OBS chat overlay instance. */
 export interface ChatOverlayConfig extends OverlayBase {

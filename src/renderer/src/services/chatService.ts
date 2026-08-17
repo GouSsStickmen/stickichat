@@ -718,8 +718,18 @@ class ChatService {
     msg.userId = String(event.user_id ?? '')
     // The events panel keeps every follow regardless; the setting only decides whether the line
     // also appears in the chat itself, which is the part that can get in the way during a raid.
-    if (st.settings.announceFollows) this.queue(channel, msg)
-    else hlIngest(channel, msg)
+    if (st.settings.announceFollows) {
+      this.queue(channel, msg)
+      return
+    }
+    hlIngest(channel, msg)
+    // An alert overlay is a different question from a chat line, so it must not depend on that
+    // answer. queue() would have pushed this for us; without it, the push happens here.
+    if (window.location.hash || !st.settings.overlayEnabled) return
+    void import('../lib/overlayRender').then(({ buildOverlayLine }) => {
+      const line = buildOverlayLine(msg)
+      if (line) window.sticki.overlayPush(channel, line)
+    })
   }
 
   /** channel.shoutout.create — the broadcaster gave a shoutout; show it + offer to open the target */

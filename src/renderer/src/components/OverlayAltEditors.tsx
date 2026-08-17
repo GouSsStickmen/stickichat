@@ -1,5 +1,13 @@
 import React, { useState } from 'react'
-import { ChatOverlayConfig, EmoteRainOverlayConfig, GoalOverlayConfig, OverlayConfig } from '../types'
+import {
+  ALERT_ANIMS,
+  AlertAnim,
+  ChatOverlayConfig,
+  EmoteRainOverlayConfig,
+  FollowOverlayConfig,
+  GoalOverlayConfig,
+  OverlayConfig
+} from '../types'
 import { ColorField, FontPicker, NickListArea, Toggle } from './settings/SettingsModal'
 import { Row, Num, Sec, FillEditor, readFile } from './OverlayEditorWindow'
 
@@ -460,6 +468,353 @@ function GoalPanel({
   )
 }
 
+/**
+ * The follow alert's panel.
+ *
+ * Ordered the way somebody actually builds one: what it says, then how it moves, then the picture,
+ * then the plate around it, then the sound. The test button matters more than it looks — an alert is
+ * the one overlay you cannot wait for real life to trigger while you are dialling it in.
+ */
+function FollowPanel({
+  ov,
+  update,
+  port,
+  channel
+}: {
+  ov: FollowOverlayConfig
+  update: (patch: Partial<FollowOverlayConfig>) => void
+  port: number
+  channel: string
+}): React.JSX.Element {
+  const ANIM_LABEL: Record<AlertAnim, string> = {
+    none: 'Без анімації',
+    fade: 'Проявлення',
+    slideUp: 'Знизу вгору',
+    slideDown: 'Згори вниз',
+    slideLeft: 'Справа наліво',
+    slideRight: 'Зліва направо',
+    pop: 'Вискок',
+    zoom: 'Наближення',
+    bounce: 'Стрибок',
+    flip: 'Переворот',
+    swing: 'Хитання',
+    blur: 'З розмиття',
+    glitch: 'Глітч',
+    wipe: 'Витирання',
+    custom: 'Власна (завантажена)'
+  }
+  const testUrl = `http://127.0.0.1:${port}/overlay?channel=${encodeURIComponent(channel)}&profile=${encodeURIComponent(ov.id)}&preview=1`
+  void testUrl
+  return (
+    <>
+      <Sec title="✏️ Текст" defaultOpen>
+        <Row label="Заголовок" hint="{user} — нік фоловера, {channel} — канал.">
+          <input value={ov.title} onChange={(e) => update({ title: e.target.value })} />
+        </Row>
+        <Row label="Другий рядок">
+          <input value={ov.subtitle} onChange={(e) => update({ subtitle: e.target.value })} />
+        </Row>
+        <Row label="Шрифт">
+          <FontPicker value={ov.font} onChange={(v) => update({ font: v })} />
+        </Row>
+        <Row label="Розміри">
+          <Num v={ov.titleSize} on={(n) => update({ titleSize: n })} min={8} max={200} w={60} def={30} />
+          <Num v={ov.subtitleSize} on={(n) => update({ subtitleSize: n })} min={8} max={200} w={60} def={40} />
+        </Row>
+        <Row label="Кольори">
+          <ColorField value={ov.titleColor} defaultValue="#ffffff" onChange={(v) => update({ titleColor: v })} />
+          <ColorField value={ov.subtitleColor} defaultValue="#ffffff" onChange={(v) => update({ subtitleColor: v })} />
+        </Row>
+        <Row label="Колір ніка" hint="Нік усередині рядка фарбується окремо від решти тексту.">
+          <ColorField value={ov.nameColor} defaultValue="#c7a6ff" onChange={(v) => update({ nameColor: v })} />
+        </Row>
+        <Row label="Обведення">
+          <Num v={ov.outlineWidth} on={(n) => update({ outlineWidth: n })} min={0} max={8} w={54} def={0} />
+          <ColorField value={ov.outlineColor} defaultValue="#000000" onChange={(v) => update({ outlineColor: v })} />
+        </Row>
+        <Row label="Тінь">
+          <Num v={ov.shadowBlur} on={(n) => update({ shadowBlur: n })} min={0} max={60} w={54} def={14} />
+          <ColorField value={ov.shadowColor} defaultValue="#000000" onChange={(v) => update({ shadowColor: v })} />
+        </Row>
+      </Sec>
+
+      <Sec title="🎬 Рух і час">
+        <Row label="Поява">
+          <select value={ov.animIn} onChange={(e) => update({ animIn: e.target.value as AlertAnim })}>
+            {ALERT_ANIMS.map((a) => (
+              <option key={a} value={a}>
+                {ANIM_LABEL[a]}
+              </option>
+            ))}
+          </select>
+          <Num v={ov.animInMs} on={(n) => update({ animInMs: n })} min={0} max={5000} w={70} def={600} />
+        </Row>
+        <Row label="Зникнення">
+          <select value={ov.animOut} onChange={(e) => update({ animOut: e.target.value as AlertAnim })}>
+            {ALERT_ANIMS.map((a) => (
+              <option key={a} value={a}>
+                {ANIM_LABEL[a]}
+              </option>
+            ))}
+          </select>
+          <Num v={ov.animOutMs} on={(n) => update({ animOutMs: n })} min={0} max={5000} w={70} def={500} />
+        </Row>
+        <Row label="Тримати, с" hint="Скільки алерт стоїть на екрані, не рахуючи анімацій.">
+          <Num v={ov.durationS} on={(n) => update({ durationS: n })} min={0} max={60} w={54} def={5} />
+        </Row>
+        <Row label="Пауза між, мс" hint="Алерти стають у чергу й не накладаються один на одного.">
+          <Num v={ov.gapMs} on={(n) => update({ gapMs: n })} min={0} max={10000} w={70} def={400} />
+        </Row>
+        <Row label="Черга максимум" hint="Під час рейду зайві найстаріші відкидаються, щоб оверлей не завис на десять хвилин.">
+          <Num v={ov.queueMax} on={(n) => update({ queueMax: n })} min={1} max={100} w={54} def={8} />
+        </Row>
+        {(ov.animIn === 'custom' || ov.animOut === 'custom') && (
+          <>
+            <Row
+              label="Власні keyframes"
+              hint="CSS вставляється як є. Опиши @keyframes і напиши нижче їхні назви — працює будь-що, що вміє анімувати браузер."
+            >
+              <textarea
+                value={ov.customAnimCss}
+                spellCheck={false}
+                rows={6}
+                style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace' }}
+                onChange={(e) => update({ customAnimCss: e.target.value })}
+              />
+            </Row>
+            <Row label="Назва (поява)">
+              <input
+                value={ov.customAnimInName}
+                placeholder="myEntrance"
+                onChange={(e) => update({ customAnimInName: e.target.value })}
+              />
+            </Row>
+            <Row label="Назва (зникнення)">
+              <input
+                value={ov.customAnimOutName}
+                placeholder="myExit"
+                onChange={(e) => update({ customAnimOutName: e.target.value })}
+              />
+            </Row>
+          </>
+        )}
+      </Sec>
+
+      <Sec title="🖼 Картинка й маска">
+        <Row label="Файл" hint="PNG, GIF або WebP. Анімовані лишаються анімованими.">
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 4, (url) => update({ image: url }))
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 Обрати</span>
+            </label>
+            {ov.image && <img src={ov.image} alt="" style={{ height: 28, borderRadius: 4 }} />}
+            {ov.image && (
+              <button className="danger" onClick={() => update({ image: '' })}>
+                ✕
+              </button>
+            )}
+          </div>
+        </Row>
+        {!!ov.image && (
+          <>
+            <Row label="Ширина" hint="0 — власний розмір файлу.">
+              <Num v={ov.imageWidth} on={(n) => update({ imageWidth: n })} min={0} max={2000} w={70} def={220} />
+            </Row>
+            <Row label="Форма маски">
+              <select
+                value={ov.maskShape}
+                onChange={(e) => update({ maskShape: e.target.value as FollowOverlayConfig['maskShape'] })}
+              >
+                <option value="none">Без маски</option>
+                <option value="circle">Коло</option>
+                <option value="rounded">Заокруглена</option>
+                <option value="hexagon">Шестикутник</option>
+                <option value="star">Зірка</option>
+                <option value="blob">Пляма</option>
+              </select>
+            </Row>
+            {ov.maskShape !== 'none' && !ov.mask && (
+              <Row label="М'якість краю" hint="Форму обрізає clip-path, а його край розмити неможливо — це окрема маска поверх.">
+                <Num v={ov.maskFeather} on={(n) => update({ maskFeather: n })} min={0} max={80} w={54} def={0} />
+              </Row>
+            )}
+            <Row label="Маска файлом" hint="PNG, чия прозорість вирізає форму картинки. Має перевагу над формою вище.">
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label className="ghost" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      readFile(e.target.files?.[0], 3, (url) => update({ mask: url }))
+                      e.target.value = ''
+                    }}
+                  />
+                  <span className="hint">📁 Обрати</span>
+                </label>
+                {ov.mask && <img src={ov.mask} alt="" style={{ height: 28, borderRadius: 4 }} />}
+                {ov.mask && (
+                  <button className="danger" onClick={() => update({ mask: '' })}>
+                    ✕
+                  </button>
+                )}
+              </div>
+            </Row>
+            <Row label="Власний рух" hint="Картинка живе весь час, поки алерт на екрані.">
+              <select
+                value={ov.imageLoop}
+                onChange={(e) => update({ imageLoop: e.target.value as FollowOverlayConfig['imageLoop'] })}
+              >
+                <option value="none">Нерухомо</option>
+                <option value="float">Погойдування</option>
+                <option value="pulse">Пульс</option>
+                <option value="spin">Обертання</option>
+                <option value="shake">Тряска</option>
+              </select>
+            </Row>
+          </>
+        )}
+      </Sec>
+
+      <Sec title="👤 Аватар фоловера">
+        <Toggle label="Показувати" value={ov.avatarShow} onChange={(v) => update({ avatarShow: v })} />
+        {ov.avatarShow && (
+          <>
+            <Row label="Розмір">
+              <Num v={ov.avatarSize} on={(n) => update({ avatarSize: n })} min={16} max={400} w={64} def={84} />
+            </Row>
+            <Toggle label="Кругом" value={ov.avatarRound} onChange={(v) => update({ avatarRound: v })} />
+            <Row label="Обручка">
+              <Num v={ov.avatarRing} on={(n) => update({ avatarRing: n })} min={0} max={20} w={54} def={3} />
+              <ColorField value={ov.avatarRingColor} defaultValue="#9147ff" onChange={(v) => update({ avatarRingColor: v })} />
+            </Row>
+          </>
+        )}
+      </Sec>
+
+      <Sec title="📐 Розташування">
+        <Row label="Компонування">
+          <select value={ov.layout} onChange={(e) => update({ layout: e.target.value as FollowOverlayConfig['layout'] })}>
+            <option value="imageTop">Картинка над текстом</option>
+            <option value="imageLeft">Картинка зліва</option>
+            <option value="imageRight">Картинка справа</option>
+            <option value="imageBehind">Картинка позаду</option>
+            <option value="textOnly">Тільки текст</option>
+          </select>
+        </Row>
+        <Row label="По вертикалі">
+          <select value={ov.anchor} onChange={(e) => update({ anchor: e.target.value as FollowOverlayConfig['anchor'] })}>
+            <option value="top">Згори</option>
+            <option value="center">По центру</option>
+            <option value="bottom">Знизу</option>
+          </select>
+        </Row>
+        <Row label="По горизонталі">
+          <select value={ov.align} onChange={(e) => update({ align: e.target.value as FollowOverlayConfig['align'] })}>
+            <option value="left">Зліва</option>
+            <option value="center">По центру</option>
+            <option value="right">Справа</option>
+          </select>
+        </Row>
+        <Row label="Зсув">
+          <Num v={ov.offsetX} on={(n) => update({ offsetX: n })} min={-2000} max={2000} w={64} def={0} />
+          <Num v={ov.offsetY} on={(n) => update({ offsetY: n })} min={-2000} max={2000} w={64} def={0} />
+        </Row>
+        <Row label="Відступ між частинами">
+          <Num v={ov.gap} on={(n) => update({ gap: n })} min={0} max={200} w={54} def={12} />
+        </Row>
+      </Sec>
+
+      <Sec title="🎨 Плашка">
+        <Toggle label="Плашка позаду" value={ov.plate} onChange={(v) => update({ plate: v })} />
+        {ov.plate && (
+          <>
+            <Row label="Заповнення">
+              <FillEditor value={ov.plateFill} onChange={(f) => update({ plateFill: f })} />
+            </Row>
+            <Row label="Заокруглення">
+              <Num v={ov.plateRadius} on={(n) => update({ plateRadius: n })} min={0} max={200} w={64} def={18} />
+            </Row>
+            <Row label="Відступи">
+              <Num v={ov.platePadX} on={(n) => update({ platePadX: n })} min={0} max={200} w={60} def={28} />
+              <Num v={ov.platePadY} on={(n) => update({ platePadY: n })} min={0} max={200} w={60} def={20} />
+            </Row>
+            <Row label="Рамка">
+              <Num v={ov.plateBorderWidth} on={(n) => update({ plateBorderWidth: n })} min={0} max={20} w={54} def={0} />
+              <ColorField value={ov.plateBorderColor} defaultValue="#9147ff" onChange={(v) => update({ plateBorderColor: v })} />
+            </Row>
+            <Row label="Сяйво">
+              <Num v={ov.plateGlowSize} on={(n) => update({ plateGlowSize: n })} min={0} max={80} w={54} def={0} />
+              <ColorField value={ov.plateGlowColor} defaultValue="#9147ff" onChange={(v) => update({ plateGlowColor: v })} />
+            </Row>
+          </>
+        )}
+      </Sec>
+
+      <Sec title="🔔 Звук">
+        <Row label="Файл">
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="audio/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 2, (url) => update({ soundData: url }))
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">📁 Обрати</span>
+            </label>
+            {ov.soundData && (
+              <>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  style={{ width: 80 }}
+                  value={Math.round((ov.soundVolume ?? 0.6) * 100)}
+                  onChange={(e) => update({ soundVolume: Number(e.target.value) / 100 })}
+                />
+                <button
+                  onClick={() => {
+                    const au = new Audio(ov.soundData)
+                    au.volume = ov.soundVolume ?? 0.6
+                    au.play().catch(() => {})
+                  }}
+                >
+                  ▶
+                </button>
+                <button className="danger" onClick={() => update({ soundData: '' })}>
+                  ✕
+                </button>
+              </>
+            )}
+          </div>
+        </Row>
+      </Sec>
+
+      <Sec title="🎛 Власний CSS">
+        <textarea
+          value={ov.customCss}
+          spellCheck={false}
+          rows={6}
+          style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace' }}
+          onChange={(e) => update({ customCss: e.target.value })}
+        />
+      </Sec>
+    </>
+  )
+}
+
 export default function OverlayAltEditor({
   ov,
   update,
@@ -488,9 +843,7 @@ export default function OverlayAltEditor({
           ) : ov.type === 'goal' ? (
             <GoalPanel ov={ov} update={update} />
           ) : (
-            // the follow alert's own panel is the next piece of work; the kind is deliberately
-            // absent from the manager's "add" list until it exists, so this is unreachable
-            <p className="hint">Панель цього типу ще будується.</p>
+            <FollowPanel ov={ov} update={update} port={port} channel={channel} />
           )}
         </div>
         <div className="oe-main">

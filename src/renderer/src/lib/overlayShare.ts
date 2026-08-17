@@ -1,6 +1,7 @@
 import {
   DEFAULT_CHAT_OVERLAY,
   DEFAULT_EMOTE_OVERLAY,
+  DEFAULT_FOLLOW_OVERLAY,
   DEFAULT_GOAL_OVERLAY,
   OverlayConfig
 } from '../types'
@@ -25,6 +26,7 @@ export function exportOverlayJson(overlays: OverlayConfig | OverlayConfig[]): st
 function defaultsFor(type: unknown): Omit<OverlayConfig, 'id' | 'name'> {
   if (type === 'emotes') return DEFAULT_EMOTE_OVERLAY
   if (type === 'goal') return DEFAULT_GOAL_OVERLAY
+  if (type === 'follow') return DEFAULT_FOLLOW_OVERLAY
   return DEFAULT_CHAT_OVERLAY
 }
 
