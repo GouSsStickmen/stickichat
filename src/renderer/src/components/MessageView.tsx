@@ -1070,24 +1070,37 @@ function MessageViewInner({
             </span>
           ) : (
             <span
-              /**
-               * A /me line is the nick's own colour, so it is the nick's own paint too.
-               *
-               * Twitch colours the whole action in the writer's colour, and for somebody with a
-               * 7TV paint that colour is a flat approximation of a gradient everyone can see on
-               * their nick two words earlier. The same remount trick as the nick: Chromium keeps
-               * the old text clip on a live element and paints the gradient as a solid bar.
-               */
-              key={msg.isAction ? actionPaint?.background ?? 'plain' : undefined}
               className={`msg-text ${brailleArt ? 'ascii-art' : ''}`}
               style={{
-                ...(msg.isAction ? actionPaint ?? { color } : undefined),
+                ...(msg.isAction && !actionPaint ? { color } : undefined),
                 ...(brailleArt ? { width: Math.ceil(getBrailleCellWidth() * artCols) } : undefined)
               }}
             >
-              {tokens.map((tk, i) => (
-                <TokenView key={i} token={tk} paneId={paneId} channel={msg.channel} hiRes={!!(settings.showBits && msg.gigantified)} />
-              ))}
+              {msg.isAction && actionPaint ? (
+                /**
+                 * A /me line is the nick's own colour, so it is the nick's own paint too.
+                 *
+                 * Twitch colours the whole action in the writer's colour, and for somebody with a
+                 * 7TV paint that colour is a flat approximation of a gradient everyone can see on
+                 * their nick two words earlier.
+                 *
+                 * The paint lives on a span of its own, keyed by the paint, for the same reason
+                 * the nick is: Chromium keeps the OLD text clip on a live element and paints the
+                 * gradient as a solid bar over it, and a cosmetic that arrives after the first
+                 * render is exactly that transition. The key belongs on this inner span rather
+                 * than on the message body, so the body stays the same unkeyed child of the same
+                 * parent it has always been.
+                 */
+                <span key={actionPaint.background as string} style={actionPaint}>
+                  {tokens.map((tk, i) => (
+                    <TokenView key={i} token={tk} paneId={paneId} channel={msg.channel} hiRes={!!(settings.showBits && msg.gigantified)} />
+                  ))}
+                </span>
+              ) : (
+                tokens.map((tk, i) => (
+                  <TokenView key={i} token={tk} paneId={paneId} channel={msg.channel} hiRes={!!(settings.showBits && msg.gigantified)} />
+                ))
+              )}
             </span>
           )}
         </div>
