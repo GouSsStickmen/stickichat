@@ -3777,6 +3777,7 @@ const WHEEL_HTML = `<!doctype html>
   }
   var angle = 0        // where the wheel currently sits, degrees
   var spinning = false
+  var pendingRender = false   // a config that arrived mid-spin and still has to be drawn
   var stopSpinSound = null
 
   // NB: string tests, not a regex. This page is a TS template literal, and every backslash in a
@@ -4303,12 +4304,35 @@ const WHEEL_HTML = `<!doctype html>
     spinning = false
     if (stopSpinSound) { try { stopSpinSound() } catch (err) { /* noop */ } stopSpinSound = null }
     playWin()
-    if (!cfg.resultShow) return
+    /**
+     * Whatever changed while it was turning happens now.
+     *
+     * A wedge set to remove itself on winning is dropped from the config the moment the spin is
+     * sent, so its new shape arrives while the wheel is mid-turn — exactly when a redraw is
+     * forbidden, because rebuilding the svg would throw away the running transition and the wheel
+     * would snap to its final angle. The change was simply lost, and the wedge that had just
+     * "gone" was still there. It is redrawn once the result has had its moment instead.
+     */
+    var redraw = function () {
+      if (!pendingRender || spinning) return
+      pendingRender = false
+      render()
+    }
+    if (!cfg.resultShow) {
+      redraw()
+      return
+    }
     var res = document.getElementById('result')
-    if (!res) return
+    if (!res) {
+      redraw()
+      return
+    }
     res.textContent = label || ''
     res.classList.add('on')
-    setTimeout(function () { res.classList.remove('on') }, Math.max(0, (cfg.resultS || 0) * 1000))
+    setTimeout(function () {
+      res.classList.remove('on')
+      redraw()
+    }, Math.max(0, (cfg.resultS || 0) * 1000))
   }
 
   /**
@@ -4340,8 +4364,10 @@ const WHEEL_HTML = `<!doctype html>
         cfg = Object.assign(cfg, JSON.parse(e.data))
         gone(false)
         // never redraw mid-spin: rebuilding the svg would drop the running transition and the
-        // wheel would jump to its final angle instantly
-        if (!spinning) render()
+        // wheel would jump to its final angle instantly. It is not dropped either — land() picks
+        // it up once the wheel has stopped and the result has been read
+        if (spinning) pendingRender = true
+        else render()
       } catch (err) { /* noop */ }
     })
     es.addEventListener('gone', function () { gone(true) })
