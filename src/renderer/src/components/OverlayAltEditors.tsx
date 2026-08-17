@@ -1267,6 +1267,28 @@ function RoulettePanel({
             <option value="none">Без нього</option>
           </select>
           <ColorField value={ov.pointerColor} defaultValue="#ffffff" onChange={(v) => update({ pointerColor: v })} />
+          <Num v={ov.pointerSize ?? 46} on={(n) => update({ pointerSize: n })} min={8} max={400} w={58} def={46} />
+        </Row>
+        <Row label="Свій вказівник" hint="Картинка, гіфка або відео замість намальованого. Кріпиться серединою верхнього краю, як і решта.">
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="ghost" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  readFile(e.target.files?.[0], 6, (url) => update({ pointerMedia: url }))
+                  e.target.value = ''
+                }}
+              />
+              <span className="hint">{ov.pointerMedia ? '📁 Замінити' : '📁 Обрати'}</span>
+            </label>
+            {!!ov.pointerMedia && (
+              <button className="danger" onClick={() => update({ pointerMedia: '' })}>
+                ✕
+              </button>
+            )}
+          </div>
         </Row>
         <Row label="Центр" hint="Картинка, гіфка або відео в центрі колеса.">
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>

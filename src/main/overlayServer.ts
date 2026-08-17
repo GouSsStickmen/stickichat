@@ -3532,18 +3532,24 @@ const ALERT_HTML = `<!doctype html>
     userCss.textContent = cfg.customCss || ''
   }
 
-  // ---------- the queue ----------
+  /* ---------------------------------- the queue ----------------------------------
+   *
+   * One clock, checked against the wall, rather than a chain of timers.
+   *
+   * The chain worked until something delayed it: OBS stops giving a source frames when its scene
+   * is not showing, and a browser throttles a page it is not drawing, so the timeout that was
+   * meant to take the card away could arrive minutes late — or, if the page was suspended mid
+   * chain, never. The flag that says "an alert is on screen" then stayed set and every later
+   * follower queued behind a card that was already gone.
+   *
+   * Deadlines in real time cannot drift like that. A late tick notices that all three moments have
+   * passed and catches up in one go, and there is no state that outlives the card it describes.
+   */
   var queue = []
-  var busy = false
+  var current = null
 
   function show(d) {
-    /**
-     * Build first, claim the queue second.
-     *
-     * The old order set busy before building, so one card that threw — a shape the config had
-     * never been through, a mask the browser refused — left busy stuck true and the overlay
-     * silently dead for the rest of the stream. Now a bad card costs exactly itself.
-     */
+    // build first, claim the slot second: a card that throws should cost only itself
     var card
     try {
       card = buildCard(d)
@@ -3551,9 +3557,7 @@ const ALERT_HTML = `<!doctype html>
       console.error('alert: could not build the card', err)
       return
     }
-    busy = true
     var nameIn = animName('in')
-    var nameOut = animName('out')
     if (nameIn) card.style.animation = nameIn + ' ' + (cfg.animInMs || 600) + 'ms cubic-bezier(.2,.9,.3,1) both'
     stage.appendChild(card)
     if (cfg.soundData) {
@@ -3563,21 +3567,35 @@ const ALERT_HTML = `<!doctype html>
         au.play().catch(function () {})
       } catch (err) { /* noop */ }
     }
-    var hold = (cfg.animInMs || 0) + Math.max(0, (cfg.durationS || 0) * 1000)
-    setTimeout(function () {
-      if (nameOut) card.style.animation = nameOut + ' ' + (cfg.animOutMs || 500) + 'ms ease both'
-      setTimeout(function () {
-        card.remove()
-        busy = false
-        setTimeout(pump, Math.max(0, cfg.gapMs || 0))
-      }, nameOut ? cfg.animOutMs || 500 : 0)
-    }, hold)
+    var now = Date.now()
+    current = {
+      card: card,
+      nameOut: animName('out'),
+      leaveAt: now + (cfg.animInMs || 0) + Math.max(0, (cfg.durationS || 0) * 1000),
+      goneAt: 0
+    }
   }
 
-  function pump() {
-    if (busy || !queue.length) return
-    show(queue.shift())
+  function tick() {
+    if (holdCard) return
+    if (!current) {
+      if (queue.length) show(queue.shift())
+      return
+    }
+    var now = Date.now()
+    if (!current.goneAt && now >= current.leaveAt) {
+      current.goneAt = now + (current.nameOut ? cfg.animOutMs || 500 : 0) + Math.max(0, cfg.gapMs || 0)
+      if (current.nameOut) {
+        current.card.style.animation = current.nameOut + ' ' + (cfg.animOutMs || 500) + 'ms ease both'
+      }
+    }
+    if (current.goneAt && now >= current.goneAt) {
+      current.card.remove()
+      current = null
+      if (queue.length) show(queue.shift())
+    }
   }
+  setInterval(tick, 120)
 
   function enqueue(d) {
     // a raid can land twenty follows in a second; the ceiling drops the OLDEST one still waiting,
@@ -3585,7 +3603,38 @@ const ALERT_HTML = `<!doctype html>
     queue.push(d)
     var max = Math.max(1, cfg.queueMax || 8)
     while (queue.length > max) queue.shift()
-    pump()
+    tick()
+  }
+
+  /**
+   * The paused preview: one card that simply stays.
+   *
+   * With the demo off there was nothing to look at at all, which makes the plate impossible to
+   * style — every change had to be judged in the second and a half an alert is up. This holds a
+   * sample card on screen and rebuilds it whenever the config changes, so editing the plate is
+   * something you watch rather than something you catch.
+   */
+  var holdCard = null
+  var SAMPLE = {
+    follow: true, ts: 0, nick: 'Bobik069', login: 'bobik069',
+    avatar: 'data:image/svg+xml;base64,' + btoa(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">' +
+      '<rect width="64" height="64" fill="#9147ff"/><text x="32" y="43" font-size="34" font-family="Segoe UI"' +
+      ' font-weight="700" fill="#fff" text-anchor="middle">B</text></svg>')
+  }
+  function previewHold() {
+    if (!preview) return
+    if (holdCard) { holdCard.remove(); holdCard = null }
+    if (cfg.previewDemo !== false) return
+    queue.length = 0
+    if (current) { current.card.remove(); current = null }
+    try {
+      holdCard = buildCard(SAMPLE)
+      holdCard.style.animation = 'none'
+      stage.appendChild(holdCard)
+    } catch (err) {
+      console.error('alert: could not build the sample card', err)
+    }
   }
 
   /**
@@ -3610,7 +3659,14 @@ const ALERT_HTML = `<!doctype html>
   function connect() {
     var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
     es.addEventListener('cfg', function (e) {
-      try { gotCfg = true; cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false); applyStage() } catch (err) { /* noop */ }
+      try {
+        gotCfg = true
+        cfg = Object.assign(cfg, JSON.parse(e.data))
+        gone(false)
+        applyStage()
+        // every edit lands here, so the held sample card is rebuilt as the plate is being styled
+        previewHold()
+      } catch (err) { /* noop */ }
     })
     es.addEventListener('gone', function () { gone(true) })
     es.onmessage = function (e) {
@@ -3633,8 +3689,10 @@ const ALERT_HTML = `<!doctype html>
   if (preview) {
     var NAMES = ['Bobik069', 'Pinuses', 'Mira_Cat', 'n1cole_cat']
     var n = 0
-    var demo = function () {
-      if (cfg.previewDemo === false) return
+    // no first shot before the config lands: until it does there is no way to know the demo was
+    // meant to be off, and one alert would fire past a switch that is already set to paused
+    setInterval(function () {
+      if (!gotCfg || cfg.previewDemo === false) return
       var name = NAMES[n++ % NAMES.length]
       enqueue({
         follow: true, ts: Date.now(), nick: name, login: name.toLowerCase(),
@@ -3643,12 +3701,13 @@ const ALERT_HTML = `<!doctype html>
           '<rect width="64" height="64" fill="#9147ff"/><text x="32" y="43" font-size="34" font-family="Segoe UI"' +
           ' font-weight="700" fill="#fff" text-anchor="middle">' + name[0] + '</text></svg>')
       })
-    }
-    demo()
-    setInterval(demo, 4000)
+    }, 4000)
   }
 
-  window.__oe = { cfg: cfg, enqueue: enqueue, applyStage: applyStage, queue: queue }
+  window.__oe = {
+    cfg: cfg, enqueue: enqueue, applyStage: applyStage, queue: queue,
+    tick: tick, previewHold: previewHold, held: function () { return !!holdCard }
+  }
 })()
 </script>
 </body>
@@ -3709,6 +3768,7 @@ const WHEEL_HTML = `<!doctype html>
     sections: [], spinS: 6, turns: 5, easing: 'smooth', resultS: 4,
     size: 460, rimWidth: 10, rimColor: '#ffffff', dividerWidth: 2, dividerColor: '#00000055',
     font: 'Inter', fontSize: 20, textRadial: true, pointer: 'triangle', pointerColor: '#ffffff',
+    pointerMedia: '', pointerSize: 46,
     hubMedia: '', hubSize: 90, faceMedia: '', faceOpacity: 1,
     backdrop: '', backdropFit: 'cover', backdropOpacity: 1,
     resultShow: true, resultSize: 42, resultColor: '#ffffff',
@@ -3828,18 +3888,34 @@ const WHEEL_HTML = `<!doctype html>
     var list = slices()
     // the pointer sits at the top, so wedge 0 starts there rather than at three o'clock
     var base = -90
-    // the words go in last, after any picture across the face, or the face would bury them
+    /**
+     * Four passes, because everything wants to be on top of the colours.
+     *
+     * A picture across the whole face covers the wedge colours by design — that is what it is for
+     * — but it was covering the wedge pictures and the divider lines too, which is not. So the
+     * colours go down first, then the face, then each wedge's own picture, then the dividers as
+     * lines of their own, then the words. Drawing the dividers with the fills, the way it was,
+     * makes them a property of a shape that something else is going to paint over.
+     */
+    var wedgeArt = document.createElementNS(NS, 'g')
+    var dividers = document.createElementNS(NS, 'g')
     var labels = document.createElementNS(NS, 'g')
     for (var i = 0; i < list.length; i++) {
       var sl = list[i]
+      var d0 = arcPath(r, r, r - (cfg.rimWidth || 0) / 2, base + sl.from, base + sl.to)
       var path = document.createElementNS(NS, 'path')
-      path.setAttribute('d', arcPath(r, r, r - (cfg.rimWidth || 0) / 2, base + sl.from, base + sl.to))
+      path.setAttribute('d', d0)
       path.setAttribute('fill', sl.s.color || '#333')
-      if (cfg.dividerWidth > 0) {
-        path.setAttribute('stroke', cfg.dividerColor || '#0006')
-        path.setAttribute('stroke-width', String(cfg.dividerWidth))
-      }
       svg.appendChild(path)
+
+      if (cfg.dividerWidth > 0) {
+        var line = document.createElementNS(NS, 'path')
+        line.setAttribute('d', d0)
+        line.setAttribute('fill', 'none')
+        line.setAttribute('stroke', cfg.dividerColor || '#0006')
+        line.setAttribute('stroke-width', String(cfg.dividerWidth))
+        dividers.appendChild(line)
+      }
 
       /**
        * A wedge may carry its own picture, clipped to its own shape.
@@ -3852,10 +3928,10 @@ const WHEEL_HTML = `<!doctype html>
         var cp = document.createElementNS(NS, 'clipPath')
         cp.setAttribute('id', cid)
         var cpp = document.createElementNS(NS, 'path')
-        cpp.setAttribute('d', arcPath(r, r, r - (cfg.rimWidth || 0) / 2, base + sl.from, base + sl.to))
+        cpp.setAttribute('d', d0)
         cp.appendChild(cpp)
         defs.appendChild(cp)
-        svg.appendChild(clippedMedia(sl.s.media, cid, mediaBox(sl.s, size)))
+        wedgeArt.appendChild(clippedMedia(sl.s.media, cid, mediaBox(sl.s, size)))
       }
 
       var label = String(sl.s.label == null ? '' : sl.s.label)
@@ -3904,6 +3980,9 @@ const WHEEL_HTML = `<!doctype html>
       svg.appendChild(face)
     }
 
+    // the wedge pictures, the lines between the wedges and the words all belong above the face
+    svg.appendChild(wedgeArt)
+    svg.appendChild(dividers)
     svg.appendChild(labels)
 
     if (cfg.rimWidth > 0) {
@@ -3927,10 +4006,27 @@ const WHEEL_HTML = `<!doctype html>
       }
     }
 
-    if (cfg.pointer && cfg.pointer !== 'none') {
+    /**
+     * The pointer, drawn or supplied.
+     *
+     * An uploaded one wins over the three shapes: it is pinned by the middle of its top edge, the
+     * same place the drawn ones are, so swapping between them does not move where the wheel is
+     * being read.
+     */
+    if (cfg.pointerMedia) {
+      var pm2 = mediaEl(cfg.pointerMedia)
+      if (pm2) {
+        pm2.id = 'pointer'
+        pm2.style.width = (cfg.pointerSize || 46) + 'px'
+        pm2.style.height = 'auto'
+        wrap.appendChild(pm2)
+      }
+    } else if (cfg.pointer && cfg.pointer !== 'none') {
       var pt = document.createElementNS(NS, 'svg')
       pt.id = 'pointer'
-      pt.setAttribute('width', '46'); pt.setAttribute('height', '52')
+      var pw = cfg.pointerSize || 46
+      pt.setAttribute('width', String(pw))
+      pt.setAttribute('height', String(Math.round(pw * 52 / 46)))
       pt.setAttribute('viewBox', '0 0 46 52')
       var shape = document.createElementNS(NS, 'path')
       var d = cfg.pointer === 'arrow'

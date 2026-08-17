@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settings'
 import { useLayoutStore } from '../store/layout'
+import { useAccountsStore } from '../store/accounts'
 import { useT } from '../i18n'
 import { PlayIcon, CloseIcon } from './Icons'
 import {
@@ -309,9 +310,16 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
   const tabs = useLayoutStore((s) => s.tabs)
   const ov = settings.chatOverlays.find((o) => o.id === overlayId)
 
+  /**
+   * The owner's own channel comes first and is the default.
+   *
+   * An overlay silently pointed at whichever chat happened to be open first is one that never
+   * fires on the stream it was made for, and nothing on screen says so.
+   */
   const channels = useMemo(() => {
-    const out: string[] = []
-    for (const tb of tabs) for (const p of tb.panes) if (!out.includes(p.channel)) out.push(p.channel)
+    const own = useAccountsStore.getState().accounts[0]?.login?.toLowerCase() ?? ''
+    const out: string[] = own ? [own] : []
+    for (const tb of tabs) for (const p of tb.panes) if (p.channel && !out.includes(p.channel)) out.push(p.channel)
     return out
   }, [tabs])
   const [channel, setChannel] = useState(() => ov?.channel || channels[0] || '')

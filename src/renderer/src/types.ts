@@ -1115,6 +1115,10 @@ export interface RouletteOverlayConfig extends OverlayBase {
   /** the marker that picks the winner */
   pointer: 'triangle' | 'arrow' | 'pin' | 'none'
   pointerColor: string
+  /** an uploaded marker instead of a drawn one; wins over `pointer` when set */
+  pointerMedia?: string
+  /** px wide, for either kind */
+  pointerSize?: number
   /** the disc in the middle: a logo, an avatar, anything */
   hubMedia: string
   hubSize: number
@@ -1302,6 +1306,8 @@ export const DEFAULT_ROULETTE_OVERLAY: Omit<RouletteOverlayConfig, 'id' | 'name'
   textRadial: true,
   pointer: 'triangle',
   pointerColor: '#ffffff',
+  pointerMedia: '',
+  pointerSize: 46,
   hubMedia: '',
   hubSize: 90,
   faceMedia: '',

@@ -2895,8 +2895,19 @@ function OverlaySection(): React.JSX.Element {
     }
   }, [])
 
-  const firstChannel = tabs.flatMap((tb) => tb.panes)[0]?.channel ?? ''
-  const openChannels = [...new Set(tabs.flatMap((tb) => tb.panes).map((pn) => pn.channel).filter(Boolean))]
+  /**
+   * The channel an overlay belongs to unless told otherwise: the owner's own.
+   *
+   * It used to be whichever pane happened to be first, which is somebody else's chat as often as
+   * not — and an alert pointed at somebody else's channel is silent in a way that takes a while to
+   * notice. The main account (the first one in the list) is the one whose stream these overlays
+   * are for.
+   */
+  const ownChannel = useAccountsStore.getState().accounts[0]?.login?.toLowerCase() ?? ''
+  const firstChannel = ownChannel || tabs.flatMap((tb) => tb.panes)[0]?.channel || ''
+  const openChannels = [
+    ...new Set([ownChannel, ...tabs.flatMap((tb) => tb.panes).map((pn) => pn.channel)].filter(Boolean))
+  ]
   const urlFor = (o: OverlayConfig): string =>
     `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(o.channel || firstChannel || 'КАНАЛ')}&profile=${encodeURIComponent(o.id)}`
   const patchOverlay = (id: string, patch: Partial<OverlayBase>): void =>
@@ -2927,7 +2938,7 @@ function OverlaySection(): React.JSX.Element {
     set({
       chatOverlays: [
         ...settings.chatOverlays,
-        { ...base, id, name: `${meta.label} ${settings.chatOverlays.length + 1}` } as OverlayConfig
+        { ...base, id, name: `${meta.label} ${settings.chatOverlays.length + 1}`, channel: ownChannel } as OverlayConfig
       ]
     })
     setPickerOpen(false)
