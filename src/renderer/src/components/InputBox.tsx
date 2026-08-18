@@ -384,8 +384,13 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
 
   const insertFromPicker = (code: string): void => {
     setText((cur) => (cur.length === 0 || cur.endsWith(' ') ? cur + code + ' ' : cur + ' ' + code + ' '))
-    // move focus (and the caret) back to the chat input so Enter sends right away, instead of
-    // leaving it in the picker's search field
+    /*
+     * On the desktop focus goes back to the chat input, so Enter sends immediately instead of the
+     * caret being left in the picker's search field. On a phone that same focus raises the keyboard
+     * over half the picker after every single emote — and there is no Enter to be ready for. The text
+     * lands in the input either way; the keyboard comes when the input is tapped.
+     */
+    if (isMobile()) return
     requestAnimationFrame(() => {
       const ta = taRef.current
       if (!ta) return

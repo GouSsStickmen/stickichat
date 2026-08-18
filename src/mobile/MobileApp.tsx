@@ -16,6 +16,7 @@ import HypeTrainPopup from '@renderer/components/HypeTrainPopup'
 import Toasts from '@renderer/components/Toasts'
 import { chatService } from '@renderer/services/chatService'
 import { App as CapApp } from '@capacitor/app'
+import { StatusBar } from '@capacitor/status-bar'
 import MobileTabStrip from './MobileTabStrip'
 import ModConfirmSheet from './ModConfirmSheet'
 import MobilePlayer from './MobilePlayer'
@@ -192,6 +193,19 @@ export default function MobileApp(): React.JSX.Element | null {
       window.clearInterval(poll)
     }
   }, [booted])
+
+  /*
+   * Landscape gives the status bar back.
+   *
+   * `viewport-fit=cover` reports a 28px top inset and a 24px bottom one, and the layout honours both
+   * — which on a 411px-tall landscape screen is 13% of the height spent on padding before anything is
+   * drawn. That was the content "sliding down". Watching a stream sideways is the one case where the
+   * clock is worth less than the pixels, so the bar goes away and comes back with the rotation.
+   */
+  useEffect(() => {
+    if (landscape) void StatusBar.hide().catch(() => undefined)
+    else void StatusBar.show().catch(() => undefined)
+  }, [landscape])
 
   useEffect(() => {
     const onResize = (): void => setLandscape(window.innerWidth > window.innerHeight)

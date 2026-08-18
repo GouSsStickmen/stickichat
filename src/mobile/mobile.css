@@ -177,6 +177,11 @@ body {
   box-shadow: inset 2px 0 0 var(--accent, #9147ff);
 }
 
+/* the inset is gone with the bar it was reserving room for — see the StatusBar call in MobileApp */
+.m-app.landscape {
+  padding-top: 0;
+}
+
 /* landscape: the phone is now shaped like the desktop, so the desktop answer is right again */
 .m-app.landscape .m-stack {
   flex-direction: row;
@@ -189,24 +194,62 @@ body {
  * slot underneath. Side by side, both are usable — which is the arrangement the Twitch app settled on
  * for the same reason.
  */
+/*
+ * Placed, not wrapped.
+ *
+ * A wrapping flex row shares its height between the lines by its own rules, and it left a 97px band
+ * of nothing between the tab strip and the video. Both halves are simply told where they go: under
+ * the strip, above the gesture bar, video on the left and chat on the right.
+ */
 .m-app.landscape.has-player {
-  flex-direction: row;
-  flex-wrap: wrap;
+  position: relative;
 }
 
-.m-app.landscape.has-player .m-tabs {
-  width: 100%;
+.m-app.landscape.has-player .m-player,
+.m-app.landscape.has-player .m-stack {
+  position: absolute;
+  top: var(--m-tabs-h);
+  bottom: var(--m-safe-bottom);
+  height: auto !important;
 }
 
 .m-app.landscape.has-player .m-player {
-  flex: 1 1 62%;
-  height: auto !important;
-  min-width: 0;
+  left: 0;
+  width: 62%;
 }
 
 .m-app.landscape.has-player .m-stack {
-  flex: 1 1 38%;
+  right: 0;
+  width: 38%;
   min-width: 260px;
+}
+
+/*
+ * Landscape turns the picker into a column.
+ *
+ * Pinned across the bottom it is a 200px-tall strip on a 411px screen — two rows of emotes and a
+ * search field. Taking the right half instead gives it the full height, which is where the rows are.
+ */
+.m-app.landscape .emote-picker {
+  left: auto;
+  right: 6px;
+  width: min(360px, 46vw);
+  top: calc(var(--m-tabs-h) + 4px);
+  bottom: calc(6px + var(--m-safe-bottom));
+}
+
+/*
+ * Landscape strips the chrome back.
+ *
+ * A landscape phone is 411px tall and the pane header — channel name, pencil, lock, star, users,
+ * close — is 47 of them, plus the mod toolbar above the chat. On a screen that is showing a video at
+ * the same time, that is a third of what is left of the chat spent on buttons that are all reachable
+ * from the tab strip and the settings.
+ */
+.m-app.landscape.has-player .pane-header,
+.m-app.landscape.has-player .mod-toolbar,
+.m-app.landscape.has-player .stream-info {
+  display: none;
 }
 
 /* in the little window the split does not apply — it is only ever the video */
@@ -644,8 +687,14 @@ body {
    * cap comes down to match so the picker still fits between the keyboard and the top of the screen.
    */
   bottom: calc(8px + var(--m-safe-bottom) + var(--m-input-h, 62px));
+  /*
+   * All the room there is: from just under the tab strip down to the input row. A fixed height cap
+   * was leaving one row of emotes visible once the keyboard shrank the page, and the space above it
+   * was doing nothing.
+   */
+  top: calc(var(--m-safe-top) + var(--m-tabs-h) + 6px);
   width: auto;
-  max-height: 44vh;
+  max-height: none;
   margin: 0;
   z-index: 55;
 }
