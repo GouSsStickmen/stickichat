@@ -182,6 +182,38 @@ body {
   flex-direction: row;
 }
 
+/*
+ * Landscape with a stream: the video takes the left, the chat stands beside it on the right.
+ *
+ * Stacked, a 16:9 video across a landscape phone is most of the height and the chat is a letterbox
+ * slot underneath. Side by side, both are usable — which is the arrangement the Twitch app settled on
+ * for the same reason.
+ */
+.m-app.landscape.has-player {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.m-app.landscape.has-player .m-tabs {
+  width: 100%;
+}
+
+.m-app.landscape.has-player .m-player {
+  flex: 1 1 62%;
+  height: auto !important;
+  min-width: 0;
+}
+
+.m-app.landscape.has-player .m-stack {
+  flex: 1 1 38%;
+  min-width: 260px;
+}
+
+/* in the little window the split does not apply — it is only ever the video */
+.m-app.in-pip.landscape.has-player .m-player {
+  flex: 1 1 auto;
+}
+
 .m-expand {
   position: absolute;
   top: 4px;
@@ -231,6 +263,17 @@ body {
 }
 
 /* over the video, because a bar beside it would cost height the video needs */
+.m-player-bar,
+.m-player-grip {
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+}
+
+.m-player.bar-shown .m-player-bar,
+.m-player.bar-shown .m-player-grip {
+  opacity: 1;
+}
+
 .m-player-bar {
   position: absolute;
   top: 0;
@@ -600,7 +643,7 @@ body {
    * what you had picked or what you were typing. 62px is the input row plus its padding; the height
    * cap comes down to match so the picker still fits between the keyboard and the top of the screen.
    */
-  bottom: calc(8px + var(--m-safe-bottom) + 62px);
+  bottom: calc(8px + var(--m-safe-bottom) + var(--m-input-h, 62px));
   width: auto;
   max-height: 44vh;
   margin: 0;
@@ -664,8 +707,8 @@ body {
   left: 8px !important;
   right: 8px;
   top: auto !important;
-  /* the same 62px of clearance the emote picker gets: the card must not sit on the input row */
-  bottom: calc(8px + var(--m-safe-bottom) + 62px) !important;
+  /* the same clearance the picker gets, from the same live measurement of the input row */
+  bottom: calc(8px + var(--m-safe-bottom) + var(--m-input-h, 62px)) !important;
 }
 
 .m-app .link-card {

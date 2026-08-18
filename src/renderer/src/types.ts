@@ -2192,7 +2192,7 @@ export const DEFAULT_SETTINGS: Settings = {
     '!vanish',
     '!watchtime'
   ],
-  translitEnabled: true,
+  translitEnabled: false,
   translitExcludeWords: ['!followage', '!drop', '!time', '!uptime'],
   fontFamily: '',
   usercardFontSize: 14,

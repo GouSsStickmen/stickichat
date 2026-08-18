@@ -2,7 +2,10 @@ import React, { useEffect, useRef, useState } from 'react'
 import { registerPlugin } from '@capacitor/core'
 import { useSettingsStore } from '@renderer/store/settings'
 
-const Pip = registerPlugin<{ enter(o: { width: number; height: number }): Promise<void> }>('Pip')
+const Pip = registerPlugin<{
+  enter(o: { width: number; height: number }): Promise<void>
+  setAuto(o: { enabled: boolean }): Promise<void>
+}>('Pip')
 
 /**
  * The stream, above the chat.
@@ -26,7 +29,36 @@ export default function MobilePlayer({
   const stored = useSettingsStore((s) => s.settings.playerHeight)
   const [height, setHeight] = useState(stored || 220)
   const [inPip, setInPip] = useState(false)
+  /*
+   * The two buttons are over the video, so they cannot live there permanently — they were covering a
+   * corner of whatever was being watched. They come up on a tap and go again on their own, the way
+   * every video player on the phone behaves.
+   */
+  const [barShown, setBarShown] = useState(true)
+  const hideAt = useRef<number | undefined>(undefined)
   const dragRef = useRef<{ y: number; h: number } | null>(null)
+
+  const showBar = (): void => {
+    setBarShown(true)
+    window.clearTimeout(hideAt.current)
+    hideAt.current = window.setTimeout(() => setBarShown(false), 2600)
+  }
+  useEffect(() => {
+    showBar()
+    return () => window.clearTimeout(hideAt.current)
+  }, [])
+
+  /*
+   * Leaving the app keeps the stream, in the little window. The flag is set while a player exists and
+   * cleared when it goes, because the request is made natively from onUserLeaveHint and that code has
+   * no other way to know whether anything is playing.
+   */
+  useEffect(() => {
+    void Pip.setAuto({ enabled: true }).catch(() => undefined)
+    return () => {
+      void Pip.setAuto({ enabled: false }).catch(() => undefined)
+    }
+  }, [])
 
   useEffect(() => {
     const onPip = (e: Event): void => {
@@ -90,7 +122,11 @@ export default function MobilePlayer({
     `&parent=localhost&autoplay=true&muted=false`
 
   return (
-    <div className="m-player" style={{ height: inPip ? '100%' : height }}>
+    <div
+      className={`m-player ${barShown ? 'bar-shown' : ''}`}
+      style={{ height: inPip ? '100%' : height }}
+      onPointerDown={showBar}
+    >
       <iframe
         title={channel}
         src={src}

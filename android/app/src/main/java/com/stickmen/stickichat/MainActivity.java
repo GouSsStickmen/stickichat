@@ -1,7 +1,10 @@
 package com.stickmen.stickichat;
 
+import android.app.PictureInPictureParams;
 import android.content.res.Configuration;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Rational;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -11,6 +14,27 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(BrowserOnlyPlugin.class);
         registerPlugin(PipPlugin.class);
         super.onCreate(savedInstanceState);
+    }
+
+    /**
+     * Leaving the app while a stream plays puts it in the little window instead of stopping it.
+     *
+     * onUserLeaveHint is the one callback that fires while the activity is still allowed to ask for
+     * picture-in-picture: from onPause onwards the system refuses. So the decision has to be made
+     * here, from a flag the page keeps up to date.
+     */
+    @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (!PipPlugin.autoPipWanted) return;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        try {
+            enterPictureInPictureMode(
+                new PictureInPictureParams.Builder().setAspectRatio(new Rational(16, 9)).build()
+            );
+        } catch (Exception ignored) {
+            // a phone that will not do it is not a reason to fail leaving the app
+        }
     }
 
     /**

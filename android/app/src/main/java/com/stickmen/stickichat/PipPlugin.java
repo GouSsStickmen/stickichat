@@ -21,6 +21,22 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "Pip")
 public class PipPlugin extends Plugin {
 
+    /**
+     * Whether leaving the app should put it in the little window.
+     *
+     * Static because the activity has to read it from onUserLeaveHint, which is the only moment
+     * Android accepts the request — by the time the app is actually in the background it is too late
+     * to ask. False unless a stream is playing, or every trip to the home screen would leave a video
+     * window behind.
+     */
+    public static boolean autoPipWanted = false;
+
+    @PluginMethod
+    public void setAuto(PluginCall call) {
+        autoPipWanted = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        call.resolve();
+    }
+
     @PluginMethod
     public void enter(PluginCall call) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {

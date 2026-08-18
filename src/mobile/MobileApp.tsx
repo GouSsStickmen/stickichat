@@ -162,6 +162,37 @@ export default function MobileApp(): React.JSX.Element | null {
     }
   }, [focused])
 
+  /*
+   * Publish how tall the input row is right now.
+   *
+   * The emote picker and the link card both have to sit above it, and it is not a fixed height: it
+   * grows as a message wraps onto more lines. A hardcoded 62px was right until the moment someone
+   * typed a long message, and then the picker was back on top of the input again.
+   */
+  // keyed on `booted`: before that this component renders null, so there is no .m-app to measure in
+  // and to observe — the effect used to run once against an empty document and give up for good
+  useEffect(() => {
+    const root = document.querySelector('.m-app') as HTMLElement | null
+    if (!root) return
+    const measure = (): void => {
+      const area = document.querySelector('.m-pane.writing .input-area, .input-area') as HTMLElement | null
+      root.style.setProperty('--m-input-h', `${Math.round(area?.getBoundingClientRect().height ?? 0)}px`)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    document.querySelectorAll('.input-area').forEach((el) => ro.observe(el))
+    // the row is replaced when panes change, and it also grows on its own as text wraps
+    window.addEventListener('sticki:inputgrew', measure)
+    window.addEventListener('resize', measure)
+    const poll = window.setInterval(measure, 1000)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('sticki:inputgrew', measure)
+      window.removeEventListener('resize', measure)
+      window.clearInterval(poll)
+    }
+  }, [booted])
+
   useEffect(() => {
     const onResize = (): void => setLandscape(window.innerWidth > window.innerHeight)
     window.addEventListener('resize', onResize)
@@ -181,7 +212,7 @@ export default function MobileApp(): React.JSX.Element | null {
   const writer = shown.length === 1 ? shown[0]?.id : (writingIn ?? shown[0]?.id)
 
   return (
-    <div className={`m-app ${landscape ? 'landscape' : 'portrait'}`}>
+    <div className={`m-app ${landscape ? 'landscape' : 'portrait'} ${playing ? 'has-player' : ''}`}>
       <MobileTabStrip
         playing={playing}
         onTogglePlayer={(ch) => setPlaying((cur) => (cur === ch ? null : ch))}
