@@ -7,6 +7,33 @@ import { createAccountFromTokens } from '../services/accountService'
 import { reloadAllBadges } from '../services/emoteService'
 import { persistAccountTokens } from '../services/config'
 import { useUiStore } from '../store/ui'
+import { host, TWITCH_APP_PACKAGE } from '../lib/platform'
+
+/**
+ * The one thing that stops this login from working, and the switch that fixes it.
+ *
+ * Twitch owns twitch.tv as a verified Android App Link, so pressing Activate in a browser hands the
+ * page to the Twitch app, which opens on a black screen and grants nothing. Nobody would guess that
+ * from an authorization error, and the switch that turns it off is four levels deep in Settings — so
+ * the explanation and a way straight to it both belong here.
+ *
+ * It renders only where the platform can actually open that screen, which is Android and nowhere
+ * else; on the desktop the whole thing is absent rather than irrelevant-but-visible.
+ */
+function LinkHijackHint(): React.JSX.Element | null {
+  const t = useT()
+  const openSettings = host().openAppLinkSettings
+  if (!openSettings) return null
+  return (
+    <div className="auth-hijack-hint">
+      <p>{t('auth.linkHijack')}</p>
+      <button onClick={() => void openSettings(TWITCH_APP_PACKAGE)}>
+        {t('auth.openLinkSettings')}
+      </button>
+      <p className="how">{t('auth.linkHijackHow')}</p>
+    </div>
+  )
+}
 
 type Phase = 'starting' | 'waiting' | 'done' | 'error'
 
@@ -101,12 +128,14 @@ export default function DeviceAuthModal({ onClose }: { onClose: () => void }): R
                 </button>
               </div>
               <p style={{ color: 'var(--text-muted)', textAlign: 'center' }}>{t('auth.waiting')}</p>
+              <LinkHijackHint />
             </>
           )}
           {phase === 'error' && (
             <>
               <p style={{ color: 'var(--danger)' }}>{t('auth.error')}</p>
               <p style={{ color: 'var(--text-muted)', fontSize: 12, userSelect: 'text' }}>{error}</p>
+              <LinkHijackHint />
             </>
           )}
         </div>

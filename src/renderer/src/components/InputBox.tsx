@@ -16,6 +16,7 @@ import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
 import EmotePicker, { emoteInsertText } from './EmotePicker'
 import EmojiGlyph from './EmojiGlyph'
 import { useT } from '../i18n'
+import { isMobile } from '../lib/platform'
 import { getWatchStreakInfo } from '../lib/watchStreaks'
 
 export const TWITCH_MESSAGE_LIMIT = 500
@@ -183,6 +184,13 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
       }
       // input not focused — append at the end and drop the caret there so you can keep typing
       setText((cur) => (cur.length === 0 || cur.endsWith(' ') ? cur + d.text : `${cur} ${d.text}`))
+      /*
+       * On a phone, focusing here is what raised the keyboard — and the keyboard shrinks the page,
+       * which pushed the top of the emote picker off the screen the moment the first emote was
+       * picked. Picking emotes is not typing: the text lands in the input either way, and the
+       * keyboard comes up when the user actually taps the input.
+       */
+      if (isMobile()) return
       requestAnimationFrame(() => {
         const t = taRef.current
         if (!t) return

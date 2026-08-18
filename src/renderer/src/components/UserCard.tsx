@@ -356,6 +356,7 @@ export default function UserCard({
         </button>
         {!standalone && (
           <button
+            data-desktop-only
             title={t('user.openWindow')}
             onClick={() => {
               // pass the full message objects so the window renders badges/system/reply lines

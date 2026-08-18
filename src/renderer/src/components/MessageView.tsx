@@ -25,6 +25,8 @@ import { useFfzBadges, ensureFfzBadges } from '../lib/ffzCosmetics'
 import { clipSlugFromUrl, fetchLinkPreview, LinkPreviewData } from '../lib/linkPreview'
 import { getSourceChannelInfo } from '../lib/sourceChannels'
 import { useShoutoutCooldown, shoutoutStatus, formatCooldown } from '../lib/shoutoutCooldown'
+import { confirmDestructive } from '../lib/confirmMod'
+import { host, isMobile } from '../lib/platform'
 
 /**
  * Tokenized messages, kept alive after their row leaves the screen.
@@ -77,6 +79,70 @@ function formatTime(ts: number, withSeconds: boolean): string {
 }
 
 /** RMB inserts into the input; Ctrl+RMB sends the token to chat immediately */
+/** put text into a pane's input box — the thing right-click does, without needing a right button */
+function insertIntoInput(paneId: string, text: string): void {
+  window.dispatchEvent(
+    new CustomEvent<InsertEventDetail>('sticki:insert', { detail: { paneId, text } })
+  )
+}
+
+/**
+ * Touch handlers for one emote: tap looks, hold takes, long hold leaves.
+ *
+ * On a phone a tap was opening the emote's page on 7TV — the rarest of the three things anyone wants
+ * from an emote, and the only one that leaves the app. So the useful one is the short hold: the code
+ * goes into the input, with a buzz to say it happened. The page is still there behind a hold nobody
+ * performs by accident.
+ */
+function emoteTouchProps(
+  paneId: string,
+  codes: string,
+  openPage: (() => void) | null,
+  preview: () => void
+): {
+  onTouchStart: (e: React.TouchEvent) => void
+  onTouchEnd: () => void
+  onTouchMove: () => void
+} {
+  let insertAt = 0
+  let pageAt = 0
+  let done = false
+
+  const clear = (): void => {
+    window.clearTimeout(insertAt)
+    window.clearTimeout(pageAt)
+  }
+
+  return {
+    onTouchStart: () => {
+      done = false
+      clear()
+      insertAt = window.setTimeout(() => {
+        done = true
+        insertIntoInput(paneId, `${codes} `)
+        navigator.vibrate?.(12)
+      }, 450)
+      if (openPage) {
+        pageAt = window.setTimeout(() => {
+          done = true
+          navigator.vibrate?.(24)
+          openPage()
+        }, 1300)
+      }
+    },
+    // a finger that moved is scrolling the chat, not choosing an emote
+    onTouchMove: () => {
+      done = true
+      clear()
+    },
+    onTouchEnd: () => {
+      clear()
+      // released before the hold matured: show what it is, which is what a tap should mean
+      if (!done) preview()
+    }
+  }
+}
+
 function tokenContextHandler(paneId: string, text: string) {
   return (e: React.MouseEvent): void => {
     e.preventDefault()
@@ -208,12 +274,40 @@ function TokenView({
         }
         if (page) window.sticki.openExternal(page)
       }
+      const previewHere = (): void =>
+        useUiStore.getState().setEmotePreview({
+          url: hiResEmoteUrl(token.emote.url),
+          code: token.emote.code,
+          overlayUrls: token.overlays.map((o) => hiResEmoteUrl(o.url)),
+          subtitle: [
+            token.emote.provider === 'twitch'
+              ? t('picker.twitchEmote')
+              : `${t('picker.channelEmote')} ${token.emote.provider.toUpperCase()}`,
+            ownerName ? `${t('picker.by')} ${ownerName}` : ''
+          ].filter(Boolean),
+          x: 0,
+          y: 0
+        })
+      const touch = isMobile()
+        ? emoteTouchProps(
+            paneId,
+            codes,
+            page || ownerLogin
+              ? () =>
+                  void host().openUrl(page || `https://twitch.tv/${ownerLogin}`)
+              : null,
+            previewHere
+          )
+        : null
+
       return (
         <span
           className={`emote-wrap ${page || ownerLogin ? 'clickable' : ''}`}
           title={title}
-          onClick={openEmote}
+          // a tap must not open the page; on touch the handlers below decide what the press meant
+          onClick={touch ? undefined : openEmote}
           onContextMenu={tokenContextHandler(paneId, `${codes} `)}
+          {...(touch ?? {})}
           onMouseEnter={(e) =>
             useUiStore.getState().setEmotePreview({
               url: hiResEmoteUrl(token.emote.url),
@@ -287,9 +381,16 @@ let brailleCellWidth: number | null = null
 function LinkToken({ url, label }: { url: string; label: string }): React.JSX.Element {
   const previews = useSettingsStore((s) => s.settings.linkPreviews)
   const clipsOnly = useSettingsStore((s) => s.settings.linkPreviewsClipsOnly)
-  // "open on hover" — the same setting that used to mean "draw the card already open", which
-  // is the same wish: see the preview without asking for it twice
-  const onHover = useSettingsStore((s) => s.settings.linkPreviewsExpanded)
+  /*
+   * "Open on hover" — the same setting that used to mean "draw the card already open", which is the
+   * same wish: see the preview without asking for it twice.
+   *
+   * Never on touch, and that is why link previews did nothing there at all. It defaults to on, and
+   * with it on the tag after the link is not rendered — the card is supposed to come up under the
+   * pointer instead. A phone has no pointer, so neither ever appeared. On touch there is one
+   * question, "previews or not", and the tag is how you ask for one.
+   */
+  const onHover = useSettingsStore((s) => s.settings.linkPreviewsExpanded) && !isMobile()
   const eligible = previews && (!clipsOnly || !!clipSlugFromUrl(url))
   const timer = useRef<number | undefined>(undefined)
 
@@ -508,7 +609,18 @@ function MessageViewInner({
   const modButtons = useSettingsStore((s) => s.modButtons)
   const highlightRules = useSettingsStore((s) => s.highlightRules)
   const channelAccent = useChatStore((s) => s.channelAccents[msg.channel])
-  const [dragX, setDragX] = useState(0)
+  /*
+   * The swipe writes to the DOM, not to state.
+   *
+   * `dragX` used to be React state set on every pointermove, which re-rendered this component — the
+   * one that tokenizes the message, lays out its emotes and runs its effects — once per finger
+   * position. On a phone that is what "not smooth" was. The offset now goes straight onto the
+   * element's transform, and React only hears about the tier label, which changes a handful of times
+   * in a whole gesture.
+   */
+  const [swipeAction, setSwipeAction] = useState<SwipeAction | null>(null)
+  const msgElRef = useRef<HTMLDivElement | null>(null)
+  const dragXRef = useRef(0)
   const draggingRef = useRef(false)
 
   const tokens = useMemo(() => {
@@ -717,7 +829,7 @@ function MessageViewInner({
   if (msg.historical) classes.push('historical')
   if (flash) classes.push('flash')
   if (msg.system === 'usernotice') classes.push('usernotice')
-  if (dragX > 0) classes.push('swiping')
+  if (swipeAction) classes.push('swiping')
   // bits power-ups (Twitch-style): gigantified emote + animated message effect
   if (settings.showBits && msg.gigantified) classes.push('gigantified')
   /**
@@ -731,6 +843,11 @@ function MessageViewInner({
   if (bitsEffect) classes.push('msg-effect', `effect-${bitsEffect}`)
 
   const canAct = !!account && !!msg.userId
+  /*
+   * Whether this row's action sheet is the one open. Selecting the comparison, not the id, means a
+   * row only re-renders when its own answer flips — not every time some other message is held.
+   */
+  const held = useUiStore((s) => s.heldMsgId === msg.id)
   // moderators/broadcasters can't be timed out or banned by another mod — only their messages can be deleted
   const targetIsProtected = msg.badges.some(
     (b) => b.setId === 'moderator' || b.setId === 'lead_moderator' || b.setId === 'broadcaster'
@@ -746,7 +863,8 @@ function MessageViewInner({
       return true
     })
   // still swipeable after a delete — you often delete first, then decide to time out too
-  const swipeEnabled = isMod && canAct
+  // ...and only at all if the gesture is wanted: switched off, there is no grip and no gutter for it
+  const swipeEnabled = isMod && canAct && settings.swipeModEnabled !== false
   // the grip is absolutely positioned over the row's left edge — give it its own gutter so
   // dragging a selection across the first characters isn't intercepted by it
   if (swipeEnabled) classes.push('has-grip')
@@ -778,6 +896,13 @@ function MessageViewInner({
   const executeSwipe = async (dx: number): Promise<void> => {
     const action = swipeActionFor(dx, swipeLabels, swipeTiers, targetIsProtected)
     if (!action || !account) return
+    // every one of the three asks first on touch — a deleted message is not recoverable either
+    const ok = await confirmDestructive(
+      action.kind,
+      msg.login,
+      action.seconds ? formatDuration(action.seconds) : undefined
+    )
+    if (!ok) return
     const res =
       action.kind === 'delete'
         ? await deleteChatMessage(account, channelId, msg.id)
@@ -794,23 +919,70 @@ function MessageViewInner({
     const start = { x: e.clientX, y: e.clientY }
     draggingRef.current = true
     document.getSelection()?.removeAllRanges()
-    const onMove = (ev: PointerEvent): void => {
-      const dx = ev.clientX - start.x
-      const cap = targetIsProtected ? SWIPE_TIMEOUT_START - 1 : banStartFor(swipeTiers) + 40
-      setDragX(Math.max(0, Math.min(dx, cap)))
+
+    const el = msgElRef.current
+    // no transition while a finger is on it: the row has to sit exactly where the finger is
+    if (el) el.style.transition = 'none'
+    let shownLabel: string | null = null
+    /** set once the drag has been abandoned — the row goes home and nothing happens on release */
+    let abandoned = false
+
+    const paint = (dx: number): void => {
+      dragXRef.current = dx
+      if (el) el.style.transform = dx > 0 ? `translateX(${dx}px)` : ''
+      const action = dx > 0 ? swipeActionFor(dx, swipeLabels, swipeTiers, targetIsProtected) : null
+      // React is told only when the words change, not when the finger moves
+      if ((action?.label ?? null) !== shownLabel) {
+        shownLabel = action?.label ?? null
+        setSwipeAction(action)
+      }
     }
-    const onUp = (ev: PointerEvent): void => {
+
+    const onMove = (ev: PointerEvent): void => {
+      if (abandoned) return
+      const dx = ev.clientX - start.x
+      const dy = ev.clientY - start.y
+      /*
+       * Sliding a finger down means "I am scrolling, or I changed my mind" — and until now there was
+       * no way to say either: the row followed sideways whatever the hand did, and letting go fired
+       * whatever tier it happened to be sitting in. Leaving the lane calls the whole thing off.
+       */
+      if (Math.abs(dy) > 44) {
+        abandoned = true
+        paint(0)
+        return
+      }
+      const cap = targetIsProtected ? SWIPE_TIMEOUT_START - 1 : banStartFor(swipeTiers) + 40
+      paint(Math.max(0, Math.min(dx, cap)))
+    }
+
+    const finish = (run: boolean): void => {
       cleanup()
       draggingRef.current = false
-      executeSwipe(ev.clientX - start.x)
-      setDragX(0)
+      const dx = dragXRef.current
+      // slide home under its own steam; the drag itself had the transition off
+      if (el) {
+        el.style.transition = ''
+        el.style.transform = ''
+      }
+      dragXRef.current = 0
+      shownLabel = null
+      setSwipeAction(null)
+      if (run && !abandoned) void executeSwipe(dx)
     }
+
+    const onUp = (): void => finish(true)
+    // the browser taking the gesture for a scroll is not a decision to moderate anyone
+    const onCancel = (): void => finish(false)
+
     const cleanup = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   // RMB inserts the nick; Ctrl+RMB sends "@nick" to chat immediately
@@ -818,8 +990,6 @@ function MessageViewInner({
   // the login so the mention still pings
   const mentionName = msg.displayName && msg.displayName.toLowerCase() === msg.login ? msg.displayName : msg.login
   const insertNick = tokenContextHandler(paneId, `@${mentionName} `)
-
-  const swipeAction = dragX > 0 ? swipeActionFor(dragX, swipeLabels, swipeTiers, targetIsProtected) : null
 
   const jumpToParent = (): void => {
     if (!msg.replyParent?.msgId) return
@@ -843,6 +1013,7 @@ function MessageViewInner({
           </div>
         )}
         <div
+          ref={msgElRef}
           className={classes.join(' ')}
           style={
             {
@@ -862,8 +1033,8 @@ function MessageViewInner({
                 ? msg.announceColor === 'primary'
                   ? (channelAccent ?? ANNOUNCE_COLORS.primary)
                   : ANNOUNCE_COLORS[msg.announceColor]
-                : undefined,
-              transform: dragX > 0 ? `translateX(${dragX}px)` : undefined
+                : undefined
+              // the swipe offset is written straight to this element during the drag — see startSwipe
             } as React.CSSProperties
           }
         >
@@ -1105,6 +1276,54 @@ function MessageViewInner({
           )}
         </div>
       </div>
+      {/*
+        Touch: one sheet instead of the hover row.
+
+        The hover buttons were 36px pills over the message they act on, and a long press brought them
+        up together with Android's own copy menu — two menus, one gesture, neither comfortable. This
+        is the same buttons, from the same `visibleButtons` and the same action context, as a list
+        with names on it; and because it is drawn by the row that owns the message, none of that had
+        to be rebuilt anywhere else. `position: fixed` in the stylesheet keeps it out of the row's
+        measured height.
+      */}
+      {held && (
+        <div className="msg-sheet">
+          <div className="msg-sheet-who">{msg.displayName || msg.login}</div>
+          <button
+            onClick={() =>
+              onReply({ msgId: msg.id, login: msg.login, displayName: msg.displayName, text: msg.text })
+            }
+          >
+            ↩ {t('reply.action')}
+          </button>
+          <button onClick={() => void host().copyText(msg.text)}>
+            📋 {t('btn.type.copy')}
+          </button>
+          <button onClick={() => void host().copyText(msg.login)}>
+            @ {t('user.copyName')}
+          </button>
+          {canAct &&
+            visibleButtons.map((btn) => (
+              <button
+                key={btn.id}
+                onClick={() =>
+                  runModButton(btn, {
+                    account: account!,
+                    channel: msg.channel,
+                    channelId,
+                    paneId,
+                    targetUserId: msg.userId,
+                    targetLogin: msg.login,
+                    targetMsgId: msg.id,
+                    targetText: msg.text
+                  })
+                }
+              >
+                <BtnIcon icon={btn.icon} /> {btn.label}
+              </button>
+            ))}
+        </div>
+      )}
       {canAct && (
         <span className="hover-actions">
           <button

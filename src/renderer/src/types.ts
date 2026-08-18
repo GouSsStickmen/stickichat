@@ -2032,8 +2032,17 @@ export interface Settings {
   recentColors: string[]
   /** action → accelerator (e.g. "Ctrl+L"); missing keys fall back to DEFAULT_HOTKEYS */
   hotkeys: Partial<Record<HotkeyAction, string>>
+  /** height in px of the mobile stream player, remembered between launches */
+  playerHeight: number
   /** swipe-to-moderate timeout tiers (seconds), shortest→longest */
   swipeTimeouts: number[]
+  /**
+   * Whether the swipe-to-moderate gesture exists at all.
+   *
+   * Off, no grip is drawn and no drag is armed — which is the point: on a phone the gesture shares a
+   * row with the message you are trying to read, and not everyone moderating wants it there.
+   */
+  swipeModEnabled: boolean
   /** OBS chat overlay (local SSE server + transparent browser-source page) */
   overlayEnabled: boolean
   overlayPort: number
@@ -2229,6 +2238,8 @@ export const DEFAULT_SETTINGS: Settings = {
   recentColors: [],
   hotkeys: {},
   swipeTimeouts: [60, 300, 600, 1800, 3600, 86400],
+  swipeModEnabled: true,
+  playerHeight: 220,
   overlayEnabled: false,
   overlayPort: 4715,
   overlayFontSize: 16,

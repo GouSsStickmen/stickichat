@@ -9,6 +9,7 @@ import MessageView from './MessageView'
 import { ReplyTarget } from './InputBox'
 import { useT } from '../i18n'
 import { diagWarn } from '../lib/diag'
+import { isMobile } from '../lib/platform'
 
 interface Props {
   pane: Pane
@@ -225,13 +226,154 @@ export default function MessageList({
       if (d.deltaY < 0) stopFollowing()
       sc.scrollTop += d.deltaY
     }
+    /*
+     * A touch drag is the same intent as a wheel-up and produces no wheel event at all, so without
+     * this the list never stops following on a phone: the drag moves the scroller, the follow glide
+     * pins it back inside the same frame, and the chat simply refuses to scroll.
+     *
+     * The threshold is what separates a drag from a tap — a finger never lands perfectly still, and
+     * treating every touch as a scroll would unstick the list whenever a message is tapped.
+     */
+    let touchY = 0
+    let touchDragged = false
+
+    /*
+     * Long press stands in for hover.
+     *
+     * The per-message actions — reply, and every configured mod button — are revealed by `:hover` on
+     * the desktop, and a phone has no hover at all. Rather than build a second set of buttons with a
+     * second set of handlers, the press marks the row and the stylesheet shows the ones already
+     * rendered there. One class, no duplicated behaviour, and a new mod button appears here the day
+     * it appears on the desktop.
+     */
+    let pressTimer = 0
+    const clearHeld = (): void => {
+      el?.querySelectorAll('.msg-row.touch-held').forEach((r) => r.classList.remove('touch-held'))
+      if (useUiStore.getState().heldMsgId) useUiStore.getState().setHeldMsgId(null)
+    }
+    const cancelPress = (): void => {
+      if (pressTimer) window.clearTimeout(pressTimer)
+      pressTimer = 0
+    }
+
+    const onTouchStart = (e: TouchEvent): void => {
+      touchY = e.touches[0]?.clientY ?? 0
+      touchDragged = false
+
+      const row = (e.target as HTMLElement | null)?.closest?.('.msg-row') as HTMLElement | null
+      /*
+       * Three things claim a long press and only one of them can have it. An emote press is that
+       * emote's own gesture — hold to insert it, hold longer for its page. A press on the sheet
+       * belongs to the sheet. And a press on the grip is the start of a swipe: the sheet used to open
+       * mid-drag and cover the very row being dragged. Everything else is the message.
+       */
+      const claimed = (e.target as HTMLElement | null)?.closest?.(
+        '.msg-sheet, .emote-wrap, .swipe-grip'
+      )
+      if (claimed) return
+      clearHeld()
+      cancelPress()
+      if (!row) return
+      pressTimer = window.setTimeout(() => {
+        pressTimer = 0
+        row.classList.add('touch-held')
+        /*
+         * The row draws its own sheet from this — reply, copy and its mod buttons in one list.
+         * `data-mid` is on the positioned wrapper the virtualiser renders around each row, not on
+         * `.msg-row` itself, so it is looked up from the target rather than from the row.
+         */
+        const mid = (e.target as HTMLElement | null)?.closest?.('[data-mid]')?.getAttribute('data-mid')
+        if (mid) useUiStore.getState().setHeldMsgId(mid)
+        // Android starts selecting words at about this point; the press means the sheet now
+        document.getSelection()?.removeAllRanges()
+        // the same short buzz Android uses for its own long presses, where the device allows it
+        navigator.vibrate?.(12)
+      }, 450)
+    }
+    const onTouchEnd = (): void => cancelPress()
+
+    /*
+     * Android fires `contextmenu` at the end of its own long-press timer, so the OS text-selection
+     * menu came up on top of the buttons the press had just revealed — two menus for one gesture.
+     *
+     * Touch only, and that matters: the desktop's right-click handlers live on this same event —
+     * right button inserts the nick — so swallowing it everywhere would take that away.
+     */
+    const onContextMenu = (e: Event): void => {
+      if (isMobile()) e.preventDefault()
+    }
+
+    /*
+     * The buttons let go on their own.
+     *
+     * A tap on one runs its action and leaves the row exactly as it was — still held, still covering
+     * the message under it — and a tap anywhere else did nothing at all. Both are the same fix: the
+     * next touch that is not on the buttons clears them, and using one on purpose clears them too.
+     */
+    const onDocTouch = (e: Event): void => {
+      const t = e.target as HTMLElement | null
+      // a touch inside the sheet is a touch on the sheet, wherever it happens to be drawn
+      if (t?.closest?.('.msg-sheet')) return
+      clearHeld()
+    }
+    /*
+     * Deferred, and that is the whole point.
+     *
+     * This is a native listener inside the tree, so it runs before React's delegated handler at the
+     * root. Clearing straight away unmounted the sheet while the click was still on its way to the
+     * button's own onClick — the sheet closed and the action never ran. A task boundary lets React
+     * deliver the click first.
+     */
+    const onActionUsed = (e: Event): void => {
+      if ((e.target as HTMLElement | null)?.closest?.('.msg-sheet')) window.setTimeout(clearHeld, 0)
+    }
+    const onScrollAway = (): void => clearHeld()
+    const onTouchMove = (e: TouchEvent): void => {
+      const y = e.touches[0]?.clientY ?? 0
+      // finger down the screen = content moves down = scrollTop decreases = wheel-up
+      if (Math.abs(y - touchY) > 4) cancelPress()
+      if (!touchDragged && y - touchY > 6) {
+        touchDragged = true
+        stopFollowing()
+      }
+      // keep the split panes in step the same way the wheel does, from the same user gesture
+      if (pane.syncScroll) {
+        const dy = touchY - y
+        if (dy) {
+          window.dispatchEvent(
+            new CustomEvent<SyncScrollDetail>('sticki:syncscroll', {
+              detail: { fromPaneId: pane.id, deltaY: dy }
+            })
+          )
+        }
+      }
+      touchY = y
+    }
+
     el?.addEventListener('wheel', onWheel, { passive: true })
+    el?.addEventListener('touchstart', onTouchStart, { passive: true })
+    el?.addEventListener('touchmove', onTouchMove, { passive: true })
+    el?.addEventListener('touchend', onTouchEnd, { passive: true })
+    el?.addEventListener('touchcancel', onTouchEnd, { passive: true })
+    el?.addEventListener('contextmenu', onContextMenu)
+    el?.addEventListener('click', onActionUsed)
+    el?.addEventListener('scroll', onScrollAway, { capture: true, passive: true })
+    document.addEventListener('touchstart', onDocTouch, { passive: true })
     window.addEventListener('sticki:syncscroll', onSync)
     return () => {
       window.removeEventListener('sticki:grew', rePin)
       window.removeEventListener('sticki:inputgrew', onInputGrew)
       window.clearInterval(keepalive)
       el?.removeEventListener('wheel', onWheel)
+      el?.removeEventListener('touchstart', onTouchStart)
+      el?.removeEventListener('touchmove', onTouchMove)
+      el?.removeEventListener('touchend', onTouchEnd)
+      el?.removeEventListener('touchcancel', onTouchEnd)
+      el?.removeEventListener('contextmenu', onContextMenu)
+      el?.removeEventListener('click', onActionUsed)
+      el?.removeEventListener('scroll', onScrollAway, { capture: true })
+      document.removeEventListener('touchstart', onDocTouch)
+      cancelPress()
       window.removeEventListener('sticki:syncscroll', onSync)
     }
   }, [scrollLocked, pane.id, pane.syncScroll, smoothScroll])

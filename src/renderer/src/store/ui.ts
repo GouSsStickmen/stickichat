@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { BadgeRef } from '../types'
 import { useSettingsStore } from './settings'
+import type { ModConfirmRequest } from '../lib/confirmMod'
 
 export interface UserCardTarget {
   channel: string
@@ -122,6 +123,21 @@ interface UiState {
   setEmotePreview: (v: EmotePreviewTarget | null) => void
   setLinkCard: (v: LinkCardTarget | null) => void
   setChannelPrompt: (v: ChannelPrompt | null) => void
+  /**
+   * A pending "are you sure" for a ban or a timeout, holding the promise that waits on the answer.
+   * Null whenever nothing is being asked — see lib/confirmMod.ts.
+   */
+  modConfirm: ModConfirmRequest | null
+  setModConfirm: (v: ModConfirmRequest | null) => void
+  /**
+   * The message whose action sheet is open, by id — touch only.
+   *
+   * An id rather than the message: the row that owns it already has everything the sheet needs
+   * (its mod buttons, its permissions, its action context), so it draws the sheet itself and no
+   * copy of that logic has to exist anywhere else.
+   */
+  heldMsgId: string | null
+  setHeldMsgId: (v: string | null) => void
   setHypeTrain: (v: HypeTrain | null) => void
   dismissHypeTrain: () => void
   allowHypeTrain: () => void
@@ -183,6 +199,10 @@ export const useUiStore = create<UiState>()((set) => ({
   setEmotePreview: (emotePreview) => set({ emotePreview }),
   setLinkCard: (linkCard) => set({ linkCard }),
   setChannelPrompt: (channelPrompt) => set({ channelPrompt }),
+  modConfirm: null,
+  setModConfirm: (modConfirm) => set({ modConfirm }),
+  heldMsgId: null,
+  setHeldMsgId: (heldMsgId) => set({ heldMsgId }),
   setHypeTrain: (hypeTrain) => set((s) => (hypeTrain && s.hypeDismissed === hypeTrain.channel ? s : { hypeTrain })),
   dismissHypeTrain: () =>
     set((s) => ({ hypeTrain: null, hypeDismissed: s.hypeTrain?.channel ?? s.hypeDismissed })),

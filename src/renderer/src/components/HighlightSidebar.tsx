@@ -245,7 +245,12 @@ export default function HighlightSidebar({
           <ZoomIcon dir="in" />
         </button>
         {!standalone && (
-          <button className="ghost" title={t('highlights.openWindow')} onClick={openWindow}>
+          <button
+            className="ghost"
+            data-desktop-only
+            title={t('highlights.openWindow')}
+            onClick={openWindow}
+          >
             ⧉
           </button>
         )}

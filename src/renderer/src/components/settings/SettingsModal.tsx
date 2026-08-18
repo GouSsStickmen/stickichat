@@ -31,6 +31,7 @@ import {
 import { nextId, useLayoutStore } from '../../store/layout'
 import { exportOverlayJson, parseOverlayImport } from '../../lib/overlayShare'
 import { startPointerReorder } from '../../lib/pointerReorder'
+import { isMobile } from '../../lib/platform'
 import { useFlip } from '../../lib/useFlip'
 import { eventToAccel, hotkeyFor } from '../../lib/hotkeys'
 import { hexToRgba } from '../../lib/tokenize'
@@ -115,8 +116,19 @@ export default function SettingsModal({
   const close = (): void => (standalone ? window.close() : useUiStore.getState().setSettingsOpen(false))
   // NOTE: read-only in the initializer — StrictMode runs it twice, so clearing here
   // would wipe the requested section before the second run sees it
-  const [section, setSection] = useState<Section>(
-    () => ((initialSection ?? useUiStore.getState().settingsSection) as Section | null) ?? 'accounts'
+  /*
+   * On a phone the panel is two screens, not two columns.
+   *
+   * A 160px list of eleven categories beside the controls leaves the controls 245px of a 411px
+   * screen, and the categories are visible the whole time for no reason — you pick one and then read
+   * one. So the list IS the first screen: `section` starts as null, tapping a row opens it, and the
+   * header grows a back arrow. Nothing about the sections themselves changes.
+   */
+  const phone = isMobile()
+  const [section, setSection] = useState<Section | null>(
+    () =>
+      ((initialSection ?? useUiStore.getState().settingsSection) as Section | null) ??
+      (phone ? null : 'accounts')
   )
   useEffect(() => {
     useUiStore.getState().setSettingsSection(null)
@@ -126,22 +138,54 @@ export default function SettingsModal({
   useEffect(() => {
     if (standalone) return
     const onEsc = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') close()
+      if (e.key !== 'Escape') return
+      // on a phone this event is also what Android's back button becomes: back out of the section
+      // first, and only leave the panel from its own front screen
+      if (phone && section) setSection(null)
+      else close()
     }
     document.addEventListener('keydown', onEsc)
     return () => document.removeEventListener('keydown', onEsc)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [standalone])
+  }, [standalone, phone, section])
 
   const openInWindow = (): void => {
     useUiStore.getState().setSettingsOpen(false)
     window.sticki.openSettingsWindow('settings')
   }
 
+  const allSections: [Section, string][] = [
+    ['accounts', t('set.accounts')],
+    ['appearance', t('set.appearance')],
+    ['chat', t('set.chat')],
+    ['highlights', t('set.highlights')],
+    ['notifications', t('set.notifications')],
+    ['moderation', t('set.moderation')],
+    ['hotkeys', t('set.hotkeys')],
+    ['windows', t('set.windows')],
+    ['overlay', t('set.overlay')],
+    ['advanced', t('set.advanced')],
+    ['about', t('set.about')]
+  ]
+
+  /*
+   * Three categories are about things a phone does not have: physical shortcut keys, extra windows,
+   * and the OBS overlay server, which only the desktop process runs. On a phone they are pages of
+   * switches that cannot do anything, so they are not offered.
+   */
+  const PHONE_HIDDEN = new Set<Section>(['hotkeys', 'windows', 'overlay'])
+  const sections = phone ? allSections.filter(([k]) => !PHONE_HIDDEN.has(k)) : allSections
+  const sectionTitle = allSections.find(([k]) => k === section)?.[1] ?? t('set.title')
+
   const body = (
     <>
       <div className="modal-header">
-        {t('set.title')}
+        {phone && section && (
+          <button className="ghost m-set-back" onClick={() => setSection(null)}>
+            ‹
+          </button>
+        )}
+        {phone ? sectionTitle : t('set.title')}
         <div className="spacer" />
         {/* language switcher lives in the header — always one click away */}
         <select
@@ -156,7 +200,12 @@ export default function SettingsModal({
         </select>
         {standalone && <PinButton settingKey="settingsPinned" />}
         {!standalone && (
-          <button className="ghost" title={t('set.openInWindow')} onClick={openInWindow}>
+          <button
+            className="ghost"
+            data-desktop-only
+            title={t('set.openInWindow')}
+            onClick={openInWindow}
+          >
             ⧉
           </button>
         )}
@@ -167,28 +216,18 @@ export default function SettingsModal({
           </button>
         )}
       </div>
-      <div className="settings-layout">
-        <div className="settings-nav">
-          {(
-            [
-              ['accounts', t('set.accounts')],
-              ['appearance', t('set.appearance')],
-              ['chat', t('set.chat')],
-              ['highlights', t('set.highlights')],
-              ['notifications', t('set.notifications')],
-              ['moderation', t('set.moderation')],
-              ['hotkeys', t('set.hotkeys')],
-              ['windows', t('set.windows')],
-              ['overlay', t('set.overlay')],
-              ['advanced', t('set.advanced')],
-              ['about', t('set.about')]
-            ] as [Section, string][]
-          ).map(([key, label]) => (
-            <button key={key} className={section === key ? 'active' : ''} onClick={() => setSection(key)}>
-              {label}
-            </button>
-          ))}
-        </div>
+      <div className={`settings-layout ${phone ? (section ? 'phone-section' : 'phone-index') : ''}`}>
+        {/* on a phone the list and the section are separate screens, never both at once */}
+        {(!phone || !section) && (
+          <div className="settings-nav">
+            {sections.map(([key, label]) => (
+              <button key={key} className={section === key ? 'active' : ''} onClick={() => setSection(key)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {(!phone || section) && (
         <div className="settings-content">
           {section === 'accounts' && <AccountsSection />}
           {section === 'appearance' && <AppearanceSection />}
@@ -202,6 +241,7 @@ export default function SettingsModal({
           {section === 'advanced' && <AdvancedSection />}
           {section === 'about' && <AboutSection />}
         </div>
+        )}
       </div>
     </>
   )
@@ -1213,7 +1253,12 @@ function ChatSection(): React.JSX.Element {
       </div>
       <div className="set-block">
       <Toggle label={t('set.linkPreviews')} hint={t('hint.linkPreviews')} value={settings.linkPreviews} onChange={(v) => set({ linkPreviews: v })} />
-      {settings.linkPreviews && (
+      {/*
+        On touch this is one switch and no sub-options. Everything under here is about a pointer —
+        open on hover, how big the floating card is, where it sits — and on a phone the answer to all
+        of them is fixed: the tag after the link is the preview, and tapping it opens the card.
+      */}
+      {settings.linkPreviews && !isMobile() && (
         <div className="set-sub">
           <Toggle
             label={t('set.linkPreviewsClipsOnly')}
@@ -2014,6 +2059,8 @@ function SwipeTiersEditor(): React.JSX.Element {
 
 function ModerationSection(): React.JSX.Element {
   const t = useT()
+  const swipeModEnabled = useSettingsStore((s) => s.settings.swipeModEnabled)
+  const setSettings = useSettingsStore((s) => s.setSettings)
   const modButtons = useSettingsStore((s) => s.modButtons)
   const setModButtons = useSettingsStore((s) => s.setModButtons)
   const raidFavorites = useSettingsStore((s) => s.raidFavorites)
@@ -2253,7 +2300,13 @@ function ModerationSection(): React.JSX.Element {
       <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
         {t('set.swipeTiers.hint')}
       </p>
-      <SwipeTiersEditor />
+      <Toggle
+        label={t('set.swipeMod')}
+        hint={t('set.swipeMod.hint')}
+        value={swipeModEnabled !== false}
+        onChange={(v) => setSettings({ swipeModEnabled: v })}
+      />
+      {swipeModEnabled !== false && <SwipeTiersEditor />}
 
       <h4 style={{ marginTop: 22, marginBottom: 6 }}>{t('set.raidFavorites')}</h4>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>

@@ -5,6 +5,7 @@ import { useUiStore } from "../store/ui";
 import ChatPane from "./ChatPane";
 import { useT } from "../i18n";
 import { Pane } from "../types";
+import { isMobile } from "../lib/platform";
 
 export default function SplitGrid(): React.JSX.Element | null {
   const t = useT();
@@ -143,7 +144,13 @@ export function AddPaneForm({
       </div>
       <input
         autoFocus
-        list="known-channels"
+        /*
+         * No native datalist on touch. Android draws that dropdown itself, as a window on top of
+         * everything — including the keyboard the user is typing on, which is what it covered. The
+         * same names are offered below as ordinary rows instead, which are also easier to hit.
+         */
+        list={isMobile() ? undefined : "known-channels"}
+        autoComplete={isMobile() ? "off" : undefined}
         style={{ minWidth: 130, flex: 1 }}
         placeholder={t("pane.channelPlaceholder")}
         value={channel}
@@ -154,11 +161,35 @@ export function AddPaneForm({
           if (e.key === "Escape") onDone();
         }}
       />
-      <datalist id="known-channels">
-        {knownChannels.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
+      {!isMobile() && (
+        <datalist id="known-channels">
+          {knownChannels.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      )}
+      {isMobile() && (() => {
+        const q = channel.trim().toLowerCase();
+        const hits = knownChannels
+          .filter((c) => !q || c.toLowerCase().includes(q))
+          .slice(0, 6);
+        if (!hits.length) return null;
+        return (
+          <div className="m-channel-hints">
+            {hits.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => {
+                  setChannel(c);
+                }}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
       <select
         value={accountId}
         onChange={(e) => {

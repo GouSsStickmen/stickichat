@@ -16,6 +16,8 @@ import { translate } from '../i18n'
 import { HttpResponse } from '../lib/http'
 import { localizeApiError } from '../lib/apiErrors'
 import { runSlashCommand } from '../lib/slashCommands'
+import { confirmDestructive } from '../lib/confirmMod'
+import { formatDuration } from '../lib/tokenize'
 
 /** turns a few known raw Twitch API errors into a clearer message */
 function friendlyMessage(raw: string): string {
@@ -88,6 +90,9 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
     switch (btn.type) {
       case 'timeout': {
         if (!ctx.targetUserId) return
+        // same gate as the swipe: on touch these two ask first, on the desktop they never do
+        if (!(await confirmDestructive('timeout', ctx.targetLogin ?? '', formatDuration(btn.seconds ?? 600))))
+          return
         report(
           await banUser(ctx.account, ctx.channelId, ctx.targetUserId, btn.seconds ?? 600, btn.text || undefined),
           `⏱ ${ctx.targetLogin}`,
@@ -97,6 +102,7 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
       }
       case 'ban': {
         if (!ctx.targetUserId) return
+        if (!(await confirmDestructive('ban', ctx.targetLogin ?? ''))) return
         report(await banUser(ctx.account, ctx.channelId, ctx.targetUserId, undefined, btn.text || undefined), `🔨 ${ctx.targetLogin}`, ctx.account.login)
         break
       }
@@ -107,6 +113,7 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
       }
       case 'delete': {
         if (!ctx.targetMsgId) return
+        if (!(await confirmDestructive('delete', ctx.targetLogin ?? ''))) return
         report(await deleteChatMessage(ctx.account, ctx.channelId, ctx.targetMsgId), '🗑️', ctx.account.login)
         break
       }
