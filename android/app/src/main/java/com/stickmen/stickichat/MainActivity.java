@@ -6,6 +6,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
 
+import android.webkit.CookieManager;
+
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -14,6 +16,14 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(BrowserOnlyPlugin.class);
         registerPlugin(PipPlugin.class);
         super.onCreate(savedInstanceState);
+        /*
+         * The player is an iframe on player.twitch.tv inside a page served from localhost, which makes
+         * its cookies third-party. Without this the session established by LoginActivity exists in the
+         * process and is still invisible to the one thing it was for.
+         */
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(getBridge().getWebView(), true);
+        }
     }
 
     /**

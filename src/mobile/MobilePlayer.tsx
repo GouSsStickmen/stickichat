@@ -5,7 +5,28 @@ import { useSettingsStore } from '@renderer/store/settings'
 const Pip = registerPlugin<{
   enter(o: { width: number; height: number }): Promise<void>
   setAuto(o: { enabled: boolean }): Promise<void>
+  openTwitchLogin(): Promise<void>
+  hasTwitchSession(): Promise<{ value: boolean }>
 }>('Pip')
+
+/**
+ * Whether the player is watching as a logged-in viewer.
+ *
+ * Exported because the menu offers the login and the player is what the answer is about: the app's own
+ * OAuth token says nothing here — ads are decided by a twitch.tv web session, which lives in the
+ * WebView cookie jar and nowhere else.
+ */
+export async function twitchSessionActive(): Promise<boolean> {
+  try {
+    return (await Pip.hasTwitchSession()).value
+  } catch {
+    return false
+  }
+}
+
+export async function openTwitchLogin(): Promise<void> {
+  await Pip.openTwitchLogin().catch(() => undefined)
+}
 
 /**
  * The stream, above the chat.
@@ -117,6 +138,25 @@ export default function MobilePlayer({
     window.addEventListener('pointercancel', up)
   }
 
+  /*
+   * Coming back from the login window, the iframe has to be told to look again — it was created as an
+   * anonymous viewer and will stay one until it reloads. The key is bumped when the session appears.
+   */
+  const [sessionKey, setSessionKey] = useState(0)
+  useEffect(() => {
+    const onResume = (): void => {
+      void twitchSessionActive().then((live) => {
+        if (live) setSessionKey((k) => k + 1)
+      })
+    }
+    window.addEventListener('sticki:twitchlogin', onResume)
+    document.addEventListener('visibilitychange', onResume)
+    return () => {
+      window.removeEventListener('sticki:twitchlogin', onResume)
+      document.removeEventListener('visibilitychange', onResume)
+    }
+  }, [])
+
   const src =
     `https://player.twitch.tv/?channel=${encodeURIComponent(channel)}` +
     `&parent=localhost&autoplay=true&muted=false`
@@ -128,11 +168,14 @@ export default function MobilePlayer({
       onPointerDown={showBar}
     >
       <iframe
+        key={sessionKey}
         title={channel}
         src={src}
         allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
         allowFullScreen
       />
+      {/* the only thing that can hear a tap on the video — see .m-player-tap */}
+      {!inPip && !barShown && <div className="m-player-tap" onPointerDown={showBar} />}
       {!inPip && (
         <>
           <div className="m-player-bar">

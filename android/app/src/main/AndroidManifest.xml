@@ -35,6 +35,13 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+    
+        <!-- Twitch's login page, in its own window; see LoginActivity -->
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false"
+            android:label="Twitch"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
     </application>
 
     <!-- Permissions -->

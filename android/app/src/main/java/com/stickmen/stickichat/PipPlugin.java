@@ -1,9 +1,12 @@
 package com.stickmen.stickichat;
 
 import android.app.PictureInPictureParams;
+import android.content.Intent;
 import android.os.Build;
 import android.util.Rational;
+import android.webkit.CookieManager;
 
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -35,6 +38,32 @@ public class PipPlugin extends Plugin {
     public void setAuto(PluginCall call) {
         autoPipWanted = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         call.resolve();
+    }
+
+    /**
+     * Open Twitch's login page in its own window, so the player can stop being anonymous.
+     *
+     * Lives on this plugin because it is the same subject: what the embedded player is allowed to be.
+     * See LoginActivity for why a session, and not the API token the app already has, is what decides
+     * whether a subscriber sees ads.
+     */
+    @PluginMethod
+    public void openTwitchLogin(PluginCall call) {
+        try {
+            getContext().startActivity(new Intent(getContext(), LoginActivity.class));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("could not open the login window: " + e.getMessage());
+        }
+    }
+
+    /** whether this process holds a twitch.tv session — the player is logged in exactly when it does */
+    @PluginMethod
+    public void hasTwitchSession(PluginCall call) {
+        String cookie = CookieManager.getInstance().getCookie("https://www.twitch.tv");
+        JSObject res = new JSObject();
+        res.put("value", cookie != null && cookie.contains("auth-token"));
+        call.resolve(res);
     }
 
     @PluginMethod

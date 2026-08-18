@@ -3,6 +3,8 @@ import { useLayoutStore } from '@renderer/store/layout'
 import { useAccountsStore } from '@renderer/store/accounts'
 import { useUiStore } from '@renderer/store/ui'
 import { useChatStore } from '@renderer/store/chat'
+import { useSettingsStore } from '@renderer/store/settings'
+import { openTwitchLogin, twitchSessionActive } from './MobilePlayer'
 import { Tab } from '@renderer/types'
 
 /**
@@ -42,6 +44,15 @@ export default function MobileTabStrip({
   const [channel, setChannel] = useState('')
   /** set when the sheet was opened to split an existing tab rather than to make a new one */
   const [splitInto, setSplitInto] = useState<string | null>(null)
+  /** the ⋮ menu: filter, search, settings and the buttons that used to crowd the strip */
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const tabFilter = useSettingsStore((s) => s.settings.tabFilter)
+  const liveChannels = useChatStore((s) => s.liveChannels)
+  const [twitchSession, setTwitchSession] = useState(false)
+  useEffect(() => {
+    if (menuOpen) void twitchSessionActive().then(setTwitchSession)
+  }, [menuOpen])
 
   /**
    * Adding a channel is its own sheet rather than a reused desktop dialog.
@@ -88,12 +99,24 @@ export default function MobileTabStrip({
     setSplitInto(null)
   }
 
+  /*
+   * What the strip actually shows: the filter first, then the search box if anything is typed in it.
+   * Pinned tabs ignore the filter, the same rule the desktop bar uses — a tab you pinned is one you
+   * asked to always see.
+   */
+  const isLive = (t: Tab): boolean => t.panes.some((p) => liveChannels[p.channel])
+  const q = search.trim().toLowerCase()
+  const shownTabs = tabs
+    .filter((t) => tabFilter === 'all' || t.pinned || (tabFilter === 'online' ? isLive(t) : !isLive(t)))
+    .filter((t) => !q || label(t).toLowerCase().includes(q) || t.panes.some((p) => p.channel.includes(q)))
+
   // Escape is what Android's back button dispatches — see the handler in MobileApp
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
       setMenuFor(null)
       setAdding(false)
+      setMenuOpen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -103,7 +126,7 @@ export default function MobileTabStrip({
     <>
       <div className="m-tabs">
         <div className="m-tabs-scroll">
-          {tabs.map((t) => (
+          {shownTabs.map((t) => (
             <button
               key={t.id}
               className={`m-tab ${t.id === activeTabId ? 'active' : ''}`}
@@ -139,34 +162,97 @@ export default function MobileTabStrip({
           ))}
         </div>
         {/*
-          The stream of the channel you are looking at. It follows the active tab rather than being a
-          separate choice, because on a phone the tab you are on IS the channel you are watching.
+          One button, not four.
+          A 411px strip was carrying ▶, +, ⋮ and the tabs themselves, so the tabs had about half the
+          width. Everything that is not a tab now lives behind the ⋮ — which is also where a filter and
+          a search box can exist at all, neither of which had anywhere to go before.
         */}
-        {(() => {
-          const active = tabs.find((t) => t.id === activeTabId)
-          const ch = active?.panes[0]?.channel
-          if (!ch) return null
-          return (
-            <button
-              className={`m-tabs-play ${playing === ch ? 'on' : ''}`}
-              onClick={() => onTogglePlayer(ch)}
-              title={playing === ch ? 'Прибрати стрім' : 'Показати стрім'}
-            >
-              {playing === ch ? '■' : '▶'}
-            </button>
-          )
-        })()}
-        <button className="m-tabs-add" onClick={openAdd} title="Додати канал">
-          +
-        </button>
-        <button
-          className="m-tabs-menu"
-          onClick={() => useUiStore.getState().setSettingsOpen(true)}
-          title="Налаштування"
-        >
+        <button className="m-tabs-menu" onClick={() => setMenuOpen(true)} title="Меню">
           ⋮
         </button>
       </div>
+
+      {menuOpen && (
+        <div className="m-sheet-back m-menu-back" onClick={() => setMenuOpen(false)}>
+          <div className="m-menu" onClick={(e) => e.stopPropagation()}>
+            <input
+              className="m-input"
+              value={search}
+              placeholder="Пошук каналу"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="off"
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
+            <div className="m-menu-filter">
+              {(
+                [
+                  ['all', 'Усі'],
+                  ['online', '🟢 Онлайн'],
+                  ['offline', '⚫ Офлайн']
+                ] as ['all' | 'online' | 'offline', string][]
+              ).map(([key, text]) => (
+                <button
+                  key={key}
+                  className={tabFilter === key ? 'on' : ''}
+                  onClick={() => useSettingsStore.getState().setSettings({ tabFilter: key })}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                setMenuOpen(false)
+                openAdd()
+              }}
+            >
+              ＋ Додати канал
+            </button>
+
+            {(() => {
+              const active = tabs.find((t) => t.id === activeTabId)
+              const ch = active?.panes[0]?.channel
+              if (!ch) return null
+              return (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onTogglePlayer(ch)
+                  }}
+                >
+                  {playing === ch ? '■ Прибрати стрім' : '▶ Показати стрім'}
+                </button>
+              )
+            })()}
+
+            {/*
+              The web session, which is a different thing from the account the app is signed in with:
+              this one is what the embedded player sees, and the only reason it exists is that a
+              subscriber watching logged-out still gets pre-roll ads.
+            */}
+            <button
+              onClick={() => {
+                setMenuOpen(false)
+                void openTwitchLogin()
+              }}
+            >
+              {twitchSession ? '🔓 Плеєр: вхід виконано' : '🔒 Вхід у Twitch для плеєра'}
+            </button>
+
+            <button
+              onClick={() => {
+                setMenuOpen(false)
+                useUiStore.getState().setSettingsOpen(true)
+              }}
+            >
+              ⚙ Налаштування
+            </button>
+          </div>
+        </div>
+      )}
 
       {adding && (
         <div className="m-sheet-back" onClick={() => setAdding(false)}>

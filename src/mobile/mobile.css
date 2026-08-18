@@ -235,7 +235,8 @@ body {
   right: 6px;
   width: min(360px, 46vw);
   top: calc(var(--m-tabs-h) + 4px);
-  bottom: calc(6px + var(--m-safe-bottom));
+  /* the input row is down there in landscape as well — this was sitting on top of it */
+  bottom: calc(6px + var(--m-safe-bottom) + var(--m-input-h, 62px));
 }
 
 /*
@@ -252,9 +253,18 @@ body {
   display: none;
 }
 
-/* in the little window the split does not apply — it is only ever the video */
-.m-app.in-pip.landscape.has-player .m-player {
-  flex: 1 1 auto;
+/*
+ * The little window is not a landscape phone, whatever its shape says.
+ *
+ * A picture-in-picture window is 227x128 — wider than it is tall, so the landscape rules matched it
+ * and placed the video at 62% width starting 44px down. That is what pushed it into the bottom-left
+ * corner. In PiP the video is the whole window and nothing else is placed at all.
+ */
+.m-app.in-pip .m-player {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .m-expand {
@@ -306,8 +316,27 @@ body {
 }
 
 /* over the video, because a bar beside it would cost height the video needs */
+/*
+ * A transparent layer to tap on.
+ *
+ * Touches that land on an iframe belong to the iframe's own document and never reach the page holding
+ * it — so tapping the video could not bring the buttons back, and once they had faded they were gone
+ * for good. This sits over the video for exactly that one job, and steps aside while the buttons are
+ * up so they can be pressed.
+ */
+.m-player-tap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.m-player.bar-shown .m-player-tap {
+  display: none;
+}
+
 .m-player-bar,
 .m-player-grip {
+  z-index: 2;
   opacity: 0;
   transition: opacity 0.18s ease-out;
 }
@@ -849,6 +878,81 @@ body {
 .m-app .msg-sheet button img {
   width: 20px;
   height: 20px;
+}
+
+/* ---------- the ⋮ menu ---------- */
+
+/*
+ * A panel hanging from the top right, not a sheet from the bottom.
+ *
+ * It belongs to the button that opened it and the button is up there — a sheet rising from the far
+ * end of the screen for a menu attached to the top corner reads as a different thing happening.
+ */
+/* both classes: .m-sheet-back is defined further down the file and its flex-end would win on one */
+.m-sheet-back.m-menu-back {
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.m-menu {
+  width: min(280px, 86vw);
+  margin: calc(var(--m-safe-top) + var(--m-tabs-h) + 4px) 6px 0 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 14px;
+  background: var(--bg-alt, #18181b);
+  box-shadow: 0 10px 34px rgb(0 0 0 / 60%);
+  animation: m-menu-in 0.14s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes m-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+}
+
+.m-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text, #efeff1);
+  font-size: 15px;
+  text-align: left;
+}
+
+.m-menu > button:active {
+  background: rgb(255 255 255 / 8%);
+}
+
+/* the three states side by side: one tap to a filter, and the current one is obvious */
+.m-menu-filter {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.m-menu-filter button {
+  flex: 1 1 0;
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--surface-2, #26262c);
+  color: var(--text-dim, #adadb8);
+  font-size: 13px;
+}
+
+.m-menu-filter button.on {
+  background: var(--accent, #9147ff);
+  color: #fff;
 }
 
 /* ---------- the ban confirmation ---------- */
