@@ -148,6 +148,8 @@ export default function MobileTabStrip({
                 const inactive = t.id !== activeTabId
                 return (
                   <>
+                    {/* live first: it is the reason to open the tab, the rest is what happened in it */}
+                    {isLive(t) && <span className="live-dot" title="Онлайн" />}
                     {mention && <span className="mention-dot">@</span>}
                     {keyword && inactive && (
                       <span className="keyword-tag" title={keyword}>

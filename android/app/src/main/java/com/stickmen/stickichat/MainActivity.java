@@ -58,6 +58,21 @@ public class MainActivity extends BridgeActivity {
     public void onPictureInPictureModeChanged(boolean inPip, Configuration config) {
         super.onPictureInPictureModeChanged(inPip, config);
         if (getBridge() == null || getBridge().getWebView() == null) return;
+
+        /*
+         * Entering picture-in-picture takes the activity through onPause, and a paused WebView has its
+         * timers and its media stopped — so the video froze in the very window it was moved into. In
+         * PiP the app is not in the background in any sense that matters: it is on screen and playing.
+         */
+        if (inPip) {
+            runOnUiThread(
+                () -> {
+                    getBridge().getWebView().onResume();
+                    getBridge().getWebView().resumeTimers();
+                }
+            );
+        }
+
         // evaluateJavascript has to be on the UI thread, and this callback is not guaranteed to be
         runOnUiThread(
             () ->

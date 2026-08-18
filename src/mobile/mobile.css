@@ -721,11 +721,17 @@ body {
    * was leaving one row of emotes visible once the keyboard shrank the page, and the space above it
    * was doing nothing.
    */
-  top: calc(var(--m-safe-top) + var(--m-tabs-h) + 6px);
+  /* as tall as it needs and no taller; the full stretch is for when the keyboard has taken the screen */
+  top: auto;
+  max-height: 46vh;
   width: auto;
-  max-height: none;
   margin: 0;
   z-index: 55;
+}
+
+.m-app.kb-open .emote-picker {
+  top: calc(var(--m-safe-top) + var(--m-tabs-h) + 6px);
+  max-height: none;
 }
 
 .m-app .picker-body {

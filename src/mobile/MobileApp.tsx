@@ -17,6 +17,7 @@ import Toasts from '@renderer/components/Toasts'
 import { chatService } from '@renderer/services/chatService'
 import { App as CapApp } from '@capacitor/app'
 import { StatusBar } from '@capacitor/status-bar'
+import { Keyboard } from '@capacitor/keyboard'
 import MobileTabStrip from './MobileTabStrip'
 import ModConfirmSheet from './ModConfirmSheet'
 import MobilePlayer from './MobilePlayer'
@@ -202,6 +203,23 @@ export default function MobileApp(): React.JSX.Element | null {
    * drawn. That was the content "sliding down". Watching a stream sideways is the one case where the
    * clock is worth less than the pixels, so the bar goes away and comes back with the rotation.
    */
+  /*
+   * Whether the keyboard is up, as a class on the root.
+   *
+   * The emote picker takes all the room between the tab strip and the input only when it has to —
+   * which is when the keyboard has taken half the screen. With the keyboard down that same stretch
+   * covered the player, and there was no reason for it: the emotes already fit.
+   */
+  useEffect(() => {
+    const root = () => document.querySelector('.m-app')
+    const on = Keyboard.addListener('keyboardWillShow', () => root()?.classList.add('kb-open'))
+    const off = Keyboard.addListener('keyboardWillHide', () => root()?.classList.remove('kb-open'))
+    return () => {
+      void on.then((h) => h.remove())
+      void off.then((h) => h.remove())
+    }
+  }, [booted])
+
   useEffect(() => {
     if (landscape) void StatusBar.hide().catch(() => undefined)
     else void StatusBar.show().catch(() => undefined)
