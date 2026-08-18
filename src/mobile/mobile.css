@@ -1,0 +1,1139 @@
+/*
+ * The phone layout.
+ *
+ * Everything the theme decides — colours, emote sizes, message spacing, the 7TV paints — still
+ * comes from global.css, which is shared verbatim with the desktop. This file only does the things
+ * a phone needs and a desktop does not: safe-area insets, thumb-sized hit targets, a vertical
+ * split, and the removal of chrome that exists only because a mouse was assumed.
+ */
+
+:root {
+  /* the strip is fixed; the panes get whatever is left, minus the notch and the home bar */
+  --m-tabs-h: 44px;
+  --m-safe-top: env(safe-area-inset-top, 0px);
+  --m-safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* 44px is the smallest target that is reliably hit with a thumb; the desktop uses 20 */
+  --m-tap: 44px;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg, #0e0e10);
+  /* a chat is a scrolling list: the browser's rubber-band on the page itself only fights it */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  height: 100%;
+}
+
+.m-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: var(--m-safe-top);
+  padding-bottom: var(--m-safe-bottom);
+  box-sizing: border-box;
+  color: var(--text, #efeff1);
+  font: 14px/1.45 var(--font-family, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
+}
+
+/* ---------- tabs ---------- */
+
+.m-tabs {
+  display: flex;
+  align-items: stretch;
+  height: var(--m-tabs-h);
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border, #2a2a2e);
+  background: var(--bg-alt, #18181b);
+}
+
+.m-tabs-scroll {
+  display: flex;
+  gap: 4px;
+  flex: 1 1 auto;
+  padding: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* a tab strip that lands between two tabs looks broken; snap so it always lands on one */
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.m-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.m-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: 42vw;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--tab-bg, #26262c);
+  color: var(--tab-text, #adadb8);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  scroll-snap-align: center;
+  /* the OS text-selection popup on a long press would fight the long-press menu below */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.m-tab.active {
+  background: var(--tab-active-bg, #3a3a44);
+  color: var(--tab-active-text, #fff);
+  border-color: var(--accent, #9147ff);
+}
+
+.m-tab-count {
+  padding: 1px 5px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 14%);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.m-tabs-add,
+.m-tabs-menu {
+  flex: 0 0 auto;
+  width: var(--m-tap);
+  border: 0;
+  border-left: 1px solid var(--border, #2a2a2e);
+  background: transparent;
+  color: var(--text-dim, #adadb8);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.m-tabs-add:active,
+.m-tabs-menu:active {
+  background: rgb(255 255 255 / 8%);
+}
+
+/* ---------- the split ---------- */
+
+.m-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 1px;
+  background: var(--border, #2a2a2e);
+}
+
+.m-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* equal shares by default, and `min-height: 0` so a long chat scrolls instead of
+     stretching its own pane — the classic flexbox overflow trap */
+  flex: 1 1 0;
+  min-height: 0;
+  background: var(--bg, #0e0e10);
+  overflow: hidden;
+}
+
+/*
+ * The shared pane sizes itself from a grid cell on the desktop, where a cell stretches its child in
+ * both directions. Inside this flex column only the cross axis stretches, so without a grow the
+ * pane collapses to its header plus its input and the message list ends up exactly 0px tall.
+ */
+.m-pane > .pane {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/*
+ * In a stack, only the pane being written to shows an input row, and every header is compressed.
+ * Both are pure space arithmetic: the chrome is fixed-height, so on a small screen it is the chat
+ * that pays for it. A single pane keeps the full desktop chrome — there is room for it.
+ */
+.m-stack:not([data-count='1']) .m-pane:not(.writing) .input-area {
+  display: none;
+}
+
+.m-stack:not([data-count='1']) .pane-header {
+  min-height: 0;
+  padding-top: 1px;
+  padding-bottom: 1px;
+  font-size: 12px;
+}
+
+/* the pane you are typing into should be obvious without reading anything */
+.m-stack:not([data-count='1']) .m-pane.writing {
+  box-shadow: inset 2px 0 0 var(--accent, #9147ff);
+}
+
+/* landscape: the phone is now shaped like the desktop, so the desktop answer is right again */
+.m-app.landscape .m-stack {
+  flex-direction: row;
+}
+
+.m-expand {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  backdrop-filter: blur(4px);
+}
+
+/* the pane fills the screen: nothing to escape from, and the button would cover a message */
+.m-stack[data-count='1'] .m-expand {
+  background: rgb(0 0 0 / 35%);
+}
+
+/* the anonymous-read notice: one line, tappable, and out of the way of the chat */
+.m-signin {
+  flex: 0 0 auto;
+  min-height: 30px;
+  border: 0;
+  border-bottom: 1px solid var(--border, #2a2a2e);
+  background: color-mix(in srgb, var(--accent, #9147ff) 18%, transparent);
+  color: var(--text, #efeff1);
+  font-size: 12px;
+}
+
+/* ---------- the stream player ---------- */
+
+.m-player {
+  position: relative;
+  flex: 0 0 auto;
+  background: #000;
+  overflow: hidden;
+}
+
+.m-player iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* over the video, because a bar beside it would cost height the video needs */
+.m-player-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 10px;
+  background: linear-gradient(rgb(0 0 0 / 65%), transparent);
+  pointer-events: none;
+}
+
+.m-player-who {
+  flex: 1 1 auto;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-player-bar button {
+  pointer-events: auto;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/*
+ * The resize handle is a whole strip, not a line.
+ *
+ * A 4px divider is a mouse target. This is 18px tall, spans the width, and says which way it moves —
+ * and `touch-action: none` is what stops the chat below from claiming the drag as a scroll.
+ */
+.m-player-grip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(transparent, rgb(0 0 0 / 70%));
+  color: rgb(255 255 255 / 70%);
+  font-size: 11px;
+  letter-spacing: 2px;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.m-tabs-play {
+  flex: 0 0 auto;
+  width: var(--m-tap);
+  border: 0;
+  border-left: 1px solid var(--border, #2a2a2e);
+  background: transparent;
+  color: var(--text-dim, #adadb8);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.m-tabs-play.on {
+  background: color-mix(in srgb, var(--accent, #9147ff) 30%, transparent);
+  color: #fff;
+}
+
+/*
+ * In picture-in-picture the app IS the player.
+ *
+ * Android shrinks the whole activity into a corner of the screen — a few hundred pixels wide, with no
+ * room for a tab strip or a line of chat, and no way to interact with them anyway. So everything else
+ * is taken away and the player fills the window; it all comes back when the window does.
+ */
+.m-app.in-pip .m-tabs,
+.m-app.in-pip .m-stack,
+.m-app.in-pip .m-signin,
+.m-app.in-pip .m-empty {
+  display: none;
+}
+
+.m-app.in-pip {
+  padding: 0;
+}
+
+.m-app.in-pip .m-player {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+/* ---------- empty states ---------- */
+
+.m-empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-dim, #adadb8);
+}
+
+.m-empty p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.m-empty .hint {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/*
+ * Buttons whose only job is to open a second window.
+ *
+ * There is no second window here, so they cannot do anything at all — and unlike the emote picker
+ * or the highlights star, they have no in-app behaviour to fall back to. The three preferences that
+ * route those other buttons through a window are forced off at boot instead; these are the ones
+ * left with nothing to be.
+ */
+.m-app [data-desktop-only] {
+  display: none;
+}
+
+/*
+ * The placeholder is the only text in the input that is allowed to be small.
+ *
+ * Typed text stays at 16px because anything smaller makes Android zoom the page in on focus and
+ * never zoom back out. The hint has no such constraint, and at 16px "Надіслати повідомлення…" wraps
+ * to two lines in a 225px box and gets clipped by the single-line height.
+ */
+.m-app .input-row textarea::placeholder {
+  font-size: 13px;
+}
+
+/* the hint that explains why the Twitch app swallows the login, and the way to its setting */
+.auth-hijack-hint {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--border, #2a2a2e);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent, #9147ff) 10%, transparent);
+}
+
+.auth-hijack-hint p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.auth-hijack-hint .how {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted, #adadb8);
+}
+
+.auth-hijack-hint button {
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent, #9147ff);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- settings, for a phone ---------- */
+
+/*
+ * The settings panel is a desktop panel: a 160px sidebar of eleven sections beside a column of
+ * label-and-control rows. On 411px that sidebar is 39% of the screen and leaves the controls about
+ * 245px to share — which is where the squeezed text comes from.
+ *
+ * So the sidebar stops being a sidebar. It becomes one scrolling row of chips at the top, the same
+ * shape as the tab strip above it, and the content gets the whole width. Nothing about the sections
+ * themselves changes: they already adapt to the width of the column they sit in (`container:
+ * setpane`), and giving them 400px instead of 245px is what that adaptation was waiting for.
+ */
+.m-app .modal-backdrop:has(.settings-layout) {
+  /* a full screen, not a floating card: there is no "beside" on a phone */
+  padding: 0;
+  align-items: stretch;
+}
+
+.m-app .modal:has(.settings-layout) {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  /* the panel's own zoom is a desktop affordance; here the OS text size already did that job */
+  zoom: 1 !important;
+}
+
+.m-app .modal:has(.settings-layout) .modal-header {
+  padding: 10px 12px;
+  padding-top: calc(10px + var(--m-safe-top));
+  font-size: 17px;
+}
+
+.m-app .settings-layout {
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* the category list, as its own screen: full width, one row per category, room to tap */
+.m-app .settings-nav {
+  flex-direction: column;
+  width: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+  gap: 4px;
+  border-right: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.m-app .settings-nav button {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--surface-2, #26262c);
+  color: var(--text, #efeff1);
+  font-size: 16px;
+  text-align: left;
+}
+
+/* the chevron says the row goes somewhere, which is the whole difference from a tab */
+.m-app .settings-nav button::after {
+  content: '›';
+  margin-left: auto;
+  padding-left: 10px;
+  color: var(--text-faint, #6b6b76);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.m-app .settings-nav button:active {
+  background: var(--surface-3, #35353d);
+}
+
+/* the back arrow in the header, sized like the close button beside it */
+.m-app .m-set-back {
+  min-width: 34px;
+  min-height: 34px;
+  margin-right: 4px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.m-app .settings-content {
+  max-height: none;
+  flex: 1 1 auto;
+  padding: 12px;
+  padding-bottom: calc(16px + var(--m-safe-bottom));
+  overscroll-behavior: contain;
+}
+
+/*
+ * Controls sized for a finger, and stacked when they are a label with a value.
+ *
+ * The container rules already wrap these rows; what they cannot do is make a 20px checkbox or a
+ * 24px-tall select something a thumb can hit, because on the desktop those sizes are correct.
+ */
+.m-app .settings-content .set-row {
+  padding: 10px 0;
+  gap: 8px;
+}
+
+.m-app .settings-content input[type='text'],
+.m-app .settings-content input[type='number'],
+.m-app .settings-content input[type='url'],
+.m-app .settings-content select,
+.m-app .settings-content textarea {
+  min-height: 40px;
+  /* 16px or Android zooms the page in on focus and never zooms back */
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+.m-app .settings-content input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.m-app .settings-content input[type='range'] {
+  min-height: 36px;
+}
+
+.m-app .settings-content button {
+  min-height: 38px;
+}
+
+/* a text field that shares its row with a label should still get a usable width */
+.m-app .settings-content .set-row > input[type='text'],
+.m-app .settings-content .set-row > select {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+/*
+ * The reorder handles, made grabbable.
+ *
+ * The reordering itself was never desktop-only — it runs on pointer events, which touch produces
+ * too. What stopped it is that a finger moving on a scrollable panel belongs to the scroller: the
+ * browser claims the gesture and sends `pointercancel`, so the drag ended before it began.
+ * `touch-action: none` on the handle alone says this one small area is not for scrolling, which is
+ * why these are handles and not whole rows.
+ */
+.m-app .modbtn-drag,
+.m-app .hl-drag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 40px;
+  font-size: 18px;
+  touch-action: none;
+  /* the OS text-selection popup would otherwise ride along with the press */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* the card being dragged should be obvious under a finger that is covering part of it */
+.m-app .modbtn-card.dragging,
+.m-app .hl-card.dragging {
+  outline: 2px solid var(--accent, #9147ff);
+  outline-offset: -2px;
+}
+
+/* ---------- the emote picker ---------- */
+
+/*
+ * A sheet with its own height budget, instead of a box hanging above the input.
+ *
+ * Anchored at `bottom: 100%` of the input row, its top ran past the top of the screen as soon as
+ * anything shrank the page — which the keyboard does. Pinned to the viewport with a max-height in
+ * `vh`, it re-fits whenever that viewport changes instead of overflowing it.
+ */
+.m-app .emote-picker {
+  position: fixed;
+  left: 6px;
+  right: 6px;
+  /*
+   * Clear of the input row, not on top of it.
+   *
+   * Pinned to the bottom it covered the very field the emote was going into, so you could not see
+   * what you had picked or what you were typing. 62px is the input row plus its padding; the height
+   * cap comes down to match so the picker still fits between the keyboard and the top of the screen.
+   */
+  bottom: calc(8px + var(--m-safe-bottom) + 62px);
+  width: auto;
+  max-height: 44vh;
+  margin: 0;
+  z-index: 55;
+}
+
+.m-app .picker-body {
+  /* the sheet caps the height now; this one was capping it at a fixed 300px as well */
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/*
+ * No preview strip in the picker.
+ *
+ * It is a mouse idea: on the desktop you hover an emote and the big version appears below without
+ * committing to anything. A finger has nothing to hover with, so the strip only ever showed the last
+ * emote tapped — while eating its own height plus a border, which with the keyboard up left room for
+ * a single row of emotes. Gone, the same space holds three or four.
+ */
+.m-app .picker-preview {
+  display: none !important;
+}
+
+.m-app .picker-tabs button,
+.m-app .emote-picker > input {
+  min-height: 38px;
+}
+
+.m-app .emote-picker > input {
+  font-size: 16px;
+}
+
+/* the channel suggestions, as rows in the page instead of a system dropdown over the keyboard */
+.m-app .m-channel-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.m-app .m-channel-hints button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border, #2a2a2e);
+  border-radius: 18px;
+  background: var(--surface-2, #26262c);
+  color: var(--text, #efeff1);
+  font-size: 14px;
+}
+
+/* ---------- link previews ---------- */
+
+/*
+ * The card is anchored to the link that opened it, which on a phone means it opens halfway down a
+ * 411px screen and continues off the side. Pinned to the bottom instead, like every other panel
+ * here, so it is fully on screen wherever the link happened to be.
+ */
+.m-app .link-card-anchor {
+  left: 8px !important;
+  right: 8px;
+  top: auto !important;
+  /* the same 62px of clearance the emote picker gets: the card must not sit on the input row */
+  bottom: calc(8px + var(--m-safe-bottom) + 62px) !important;
+}
+
+.m-app .link-card {
+  max-width: none;
+  width: 100%;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/*
+ * The emote preview, centred rather than placed at a pointer.
+ *
+ * Its position comes from the mouse coordinates that opened it, and a tap has none worth using — the
+ * touch handler passes zeros, which put it in the top-left corner over the tab strip. Anchored to the
+ * middle of the screen it is where the eye already is, and it stays clear of the input.
+ */
+.m-app .emote-hover-preview {
+  left: 50% !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* the tag after a link is the whole affordance on touch, so it has to be tappable */
+.m-app .link-preview-toggle {
+  min-height: 26px;
+  padding: 0 8px;
+}
+
+/* ---------- the message action sheet ---------- */
+
+/*
+ * What a long press opens now.
+ *
+ * `position: fixed` matters twice over: the list keeps each row's measured height and would hide
+ * anything added inside one, and a sheet pinned to the bottom of the screen is where a thumb already
+ * is rather than wherever the message happens to sit.
+ */
+.m-app .msg-sheet {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: calc(8px + var(--m-safe-bottom));
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 68vh;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 16px;
+  background: var(--bg-alt, #18181b);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 60%);
+  animation: m-rise 0.16s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.m-app .msg-sheet-who {
+  padding: 8px 12px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border, #2a2a2e);
+  color: var(--text-dim, #adadb8);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.m-app .msg-sheet button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text, #efeff1);
+  font-size: 15px;
+  text-align: left;
+}
+
+.m-app .msg-sheet button:active {
+  background: rgb(255 255 255 / 8%);
+}
+
+.m-app .msg-sheet button img {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- the ban confirmation ---------- */
+
+/*
+ * The name is the biggest thing in it, and the destructive button is the far one.
+ *
+ * These accidents were not people choosing wrong: a swipe that crossed a 411px screen landed in the
+ * ban zone and nobody saw a choice being made. So the sheet says who, loudly, and puts the red
+ * button where a thumb finishing that same swipe is not already resting.
+ */
+/*
+ * Above the shared modals, which sit at z-index 100.
+ *
+ * A confirmation that can be hidden behind anything is worse than none: the action would sit there
+ * waiting on an answer to a question nobody can see.
+ */
+.m-sheet-back:has(.m-confirm) {
+  z-index: 120;
+}
+
+.m-confirm {
+  padding-top: 18px;
+  text-align: center;
+}
+
+.m-confirm-what {
+  font-size: 13px;
+  color: var(--text-dim, #adadb8);
+  letter-spacing: 0.04em;
+}
+
+.m-confirm-who {
+  margin: 6px 0 18px;
+  font-size: 24px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.m-confirm-row {
+  display: flex;
+  gap: 10px;
+}
+
+.m-confirm-row button {
+  flex: 1 1 0;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: 12px;
+  background: var(--surface-2, #2a2a31);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.m-confirm-row button.danger-solid {
+  flex: 1.4 1 0;
+  background: var(--danger, #d64545);
+  color: #fff;
+}
+
+/* ---------- bottom sheets ---------- */
+
+/*
+ * Menus are sheets, not popovers. A popover is anchored to the thing it belongs to, which on a
+ * phone means it opens under the finger that just pressed it. A sheet always opens where the thumb
+ * already is, and its backdrop makes "somewhere else" a valid way to dismiss.
+ */
+.m-sheet-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  background: rgb(0 0 0 / 50%);
+  animation: m-fade 0.12s ease-out;
+}
+
+.m-sheet {
+  width: 100%;
+  max-height: 70vh;
+  padding: 8px 8px calc(8px + var(--m-safe-bottom));
+  box-sizing: border-box;
+  border-radius: 16px 16px 0 0;
+  background: var(--bg-alt, #18181b);
+  box-shadow: 0 -8px 32px rgb(0 0 0 / 45%);
+  overflow-y: auto;
+  animation: m-rise 0.16s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.m-sheet-title {
+  padding: 10px 12px 12px;
+  color: var(--text-dim, #adadb8);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 1px solid var(--border, #2a2a2e);
+  margin-bottom: 6px;
+}
+
+.m-sheet button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--m-tap);
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text, #efeff1);
+  font-size: 15px;
+  text-align: left;
+}
+
+.m-sheet button:active {
+  background: rgb(255 255 255 / 8%);
+}
+
+.m-sheet button.danger {
+  color: var(--danger, #ff6b6b);
+}
+
+.m-sheet button.primary {
+  justify-content: center;
+  margin-top: 8px;
+  background: var(--accent, #9147ff);
+  color: #fff;
+  font-weight: 600;
+}
+
+.m-input {
+  width: 100%;
+  min-height: var(--m-tap);
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border, #2a2a2e);
+  border-radius: 10px;
+  background: var(--input-bg, #0e0e10);
+  color: var(--text, #efeff1);
+  /* under 16px Android zooms the whole page in on focus and never zooms back out */
+  font-size: 16px;
+}
+
+.m-input:focus {
+  outline: 2px solid var(--accent, #9147ff);
+  outline-offset: -1px;
+}
+
+@keyframes m-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes m-rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* ---------- shared components, adjusted for touch ---------- */
+
+/*
+ * These reach into the desktop components' own class names. That is deliberate and it is the whole
+ * point of sharing them: the markup and the logic stay in one place, and the differences that are
+ * purely about a finger instead of a cursor live here, where they cannot drift into the desktop.
+ */
+
+/*
+ * A phone has no cursor, so `:hover` never fires — and on Android a tap latches it until the next
+ * tap elsewhere. Both facts point the same way: the desktop's hover affordances are turned off
+ * here, and the actions they revealed are reached by a long press instead.
+ */
+@media (hover: none) {
+  .m-app .msg-row:hover .hover-actions {
+    display: none;
+  }
+
+  /* they stay gone: a long press opens .msg-sheet instead, with names on the buttons */
+  .m-app .msg-row.touch-held .hover-actions {
+    display: none;
+  }
+
+  .m-app .msg-row.touch-held {
+    background: var(--surface-2, rgb(255 255 255 / 6%));
+    /* over the rows below, which are absolutely positioned siblings */
+    z-index: 6;
+  }
+
+  /*
+   * The grip: a visible handle, off the edge, thumb-sized.
+   *
+   * Three separate reasons it was hard to use. It was 14px wide, hard against the left edge — which
+   * is where Android's back gesture starts, so half the drags were the OS leaving the app. It was
+   * invisible until hover, which on a phone means never, so there was nothing to aim at. And it drew
+   * a ⠿ the same colour as the timestamps beside it.
+   *
+   * So: always visible, 34px wide, inset from the edge, and shaped like something to hold.
+   */
+  /*
+   * Near the edge, on purpose.
+   *
+   * Android reserves a strip along each edge for its own back swipe, and a drag started inside it can
+   * be taken by the system: instrumented here, a synthetic swipe from 23px got 6px of movement and
+   * three pointercancels, while one further in delivered its full 224px. Moved out to 40px it was
+   * never intercepted — and it was also too far from the edge to reach comfortably, which is the
+   * complaint that matters more. A real finger, unlike an injected event, evidently wins that race.
+   *
+   * So it stays here, and anyone it does fight with can switch the whole gesture off in settings.
+   */
+  .m-app .msg.has-grip .swipe-grip {
+    left: 5px;
+    width: 34px;
+    top: 2px;
+    bottom: 2px;
+    opacity: 1;
+    border-radius: 7px;
+    background: var(--surface-2, #26262c);
+    color: var(--text-dim, #adadb8);
+    font-size: 15px;
+    letter-spacing: -1px;
+  }
+
+  .m-app .msg.has-grip .swipe-grip:active {
+    background: var(--accent, #9147ff);
+    color: #fff;
+  }
+
+  /* the message starts after the handle instead of underneath it */
+  .m-app .msg.has-grip {
+    padding-left: 44px;
+  }
+
+  /*
+   * The label you are choosing, big enough to read mid-gesture.
+   *
+   * Picking a specific timeout was guesswork because the tier name was small text behind a sliding
+   * row. It is now the loudest thing on the line — and whatever it says, the confirmation repeats it
+   * before anything happens.
+   */
+  .m-app .swipe-overlay {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding-left: 12px;
+  }
+
+  /* a long press is the actions now, so it must not also start selecting words */
+  .m-app .msg-row.touch-held .msg {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /*
+   * The grip is deliberately not in here.
+   *
+   * It used to be, and that is why it vanished at random: Android latches `:hover` onto whatever was
+   * last tapped and leaves it there, and this rule is one class more specific than the one that keeps
+   * the grip visible. So the row you had just touched — the one you were most likely about to swipe —
+   * was the one that lost its handle, while the gesture itself kept working.
+   */
+  .m-app .msg-row:hover .art-width-ctl {
+    opacity: 0;
+  }
+
+  .m-app .msg-row:hover {
+    background: none;
+  }
+}
+
+/*
+ * The pane header holds eight icon buttons and a channel name. At 412px the flexbox settles that
+ * by crushing the name to "r…", which is the one item that cannot be guessed from an icon. So the
+ * name keeps a floor and the buttons are allowed to run off the edge into a horizontal scroll.
+ */
+.m-app .pane-header {
+  min-height: var(--m-tap);
+  padding-right: 40px; /* the ⤢ button floats over this corner */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.m-app .pane-header::-webkit-scrollbar {
+  display: none;
+}
+
+.m-app .pane-header .channel-name {
+  min-width: 5.5em;
+  flex: 0 0 auto;
+}
+
+.m-app .pane-header .icon-btn {
+  flex: 0 0 auto;
+}
+
+/* the spacer would eat the scroll room the buttons need */
+.m-app .pane-header .spacer {
+  flex: 0 0 8px;
+}
+
+.m-app .pane-header .icon-btn,
+.m-app .mod-toolbar button {
+  min-width: 34px;
+  min-height: 34px;
+}
+
+/* the scrollbar is dead width on a phone: the list scrolls by touch */
+.m-app .chat-scroller::-webkit-scrollbar {
+  width: 0;
+}
+
+.m-app .chat-scroller {
+  /* the list owns the vertical gesture; the page must not rubber-band behind it */
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* the input row is the one place a phone needs more room than a desktop, not less */
+.m-app .input-area {
+  padding-bottom: 4px;
+}
+
+.m-app .input-row textarea,
+.m-app .input-row input[type='text'] {
+  /* under 16px Android zooms the page in on focus and never zooms back out */
+  font-size: 16px;
+  min-height: 38px;
+}
+
+/*
+ * Every popover becomes a sheet.
+ *
+ * A popover is positioned against the button that opened it, which on a 412px screen means it
+ * starts near the right edge and continues past it — the pane header's own "add a chat" popover was
+ * simply off-screen. Clamping the width does not help: the anchor is the problem, not the size. So
+ * the anchoring is dropped entirely and they are pinned to the bottom of the viewport, where a
+ * thumb is anyway. One rule covers all of them, including the ones not yet looked at.
+ */
+.m-app .popover {
+  /*
+   * `!important` is not decoration here. The anchoring is written as an inline `top`/`right`
+   * computed in JS from the button's own position, and an inline style beats any stylesheet rule —
+   * so without this the popover keeps the coordinates it was given and keeps hanging off the edge.
+   */
+  position: fixed !important;
+  left: 8px !important;
+  right: 8px !important;
+  top: auto !important;
+  bottom: 8px !important;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 55%);
+  /* above the pane chrome it was anchored inside */
+  z-index: 70;
+}
+
+/* an arrow drawn to point at the anchor now points at nothing */
+.m-app .popover::before,
+.m-app .popover::after {
+  display: none;
+}
+
+/* a popover's own rows are mouse-sized too */
+.m-app .popover button,
+.m-app .popover .item,
+.m-app .popover label {
+  min-height: 38px;
+}
+
+.m-app .popover input[type='text'],
+.m-app .popover input:not([type]) {
+  font-size: 16px;
+  min-height: 38px;
+}

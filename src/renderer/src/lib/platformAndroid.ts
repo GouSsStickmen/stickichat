@@ -3,6 +3,16 @@ import { Clipboard } from '@capacitor/clipboard'
 import { Browser } from '@capacitor/browser'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import type { HostRequest, HostResponse, PlatformHost } from './platform'
+import { registerPlugin } from '@capacitor/core'
+
+/**
+ * The native side of "open this in a browser, not in the app that owns the link".
+ * See BrowserOnlyPlugin.java for why a Custom Tab cannot do this.
+ */
+const BrowserOnly = registerPlugin<{
+  open(options: { url: string }): Promise<{ package: string }>
+  openLinkSettings(options: { package: string }): Promise<void>
+}>('BrowserOnly')
 
 /**
  * The same five things, from Android instead of Electron.
@@ -157,9 +167,33 @@ export const androidHost: PlatformHost = {
     await Clipboard.write({ string: text })
   },
 
+  async openAppLinkSettings(packageName: string) {
+    await BrowserOnly.openLinkSettings({ package: packageName })
+  },
+
   async openUrl(url: string) {
-    // a Custom Tab rather than a jump to the browser app: the device-code login sends people to
-    // twitch.tv/activate and they need to come straight back
+    /*
+     * The activation page has to open in a browser, explicitly.
+     *
+     * Twitch owns twitch.tv as a verified Android App Link, so a Custom Tab hands the URL to the
+     * installed Twitch app — which opens on a black screen and never shows the activation form.
+     * That leaves the device-code login with no way to finish, and neither an `intent:` URL nor a
+     * hardcoded browser package fixes it — the WebView does not parse the former, and this device
+     * has no Chrome at all. A native call that resolves the installed browsers and names one
+     * explicitly is the only thing that gets past a verified app link.
+     *
+     * Only this one page is treated that way. For an ordinary link — a clip, a stream, a VOD —
+     * landing in the Twitch app is the better outcome, so those keep the normal Custom Tab.
+     */
+    if (/twitch\.tv\/activate/i.test(url)) {
+      try {
+        const { package: opened } = await BrowserOnly.open({ url })
+        console.log('[stickichat] activation page opened in', opened)
+        return
+      } catch (e) {
+        console.warn('[stickichat] browser-only open failed, falling back to a custom tab', e)
+      }
+    }
     await Browser.open({ url })
   }
 }

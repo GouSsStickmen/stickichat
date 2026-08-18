@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StickiChat</string>
+    <string name="title_activity_main">StickiChat</string>
+    <string name="package_name">com.stickmen.stickichat</string>
+    <string name="custom_url_scheme">com.stickmen.stickichat</string>
+</resources>

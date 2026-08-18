@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { create } from 'zustand'
+import { host } from './platform'
 
 /**
  * Lazily-fetched 7TV cosmetic nick styling, keyed by twitch user id. 7TV exposes a user's
@@ -269,7 +270,7 @@ interface StvBadge {
  */
 async function fetchStyle(sevenTvUserId: string): Promise<{ paint: Paint | null; badge: StvBadge | null }> {
   try {
-    const res = await window.sticki.fetchJson('https://7tv.io/v3/gql', {
+    const res = await host().request('https://7tv.io/v3/gql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -325,9 +326,9 @@ function fetchCosmetic(twitchId: string, force = false): Promise<Cosmetic | unde
   if (knownEmpty(twitchId) && !force) return Promise.resolve(undefined)
   const existing = inFlight.get(twitchId)
   if (existing) return existing
-  // through the main process — a raw renderer fetch to 7tv.io is blocked by the app CSP
+  // through the platform host: blocked by the CSP on the desktop, by CORS on Android
   const p = acquire()
-    .then(() => window.sticki.fetchJson(`https://7tv.io/v3/users/twitch/${twitchId}`))
+    .then(() => host().request(`https://7tv.io/v3/users/twitch/${twitchId}`))
     .then(async (res) => {
       // A failed/rate-limited request has no body. Treating that as "this user has no
       // cosmetic" is what erased real colours during a refresh burst — bail out and keep

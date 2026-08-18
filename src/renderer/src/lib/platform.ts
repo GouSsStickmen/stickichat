@@ -65,7 +65,24 @@ export interface PlatformHost {
 
   copyText(text: string): Promise<void>
   openUrl(url: string): Promise<void>
+
+  /**
+   * Take the user to the OS screen where another app's link handling is turned off.
+   *
+   * Optional on purpose: it exists only on Android, and a caller checking for it is asking "can
+   * this platform do that" rather than "am I on a phone" — so the button that needs it appears
+   * exactly where it can work.
+   */
+  openAppLinkSettings?: (packageName: string) => Promise<void>
 }
+
+/**
+ * The app that claims twitch.tv on Android and swallows the device-code activation page.
+ *
+ * Lives here rather than in the Android host so that a shared component can name it without
+ * pulling the whole Capacitor runtime into the desktop bundle.
+ */
+export const TWITCH_APP_PACKAGE = 'tv.twitch.android.app'
 
 /**
  * The Electron host, which is what the app has always used.

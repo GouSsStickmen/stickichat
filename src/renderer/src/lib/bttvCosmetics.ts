@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { host } from './platform'
 
 /**
  * BetterTTV badges. BTTV publishes its whole badge roster as one small document
@@ -40,9 +41,10 @@ let started = false
 export function ensureBttvBadges(): void {
   if (started) return
   started = true
-  // through the main process — a raw renderer fetch is blocked by the app CSP
-  window.sticki
-    .fetchJson('https://api.betterttv.net/3/cached/badges')
+  // through the platform host: the desktop CSP blocks a raw renderer fetch, and on
+  // Android a direct one is blocked by CORS — both need the native side
+  host()
+    .request('https://api.betterttv.net/3/cached/badges')
     .then((res) => {
       const list = res.json as RawBadge[] | null
       if (!res.ok || !Array.isArray(list)) return

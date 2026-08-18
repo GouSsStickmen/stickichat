@@ -4,6 +4,8 @@
  * read them from the public GQL endpoint with the well-known web Client-ID. Best-effort:
  * any failure (CORS, schema change, network) returns [] and the caller falls back.
  */
+import { host } from './platform'
+
 const GQL_URL = 'https://gql.twitch.tv/gql'
 const WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
 
@@ -14,9 +16,9 @@ export async function fetchChatRules(login: string): Promise<string[]> {
   const cached = cache.get(key)
   if (cached) return cached
   try {
-    // go through the main process (window.sticki.fetchJson) — a direct renderer fetch to
+    // go through the platform host — a direct renderer fetch to
     // gql.twitch.tv is blocked by CORS
-    const res = await window.sticki.fetchJson(GQL_URL, {
+    const res = await host().request(GQL_URL, {
       method: 'POST',
       headers: { 'Client-Id': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
       // login is a validated Twitch login (word chars only), safe to inline
@@ -59,7 +61,7 @@ export async function fetchUserBadges(login: string): Promise<GqlBadge[]> {
   const cached = badgeCache.get(key)
   if (cached) return cached
   try {
-    const res = await window.sticki.fetchJson(GQL_URL, {
+    const res = await host().request(GQL_URL, {
       method: 'POST',
       headers: { 'Client-Id': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
       body: JSON.stringify({

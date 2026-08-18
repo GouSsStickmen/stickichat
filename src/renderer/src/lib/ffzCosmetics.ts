@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { host } from './platform'
 
 /**
  * FrankerFaceZ badges. Like BetterTTV, FFZ publishes its whole roster as one small document
@@ -44,9 +45,10 @@ let started = false
 export function ensureFfzBadges(): void {
   if (started) return
   started = true
-  // through the main process — a raw renderer fetch is blocked by the app CSP
-  window.sticki
-    .fetchJson('https://api.frankerfacez.com/v1/badges/ids')
+  // through the platform host: the desktop CSP blocks a raw renderer fetch, and on
+  // Android a direct one is blocked by CORS — both need the native side
+  host()
+    .request('https://api.frankerfacez.com/v1/badges/ids')
     .then((res) => {
       const j = res.json as RawFfz | null
       if (!res.ok || !j?.badges) return
