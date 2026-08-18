@@ -84,6 +84,9 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
   const onUp = (): void => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
+    // touch only: if the browser decides mid-drag that the gesture was a scroll after all, `pointerup`
+    // never comes and without this the listeners — and the caller's "dragging" highlight — stay behind
+    window.removeEventListener('pointercancel', onUp)
     if (active) {
       opts.onDragState(false)
       justReordered = true
@@ -95,4 +98,5 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
 
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onUp)
 }

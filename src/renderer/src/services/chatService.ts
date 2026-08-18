@@ -521,6 +521,17 @@ class ChatService {
   private subErrorSeen = new Map<string, number>()
   private onEventSubError(desired: EventSubDesired, status: number): void {
     const lang = useSettingsStore.getState().settings.language
+    /*
+     * A channel is marked as having the rich mod feed when its subscription succeeds, and the plain
+     * IRC "X was banned" line is suppressed there to avoid saying it twice. Nothing ever unmarked it
+     * on the way back down — so once a later resubscribe failed, usually with the 429 that means the
+     * account's websocket subscription budget is spent, both lines were gone: the rich one never
+     * arrived and the plain one was still being hidden for its sake. Moderation appeared to do
+     * nothing at all.
+     */
+    if (desired.type === 'channel.moderate' && desired.channelLogin) {
+      this.modEventChannels.delete(desired.channelLogin)
+    }
     // Every rejection is worth a line — a report that says "feature X does nothing" is
     // answerable at once if the log says X was never subscribed. Every rejection of the SAME
     // thing for the same reason is not: with a subscription per open channel, one rate limit

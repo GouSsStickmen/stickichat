@@ -67,22 +67,55 @@ export async function pollDeviceToken(
 ): Promise<TokenPair> {
   const deadline = Date.now() + device.expires_in * 1000
   const intervalMs = Math.max(device.interval, 5) * 1000
+  /** the last thing that went wrong, kept only to explain a timeout that never got an answer */
+  let lastTrouble = ''
   for (;;) {
     if (cancelled()) throw new Error('cancelled')
-    if (Date.now() > deadline) throw new Error('code expired')
+    if (Date.now() > deadline) {
+      throw new Error(lastTrouble ? `code expired (last: ${lastTrouble})` : 'code expired')
+    }
     await new Promise((r) => setTimeout(r, intervalMs))
     if (cancelled()) throw new Error('cancelled')
-    const res = await httpForm('https://id.twitch.tv/oauth2/token', {
-      client_id: clientId,
-      scopes: TWITCH_SCOPES,
-      device_code: device.device_code,
-      grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-    })
+
+    let res: Awaited<ReturnType<typeof httpForm>>
+    try {
+      res = await httpForm('https://id.twitch.tv/oauth2/token', {
+        client_id: clientId,
+        scopes: TWITCH_SCOPES,
+        device_code: device.device_code,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+      })
+    } catch (e) {
+      /*
+       * The request never reached Twitch. On a phone that is the normal case, not an exception:
+       * confirming the code happens in a browser, so this app spends that time in the background
+       * where the request layer can simply fail. Treating it as a refusal is what killed the login
+       * every time — the user came back to an error while the authorization had gone through.
+       */
+      lastTrouble = String(e)
+      // visible in adb logcat: the retries are the difference between a login that survives
+      // being backgrounded and one that dies there
+      console.warn('[auth] device poll could not reach twitch, retrying:', lastTrouble)
+      continue
+    }
+
     if (res.ok) return res.json as TokenPair
+
     const msg = ((res.json as { message?: string })?.message ?? '').toLowerCase()
     if (msg.includes('pending')) continue
     if (msg.includes('slow')) continue
-    throw new Error(`authorization failed: ${res.status} ${res.text}`)
+
+    /*
+     * Only a definitive answer ends the wait: a code that is spent, wrong, or refused. Anything
+     * else — a 5xx, an empty body, a captive-portal page — is not Twitch saying no, so the loop
+     * keeps asking until the code's own deadline.
+     */
+    const refused =
+      res.status === 400 &&
+      (msg.includes('invalid') || msg.includes('expired') || msg.includes('denied'))
+    if (refused) throw new Error(`authorization failed: ${res.status} ${res.text}`)
+
+    lastTrouble = `${res.status} ${res.text}`.trim()
   }
 }
 
