@@ -23,6 +23,13 @@ public class MainActivity extends BridgeActivity {
          */
         if (getBridge() != null && getBridge().getWebView() != null) {
             CookieManager.getInstance().setAcceptThirdPartyCookies(getBridge().getWebView(), true);
+            /*
+             * The player starts playing on its own. A WebView refuses media until the page has had a
+             * user gesture, and the tap that opened the player landed on our page — not inside the
+             * Twitch iframe, which is where the rule is applied. So the stream opened paused, every
+             * time, with nothing to press.
+             */
+            getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
         }
     }
 
@@ -45,6 +52,27 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception ignored) {
             // a phone that will not do it is not a reason to fail leaving the app
         }
+    }
+
+    /**
+     * In the little window, staying paused is not an option — and onPause is what pauses it.
+     *
+     * The order Android uses is onUserLeaveHint, then onPictureInPictureModeChanged, then onPause. So
+     * resuming the view as it entered PiP was undone a moment later by the pause that followed, and in
+     * a PiP window there is no way to press play: taps there go to the system, not to the page.
+     */
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return;
+        if (!isInPictureInPictureMode()) return;
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        runOnUiThread(
+            () -> {
+                getBridge().getWebView().onResume();
+                getBridge().getWebView().resumeTimers();
+            }
+        );
     }
 
     /**

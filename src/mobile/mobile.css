@@ -824,6 +824,17 @@ body {
   padding: 0 8px;
 }
 
+/*
+ * The "new messages below" chip sits above the chat, and the sheets sit above everything — but it was
+ * showing through them, because it is inside the pane while they are pinned to the viewport. While
+ * something is open over the chat there is nothing to jump to anyway.
+ */
+.m-app:has(.msg-sheet) .new-msgs-chip,
+.m-app:has(.m-sheet) .new-msgs-chip,
+.m-app:has(.m-menu) .new-msgs-chip {
+  display: none;
+}
+
 /* ---------- the message action sheet ---------- */
 
 /*

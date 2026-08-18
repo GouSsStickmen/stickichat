@@ -955,10 +955,32 @@ function MessageViewInner({
   // hijack plain text selection (left-to-right copy started a swipe)
   const startSwipe = (e: React.PointerEvent): void => {
     if (!swipeEnabled || e.button !== 0) return
-    // tap mode: the handle is a button, not something to pull
+    /*
+     * Tap mode is a hold, not a tap.
+     *
+     * Opening the list on the press put it under the finger that was still down, and the release
+     * landed on whatever ended up first — an action chosen by accident, which is the one thing this
+     * mode exists to prevent. It opens once the press has been held, and the release that follows is
+     * on nothing.
+     */
     if (settings.swipeModMode === 'tap') {
       e.preventDefault()
-      setTierSheet(true)
+      const timer = window.setTimeout(() => {
+        setTierSheet(true)
+        navigator.vibrate?.(12)
+      }, 400)
+      const cancel = (): void => {
+        window.clearTimeout(timer)
+        window.removeEventListener('pointerup', cancel)
+        window.removeEventListener('pointercancel', cancel)
+        window.removeEventListener('pointermove', onMoveAway)
+      }
+      const onMoveAway = (ev: PointerEvent): void => {
+        if (Math.abs(ev.clientY - e.clientY) > 8 || Math.abs(ev.clientX - e.clientX) > 8) cancel()
+      }
+      window.addEventListener('pointerup', cancel)
+      window.addEventListener('pointercancel', cancel)
+      window.addEventListener('pointermove', onMoveAway)
       return
     }
     e.preventDefault()
