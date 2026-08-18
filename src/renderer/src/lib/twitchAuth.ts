@@ -1,4 +1,5 @@
 import { httpForm, httpGet } from './http'
+import { host } from './platform'
 import { Account } from '../types'
 import { useAccountsStore } from '../store/accounts'
 import { useSettingsStore } from '../store/settings'
@@ -148,8 +149,8 @@ async function refreshAndPersist(clientId: string, account: Account): Promise<st
       if (String(e).includes('Invalid refresh token')) notifyReauthNeeded(account)
       throw e
     }
-    const accessTokenEnc = await window.sticki.encrypt(pair.access_token)
-    const refreshTokenEnc = await window.sticki.encrypt(pair.refresh_token)
+    const accessTokenEnc = await host().encrypt(pair.access_token)
+    const refreshTokenEnc = await host().encrypt(pair.refresh_token)
     useAccountsStore.getState().updateAccount(account.id, {
       _accessToken: pair.access_token,
       _refreshToken: pair.refresh_token,

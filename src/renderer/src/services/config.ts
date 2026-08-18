@@ -1,4 +1,5 @@
 import { AppConfig, DEFAULT_MOD_BUTTONS, DEFAULT_SETTINGS, Settings } from '../types'
+import { host } from '../lib/platform'
 import { useAccountsStore } from '../store/accounts'
 import { useLayoutStore } from '../store/layout'
 import { useSettingsStore } from '../store/settings'
@@ -52,7 +53,7 @@ function migrateHighlightRulesV2(): void {
 
 /** Loads persisted config into all stores. Returns true if config existed. */
 export async function loadConfig(): Promise<boolean> {
-  const raw = (await window.sticki.getConfig()) as Partial<AppConfig> | null
+  const raw = (await host().readConfig()) as Partial<AppConfig> | null
   if (!raw) {
     // fresh install: still seed the default highlight rules + overlay profile
     migrateHighlightRules()
@@ -77,8 +78,8 @@ export async function loadConfig(): Promise<boolean> {
 
   const accounts = useAccountsStore.getState()
   for (const a of raw.accounts ?? []) {
-    const accessToken = a.accessTokenEnc ? await window.sticki.decrypt(a.accessTokenEnc) : null
-    const refreshToken = a.refreshTokenEnc ? await window.sticki.decrypt(a.refreshTokenEnc) : null
+    const accessToken = a.accessTokenEnc ? await host().decrypt(a.accessTokenEnc) : null
+    const refreshToken = a.refreshTokenEnc ? await host().decrypt(a.refreshTokenEnc) : null
     accounts.addAccount({
       ...a,
       moderatedChannelIds: a.moderatedChannelIds ?? [],
@@ -299,7 +300,7 @@ function scheduleSave(): void {
     const blob = snapshot()
     // stale-settings guard: another window (e.g. the overlay editor) may have just saved a
     // NEWER settings revision — never clobber it with our older copy; adopt it instead
-    const raw = ((await window.sticki.getConfig()) as Partial<AppConfig> | null) ?? {}
+    const raw = ((await host().readConfig()) as Partial<AppConfig> | null) ?? {}
     const diskRev = raw.settings?._rev ?? 0
     const memRev = blob.settings._rev ?? 0
     if (diskRev > memRev && raw.settings) {
@@ -311,8 +312,8 @@ function scheduleSave(): void {
         applyingRemote = false
       }
     }
-    window.sticki.setConfig(blob)
-    window.sticki.notifyConfigChanged()
+    host().writeConfig(blob)
+    host().configChanged()
   }, 400)
 }
 
@@ -330,7 +331,7 @@ function scheduleSettingsSave(): void {
   settingsSaveTimer = window.setTimeout(async () => {
     settingsSaveTimer = null
     // merge into the stored config: utility windows must never write their (empty) layout
-    const raw = ((await window.sticki.getConfig()) as Partial<AppConfig> | null) ?? {}
+    const raw = ((await host().readConfig()) as Partial<AppConfig> | null) ?? {}
     const s = useSettingsStore.getState()
     // stale-settings guard (same as the main window's save)
     const settings = (raw.settings?._rev ?? 0) > (s.settings._rev ?? 0) && raw.settings ? raw.settings : s.settings
@@ -342,7 +343,7 @@ function scheduleSettingsSave(): void {
       return i === -1 ? 1e9 : i
     }
     const accounts = [...(raw.accounts ?? [])].sort((a, b) => accPos(a.id) - accPos(b.id))
-    await window.sticki.setConfig({
+    await host().writeConfig({
       ...raw,
       accounts,
       clientId: s.clientId,
@@ -352,7 +353,7 @@ function scheduleSettingsSave(): void {
       highlightRules: s.highlightRules,
       favoriteEmotes: s.favoriteEmotes
     })
-    window.sticki.notifyConfigChanged()
+    host().configChanged()
   }, 400)
 }
 
@@ -375,7 +376,7 @@ export function startSettingsPersistence(): void {
 export async function persistAccountTokens(accountId: string): Promise<void> {
   const acc = useAccountsStore.getState().accounts.find((a) => a.id === accountId)
   if (!acc) return
-  const raw = ((await window.sticki.getConfig()) as Partial<AppConfig> | null) ?? {}
+  const raw = ((await host().readConfig()) as Partial<AppConfig> | null) ?? {}
   const { _accessToken, _refreshToken, ...stored } = acc
   const existing = raw.accounts ?? []
   const accounts = existing.some((a) => a.id === accountId)
@@ -385,8 +386,8 @@ export async function persistAccountTokens(accountId: string): Promise<void> {
           : a
       )
     : [...existing, stored] // brand-new account added from a window without persistence
-  await window.sticki.setConfig({ ...raw, accounts })
-  window.sticki.notifyConfigChanged()
+  await host().writeConfig({ ...raw, accounts })
+  host().configChanged()
 }
 
 /**
@@ -395,16 +396,16 @@ export async function persistAccountTokens(accountId: string): Promise<void> {
  * account there otherwise never reached disk — and the account reappeared on the next open.
  */
 export async function persistAccountRemoval(accountId: string): Promise<void> {
-  const raw = ((await window.sticki.getConfig()) as Partial<AppConfig> | null) ?? {}
+  const raw = ((await host().readConfig()) as Partial<AppConfig> | null) ?? {}
   const accounts = (raw.accounts ?? []).filter((a) => a.id !== accountId)
-  await window.sticki.setConfig({ ...raw, accounts })
-  window.sticki.notifyConfigChanged()
+  await host().writeConfig({ ...raw, accounts })
+  host().configChanged()
 }
 
 /** Reload settings/tokens (not layout — each window keeps its own tabs) when another window saves. */
 export function startConfigSync(): () => void {
-  return window.sticki.onConfigChanged(() => {
-    window.sticki.getConfig().then(async (raw) => {
+  return host().onConfigChanged(() => {
+    host().readConfig().then(async (raw) => {
       const cfg = raw as Partial<AppConfig> | null
       if (!cfg) return
       applyingRemote = true
@@ -434,8 +435,8 @@ export function startConfigSync(): () => void {
               existing.refreshTokenEnc === a.refreshTokenEnc
             )
               continue
-            const accessToken = a.accessTokenEnc ? await window.sticki.decrypt(a.accessTokenEnc) : null
-            const refreshToken = a.refreshTokenEnc ? await window.sticki.decrypt(a.refreshTokenEnc) : null
+            const accessToken = a.accessTokenEnc ? await host().decrypt(a.accessTokenEnc) : null
+            const refreshToken = a.refreshTokenEnc ? await host().decrypt(a.refreshTokenEnc) : null
             useAccountsStore.getState().updateAccount(a.id, {
               accessTokenEnc: a.accessTokenEnc,
               refreshTokenEnc: a.refreshTokenEnc,
@@ -445,8 +446,8 @@ export function startConfigSync(): () => void {
             tokensChanged = true
           } else {
             // brand-new account authorized in another window — decrypt tokens and add it here
-            const accessToken = a.accessTokenEnc ? await window.sticki.decrypt(a.accessTokenEnc) : null
-            const refreshToken = a.refreshTokenEnc ? await window.sticki.decrypt(a.refreshTokenEnc) : null
+            const accessToken = a.accessTokenEnc ? await host().decrypt(a.accessTokenEnc) : null
+            const refreshToken = a.refreshTokenEnc ? await host().decrypt(a.refreshTokenEnc) : null
             useAccountsStore.getState().addAccount({
               ...a,
               moderatedChannelIds: a.moderatedChannelIds ?? [],

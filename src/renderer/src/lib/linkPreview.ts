@@ -1,4 +1,5 @@
 import { getClips } from './helix'
+import { host as platform } from './platform'
 import { useAccountsStore } from '../store/accounts'
 
 /**
@@ -159,7 +160,7 @@ async function oEmbedPreview(url: string): Promise<LinkPreviewData | null> {
     endpoint = `https://embed.bsky.app/oembed?format=json&url=${encodeURIComponent(url)}`
   if (!endpoint) return null
 
-  const res = await window.sticki.fetchJson(endpoint, { headers: UNFURL_HEADERS })
+  const res = await platform().request(endpoint, { headers: UNFURL_HEADERS })
   const j = res.json as { title?: string; author_name?: string; thumbnail_url?: string; provider_name?: string } | null
   if (!res.ok || !j || (!j.title && !j.thumbnail_url)) return null
   // YouTube's oEmbed thumbnail is the 480px "hqdefault"; maxres exists for most videos and
@@ -258,7 +259,7 @@ async function fetchCard(
   url: string,
   headers: Record<string, string>
 ): Promise<{ data: LinkPreviewData; strong: boolean } | null> {
-  const res = await window.sticki.fetchJson(url, { headers })
+  const res = await platform().request(url, { headers })
   // image hosts like kappa.lol serve the picture straight off an extension-less URL, so the
   // path tells us nothing — the Content-Type does
   if (/^image\//i.test(res.contentType ?? '')) return { data: { kind: 'image', image: url }, strong: true }

@@ -1,3 +1,5 @@
+import { host } from './platform'
+
 export interface HttpResponse {
   ok: boolean
   status: number
@@ -26,9 +28,15 @@ export function retryAfterMs(res: HttpResponse, now = Date.now()): number {
   return 0
 }
 
-/** All HTTP goes through the Electron main process (no CORS restrictions there). */
+/**
+ * All HTTP goes through the host, which answers it from native code.
+ *
+ * That is not a preference: 7TV, BTTV, FFZ and the link unfurler do not send the headers a page
+ * would need, so a plain fetch reaches none of them. The host is Electron's main process on the
+ * desktop and Capacitor's native HTTP on Android — same contract, no CORS either way.
+ */
 export function httpGet(url: string, headers?: Record<string, string>): Promise<HttpResponse> {
-  return window.sticki.fetchJson(url, { headers })
+  return host().request(url, { headers })
 }
 
 export function httpJson(
@@ -37,7 +45,7 @@ export function httpJson(
   headers?: Record<string, string>,
   body?: unknown
 ): Promise<HttpResponse> {
-  return window.sticki.fetchJson(url, {
+  return host().request(url, {
     method,
     headers: { 'Content-Type': 'application/json', ...headers },
     body: body === undefined ? undefined : JSON.stringify(body)
@@ -49,7 +57,7 @@ export function httpForm(
   form: Record<string, string>,
   headers?: Record<string, string>
 ): Promise<HttpResponse> {
-  return window.sticki.fetchJson(url, {
+  return host().request(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
     body: new URLSearchParams(form).toString()

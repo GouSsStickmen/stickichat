@@ -1,4 +1,5 @@
 import { Account } from '../types'
+import { host } from '../lib/platform'
 import { getModeratedChannelIds, getUsers } from '../lib/helix'
 import { useAccountsStore } from '../store/accounts'
 import { chatService } from './chatService'
@@ -11,8 +12,8 @@ export async function createAccountFromTokens(
   userId: string,
   login: string
 ): Promise<Account> {
-  const accessTokenEnc = await window.sticki.encrypt(accessToken)
-  const refreshTokenEnc = await window.sticki.encrypt(refreshToken)
+  const accessTokenEnc = await host().encrypt(accessToken)
+  const refreshTokenEnc = await host().encrypt(refreshToken)
   const account: Account = {
     id: userId,
     login,
