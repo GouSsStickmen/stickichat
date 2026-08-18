@@ -2060,6 +2060,7 @@ function SwipeTiersEditor(): React.JSX.Element {
 function ModerationSection(): React.JSX.Element {
   const t = useT()
   const swipeModEnabled = useSettingsStore((s) => s.settings.swipeModEnabled)
+  const swipeModMode = useSettingsStore((s) => s.settings.swipeModMode)
   const setSettings = useSettingsStore((s) => s.setSettings)
   const modButtons = useSettingsStore((s) => s.modButtons)
   const setModButtons = useSettingsStore((s) => s.setModButtons)
@@ -2306,7 +2307,21 @@ function ModerationSection(): React.JSX.Element {
         value={swipeModEnabled !== false}
         onChange={(v) => setSettings({ swipeModEnabled: v })}
       />
-      {swipeModEnabled !== false && <SwipeTiersEditor />}
+      {swipeModEnabled !== false && (
+        <>
+          <div className="set-row">
+            <label>{t('set.swipeMode')}</label>
+            <select
+              value={swipeModMode ?? 'swipe'}
+              onChange={(e) => setSettings({ swipeModMode: e.target.value as 'swipe' | 'tap' })}
+            >
+              <option value="swipe">{t('set.swipeMode.swipe')}</option>
+              <option value="tap">{t('set.swipeMode.tap')}</option>
+            </select>
+          </div>
+          <SwipeTiersEditor />
+        </>
+      )}
 
       <h4 style={{ marginTop: 22, marginBottom: 6 }}>{t('set.raidFavorites')}</h4>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>

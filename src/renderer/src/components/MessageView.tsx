@@ -619,6 +619,26 @@ function MessageViewInner({
    * in a whole gesture.
    */
   const [swipeAction, setSwipeAction] = useState<SwipeAction | null>(null)
+  /** the grip was tapped in 'tap' mode: the ladder of actions, listed rather than dragged */
+  const [tierSheet, setTierSheet] = useState(false)
+  useEffect(() => {
+    if (!tierSheet) return
+    // Escape is also what Android's back button becomes — see the handler in MobileApp
+    const close = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setTierSheet(false)
+    }
+    const away = (e: Event): void => {
+      if (!(e.target as HTMLElement | null)?.closest?.('.msg-sheet, .swipe-grip')) setTierSheet(false)
+    }
+    window.addEventListener('keydown', close)
+    document.addEventListener('touchstart', away, { passive: true })
+    document.addEventListener('mousedown', away)
+    return () => {
+      window.removeEventListener('keydown', close)
+      document.removeEventListener('touchstart', away)
+      document.removeEventListener('mousedown', away)
+    }
+  }, [tierSheet])
   const msgElRef = useRef<HTMLDivElement | null>(null)
   const dragXRef = useRef(0)
   const draggingRef = useRef(false)
@@ -893,8 +913,8 @@ function MessageViewInner({
 
   const swipeLabels = { delete: t('swipe.delete'), ban: t('swipe.ban') }
 
-  const executeSwipe = async (dx: number): Promise<void> => {
-    const action = swipeActionFor(dx, swipeLabels, swipeTiers, targetIsProtected)
+  /** perform one moderation action, with the confirmation the touch build insists on */
+  const runModAction = async (action: SwipeAction | null): Promise<void> => {
     if (!action || !account) return
     // every one of the three asks first on touch — a deleted message is not recoverable either
     const ok = await confirmDestructive(
@@ -911,10 +931,36 @@ function MessageViewInner({
     else toast((localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }), 'error')
   }
 
+  const executeSwipe = (dx: number): Promise<void> =>
+    runModAction(swipeActionFor(dx, swipeLabels, swipeTiers, targetIsProtected))
+
+  /*
+   * The tap mode's list: the same ladder the drag walks through, written out. Built from the same
+   * tiers setting, so the two modes can never disagree about what is on offer.
+   */
+  const tierActions = (): SwipeAction[] => {
+    const list: SwipeAction[] = [
+      { kind: 'delete', label: swipeLabels.delete, color: 'var(--warning)' }
+    ]
+    if (!targetIsProtected) {
+      for (const secs of swipeTiers) {
+        list.push({ kind: 'timeout', seconds: secs, label: `⏱ ${formatDuration(secs)}`, color: 'var(--accent-strong)' })
+      }
+      list.push({ kind: 'ban', label: `🔨 ${swipeLabels.ban}`, color: 'var(--danger)' })
+    }
+    return list
+  }
+
   // swipe-to-moderate starts ONLY from the ⠿ grip — dragging from the message body used to
   // hijack plain text selection (left-to-right copy started a swipe)
   const startSwipe = (e: React.PointerEvent): void => {
     if (!swipeEnabled || e.button !== 0) return
+    // tap mode: the handle is a button, not something to pull
+    if (settings.swipeModMode === 'tap') {
+      e.preventDefault()
+      setTierSheet(true)
+      return
+    }
     e.preventDefault()
     const start = { x: e.clientX, y: e.clientY }
     draggingRef.current = true
@@ -1286,6 +1332,22 @@ function MessageViewInner({
         to be rebuilt anywhere else. `position: fixed` in the stylesheet keeps it out of the row's
         measured height.
       */}
+      {tierSheet && (
+        <div className="msg-sheet">
+          <div className="msg-sheet-who">{msg.displayName || msg.login}</div>
+          {tierActions().map((a) => (
+            <button
+              key={`${a.kind}${a.seconds ?? ''}`}
+              onClick={() => {
+                setTierSheet(false)
+                void runModAction(a)
+              }}
+            >
+              {a.kind === 'delete' ? `🗑 ${a.label}` : a.label}
+            </button>
+          ))}
+        </div>
+      )}
       {held && (
         <div className="msg-sheet">
           <div className="msg-sheet-who">{msg.displayName || msg.login}</div>

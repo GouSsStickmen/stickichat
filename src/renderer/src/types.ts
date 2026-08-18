@@ -2043,6 +2043,14 @@ export interface Settings {
    * row with the message you are trying to read, and not everyone moderating wants it there.
    */
   swipeModEnabled: boolean
+  /**
+   * What the grip does when moderation-by-grip is on.
+   *
+   * 'swipe' drags the message through the tiers. 'tap' leaves the grip exactly where it is but does
+   * not move anything: pressing it lists the same actions instead. Same handle, same actions, no
+   * gesture to fight with — and nothing that can be triggered by a hand moving across the screen.
+   */
+  swipeModMode: 'swipe' | 'tap'
   /** OBS chat overlay (local SSE server + transparent browser-source page) */
   overlayEnabled: boolean
   overlayPort: number
@@ -2239,6 +2247,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hotkeys: {},
   swipeTimeouts: [60, 300, 600, 1800, 3600, 86400],
   swipeModEnabled: true,
+  swipeModMode: 'swipe',
   playerHeight: 220,
   overlayEnabled: false,
   overlayPort: 4715,
