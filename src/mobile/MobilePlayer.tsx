@@ -143,17 +143,28 @@ export default function MobilePlayer({
    * anonymous viewer and will stay one until it reloads. The key is bumped when the session appears.
    */
   const [sessionKey, setSessionKey] = useState(0)
+  const hadSession = useRef<boolean | null>(null)
   useEffect(() => {
-    const onResume = (): void => {
+    /*
+     * Reload only when the session APPEARS, never merely because the app came back.
+     *
+     * This was firing on every visibilitychange, so returning to the app rebuilt the iframe — and a
+     * fresh Twitch player means a fresh pre-roll. That is why an ad played every single time it was
+     * reopened, and why the stream so often came back stopped: it was not the same stream any more.
+     */
+    const check = (): void => {
       void twitchSessionActive().then((live) => {
-        if (live) setSessionKey((k) => k + 1)
+        const before = hadSession.current
+        hadSession.current = live
+        if (before === false && live) setSessionKey((k) => k + 1)
       })
     }
-    window.addEventListener('sticki:twitchlogin', onResume)
-    document.addEventListener('visibilitychange', onResume)
+    check()
+    window.addEventListener('sticki:twitchlogin', check)
+    document.addEventListener('visibilitychange', check)
     return () => {
-      window.removeEventListener('sticki:twitchlogin', onResume)
-      document.removeEventListener('visibilitychange', onResume)
+      window.removeEventListener('sticki:twitchlogin', check)
+      document.removeEventListener('visibilitychange', check)
     }
   }, [])
 

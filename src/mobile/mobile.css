@@ -950,6 +950,52 @@ body {
   background: rgb(255 255 255 / 8%);
 }
 
+/* the search results: scrollable inside the menu, so a long list cannot push it off the screen */
+.m-msg-hits {
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 4px 0;
+  border-radius: 10px;
+  background: var(--surface-2, #26262c);
+}
+
+.m-app .m-msg-hit {
+  display: flex !important;
+  flex-direction: column;
+  gap: 1px;
+  align-items: flex-start;
+  min-height: 0 !important;
+  padding: 8px 10px !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid var(--border, #2a2a2e) !important;
+}
+
+.m-msg-hit .who {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent, #9147ff);
+}
+
+.m-msg-hit .what {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--text, #efeff1);
+  /* two lines is enough to recognise a message; the jump shows the rest in place */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: left;
+}
+
+.m-msg-none {
+  padding: 10px;
+  color: var(--text-dim, #adadb8);
+  font-size: 13px;
+  text-align: center;
+}
+
 /* the three states side by side: one tap to a filter, and the current one is obvious */
 .m-menu-filter {
   display: flex;

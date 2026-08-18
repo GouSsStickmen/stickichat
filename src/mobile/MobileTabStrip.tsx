@@ -50,6 +50,8 @@ export default function MobileTabStrip({
   const tabFilter = useSettingsStore((s) => s.settings.tabFilter)
   const liveChannels = useChatStore((s) => s.liveChannels)
   const [twitchSession, setTwitchSession] = useState(false)
+  /** the message search: a query over the active channel's buffer, and where a hit jumps to */
+  const [msgQuery, setMsgQuery] = useState('')
   useEffect(() => {
     if (menuOpen) void twitchSessionActive().then(setTwitchSession)
   }, [menuOpen])
@@ -235,6 +237,52 @@ export default function MobileTabStrip({
               this one is what the embedded player sees, and the only reason it exists is that a
               subscriber watching logged-out still gets pre-roll ads.
             */}
+            {/*
+              Searching the chat itself, which the desktop does through its highlights window. Here it
+              is the buffer that is already in memory: the newest matches first, because in a chat the
+              thing being looked for is nearly always something that just went past.
+            */}
+            <input
+              className="m-input"
+              value={msgQuery}
+              placeholder="Пошук у чаті: текст або нік"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="off"
+              onChange={(e) => setMsgQuery(e.target.value)}
+            />
+            {msgQuery.trim().length > 1 && (
+              <div className="m-msg-hits">
+                {(() => {
+                  const active = tabs.find((t) => t.id === activeTabId)
+                  const ch = active?.panes[0]?.channel
+                  const q = msgQuery.trim().toLowerCase()
+                  const buf = ch ? (useChatStore.getState().messages[ch] ?? []) : []
+                  const hits = buf
+                    .filter((m) => m.login?.includes(q) || m.text?.toLowerCase().includes(q))
+                    .slice(-40)
+                    .reverse()
+                  if (!hits.length) return <div className="m-msg-none">Нічого не знайдено</div>
+                  return hits.map((m) => (
+                    <button
+                      key={m.id}
+                      className="m-msg-hit"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setMsgQuery('')
+                        window.dispatchEvent(
+                          new CustomEvent('sticki:jump', { detail: { channel: m.channel, msgId: m.id } })
+                        )
+                      }}
+                    >
+                      <span className="who">{m.displayName || m.login}</span>
+                      <span className="what">{m.text}</span>
+                    </button>
+                  ))
+                })()}
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setMenuOpen(false)
