@@ -3651,7 +3651,8 @@ const ALERT_HTML = `<!doctype html>
     if (current) { current.card.remove(); current = null }
     try {
       holdCard = buildCard(SAMPLE)
-      holdCard.style.animation = 'none'
+      // no inline animation here: it would beat anything the custom CSS puts on .alert, and a
+      // held card is exactly where somebody is trying to watch their own animation
       stage.appendChild(holdCard)
     } catch (err) {
       console.error('alert: could not build the sample card', err)
