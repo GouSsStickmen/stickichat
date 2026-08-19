@@ -32,8 +32,13 @@ android {
         applicationId "com.stickmen.stickichat"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        /*
+         * versionCode is what Android compares to decide whether an install is an upgrade, and it must
+         * go up by at least one every time a build is handed out — a device refuses an APK whose code
+         * is not higher than the one it already has. versionName is only what people read.
+         */
         versionCode 1
-        versionName "1.0"
+        versionName "0.5.12"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
