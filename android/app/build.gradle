@@ -1,5 +1,30 @@
 apply plugin: 'com.android.application'
 
+/*
+ * Release signing, read from a file that is not in the repository.
+ *
+ * An APK that other people install has to be signed with a key that stays the same forever: Android
+ * refuses to update an app whose signature changed, so losing this key means every user has to
+ * uninstall and reinstall to ever get another version. The key and its password therefore belong to
+ * whoever owns the app and to nowhere else — not in git, and not in anything written by a tool.
+ *
+ * Create it once:
+ *   keytool -genkeypair -v -keystore stickichat.jks -alias stickichat  *           -keyalg RSA -keysize 4096 -validity 10000
+ *
+ * then put android/keystore.properties beside it:
+ *   storeFile=../stickichat.jks
+ *   storePassword=...
+ *   keyAlias=stickichat
+ *   keyPassword=...
+ *
+ * Without that file the release build simply is not configured, and `assembleDebug` still works.
+ */
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file('keystore.properties')
+if (keystoreFile.exists()) {
+    keystoreFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace = "com.stickmen.stickichat"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +41,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystoreProps['storeFile']) {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystoreProps['storeFile']) signingConfig signingConfigs.release
+            // a shared build says nothing to logcat: plugin results carry tokens through it
+            debuggable false
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
