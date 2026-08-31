@@ -572,6 +572,9 @@ class ChatService {
     }
   }
 
+  /** the "background channels get fewer event subscriptions" explanation, shown once a session */
+  private scopeNoticeShown = false
+
   /** channels already told that Twitch's subscription budget is full — one notice each */
   private subLimitShown = new Set<string>()
 
@@ -588,10 +591,44 @@ class ChatService {
     const auth = accounts.find((a) => a._accessToken)
     const ids = useChatStore.getState().channelIds
     const open = allOpenChannels(useLayoutStore.getState().tabs)
+    /*
+     * Twitch caps the total cost of one account's websocket subscriptions, and forty open channels
+     * asking for four each is far past it. Everything then fails by lottery: follows stop arriving,
+     * the mod feed goes silent, and which of them broke changes between launches.
+     *
+     * So they are ranked instead of all requested at once. The moderation feed is asked for
+     * everywhere it applies — it is what reports a ban, a deletion, and the lifting of a timeout,
+     * and it has to be right in a channel whether or not that channel is on screen. The rest —
+     * follows, raids, shoutouts — is announcement material, and an announcement about a channel you
+     * are not looking at is worth less than a mod tool that works. Those follow the eye: the active
+     * tab, plus anything pinned, which is the user saying "keep this one live".
+     */
+    const { tabs, activeTabId } = useLayoutStore.getState()
+    const foreground = new Set(
+      tabs
+        .filter((t) => t.id === activeTabId || t.pinned)
+        .flatMap((t) => t.panes.map((p) => p.channel))
+    )
+    /*
+     * And say so, once, when the ranking actually costs something.
+     *
+     * Silently doing less is how "follows sometimes do not work" became a bug report twice. Most
+     * people have a handful of channels open and never reach this at all, so the notice appears only
+     * when channels are genuinely being left out — and once per session, because it is an
+     * explanation, not an alarm.
+     */
+    const skipped = open.filter((ch) => !foreground.has(ch)).length
+    if (skipped > 0 && !this.scopeNoticeShown) {
+      this.scopeNoticeShown = true
+      const lang = useSettingsStore.getState().settings.language
+      useUiStore.getState().toast(translate(lang, 'info.eventScope', { count: String(skipped) }), 'ok')
+    }
+
     for (const ch of open) {
       const cid = ids[ch]
       if (!cid) continue // learned from ROOMSTATE shortly after join; resync() picks it up
-      if (auth && includeGlobal) {
+      const watched = foreground.has(ch)
+      if (auth && includeGlobal && watched) {
         out.push({
           account: auth,
           type: 'channel.raid',
@@ -614,7 +651,7 @@ class ChatService {
           channelLogin: ch
         })
         // shoutouts GIVEN in this channel — surface who was shouted out + offer to open them
-        out.push({
+        if (watched) out.push({
           account: modAccount,
           type: 'channel.shoutout.create',
           version: '1',
@@ -639,7 +676,7 @@ class ChatService {
               (o.type === 'goal' && o.metric === 'followers' && (o.channel ? o.channel.toLowerCase() === ch : true)) ||
               (o.type === 'follow' && (o.channel ? o.channel.toLowerCase() === ch : true))
           )
-        if (wantsFollows) {
+        if (wantsFollows && watched) {
           out.push({
             account: modAccount,
             type: 'channel.follow',

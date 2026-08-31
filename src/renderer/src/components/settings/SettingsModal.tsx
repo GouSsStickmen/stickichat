@@ -1417,6 +1417,13 @@ function NotificationsSection(): React.JSX.Element {
   const set = useSettingsStore((s) => s.setSettings)
   return (
     <Framed>
+      {/*
+        Stated where the settings it constrains are, because the constraint is Twitch's and no switch
+        here can lift it. Without this, a follow alert that is on and silent looks like a broken app.
+      */}
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {t('set.eventScope.hint')}
+      </p>
       <div className="set-group-title">{t('set.group.chatAlerts')}</div>
       {/* the cooldown applies to every alert below, so it sits above them rather than between
           the mention switch and the mention sound where it read as a mention option */}
