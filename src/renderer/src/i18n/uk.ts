@@ -1052,6 +1052,7 @@ export const uk: Record<TranslationKey, string> = {
   'info.hypeStart': '🚂 Хайп-трейн вирушив! Рівень {level}',
   'info.hypeLevel': '🚂 Хайп-трейн розігнався до рівня {level}',
   'info.hypeEnd': '🚂 Хайп-трейн завершився на рівні {level}',
+  'info.timeoutLifted': '✅ Таймаут знято — можна писати.',
   'info.subLimit': '⚠ Twitch вичерпав ліміт підписок на події ({type}) — деякі сповіщення тимчасово не приходять. Причина зазвичай: забагато відкритих каналів або той самий акаунт на іншому пристрої.',
   'info.shoutout': '📣 Шаутаут на {target}',
   'info.follow': '💜 {user} зафоловився!',

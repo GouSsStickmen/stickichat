@@ -1154,9 +1154,23 @@ class ChatService {
            * This needs no subscription and cannot go stale: the server accepted the message, so the
            * punishment is over, whoever ended it and however we failed to hear about it.
            */
-          if (msg.userId && useChatStore.getState().selfTimeouts[`${msg.channel}:${msg.userId}`]) {
-            if (useAccountsStore.getState().accounts.some((a) => a.id === msg.userId)) {
-              useChatStore.getState().setSelfTimeout(msg.channel, msg.userId, 0, '')
+          const heldTimeout = msg.userId
+            ? useChatStore.getState().selfTimeouts[`${msg.channel}:${msg.userId}`]
+            : undefined
+          if (heldTimeout && useAccountsStore.getState().accounts.some((a) => a.id === msg.userId)) {
+            useChatStore.getState().setSelfTimeout(msg.channel, msg.userId, 0, '')
+            /*
+             * Say it, the same way the timeout itself was said.
+             *
+             * Learning that a punishment is over by noticing that a message went through is not
+             * learning it — the countdown just disappears at some point and you are left guessing
+             * whether it expired or was lifted. A line closes it, in the same place the line about
+             * receiving it appeared.
+             */
+            const stillRunning = heldTimeout.until === -1 || heldTimeout.until > Date.now()
+            if (stillRunning) {
+              const lang = useSettingsStore.getState().settings.language
+              this.localInfo(msg.channel, translate(lang, 'info.timeoutLifted'))
             }
           }
           let seen = this.seenThisSession.get(msg.channel)

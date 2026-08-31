@@ -1049,6 +1049,7 @@ export const en = {
   'info.hypeStart': '🚂 Hype train departed! Level {level}',
   'info.hypeLevel': '🚂 Hype train reached level {level}',
   'info.hypeEnd': '🚂 Hype train ended at level {level}',
+  'info.timeoutLifted': '✅ Your timeout has been lifted — you can chat again.',
   'info.subLimit': '⚠ Twitch’s event subscription budget is full ({type}) — some notifications will not arrive for now. Usually too many open channels, or the same account on another device.',
   'info.shoutout': '📣 Shoutout to {target}',
   'info.follow': '💜 {user} just followed!',
