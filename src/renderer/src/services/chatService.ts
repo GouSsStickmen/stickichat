@@ -554,8 +554,26 @@ class ChatService {
       if (this.modSubErrorShown) return
       this.modSubErrorShown = true
       useUiStore.getState().toast(translate(lang, 'modact.needReauth', { login: desired.account.login }), 'error')
+    } else if (status === 429 && desired.channelLogin) {
+      /*
+       * Say it out loud, in the channel it happened to.
+       *
+       * Twitch caps the total cost of one account's websocket subscriptions, and with several
+       * channels open — or the same account signed in on a second device — that cap is reached and
+       * stays reached. The retry with backoff is already running, but until it wins, follows do not
+       * arrive, the mod feed is silent, raids go unannounced, and nothing anywhere says why. The
+       * feature simply looks broken, intermittently, which is the hardest kind of thing to report.
+       *
+       * Once per channel per session: a line, not a stream of them.
+       */
+      if (this.subLimitShown.has(desired.channelLogin)) return
+      this.subLimitShown.add(desired.channelLogin)
+      this.localInfo(desired.channelLogin, translate(lang, 'info.subLimit', { type: desired.type }))
     }
   }
+
+  /** channels already told that Twitch's subscription budget is full — one notice each */
+  private subLimitShown = new Set<string>()
 
   /** whisper (per account, main only) + raid-out + mod-feed subscriptions for this session */
   private desiredEventSubs(includeGlobal: boolean): EventSubDesired[] {
@@ -1056,7 +1074,8 @@ class ChatService {
             m.replyToMe = true
             m.isMention = true
           }
-          this.detectMention(m)
+          // flag it, never ring for it: see detectMention's `alert`
+          this.detectMention(m, false)
           msgs.push(m)
         }
       } else if (parsed.command === 'USERNOTICE') {
@@ -1467,7 +1486,17 @@ class ChatService {
   }
 
   /** flags mentions of any of my accounts; plays a sound + marks the tab */
-  private detectMention(msg: ChatMessage): void {
+  /**
+   * @param alert whether this message may ring and mark a tab unread.
+   *
+   * Looking like scrollback and being worth a sound were the same question until now, answered by
+   * `historical` alone — and the backfill after a dropped connection deliberately says it is NOT
+   * historical, because those messages arrived thirty seconds ago and dimming them would lie. So
+   * every reconnect replayed the pings for every mention it refilled, in every open channel at once,
+   * including ones that had already been read. The flag still gets set either way, or the mentions
+   * tab would be empty after a restart; only the noise is withheld.
+   */
+  private detectMention(msg: ChatMessage, alert = true): void {
     const accounts = useAccountsStore.getState().accounts
     if (accounts.length === 0 || !msg.text) return
     const caseSensitive = useSettingsStore.getState().settings.caseSensitiveNicks
@@ -1485,11 +1514,11 @@ class ChatService {
         return lower.includes(`@${l}`) || new RegExp(`(^|[^\\w])${l}([^\\w]|$)`).test(lower)
       })
     if (!mentioned) {
-      this.detectKeywords(msg)
+      if (alert) this.detectKeywords(msg)
       return
     }
     msg.isMention = true
-    if (msg.historical) return
+    if (msg.historical || !alert) return
 
     // is the mentioned channel visible in the active tab right now?
     const { tabs, activeTabId } = useLayoutStore.getState()
