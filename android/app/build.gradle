@@ -37,8 +37,8 @@ android {
          * go up by at least one every time a build is handed out — a device refuses an APK whose code
          * is not higher than the one it already has. versionName is only what people read.
          */
-        versionCode 1
-        versionName "0.5.12"
+        versionCode 2
+        versionName "0.5.13"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
