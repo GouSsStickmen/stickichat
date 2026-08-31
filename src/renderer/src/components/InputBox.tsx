@@ -416,8 +416,11 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
           account,
           channel: pane.channel,
           channelId,
-          toast: useUiStore.getState().toast
+          toast: useUiStore.getState().toast,
+          replyToMsgId: replyTo?.msgId
         })
+        // a command that posted a reply has consumed it, exactly as a plain message would
+        if (replyTo) onCancelReply()
       } else {
         // literal slash: KEEP the leading space in the outgoing message — Twitch's server
         // treats any message starting with "/" as a command ("Unrecognized command"), but

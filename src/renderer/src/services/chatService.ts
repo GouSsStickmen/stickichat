@@ -743,6 +743,18 @@ class ChatService {
     })
   }
 
+  /**
+   * Remember a shoutout this app just gave, so its EventSub echo is not announced again.
+   *
+   * The mod button writes its own line the moment the call succeeds — it was written when shoutouts
+   * did not come back at all. They do now, through channel.shoutout.create, so both lines appeared
+   * and the chat said the same thing twice. The echo lands in the same 30-second window the redelivery
+   * dedupe already uses, so noting it here is enough to silence exactly one of the two.
+   */
+  noteShoutoutGiven(channel: string, target: string): void {
+    this.shoutoutAnnounced.set(`${channel.toLowerCase()}:${target.toLowerCase()}`, Date.now())
+  }
+
   /** channel.shoutout.create — the broadcaster gave a shoutout; show it + offer to open the target */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private handleShoutout(event: Record<string, any>): void {
@@ -801,13 +813,27 @@ class ChatService {
         }
         break
       }
+      /*
+       * Lifting a ban or a timeout has to unlock the input, and nothing here did.
+       *
+       * Only the punishment was ever recorded. Twitch sends no CLEARCHAT when a timeout is lifted —
+       * this event is the only notice of it — so a timeout removed after ten seconds left the input
+       * locked for the full original duration, counting down against something that no longer
+       * existed. `until: 0` is the state the input reads as "nothing is in force".
+       */
       case 'unban':
         targetId = event.unban?.user_id ?? ''
         text = translate(lang, 'modact.unban', { mod, user: event.unban?.user_name ?? '?' })
+        if (targetId && useAccountsStore.getState().accounts.some((a) => a.id === targetId)) {
+          useChatStore.getState().setSelfTimeout(channel, targetId, 0, '')
+        }
         break
       case 'untimeout':
         targetId = event.untimeout?.user_id ?? ''
         text = translate(lang, 'modact.unban', { mod, user: event.untimeout?.user_name ?? '?' })
+        if (targetId && useAccountsStore.getState().accounts.some((a) => a.id === targetId)) {
+          useChatStore.getState().setSelfTimeout(channel, targetId, 0, '')
+        }
         break
       case 'delete': {
         targetId = event.delete?.user_id ?? ''
@@ -1237,6 +1263,18 @@ class ChatService {
           // that already went through (pending queue + store).
           const login = (m.tags['login'] || '').toLowerCase()
           if (m.tags['msg-id'] === 'submysterygift') {
+            /*
+             * A gift of one needs no header.
+             *
+             * Twitch announces every mass gift twice: a header saying how many were given, and a line
+             * per recipient. For a single sub that is "X дарує 1 підписок чату" followed by a
+             * collapsed child saying who actually got it — two lines and a disclosure triangle to
+             * read one fact. The header only earns its place when there is more than one line to
+             * group, so for a count of one it is dropped and the recipient's own line stands alone.
+             */
+            const count = parseInt(m.tags['msg-param-mass-gift-count'] ?? '', 10)
+            if (count === 1) break
+
             msg.giftGroupId = msg.id
             this.mysteryGifts.set(`${m.channel}:${login}`, { id: msg.id, until: Date.now() + 90_000 })
             const since = Date.now() - 90_000

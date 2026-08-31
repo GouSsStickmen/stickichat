@@ -218,7 +218,22 @@ export async function loadTwitchUserEmotes(account: Account): Promise<void> {
       }
     })
     if (list.length === 0) return // failed — keep cache/partial state, retry later
-    useEmotesStore.getState().setTwitchEmotes(account.id, list)
+    /*
+     * One entry per emote, whatever Twitch sends.
+     *
+     * A viewer who holds more than one entitlement to the same set — a tier 2 sub is the case that
+     * showed it — gets that set back once per entitlement, and the picker drew every one of those
+     * emotes twice. The code and its owner are what identify one; the tier that granted it is not
+     * part of what it is.
+     */
+    const seen = new Set<string>()
+    const unique = list.filter((e) => {
+      const key = `${e.code}|${e.ownerId}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    useEmotesStore.getState().setTwitchEmotes(account.id, unique)
     twitchEmotesLoaded.add(account.id)
     await loadEmoteOwnerNames(account, list.map((e) => e.ownerId))
     try {
@@ -226,7 +241,7 @@ export async function loadTwitchUserEmotes(account: Account): Promise<void> {
         twitchEmotesCacheKey(account.id),
         JSON.stringify({
           at: Date.now(),
-          list,
+          list: unique,
           names: useEmotesStore.getState().ownerNames
         } satisfies TwitchEmotesCache)
       )

@@ -131,6 +131,8 @@ export async function runModButton(btn: ModButton, ctx: ActionContext): Promise<
         if (!target) return
         const lang = useSettingsStore.getState().settings.language
         if (report(await sendShoutout(ctx.account, ctx.channelId, target), `📣 ${ctx.targetLogin}`, ctx.account.login)) {
+          // ours is the line that gets shown; the EventSub echo of the same shoutout is suppressed
+          chatService.noteShoutoutGiven(ctx.channel, ctx.targetLogin ?? '')
           // shoutouts don't come back through IRC — show the event in chat ourselves
           chatService.localInfo(ctx.channel, translate(lang, 'mod.shoutoutGiven', { user: ctx.targetLogin ?? '' }))
         }

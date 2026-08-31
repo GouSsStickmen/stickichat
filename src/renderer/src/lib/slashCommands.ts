@@ -22,6 +22,13 @@ export interface SlashContext {
   channel: string
   channelId: string
   toast: (text: string, kind?: 'ok' | 'error') => void
+  /**
+   * The message being replied to, when the input had a reply open.
+   *
+   * Only the commands that actually post a message can use it — /me is one, and it is the case that
+   * was broken: replying and then writing /me dropped the reply on the floor and posted a loose line.
+   */
+  replyToMsgId?: string
 }
 
 export interface SlashCommand {
