@@ -70,8 +70,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     name: 'me',
     usage: '/me <текст>',
     desc: 'Повідомлення-дія (курсивом)',
+    /*
+     * An action is a message, so it can be a reply like any other — it simply never carried the
+     * parent anywhere. Replying and then typing /me posted a loose line into the chat.
+     */
     run: async (_a, rest, ctx) => {
-      if (rest) await chatService.sendMessage(ctx.account, ctx.channel, `\x01ACTION ${rest}\x01`)
+      if (rest) await chatService.sendMessage(ctx.account, ctx.channel, `\x01ACTION ${rest}\x01`, ctx.replyToMsgId)
     }
   },
   {
