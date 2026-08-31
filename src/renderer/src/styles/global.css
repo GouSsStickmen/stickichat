@@ -5662,3 +5662,8 @@ button:has(> svg) {
   line-height: 1.5;
   tab-size: 2;
 }
+
+/* the name in "X gifted a sub to Y": drawn as that person, not as grey system text */
+.msg .gift-recipient {
+  font-weight: 700;
+}

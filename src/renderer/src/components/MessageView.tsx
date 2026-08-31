@@ -687,6 +687,20 @@ function MessageViewInner({
     if (stvWanted && !msg.system) ensureSevenTvCosmetic(msg.userId)
   }, [stvWanted, msg.userId, msg.system])
 
+  /*
+   * The same, for whoever received a gifted sub.
+   *
+   * "X подарував підписку для Y" said Y in plain grey while Y's own messages carry their colour and
+   * their paint. The name is the point of the line, so it is drawn the way that person is drawn
+   * everywhere else. The colour comes from the chatter index, never from a walk of the buffer.
+   */
+  const giftToCos = useSevenTvColors((s) =>
+    stvWanted && msg.giftToId ? s.cosmetics[msg.giftToId] : undefined
+  )
+  useEffect(() => {
+    if (stvWanted && msg.giftToId) ensureSevenTvCosmetic(msg.giftToId)
+  }, [stvWanted, msg.giftToId])
+
   // BTTV and FFZ publish one roster for everyone, so these are lookups rather than per-user
   // fetches; 7TV's badge rides along with the cosmetic request above
   const bttvBadge = useBttvBadges((s) => (msg.userId ? s.badges[msg.userId] : undefined))
@@ -1151,7 +1165,28 @@ function MessageViewInner({
                   : undefined
               }
             >
-              {msg.announceColor ? '📢' : '★'} {msg.systemText}
+              {msg.announceColor ? '📢' : '★'}{' '}
+              {(() => {
+                const who = msg.giftToName
+                const at = who && msg.systemText ? msg.systemText.indexOf(who) : -1
+                if (!who || at < 0) return msg.systemText
+                const paint = settings.sevenTvNickColors ? paintStyleOf(giftToCos, dark) : undefined
+                const colour =
+                  giftToCos?.color ??
+                  (msg.giftToLogin ? lookupUserColor(msg.channel, msg.giftToLogin) : undefined)
+                return (
+                  <>
+                    {msg.systemText!.slice(0, at)}
+                    <span
+                      className="gift-recipient"
+                      style={paint ?? (colour ? { color: ensureReadable(colour, dark) } : undefined)}
+                    >
+                      {who}
+                    </span>
+                    {msg.systemText!.slice(at + who.length)}
+                  </>
+                )
+              })()}
               {msg.giftGroupId && (
                 <span className="gift-toggle-arrow">
                   {useUiStore.getState().expandedGifts[msg.giftGroupId] ? ' ▲' : ` ▼ ${t('gift.showAll')}`}

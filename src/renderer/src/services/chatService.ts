@@ -1305,6 +1305,10 @@ class ChatService {
             useChatStore.getState().groupGifts(m.channel, login, msg.id, since)
           } else if (m.tags['msg-id'] === 'subgift') {
             msg.giftFrom = login
+            // the recipient, so the line can paint their name the way their own messages are painted
+            msg.giftToLogin = (m.tags['msg-param-recipient-user-name'] ?? '').toLowerCase()
+            msg.giftToName = m.tags['msg-param-recipient-display-name'] || msg.giftToLogin
+            msg.giftToId = m.tags['msg-param-recipient-id'] || undefined
             const g = this.mysteryGifts.get(`${m.channel}:${login}`)
             if (g && Date.now() < g.until) msg.groupedUnder = g.id
           }

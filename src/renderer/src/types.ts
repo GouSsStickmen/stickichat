@@ -66,6 +66,10 @@ export interface ChatMessage {
   giftGroupId?: string
   /** subgift line: the gifter's login (lets a late header group earlier lines) */
   giftFrom?: string
+  /** subgift: who received it — login, display name and id, so the name can be drawn as a nick */
+  giftToLogin?: string
+  giftToName?: string
+  giftToId?: string
   /** first message we've seen from this login since we joined this channel this session */
   isFirstInSession?: boolean
   /**
