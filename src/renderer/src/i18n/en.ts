@@ -60,6 +60,7 @@ export const en = {
   // Input
   'input.placeholder': 'Send a message…',
   'input.placeholderReadOnly': 'Add an account to chat',
+  'input.timedOutTry': 'you can try sending anyway',
   'input.timedOut': 'You are timed out — {seconds}s left',
   'input.banned': 'You are banned in this chat',
   'input.send': 'Send',

@@ -524,7 +524,9 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
       ? `${narrow ? '🚫' : t('input.banned')}${selfTimeout?.reason ? ` — ${selfTimeout.reason}` : ''}`
       : narrow
         ? `⏳ ${timeoutLeft}с`
-        : `${t('input.timedOut', { seconds: timeoutLeft })}${selfTimeout?.reason ? ` — ${selfTimeout.reason}` : ''}`
+        : `${t('input.timedOut', { seconds: timeoutLeft })}${selfTimeout?.reason ? ` — ${selfTimeout.reason}` : ''}${
+            canModerate(account, pane.channel, channelId) ? '' : ` — ${t('input.timedOutTry')}`
+          }`
     : null
 
   return (

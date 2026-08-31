@@ -62,6 +62,7 @@ export const uk: Record<TranslationKey, string> = {
   // Input
   'input.placeholder': 'Надіслати повідомлення…',
   'input.placeholderReadOnly': 'Додай акаунт, щоб писати',
+  'input.timedOutTry': 'можна спробувати надіслати',
   'input.timedOut': 'Ти в таймауті — залишилось {seconds}с',
   'input.banned': 'Тебе забанено в цьому чаті',
   'input.send': 'Надіслати',
