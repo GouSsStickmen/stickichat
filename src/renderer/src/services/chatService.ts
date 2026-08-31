@@ -1506,6 +1506,16 @@ class ChatService {
       !!msg.replyToMe ||
       accounts.some((a) => {
         if (msg.userId === a.id) return false // own messages don't count
+        /*
+         * An @tag is an address, and a Twitch login is not case-sensitive: @gous_stickmen and
+         * @GouS_Stickmen reach the same person, so both have to count. Only the display spelling was
+         * accepted here, which is why mentions fired "sometimes" — it depended entirely on how the
+         * other person had capitalised the name, and most people type it in lower case.
+         *
+         * The setting still governs the bare word, which is what it is for: it stops a nick that is
+         * also an ordinary word from ringing every time somebody uses that word.
+         */
+        if (lower.includes(`@${a.login.toLowerCase()}`)) return true
         if (caseSensitive) {
           const name = escapeRegExp(a.displayName)
           return msg.text.includes(`@${a.displayName}`) || new RegExp(`(^|[^\\w])${name}([^\\w]|$)`).test(msg.text)
