@@ -1142,6 +1142,23 @@ class ChatService {
       case 'PRIVMSG': {
         const msg = this.privmsgToChatMessage(m)
         if (msg) {
+          /*
+           * A message of ours arriving is proof we are not timed out.
+           *
+           * Nothing else proves it. Twitch sends no CLEARCHAT when a timeout is lifted, and the
+           * channel.moderate feed that does report it is the first thing to be refused when the
+           * account's subscription budget is full — which, with a lot of channels open, it usually
+           * is. So a timeout removed after ten seconds left the input locked for its full original
+           * length, counting down against nothing.
+           *
+           * This needs no subscription and cannot go stale: the server accepted the message, so the
+           * punishment is over, whoever ended it and however we failed to hear about it.
+           */
+          if (msg.userId && useChatStore.getState().selfTimeouts[`${msg.channel}:${msg.userId}`]) {
+            if (useAccountsStore.getState().accounts.some((a) => a.id === msg.userId)) {
+              useChatStore.getState().setSelfTimeout(msg.channel, msg.userId, 0, '')
+            }
+          }
           let seen = this.seenThisSession.get(msg.channel)
           if (!seen) {
             seen = new Set()
@@ -1855,6 +1872,28 @@ class ChatService {
           // than surfacing an error. This is the safety net for the proactive alternation
           // in dedupeSuffix (which can miss e.g. after a reconnect drops our local state).
           if (m.tags['msg-id'] === 'msg_duplicate' && this.resendTagged(account, m.channel)) return
+          /*
+           * The server's own answer about a timeout, which is the only authoritative one — and this
+           * connection knows whose it is, which the reader does not.
+           *
+           * The input no longer refuses to let a message be typed while a timeout is believed to be
+           * running, because that belief goes stale: Twitch never says when one is lifted, and the
+           * mod feed that does report it is the first thing refused when the account's subscription
+           * budget is full. So the attempt is the test. If the punishment really is still in force,
+           * this notice comes back carrying the seconds left, and the countdown is set from that
+           * instead of from what we last guessed.
+           */
+          const id = m.tags['msg-id'] ?? ''
+          if (id === 'msg_timedout' || id === 'msg_banned') {
+            const left = /(\d+)/.exec(m.trailing ?? '')
+            useChatStore
+              .getState()
+              .setSelfTimeout(
+                m.channel,
+                account.id,
+                id === 'msg_banned' ? -1 : Date.now() + (left ? parseInt(left[1], 10) : 1) * 1000
+              )
+          }
           this.queue(m.channel, this.systemMessage(m.channel, m.trailing, true))
         }
       }

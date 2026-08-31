@@ -698,7 +698,16 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             value={text}
             rows={1}
             placeholder={timeoutPlaceholder ?? (account ? t('input.placeholder') : t('input.placeholderReadOnly'))}
-            disabled={!account || timedOut}
+            /*
+             * Typing is allowed even while a timeout is believed to be running.
+             *
+             * Twitch never says when one is lifted — the mod feed that does is the first thing it
+             * refuses when the account's subscription budget is full — so the countdown can easily be
+             * counting against nothing, and a locked field left the user unable to prove otherwise.
+             * The attempt is the proof: the message either goes through, which clears it, or comes
+             * back as a notice carrying the real seconds left.
+             */
+            disabled={!account}
             spellCheck={true}
             lang="uk"
             onChange={(e) => {
@@ -742,7 +751,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
         >
           😊
         </button>
-        <button className="primary" disabled={!account || !text.trim() || timedOut} onClick={send}>
+        <button className="primary" disabled={!account || !text.trim()} onClick={send}>
           ➤
         </button>
       </div>
