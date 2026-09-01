@@ -118,7 +118,12 @@ interface UiState {
   toggleGiftGroup: (id: string) => void
   setAddAccountOpen: (v: boolean) => void
   setUserCard: (v: UserCardTarget | null) => void
-  toast: (text: string, kind?: 'ok' | 'error') => void
+  /**
+   * @param opts.muteKey lets a non-error toast carry a "don't show again" button too — the mute
+   *   machinery already existed, it was simply reachable only from errors.
+   * @param opts.ms how long it stays. An explanation needs longer on screen than a confirmation.
+   */
+  toast: (text: string, kind?: 'ok' | 'error', opts?: { muteKey?: string; ms?: number }) => void
   dismissToast: (id: number) => void
   setEmotePreview: (v: EmotePreviewTarget | null) => void
   setLinkCard: (v: LinkCardTarget | null) => void
@@ -180,8 +185,8 @@ export const useUiStore = create<UiState>()((set) => ({
     set((s) => ({ expandedGifts: { ...s.expandedGifts, [id]: !s.expandedGifts[id] } })),
   setAddAccountOpen: (addAccountOpen) => set({ addAccountOpen }),
   setUserCard: (userCard) => set({ userCard }),
-  toast: (text, kind = 'ok') => {
-    const muteKey = kind === 'error' ? errorMuteKey(text) : undefined
+  toast: (text, kind = 'ok', opts) => {
+    const muteKey = opts?.muteKey ?? (kind === 'error' ? errorMuteKey(text) : undefined)
     // silently drop errors the user has told us to stop showing
     if (muteKey && useSettingsStore.getState().settings.mutedErrors.includes(muteKey)) return
     const id = ++toastId
@@ -193,7 +198,7 @@ export const useUiStore = create<UiState>()((set) => ({
     // errors carry explanations now — give people time to actually read them
     setTimeout(() => {
       useUiStore.getState().dismissToast(id)
-    }, kind === 'error' ? 10000 : 3500)
+    }, opts?.ms ?? (kind === 'error' ? 10000 : 3500))
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setEmotePreview: (emotePreview) => set({ emotePreview }),

@@ -5692,3 +5692,24 @@ button:has(> svg) {
   /* the intrinsic ratio is kept: object-fit would otherwise crop or stretch the frame */
   object-fit: contain;
 }
+
+/* the ordering control at the top of the picker's third-party tab */
+.picker-sort {
+  display: flex;
+  gap: 4px;
+  padding: 2px 0 6px;
+  flex-wrap: wrap;
+}
+.picker-sort button {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+}
+.picker-sort button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

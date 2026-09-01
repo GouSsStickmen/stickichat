@@ -120,7 +120,10 @@ const PROVIDER_LABEL: Record<EmoteProvider, string> = {
   emoji: 'Emoji'
 }
 
-function groupByProvider(map: Map<string, Emote> | undefined): Map<EmoteProvider, Emote[]> {
+function groupByProvider(
+  map: Map<string, Emote> | undefined,
+  sort: Settings['pickerSort']
+): Map<EmoteProvider, Emote[]> {
   const groups = new Map<EmoteProvider, Emote[]>()
   if (!map) return groups
   for (const e of map.values()) {
@@ -129,8 +132,15 @@ function groupByProvider(map: Map<string, Emote> | undefined): Map<EmoteProvider
     groups.set(e.provider, arr)
   }
   // smallest to largest; unknown sizes (e.g. BTTV has none) sort after known ones
+  const bySize = (a: Emote, b: Emote): number =>
+    (a.size ?? Infinity) - (b.size ?? Infinity) || a.code.localeCompare(b.code)
   for (const arr of groups.values()) {
-    arr.sort((a, b) => (a.size ?? Infinity) - (b.size ?? Infinity) || a.code.localeCompare(b.code))
+    if (sort === 'name') arr.sort((a, b) => a.code.localeCompare(b.code))
+    else if (sort === 'overlaysFirst' || sort === 'overlaysLast') {
+      // one block of overlays and one of the rest, each still smallest-first inside itself
+      const dir = sort === 'overlaysFirst' ? -1 : 1
+      arr.sort((a, b) => (Number(!!a.zeroWidth) - Number(!!b.zeroWidth)) * dir || bySize(a, b))
+    } else arr.sort(bySize)
   }
   return groups
 }
@@ -280,14 +290,15 @@ export default function EmotePicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [twitchEmotes, channelId, ownerNames, pinnedOwners])
 
+  const pickerSort = useSettingsStore((s) => s.settings.pickerSort)
   const { channelGroups, globalGroups } = useMemo(() => {
     const st = useEmotesStore.getState()
     return {
-      channelGroups: groupByProvider(st.channelEmotes[channel]),
-      globalGroups: groupByProvider(st.globalEmotes)
+      channelGroups: groupByProvider(st.channelEmotes[channel], pickerSort),
+      globalGroups: groupByProvider(st.globalEmotes, pickerSort)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channel, emoteVersion])
+  }, [channel, emoteVersion, pickerSort])
 
   const searchResults = useMemo((): (Emote | FavoriteEmote)[] => {
     const q = query.trim().toLowerCase()
@@ -585,6 +596,26 @@ ${lockHint}` : ''}`
           )
         ) : tab === 'thirdparty' ? (
           <>
+            {/* how this tab is ordered — the overlay options are the reason it exists */}
+            <div className="picker-sort">
+              {(
+                [
+                  ['size', t('picker.sort.size')],
+                  ['name', t('picker.sort.name')],
+                  ['overlaysFirst', t('picker.sort.overlaysFirst')],
+                  ['overlaysLast', t('picker.sort.overlaysLast')]
+                ] as [Settings['pickerSort'], string][]
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  className={pickerSort === key ? 'on' : ''}
+                  onMouseDown={(ev) => ev.preventDefault()}
+                  onClick={() => useSettingsStore.getState().setSettings({ pickerSort: key })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             {(['7tv', 'bttv', 'ffz'] as EmoteProvider[]).map((p) =>
               section(`${t('picker.channel')} · ${PROVIDER_LABEL[p]}`, channelGroups.get(p) ?? [])
             )}

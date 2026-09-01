@@ -1871,6 +1871,15 @@ export interface Settings {
   emojiNameLang: 'uk' | 'en' | 'both'
   /** px size of badges in chat/lists */
   badgeSize: number
+  /**
+   * How the picker orders a provider's emotes.
+   *
+   * 'size' is the old fixed behaviour, smallest first. The overlay options exist because zero-width
+   * emotes are the ones you go looking for deliberately — they only mean anything stacked on
+   * something else — and being small, sorting purely by width scattered them evenly through the
+   * grid, which is the worst place for a thing you are hunting.
+   */
+  pickerSort: 'size' | 'name' | 'overlaysFirst' | 'overlaysLast'
   /** px size of the big hover preview in the emote picker */
   emotePreviewSize: number
   /** px size of the preview shown when hovering an emote in a chat message */
@@ -2158,6 +2167,7 @@ export const DEFAULT_SETTINGS: Settings = {
   settingsPinned: false,
   emojiNameLang: 'both',
   badgeSize: 18,
+  pickerSort: 'size',
   emotePreviewSize: 112,
   chatEmoteHoverSize: 128,
   showStreamInfo: true,

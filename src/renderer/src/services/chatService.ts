@@ -621,7 +621,16 @@ class ChatService {
     if (skipped > 0 && !this.scopeNoticeShown) {
       this.scopeNoticeShown = true
       const lang = useSettingsStore.getState().settings.language
-      useUiStore.getState().toast(translate(lang, 'info.eventScope', { count: String(skipped) }), 'ok')
+      /*
+       * Long enough to read and dismissible for good. It is an explanation of a limit that will not
+       * change, not an alert — someone who has read it once does not need it at every launch.
+       */
+      useUiStore
+        .getState()
+        .toast(translate(lang, 'info.eventScope', { count: String(skipped) }), 'ok', {
+          muteKey: 'eventScope',
+          ms: 25000
+        })
     }
 
     for (const ch of open) {
