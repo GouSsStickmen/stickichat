@@ -3,6 +3,7 @@ import {
   DEFAULT_MOD_BUTTONS,
   DEFAULT_SETTINGS,
   FavoriteEmote,
+  FavoriteFolder,
   HighlightRule,
   ModButton,
   Settings
@@ -15,6 +16,14 @@ interface SettingsState {
   raidFavorites: string[]
   highlightRules: HighlightRule[]
   favoriteEmotes: FavoriteEmote[]
+  /**
+   * Named shelves inside the favourites, holding references rather than emotes.
+   *
+   * A key, not a copy, and a list per folder rather than a folder per emote: the same emote belongs
+   * on several shelves at once — the one for a raid, the one for a bit — and neither owns it. The
+   * emote itself stays in `favoriteEmotes`, which remains the whole collection.
+   */
+  favoriteFolders: FavoriteFolder[]
   setClientId: (id: string) => void
   setSettings: (patch: Partial<Settings>) => void
   applySettings: (settings: Settings) => void
@@ -23,6 +32,9 @@ interface SettingsState {
   setHighlightRules: (rules: HighlightRule[]) => void
   toggleFavoriteEmote: (e: FavoriteEmote) => void
   setFavoriteEmotes: (list: FavoriteEmote[]) => void
+  setFavoriteFolders: (list: FavoriteFolder[]) => void
+  /** put an emote on a shelf or take it off — the emote stays in the collection either way */
+  toggleInFolder: (folderId: string, key: string) => void
 }
 
 /** stable identity of a favorite: provider + base code + every layer, in order */
@@ -38,6 +50,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   raidFavorites: [],
   highlightRules: [],
   favoriteEmotes: [],
+  favoriteFolders: [],
   setClientId: (clientId) => set({ clientId }),
   setSettings: (patch) =>
     set((s) => ({ settings: { ...s.settings, ...patch, _rev: (s.settings._rev ?? 0) + 1 } })),
@@ -58,5 +71,14 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
           : [...s.favoriteEmotes, e]
       }
     }),
-  setFavoriteEmotes: (favoriteEmotes) => set({ favoriteEmotes })
+  setFavoriteEmotes: (favoriteEmotes) => set({ favoriteEmotes }),
+  setFavoriteFolders: (favoriteFolders) => set({ favoriteFolders }),
+  toggleInFolder: (folderId, key) =>
+    set((s) => ({
+      favoriteFolders: s.favoriteFolders.map((f) =>
+        f.id !== folderId
+          ? f
+          : { ...f, keys: f.keys.includes(key) ? f.keys.filter((k) => k !== key) : [...f.keys, key] }
+      )
+    }))
 }))

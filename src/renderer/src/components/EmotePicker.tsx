@@ -327,9 +327,24 @@ export default function EmotePicker({
   const [favPop, setFavPop] = useState<string | null>(null)
   const [editFavs, setEditFavs] = useState(false)
   const favGridRef = useRef<HTMLDivElement>(null)
+  /*
+   * Shelves inside the favourites.
+   *
+   * `folderId` is which one is being looked at, null meaning the whole collection. `assignFor` is
+   * the emote whose shelf list is open — an emote belongs to as many as you like, so it is a list
+   * of checkboxes rather than a choice.
+   */
+  const folders = useSettingsStore((s) => s.favoriteFolders)
+  const [folderId, setFolderId] = useState<string | null>(null)
+  const [assignFor, setAssignFor] = useState<string | null>(null)
   const setFavoriteEmotes = useSettingsStore((s) => s.setFavoriteEmotes)
 
   const favSet = useMemo(() => new Set(favorites.map(favKeyOf)), [favorites])
+  const shownFavorites = useMemo(() => {
+    if (!folderId) return favorites
+    const keys = new Set(folders.find((f) => f.id === folderId)?.keys ?? [])
+    return favorites.filter((f) => keys.has(favKeyOf(f)))
+  }, [favorites, folders, folderId])
 
   const cell = (e: Emote | FavoriteEmote): React.JSX.Element => {
     const cellKey = favKeyOf(e as FavoriteEmote)
@@ -489,12 +504,101 @@ ${lockHint}` : ''}`
         ) : tab === 'favorites' ? (
           favorites.length > 0 ? (
             <>
+              {/*
+                One shelf at a time, and "all" is a shelf too. Right-clicking an emote below says
+                which shelves it sits on — an emote can be on several, so nothing is moved anywhere.
+              */}
+              <div className="fav-folders">
+                <button className={folderId === null ? 'on' : ''} onClick={() => setFolderId(null)}>
+                  {t('picker.allFavs')}
+                </button>
+                {folders.map((f) => (
+                  <button
+                    key={f.id}
+                    className={folderId === f.id ? 'on' : ''}
+                    title={f.name}
+                    onClick={() => setFolderId(f.id)}
+                    onContextMenu={(ev) => {
+                      ev.preventDefault()
+                      const name = window.prompt(t('picker.folderRename'), f.name)
+                      const st = useSettingsStore.getState()
+                      if (name === null) return
+                      // an empty name is how a shelf is thrown away; its emotes stay in the collection
+                      st.setFavoriteFolders(
+                        name.trim()
+                          ? st.favoriteFolders.map((x) => (x.id === f.id ? { ...x, name: name.trim() } : x))
+                          : st.favoriteFolders.filter((x) => x.id !== f.id)
+                      )
+                      if (!name.trim() && folderId === f.id) setFolderId(null)
+                    }}
+                  >
+                    {f.icon ? <img src={f.icon} alt="" /> : f.name}
+                  </button>
+                ))}
+                <button
+                  className="fav-folder-add"
+                  title={t('picker.folderNew')}
+                  onClick={() => {
+                    const name = window.prompt(t('picker.folderNew'))?.trim()
+                    if (!name) return
+                    const st = useSettingsStore.getState()
+                    const id = `fav-${Date.now().toString(36)}`
+                    st.setFavoriteFolders([...st.favoriteFolders, { id, name, keys: [] }])
+                    setFolderId(id)
+                  }}
+                >
+                  ＋
+                </button>
+              </div>
               <button
                 className={`ghost fav-edit-btn ${editFavs ? 'active' : ''}`}
                 onClick={() => setEditFavs((v) => !v)}
               >
                 ✎ {t('picker.editFavs')}
               </button>
+              {/*
+                Checkboxes, not a chooser: the same emote belongs on the raid shelf and the bit
+                shelf at once, and picking one must not take it off the other.
+              */}
+              {assignFor && (
+                <div className="fav-assign" onMouseDown={(ev) => ev.preventDefault()}>
+                  <div className="fav-assign-title">{t('picker.folderAssign')}</div>
+                  {folders.length === 0 && <div className="fav-assign-empty">—</div>}
+                  {folders.map((f) => {
+                    const inIt = f.keys.includes(assignFor)
+                    return (
+                      <button
+                        key={f.id}
+                        className={inIt ? 'on' : ''}
+                        onClick={() => useSettingsStore.getState().toggleInFolder(f.id, assignFor)}
+                      >
+                        <span className="fav-assign-box">{inIt ? '☑' : '☐'}</span>
+                        {f.name}
+                      </button>
+                    )
+                  })}
+                  {folderId && (
+                    <button
+                      className="fav-assign-icon"
+                      onClick={() => {
+                        const fav = favorites.find((x) => favKeyOf(x) === assignFor)
+                        const st = useSettingsStore.getState()
+                        st.setFavoriteFolders(
+                          st.favoriteFolders.map((x) =>
+                            x.id === folderId ? { ...x, icon: fav?.url || undefined } : x
+                          )
+                        )
+                        setAssignFor(null)
+                      }}
+                    >
+                      ★ {t('picker.folderAsIcon')}
+                    </button>
+                  )}
+                  <button className="fav-assign-close" onClick={() => setAssignFor(null)}>
+                    ✕
+                  </button>
+                </div>
+              )}
               <div className="picker-grid" ref={favGridRef}>
                 {editFavs
                   ? favorites.map((f, i) => (
@@ -548,7 +652,18 @@ ${lockHint}` : ''}`
                         )}
                       </button>
                     ))
-                  : favorites.map(cell)}
+                  : shownFavorites.map((f) => (
+                      <span
+                        key={favKeyOf(f)}
+                        className="fav-slot"
+                        onContextMenu={(ev) => {
+                          ev.preventDefault()
+                          setAssignFor(favKeyOf(f))
+                        }}
+                      >
+                        {cell(f)}
+                      </span>
+                    ))}
               </div>
             </>
           ) : (

@@ -5744,3 +5744,75 @@ button:has(> svg) {
   border-color: var(--accent);
   color: #fff;
 }
+
+/* ---------- favourite categories ---------- */
+.fav-folders {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 2px 0 6px;
+}
+.fav-folders button {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+}
+.fav-folders button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.fav-folders button img {
+  height: 18px;
+  width: auto;
+}
+.fav-folder-add {
+  font-size: var(--fs-sm) !important;
+}
+/* the shelf list for one emote */
+.fav-assign {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+.fav-assign-title {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 0 2px 2px;
+}
+.fav-assign button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.fav-assign button:hover {
+  background: var(--surface-3);
+}
+.fav-assign-empty {
+  padding: 2px 8px;
+  color: var(--text-faint);
+}
+.fav-slot {
+  display: contents;
+}

@@ -150,6 +150,15 @@ export interface Emote {
   ownerName?: string
 }
 
+/** a named shelf in the favourites; `keys` are favKey() references into favoriteEmotes */
+export interface FavoriteFolder {
+  id: string
+  name: string
+  /** an emote code shown on the tab instead of the name, when the user picks one */
+  icon?: string
+  keys: string[]
+}
+
 export type EmoteMap = Map<string, Emote>
 
 // ---------- Cheermotes (bits) ----------
@@ -2319,6 +2328,7 @@ export interface AppConfig {
   raidFavorites: string[]
   highlightRules: HighlightRule[]
   favoriteEmotes: FavoriteEmote[]
+  favoriteFolders?: FavoriteFolder[]
   tabs: Tab[]
   activeTabId: string | null
 }

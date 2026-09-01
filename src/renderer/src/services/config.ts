@@ -75,6 +75,7 @@ export async function loadConfig(): Promise<boolean> {
       : [...rules, { id: 'shared-chat', kind: 'sharedChat' as const, value: '', color: '#9147ff', opacity: 0.06, enabled: true }]
   )
   settings.setFavoriteEmotes(raw.favoriteEmotes ?? [])
+  settings.setFavoriteFolders(raw.favoriteFolders ?? [])
 
   const accounts = useAccountsStore.getState()
   for (const a of raw.accounts ?? []) {
@@ -199,7 +200,11 @@ export function exportConfigJson(parts: ConfigPart[] = CONFIG_PARTS): string {
   if (Object.keys(settings).length) body.settings = settings
   if (parts.includes('modButtons')) body.modButtons = s.modButtons
   if (parts.includes('highlightRules')) body.highlightRules = s.highlightRules
-  if (parts.includes('favoriteEmotes')) body.favoriteEmotes = s.favoriteEmotes
+  if (parts.includes('favoriteEmotes')) {
+    body.favoriteEmotes = s.favoriteEmotes
+    // the shelves travel with the collection they organise; separating them would export half a thing
+    body.favoriteFolders = s.favoriteFolders
+  }
   if (parts.includes('other')) body.raidFavorites = s.raidFavorites
   return JSON.stringify(body, null, 2)
 }
@@ -235,6 +240,7 @@ export function importConfigJson(text: string): boolean {
   if (Array.isArray(data.raidFavorites)) s.setRaidFavorites(data.raidFavorites)
   if (Array.isArray(data.highlightRules)) s.setHighlightRules(data.highlightRules)
   if (Array.isArray(data.favoriteEmotes)) s.setFavoriteEmotes(data.favoriteEmotes)
+  if (Array.isArray(data.favoriteFolders)) s.setFavoriteFolders(data.favoriteFolders)
   return true
 }
 
