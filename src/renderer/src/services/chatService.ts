@@ -60,6 +60,8 @@ interface PersistedRedeem {
   cost?: number
   icon?: string
   input?: string
+  /** the moderator removed it — replayed struck through rather than as if it still stood */
+  deleted?: boolean
 }
 
 /**
@@ -472,7 +474,7 @@ class ChatService {
         held.displayName = held.displayName || e.userDisplay
         this.markUnreadIfInactive(channel)
         this.queue(channel, held)
-        this.persistRedeem(channel, msg)
+        this.persistRedeem(channel, msg, held.id)
         return
       }
       // no raw copy in flight — the styled line is all there is, and a late copy is a duplicate
@@ -490,13 +492,18 @@ class ChatService {
     return `sticki:redeems:${channel}`
   }
 
-  private persistRedeem(channel: string, msg: ChatMessage): void {
+  /**
+   * @param id the id to file it under, when the line shown is not the one this record was built
+   *   from. A redemption with user input is shown as the real chat message, and a deletion arrives
+   *   naming that id — file it under anything else and the two can never be matched.
+   */
+  private persistRedeem(channel: string, msg: ChatMessage, id = msg.id): void {
     try {
       const raw = localStorage.getItem(this.redeemKey(channel))
       const list = raw ? (JSON.parse(raw) as PersistedRedeem[]) : []
-      if (list.some((r) => r.id === msg.id)) return // the other window already wrote it
+      if (list.some((r) => r.id === id)) return // the other window already wrote it
       list.push({
-        id: msg.id,
+        id,
         text: msg.systemText ?? '',
         ts: msg.timestamp,
         login: msg.login,
@@ -508,6 +515,21 @@ class ChatService {
         input: msg.text
       })
       localStorage.setItem(this.redeemKey(channel), JSON.stringify(list.slice(-100)))
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  /** a redemption's message was removed — remember that, or the scrollback replays it as if it stood */
+  private markRedeemDeleted(channel: string, id: string): void {
+    try {
+      const raw = localStorage.getItem(this.redeemKey(channel))
+      if (!raw) return
+      const list = JSON.parse(raw) as PersistedRedeem[]
+      const hit = list.find((r) => r.id === id)
+      if (!hit || hit.deleted) return
+      hit.deleted = true
+      localStorage.setItem(this.redeemKey(channel), JSON.stringify(list))
     } catch {
       /* best-effort */
     }
@@ -530,6 +552,8 @@ class ChatService {
         msg.rewardCost = r.cost
         msg.rewardIcon = r.icon
         msg.text = r.input ?? ''
+        // struck through on the way back in, exactly as it was left
+        if (r.deleted) msg.deleted = true
         return msg
       })
     } catch {
@@ -1357,6 +1381,7 @@ class ChatService {
         const id = m.tags['target-msg-id']
         if (id && m.channel) {
           useChatStore.getState().markDeleted(m.channel, id)
+          this.markRedeemDeleted(m.channel, id)
           if (!window.location.hash) window.sticki.overlayDelete(m.channel, { id })
         }
         break

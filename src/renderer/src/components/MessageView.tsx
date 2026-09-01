@@ -1106,7 +1106,14 @@ function MessageViewInner({
           )}
           <div
             ref={msgElRef}
-            className={`msg redeem-info ${swipeEnabled ? 'has-grip' : ''}`}
+            /*
+             * `deleted` and `historical` belong here as much as on any other line: a removed
+             * redemption is struck through for the moderator who removed it, the same way a removed
+             * message is, rather than quietly vanishing or coming back looking untouched.
+             */
+            className={`msg redeem-info ${swipeEnabled ? 'has-grip' : ''} ${
+              msg.deleted ? 'deleted' : ''
+            } ${msg.historical ? 'historical' : ''}`}
             style={customBg ? { background: customBg } : undefined}
           >
             {swipeEnabled && (
