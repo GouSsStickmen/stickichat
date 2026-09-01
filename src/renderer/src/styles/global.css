@@ -2943,8 +2943,13 @@ input[type='number']::-webkit-inner-spin-button {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
   gap: 2px;
-  /* wide emotes take two columns — dense flow backfills the gap they'd otherwise leave */
-  grid-auto-flow: row dense;
+  /*
+   * Plain row flow, not dense. Backfilling the gap a two-column emote leaves is tidier to look at
+   * and wrong to use: it pulls a later emote out of its group to plug the hole, so an overlay from
+   * the block at the end turned up on its own beside something else — and which one moved changed
+   * with the window width, because that is what decides where the gaps fall.
+   */
+  grid-auto-flow: row;
 }
 /* Twitch tab: streamer avatar rail (sticky) + emote groups */
 .picker-twitch {
@@ -5012,6 +5017,12 @@ button:has(> svg) {
   text-shadow: 0 1px 2px #000;
 }
 /* a wide emote spans two grid columns so it isn't squeezed into a square */
+/*
+ * A wide emote asks for two columns, and at some window widths the grid has only one left at the
+ * end of a row — `dense` then reaches forward for something narrow to plug the hole, which is what
+ * dragged single overlays out of their block and stacked them against the right edge. Nothing is
+ * allowed to span more columns than exist, and a cell that cannot fit takes a new row instead.
+ */
 .picker-grid .emote-cell.wide {
   grid-column: span 2;
 }
@@ -5694,11 +5705,21 @@ button:has(> svg) {
 }
 
 /* the ordering control at the top of the picker's third-party tab */
+/*
+ * The ordering control stays put while the grid scrolls under it.
+ *
+ * It is the thing you reach for after seeing the list, so having to scroll back to the top to
+ * change the order made it useful exactly once per opening.
+ */
 .picker-sort {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   gap: 4px;
-  padding: 2px 0 6px;
+  padding: 4px 0 6px;
   flex-wrap: wrap;
+  background: var(--surface-2);
 }
 .picker-sort button {
   padding: 3px 8px;

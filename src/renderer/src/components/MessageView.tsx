@@ -760,7 +760,13 @@ function MessageViewInner({
     [settings.mutedUsers, msg.login, msg.system]
   )
 
-  if (msg.system === 'info') {
+  /*
+   * Redemptions are excluded here and drawn further down, with the rest of the message machinery.
+   * They need the nick handlers and the mod buttons, and those are declared below this point — a
+   * redemption is a message someone typed into, so a moderator has to be able to answer it and
+   * delete it like any other.
+   */
+  if (msg.system === 'info' && !(msg.redeemed && msg.rewardTitle)) {
     /**
      * A 7TV set change, drawn as a card with the emotes in it.
      *
@@ -810,37 +816,6 @@ function MessageViewInner({
               </div>
             ))}
           </div>
-        </div>
-      )
-    }
-    // channel-point redemption: real points icon + colored nick + reward name + cost,
-    // instead of an emoji and a generic "redeems" label
-    if (msg.redeemed && msg.rewardTitle) {
-      const rdark = isDarkTheme(settings.theme)
-      // prefer the user's CURRENT chat color from the live buffer (the redeem's stored color
-      // is a snapshot and is often just a fallback hash if they hadn't spoken yet)
-      const nickColor = ensureReadable(
-        lookupUserColor(msg.channel, msg.login) || msg.color || fallbackColor(msg.login || ''),
-        rdark
-      )
-      return (
-        <div className="msg redeem-info" style={customBg ? { background: customBg } : undefined}>
-          {settings.showTimestamps && (
-            <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>
-          )}
-          {msg.rewardIcon ? (
-            <img className="redeem-icon" src={msg.rewardIcon} alt="" loading="lazy" />
-          ) : (
-            <span className="redeem-icon-emoji">🔴</span>
-          )}
-          {msg.displayName && (
-            <span className="redeem-nick" style={{ color: nickColor }}>
-              {msg.displayName}
-            </span>
-          )}{' '}
-          <span className="redeem-reward">{msg.rewardTitle}</span>
-          {msg.rewardCost != null && <span className="redeem-cost"> · {msg.rewardCost.toLocaleString('uk-UA')}</span>}
-          {msg.text ? <span className="redeem-input">: {msg.text}</span> : null}
         </div>
       )
     }
@@ -1098,6 +1073,89 @@ function MessageViewInner({
       new CustomEvent<JumpEventDetail>('sticki:jump', {
         detail: { channel: msg.channel, msgId: msg.replyParent.msgId }
       })
+    )
+  }
+
+    // channel-point redemption: real points icon + colored nick + reward name + cost,
+  // instead of an emoji and a generic "redeems" label
+  if (msg.redeemed && msg.rewardTitle) {
+    const rdark = isDarkTheme(settings.theme)
+    // prefer the user's CURRENT chat color from the live buffer (the redeem's stored color
+    // is a snapshot and is often just a fallback hash if they hadn't spoken yet)
+    const nickColor = ensureReadable(
+      lookupUserColor(msg.channel, msg.login) || msg.color || fallbackColor(msg.login || ''),
+      rdark
+    )
+    /*
+     * A redemption is a message like any other, and it was drawn as if it were not.
+     *
+     * This branch returned its own bare line, which skipped the row wrapper — so the nick was
+     * inert text and there was nowhere for the mod buttons to live. A redemption someone typed
+     * something rude into could be seen and not deleted, which is the one thing a moderator
+     * needs from it. Same wrapper as every other message now: the nick answers a click and a
+     * right-click exactly as it does elsewhere, and the actions are the same actions.
+     */
+    return (
+      <div className="msg-row">
+        <div className="msg-outer">
+          <div className="msg redeem-info" style={customBg ? { background: customBg } : undefined}>
+            {settings.showTimestamps && (
+              <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>
+            )}
+            {msg.rewardIcon ? (
+              <img className="redeem-icon" src={msg.rewardIcon} alt="" loading="lazy" />
+            ) : (
+              <span className="redeem-icon-emoji">🔴</span>
+            )}
+            {msg.displayName && (
+              <span
+                className="redeem-nick nick"
+                style={{ color: nickColor }}
+                onClick={openUserCard}
+                onContextMenu={insertNick}
+              >
+                {msg.displayName}
+              </span>
+            )}{' '}
+            <span className="redeem-reward">{msg.rewardTitle}</span>
+            {msg.rewardCost != null && <span className="redeem-cost"> · {msg.rewardCost.toLocaleString('uk-UA')}</span>}
+            {msg.text ? <span className="redeem-input">: {msg.text}</span> : null}
+          </div>
+        </div>
+        {canAct && (
+          <span className="hover-actions">
+            <button
+              title={t('reply.action')}
+              onClick={() =>
+                onReply({ msgId: msg.id, login: msg.login, displayName: msg.displayName, text: msg.text })
+              }
+            >
+              ↩
+            </button>
+            {visibleButtons.map((btn) => (
+              <button
+                key={btn.id}
+                title={btn.label}
+                onClick={() =>
+                  runModButton(btn, {
+                    account: account!,
+                    channel: msg.channel,
+                    channelId,
+                    paneId,
+                    targetUserId: msg.userId,
+                    targetLogin: msg.login,
+                    targetMsgId: msg.id,
+                    targetText: msg.text
+                  })
+                }
+              >
+                <BtnIcon icon={btn.icon} />
+                {!btn.icon && btn.label}
+              </button>
+            ))}
+          </span>
+        )}
+      </div>
     )
   }
 
