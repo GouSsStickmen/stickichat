@@ -474,7 +474,16 @@ class ChatService {
         held.displayName = held.displayName || e.userDisplay
         this.markUnreadIfInactive(channel)
         this.queue(channel, held)
-        this.persistRedeem(channel, msg, held.id)
+        /*
+         * Filed under its OWN id, not the real message's.
+         *
+         * Filing it under the chat message's id let a deletion be matched across a restart, and cost
+         * far more than it was worth: the channel's scrollback carries that same message, so the
+         * replay and the history collided — two entries, one id, two rows drawn at one offset. The
+         * strike now lives only as long as the session, which is honest; the record is a note about
+         * an event, and pretending it is the message was the mistake.
+         */
+        this.persistRedeem(channel, msg)
         return
       }
       // no raw copy in flight — the styled line is all there is, and a late copy is a duplicate
@@ -538,7 +547,17 @@ class ChatService {
   private loadPersistedRedeems(channel: string): ChatMessage[] {
     try {
       const raw = localStorage.getItem(this.redeemKey(channel))
-      const list = raw ? (JSON.parse(raw) as PersistedRedeem[]) : []
+      let list = raw ? (JSON.parse(raw) as PersistedRedeem[]) : []
+      /*
+       * Drop records filed under a real chat message id — a short-lived idea of mine that made the
+       * replay collide with the channel's own scrollback. They are recognisable and worthless: the
+       * message they name comes back from history on its own.
+       */
+      const clean = list.filter((r) => r.id.startsWith('redeem-'))
+      if (clean.length !== list.length) {
+        list = clean
+        localStorage.setItem(this.redeemKey(channel), JSON.stringify(list))
+      }
       return list.map((r) => {
         const msg = this.systemMessage(channel, r.text)
         msg.id = r.id
