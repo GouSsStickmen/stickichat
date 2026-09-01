@@ -1098,7 +1098,22 @@ function MessageViewInner({
     return (
       <div className="msg-row">
         <div className="msg-outer">
-          <div className="msg redeem-info" style={customBg ? { background: customBg } : undefined}>
+          {/* the same slide-to-moderate the ordinary rows have — a redemption is moderated the same way */}
+          {swipeAction && (
+            <div className="swipe-overlay" style={{ background: swipeAction.color }}>
+              {swipeAction.label}
+            </div>
+          )}
+          <div
+            ref={msgElRef}
+            className={`msg redeem-info ${swipeEnabled ? 'has-grip' : ''}`}
+            style={customBg ? { background: customBg } : undefined}
+          >
+            {swipeEnabled && (
+              <span className="swipe-grip" title={t('swipe.hint')} onPointerDown={startSwipe}>
+                ⠿
+              </span>
+            )}
             {settings.showTimestamps && (
               <span className="ts">{formatTime(msg.timestamp, settings.timestampSeconds)}</span>
             )}
