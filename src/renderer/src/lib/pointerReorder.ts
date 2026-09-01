@@ -27,6 +27,15 @@ export interface PointerReorderOptions {
    * cancelled rather than applied at whatever index the pointer happened to be over.
    */
   onDropOutside?: (target: Element | null) => boolean
+  /** carry a copy of the dragged element under the cursor, so the drag is visible as a drag */
+  ghost?: boolean
+  /**
+   * Somewhere else the drag can be aimed at.
+   *
+   * While the pointer is over one of these, it takes the class and the list stops rearranging —
+   * travelling to a drop target passed over half the collection on the way and shuffled all of it.
+   */
+  hoverTarget?: { selector: string; className: string }
 }
 
 /** true briefly after a reorder-drag finished — lets click handlers ignore the ghost click */
@@ -48,6 +57,27 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
   // touching. The node itself survives reordering (React moves it, keyed by id), so asking
   // the dom where it is right now can't desync.
   let dragEl: HTMLElement | null = null
+  let ghostEl: HTMLElement | null = null
+  let hovered: Element | null = null
+
+  const moveGhost = (ev: PointerEvent): void => {
+    if (!ghostEl) return
+    ghostEl.style.left = `${ev.clientX}px`
+    ghostEl.style.top = `${ev.clientY}px`
+  }
+
+  const markHover = (ev: PointerEvent): Element | null => {
+    if (!opts.hoverTarget) return null
+    const under = document
+      .elementFromPoint(ev.clientX, ev.clientY)
+      ?.closest(opts.hoverTarget.selector) ?? null
+    if (under !== hovered) {
+      if (hovered) hovered.classList.remove(opts.hoverTarget.className)
+      if (under) under.classList.add(opts.hoverTarget.className)
+      hovered = under
+    }
+    return under
+  }
 
   const onMove = (ev: PointerEvent): void => {
     const dx = ev.clientX - start.x
@@ -57,8 +87,17 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
       active = true
       dragEl = items()[opts.index] ?? null
       opts.onDragState(true)
+      if (opts.ghost && dragEl) {
+        ghostEl = dragEl.cloneNode(true) as HTMLElement
+        ghostEl.className = `${ghostEl.className} reorder-ghost`
+        document.body.appendChild(ghostEl)
+        moveGhost(ev)
+      }
       document.getSelection()?.removeAllRanges()
     }
+    moveGhost(ev)
+    // aimed at a drop target: nothing in the list moves while the pointer is over one
+    if (markHover(ev)) return
     const list = items()
     if (!dragEl) return
     const current = list.indexOf(dragEl)
@@ -89,7 +128,15 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
     lastSwapAt = { x: ev.clientX, y: ev.clientY }
   }
 
+  const cleanupVisuals = (): void => {
+    ghostEl?.remove()
+    ghostEl = null
+    if (hovered && opts.hoverTarget) hovered.classList.remove(opts.hoverTarget.className)
+    hovered = null
+  }
+
   const onUp = (ev?: PointerEvent): void => {
+    cleanupVisuals()
     // a release over something that is not part of the list is a drop, and the caller decides
     if (active && opts.onDropOutside && ev) {
       const under = document.elementFromPoint(ev.clientX, ev.clientY)

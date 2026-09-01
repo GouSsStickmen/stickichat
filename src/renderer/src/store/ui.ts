@@ -23,6 +23,8 @@ export interface EmoteFolderMenu {
   emote: FavoriteEmote
   x: number
   y: number
+  /** the shelf it was right-clicked in, which is the only one "remove from this category" can mean */
+  fromFolderId?: string | null
 }
 
 export interface Toast {

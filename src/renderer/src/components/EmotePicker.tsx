@@ -121,6 +121,14 @@ const PROVIDER_LABEL: Record<EmoteProvider, string> = {
   emoji: 'Emoji'
 }
 
+/**
+ * The shelf that was open when the picker was last closed.
+ *
+ * Module scope, not state: the inline picker is unmounted on close, and reopening it onto "all"
+ * every time undid whatever you were in the middle of doing.
+ */
+let lastFolderId: string | null = null
+
 function groupByProvider(
   map: Map<string, Emote> | undefined,
   sort: Settings['pickerSort']
@@ -224,6 +232,11 @@ export default function EmotePicker({
       const target = e.target as HTMLElement
       // the 😊 button toggles the picker itself — don't fight its onClick
       if (target.closest('.picker-btn')) return
+      /*
+       * The category menu is a sibling, not a child: it is mounted at the top level so chat can open
+       * it too. Without this, choosing a category closed the picker the click had come from.
+       */
+      if ((target as HTMLElement | null)?.closest?.('.emote-folder-menu')) return
       if (ref.current && !ref.current.contains(target)) onClose()
     }
     document.addEventListener('mousedown', onDown)
@@ -336,7 +349,10 @@ export default function EmotePicker({
    * of checkboxes rather than a choice.
    */
   const folders = useSettingsStore((s) => s.favoriteFolders)
-  const [folderId, setFolderId] = useState<string | null>(null)
+  const [folderId, setFolderId] = useState<string | null>(lastFolderId)
+  useEffect(() => {
+    lastFolderId = folderId
+  }, [folderId])
   const [assignFor, setAssignFor] = useState<string | null>(null)
   /*
    * Renaming happens in the chip itself.
@@ -350,8 +366,13 @@ export default function EmotePicker({
   const favSet = useMemo(() => new Set(favorites.map(favKeyOf)), [favorites])
   const shownFavorites = useMemo(() => {
     if (!folderId) return favorites
-    const keys = new Set(folders.find((f) => f.id === folderId)?.keys ?? [])
-    return favorites.filter((f) => keys.has(favKeyOf(f)))
+    /*
+     * In the shelf's own order, not the collection's — the shelf keeps its own list, and arranging
+     * it would otherwise change nothing anyone can see.
+     */
+    const keys = folders.find((f) => f.id === folderId)?.keys ?? []
+    const byKey = new Map(favorites.map((f) => [favKeyOf(f), f]))
+    return keys.map((k) => byKey.get(k)).filter((f): f is FavoriteEmote => !!f)
   }, [favorites, folders, folderId])
 
   const cell = (e: Emote | FavoriteEmote): React.JSX.Element => {
@@ -424,34 +445,28 @@ ${lockHint}` : ''}`
           onPick(e)
         }}
         onContextMenu={(ev) => {
+          /*
+           * A menu, not an instant deletion.
+           *
+           * Right-click used to unfavourite on the spot, which is a destructive act performed
+           * without being asked and with no way back. It now offers the three things anyone
+           * actually wants from an emote here: file it on a shelf, take it off this shelf, or drop
+           * it from the collection.
+           */
           ev.preventDefault()
-          // Alt asks where to file it; plain right-click still just stars or unstars
-          if (ev.altKey) {
-            useUiStore.getState().setEmoteFolderMenu({
-              key: favKeyOf(e as FavoriteEmote),
-              emote: {
-                code: e.code,
-                url: e.url,
-                provider: e.provider,
-                zeroWidth: 'zeroWidth' in e ? e.zeroWidth : undefined,
-                overlays: combo ?? undefined
-              },
-              x: ev.clientX,
-              y: ev.clientY
-            })
-            return
-          }
-          toggleFavorite({
-            code: e.code,
-            url: e.url,
-            provider: e.provider,
-            zeroWidth: 'zeroWidth' in e ? e.zeroWidth : undefined,
-            overlays: combo ?? undefined
+          useUiStore.getState().setEmoteFolderMenu({
+            key: favKeyOf(e as FavoriteEmote),
+            emote: {
+              code: e.code,
+              url: e.url,
+              provider: e.provider,
+              zeroWidth: 'zeroWidth' in e ? e.zeroWidth : undefined,
+              overlays: combo ?? undefined
+            },
+            x: ev.clientX,
+            y: ev.clientY,
+            fromFolderId: folderId
           })
-          if (!isFav) {
-            setFavPop(cellKey)
-            window.setTimeout(() => setFavPop((cur) => (cur === cellKey ? null : cur)), 500)
-          }
         }}
       >
         {isFav && <span className="fav-star"><StarIcon filled size={12} /></span>}
@@ -659,10 +674,10 @@ ${lockHint}` : ''}`
               )}
               <div className="picker-grid" ref={favGridRef}>
                 {editFavs
-                  ? favorites.map((f, i) => (
+                  ? shownFavorites.map((f, i) => (
                       <button
                         key={favKeyOf(f)}
-                        className={`emote-cell fav-editing ${
+                        className={`emote-cell fav-editing ${f.zeroWidth ? 'zero-width' : ''} ${
                           f.provider === 'emoji' &&
                           Array.from(f.code).length > 3 &&
                           !/\p{Extended_Pictographic}/u.test(f.code)
@@ -681,12 +696,33 @@ ${lockHint}` : ''}`
                             axis: 'x',
                             threshold: 3,
                             onMove: (from, to) => {
-                              const list = [...useSettingsStore.getState().favoriteEmotes]
+                              /*
+                               * Whichever shelf is open is the one being arranged. On "all" that is
+                               * the collection itself; inside a category it is that category's own
+                               * order, which is the thing you were looking at when you started
+                               * dragging — rearranging the collection from there would move things
+                               * you cannot even see.
+                               */
+                              const st = useSettingsStore.getState()
+                              if (folderId) {
+                                const folder = st.favoriteFolders.find((x) => x.id === folderId)
+                                if (!folder) return
+                                const keys = [...folder.keys]
+                                const [k] = keys.splice(from, 1)
+                                keys.splice(to, 0, k)
+                                st.setFavoriteFolders(
+                                  st.favoriteFolders.map((x) => (x.id === folderId ? { ...x, keys } : x))
+                                )
+                                return
+                              }
+                              const list = [...st.favoriteEmotes]
                               const [it] = list.splice(from, 1)
                               list.splice(to, 0, it)
                               setFavoriteEmotes(list)
                             },
                             onDragState: () => undefined,
+                            ghost: true,
+                            hoverTarget: { selector: '.fav-folder', className: 'drop-target' },
                             /*
                              * Dropping on a shelf puts it there. The same drag that reorders the
                              * collection also files things into it — which is the answer to "how do

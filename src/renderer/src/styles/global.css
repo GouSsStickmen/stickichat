@@ -5915,3 +5915,33 @@ button:has(> svg) {
 .fav-folder.took-it {
   animation: fav-took-it 0.5s ease-out;
 }
+
+/*
+ * The copy that travels with the cursor while an emote is being dragged.
+ *
+ * A drag with nothing under the hand reads as a click that went wrong: you cannot tell whether the
+ * thing was picked up until you let go of it somewhere.
+ */
+.reorder-ghost {
+  position: fixed !important;
+  z-index: 200;
+  margin: 0 !important;
+  transform: translate(-50%, -50%) scale(1.15);
+  opacity: 0.85;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 55%));
+}
+/* the shelf under the cursor, while something is being carried — never on an empty hover */
+.fav-folder.drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.efm-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+.emote-folder-menu button.danger {
+  color: var(--danger);
+}

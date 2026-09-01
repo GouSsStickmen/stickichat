@@ -522,7 +522,14 @@ export default function App(): React.JSX.Element | null {
   if (!booted) return null
 
   if (special?.kind === 'emotepicker') {
-    return <EmotePickerWindow payload={special.data} />
+    return (
+      <>
+        <EmotePickerWindow payload={special.data} />
+        {/* its own window, its own tree: the menu mounted in the main one does not exist here */}
+        <EmoteFolderMenu />
+        <Toasts />
+      </>
+    )
   }
 
   if (special?.kind === 'settings') {

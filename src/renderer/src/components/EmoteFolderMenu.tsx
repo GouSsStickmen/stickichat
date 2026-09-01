@@ -78,6 +78,49 @@ export default function EmoteFolderMenu(): React.JSX.Element | null {
         })
       )}
       {!isFav && folders.length > 0 && <div className="efm-note">{t('picker.folderWillStar')}</div>}
+
+      {/*
+        The two ways of taking something away, kept apart on purpose: one drops it from a shelf and
+        leaves it in the collection, the other drops it from the collection entirely. Right-click used
+        to do the second silently, which is a lot to happen without being asked.
+      */}
+      <div className="efm-sep" />
+      {menu.fromFolderId && folders.find((f) => f.id === menu.fromFolderId)?.keys.includes(menu.key) && (
+        <button
+          onClick={() => {
+            useSettingsStore.getState().toggleInFolder(menu.fromFolderId!, menu.key)
+            useUiStore.getState().setEmoteFolderMenu(null)
+          }}
+        >
+          ↩ {t('picker.removeFromFolder')}
+        </button>
+      )}
+      {isFav ? (
+        <button
+          className="danger"
+          onClick={() => {
+            const st = useSettingsStore.getState()
+            st.setFavoriteEmotes(st.favoriteEmotes.filter((f) => favKey(f) !== menu.key))
+            // and off every shelf, or the shelves would point at something that is gone
+            st.setFavoriteFolders(
+              st.favoriteFolders.map((f) => ({ ...f, keys: f.keys.filter((k) => k !== menu.key) }))
+            )
+            useUiStore.getState().setEmoteFolderMenu(null)
+          }}
+        >
+          ✕ {t('picker.removeFromFavs')}
+        </button>
+      ) : (
+        <button
+          onClick={() => {
+            const st = useSettingsStore.getState()
+            st.setFavoriteEmotes([...st.favoriteEmotes, menu.emote])
+            useUiStore.getState().setEmoteFolderMenu(null)
+          }}
+        >
+          ★ {t('picker.addToFavs')}
+        </button>
+      )}
     </div>
   )
 }
