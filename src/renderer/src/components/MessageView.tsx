@@ -313,14 +313,27 @@ function TokenView({
              */
             if (ev.altKey) {
               ev.preventDefault()
+              /*
+               * The whole stack, and its real key.
+               *
+               * A layered emote is one favourite — Alt+click has always starred it that way — and
+               * its identity includes every layer. Building the key by hand from the base code
+               * alone meant a combination was filed under a name nothing else uses, so the menu
+               * could never tell that it was already on a shelf, and adding it created a second,
+               * different entry.
+               */
+              const entry: FavoriteEmote = {
+                code: token.emote.code,
+                url: token.emote.url,
+                provider: token.emote.provider,
+                zeroWidth: token.emote.zeroWidth,
+                overlays: token.overlays.length
+                  ? token.overlays.map((o) => ({ code: o.code, url: o.url, provider: o.provider }))
+                  : undefined
+              }
               useUiStore.getState().setEmoteFolderMenu({
-                key: `${token.emote.provider}:${token.emote.code}`,
-                emote: {
-                  code: token.emote.code,
-                  url: token.emote.url,
-                  provider: token.emote.provider,
-                  zeroWidth: token.emote.zeroWidth
-                },
+                key: favKey(entry),
+                emote: entry,
                 x: ev.clientX,
                 y: ev.clientY
               })

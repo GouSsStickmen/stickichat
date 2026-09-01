@@ -96,7 +96,8 @@ export const en = {
   'picker.folderAsIcon': 'use as the category icon',
   'picker.channel': 'Channel',
   'picker.global': 'Global',
-  'picker.favHint': 'RMB — favorite · Ctrl+LMB — emote page · Ctrl+Shift+LMB — author channel',
+  'picker.favHint':
+    'RMB — favorites and categories · Ctrl+LMB — emote page · Ctrl+Shift+LMB — author channel',
   'picker.empty': 'Nothing here yet',
 
   // Mod
@@ -175,7 +176,8 @@ export const en = {
   'set.colorBareNicks': 'Highlight nicknames written without "@"',
   'hint.colorBareNicks': 'A word is painted with the user’s color only if they have actually written in this chat. Click — user card, RMB — insert, Shift+RMB — copy.',
   'msg.emoteChannelHint': 'Left-click — the channel this emote belongs to',
-  'msg.emoteFavHint': 'Alt+LEFT-click — save the emote (or the whole combination) to favorites',
+  'msg.emoteFavHint':
+    'Alt+LEFT-click — save the emote (or the whole combination) to favorites\nAlt+RIGHT-click — put it in a category',
   'picker.openAuthor': 'Open the author’s channel',
   'picker.openEmotePage': 'Open the emote page',
   'set.alertSoundCooldown': '2s gap between repeated alerts',

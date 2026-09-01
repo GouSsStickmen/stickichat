@@ -98,7 +98,8 @@ export const uk: Record<TranslationKey, string> = {
   'picker.folderAsIcon': 'зробити значком категорії',
   'picker.channel': 'Канал',
   'picker.global': 'Глобальні',
-  'picker.favHint': 'ПКМ — обране · Ctrl+ЛКМ — сторінка емоута · Ctrl+Shift+ЛКМ — канал автора',
+  'picker.favHint':
+    'ПКМ — обране й категорії · Ctrl+ЛКМ — сторінка емоута · Ctrl+Shift+ЛКМ — канал автора',
   'picker.empty': 'Тут поки порожньо',
 
   // Mod
@@ -177,7 +178,8 @@ export const uk: Record<TranslationKey, string> = {
   'set.colorBareNicks': 'Підсвічувати ніки, написані без «@»',
   'hint.colorBareNicks': 'Слово фарбується кольором користувача, лише якщо він справді писав у цьому чаті. Клік — картка юзера, ПКМ — вставити в поле, Shift+ПКМ — скопіювати.',
   'msg.emoteChannelHint': 'ЛКМ — канал, чий це емоут',
-  'msg.emoteFavHint': 'Alt+ЛКМ — зберегти емоут (або всю комбінацію) в обране',
+  'msg.emoteFavHint':
+    'Alt+ЛКМ — зберегти емоут (або всю комбінацію) в обране\nAlt+ПКМ — розкласти по категоріях',
   'picker.openAuthor': 'Відкрити канал автора',
   'picker.openEmotePage': 'Відкрити сторінку емоута',
   'set.alertSoundCooldown': 'Пауза 2 с між повторними сигналами',

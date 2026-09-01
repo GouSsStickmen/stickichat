@@ -62,8 +62,16 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
 
   const moveGhost = (ev: PointerEvent): void => {
     if (!ghostEl) return
-    ghostEl.style.left = `${ev.clientX}px`
-    ghostEl.style.top = `${ev.clientY}px`
+    /*
+     * Utility windows zoom themselves with `zoom` on the root element, and that changes what a
+     * fixed position means: pointer coordinates arrive in the unzoomed viewport while a fixed
+     * element inside the zoomed root is laid out in the zoomed one. Without dividing it back out,
+     * the ghost drifts away from the cursor by exactly the zoom factor — further the more it is
+     * zoomed, which is why it looked fine in the main window and flew off in the picker's own.
+     */
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom || '1') || 1
+    ghostEl.style.left = `${ev.clientX / zoom}px`
+    ghostEl.style.top = `${ev.clientY / zoom}px`
   }
 
   const markHover = (ev: PointerEvent): Element | null => {
