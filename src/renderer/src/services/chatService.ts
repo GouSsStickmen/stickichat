@@ -452,8 +452,31 @@ class ChatService {
     if (e.userInput) {
       // pair up with the raw PRIVMSG copy of this redemption (either direction of the race)
       const key = `${channel}:${e.userLogin}:${e.userInput.trim()}`
-      if (this.pendingRedeemMsgs.has(key)) this.pendingRedeemMsgs.delete(key)
-      else this.redeemSuppress.set(key, Date.now())
+      const held = this.pendingRedeemMsgs.get(key)
+      if (held) {
+        /*
+         * The real chat message wins, decorated rather than replaced.
+         *
+         * Both copies describe the same redemption, but only one of them is a message Twitch knows
+         * about: the held PRIVMSG has a real id and a real user id, so it can be deleted, replied to
+         * and moderated. The PubSub line is ours, invented — it looked better and could do nothing,
+         * and preferring it meant a redemption someone had typed something rude into could be read
+         * and not removed. So the reward's name, cost and icon move onto the real message and that
+         * is what goes to chat.
+         */
+        this.pendingRedeemMsgs.delete(key)
+        held.redeemed = true
+        held.rewardTitle = e.rewardTitle
+        held.rewardCost = e.rewardCost
+        held.rewardIcon = e.rewardIcon
+        held.displayName = held.displayName || e.userDisplay
+        this.markUnreadIfInactive(channel)
+        this.queue(channel, held)
+        this.persistRedeem(channel, msg)
+        return
+      }
+      // no raw copy in flight — the styled line is all there is, and a late copy is a duplicate
+      this.redeemSuppress.set(key, Date.now())
     }
     this.queue(channel, msg)
     this.persistRedeem(channel, msg)
