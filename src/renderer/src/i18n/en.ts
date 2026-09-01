@@ -83,6 +83,8 @@ export const en = {
   'picker.sort.overlaysFirst': 'overlays first',
   'picker.sort.overlaysLast': 'overlays last',
   'picker.allFavs': 'All',
+  'picker.folderDelete': 'Delete category',
+  'picker.folderDefault': 'New',
   'picker.folderNew': 'Name of the new category',
   'picker.folderRename': 'New name (empty deletes the category)',
   'picker.folderAssign': 'In which categories',

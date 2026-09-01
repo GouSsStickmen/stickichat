@@ -5773,6 +5773,46 @@ button:has(> svg) {
   height: 18px;
   width: auto;
 }
+/* the chip is a pill made of two buttons: the shelf, and the ✕ that appears once it is selected */
+.fav-folder {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.fav-folder.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.fav-folder.on > button {
+  color: #fff;
+}
+.fav-folder > button {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+.fav-folder-del {
+  padding: 0 7px 0 3px !important;
+  opacity: 0.75;
+}
+.fav-folder-del:hover {
+  opacity: 1;
+}
+/* the name being typed sits exactly where the chip was, so nothing jumps */
+.fav-folder-name {
+  min-width: 90px;
+  max-width: 140px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text);
+  font-size: var(--fs-xs);
+}
 .fav-folder-add {
   font-size: var(--fs-sm) !important;
 }

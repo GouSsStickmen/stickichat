@@ -337,6 +337,13 @@ export default function EmotePicker({
   const folders = useSettingsStore((s) => s.favoriteFolders)
   const [folderId, setFolderId] = useState<string | null>(null)
   const [assignFor, setAssignFor] = useState<string | null>(null)
+  /*
+   * Renaming happens in the chip itself.
+   *
+   * The first version asked with window.prompt, which Electron does not implement at all — it
+   * returns nothing and logs a line nobody sees, so the ＋ button silently did nothing.
+   */
+  const [editingFolder, setEditingFolder] = useState<string | null>(null)
   const setFavoriteEmotes = useSettingsStore((s) => s.setFavoriteEmotes)
 
   const favSet = useMemo(() => new Set(favorites.map(favKeyOf)), [favorites])
@@ -512,39 +519,69 @@ ${lockHint}` : ''}`
                 <button className={folderId === null ? 'on' : ''} onClick={() => setFolderId(null)}>
                   {t('picker.allFavs')}
                 </button>
-                {folders.map((f) => (
-                  <button
-                    key={f.id}
-                    className={folderId === f.id ? 'on' : ''}
-                    title={f.name}
-                    onClick={() => setFolderId(f.id)}
-                    onContextMenu={(ev) => {
-                      ev.preventDefault()
-                      const name = window.prompt(t('picker.folderRename'), f.name)
-                      const st = useSettingsStore.getState()
-                      if (name === null) return
-                      // an empty name is how a shelf is thrown away; its emotes stay in the collection
-                      st.setFavoriteFolders(
-                        name.trim()
-                          ? st.favoriteFolders.map((x) => (x.id === f.id ? { ...x, name: name.trim() } : x))
-                          : st.favoriteFolders.filter((x) => x.id !== f.id)
-                      )
-                      if (!name.trim() && folderId === f.id) setFolderId(null)
-                    }}
-                  >
-                    {f.icon ? <img src={f.icon} alt="" /> : f.name}
-                  </button>
-                ))}
+                {folders.map((f) =>
+                  editingFolder === f.id ? (
+                    <input
+                      key={f.id}
+                      className="fav-folder-name"
+                      autoFocus
+                      defaultValue={f.name}
+                      onMouseDown={(ev) => ev.stopPropagation()}
+                      onBlur={(ev) => {
+                        const name = ev.currentTarget.value.trim()
+                        const st = useSettingsStore.getState()
+                        // a blank name keeps the old one; deleting is the ✕, which cannot be a typo
+                        if (name) {
+                          st.setFavoriteFolders(
+                            st.favoriteFolders.map((x) => (x.id === f.id ? { ...x, name } : x))
+                          )
+                        }
+                        setEditingFolder(null)
+                      }}
+                      onKeyDown={(ev) => {
+                        if (ev.key === 'Enter') ev.currentTarget.blur()
+                        if (ev.key === 'Escape') setEditingFolder(null)
+                      }}
+                    />
+                  ) : (
+                    <span key={f.id} className={`fav-folder ${folderId === f.id ? 'on' : ''}`}>
+                      <button
+                        title={f.name}
+                        onClick={() => setFolderId(f.id)}
+                        onDoubleClick={() => setEditingFolder(f.id)}
+                      >
+                        {f.icon ? <img src={f.icon} alt="" /> : f.name}
+                      </button>
+                      {/* only on the shelf being looked at, so a ✕ is never a stray click away */}
+                      {folderId === f.id && (
+                        <button
+                          className="fav-folder-del"
+                          title={t('picker.folderDelete')}
+                          onClick={() => {
+                            const st = useSettingsStore.getState()
+                            st.setFavoriteFolders(st.favoriteFolders.filter((x) => x.id !== f.id))
+                            setFolderId(null)
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </span>
+                  )
+                )}
                 <button
                   className="fav-folder-add"
                   title={t('picker.folderNew')}
                   onClick={() => {
-                    const name = window.prompt(t('picker.folderNew'))?.trim()
-                    if (!name) return
                     const st = useSettingsStore.getState()
                     const id = `fav-${Date.now().toString(36)}`
-                    st.setFavoriteFolders([...st.favoriteFolders, { id, name, keys: [] }])
+                    // made first, named second: there is something to look at while you type
+                    st.setFavoriteFolders([
+                      ...st.favoriteFolders,
+                      { id, name: t('picker.folderDefault'), keys: [] }
+                    ])
                     setFolderId(id)
+                    setEditingFolder(id)
                   }}
                 >
                   ＋
