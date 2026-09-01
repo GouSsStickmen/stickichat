@@ -719,12 +719,22 @@ select:focus {
   background: var(--surface-2);
 }
 .msg.deleted .msg-text,
-.msg.deleted .msg-text a {
+.msg.deleted .msg-text a,
+/*
+ * A redemption draws its own parts and has no .msg-text, so the strikethrough had nothing to
+ * attach to — the row carried the class and looked untouched, which is worse than not marking it
+ * at all: the moderator saw a line they had just removed still standing.
+ */
+.msg.deleted .redeem-reward,
+.msg.deleted .redeem-cost,
+.msg.deleted .redeem-input,
+.msg.deleted .redeem-nick {
   color: var(--text-faint);
   text-decoration: line-through;
 }
 /* emote-only deleted messages had no visual cue — fade and desaturate the emotes too */
 .msg.deleted .msg-text img,
+.msg.deleted .redeem-icon,
 .msg.deleted .emote-stack {
   opacity: 0.35;
   filter: grayscale(1);
