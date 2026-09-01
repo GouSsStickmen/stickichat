@@ -11,6 +11,7 @@ import EmojiGlyph from './EmojiGlyph'
 import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
 import { StarIcon, LockIcon, PinIcon } from './Icons'
+import { useUiStore } from '../store/ui'
 
 // One shared observer: an <img> gets its real src only when it approaches the viewport.
 // Native loading="lazy" still fired THOUSANDS of parallel requests for big 7TV channels
@@ -424,6 +425,22 @@ ${lockHint}` : ''}`
         }}
         onContextMenu={(ev) => {
           ev.preventDefault()
+          // Alt asks where to file it; plain right-click still just stars or unstars
+          if (ev.altKey) {
+            useUiStore.getState().setEmoteFolderMenu({
+              key: favKeyOf(e as FavoriteEmote),
+              emote: {
+                code: e.code,
+                url: e.url,
+                provider: e.provider,
+                zeroWidth: 'zeroWidth' in e ? e.zeroWidth : undefined,
+                overlays: combo ?? undefined
+              },
+              x: ev.clientX,
+              y: ev.clientY
+            })
+            return
+          }
           toggleFavorite({
             code: e.code,
             url: e.url,
@@ -544,7 +561,11 @@ ${lockHint}` : ''}`
                       }}
                     />
                   ) : (
-                    <span key={f.id} className={`fav-folder ${folderId === f.id ? 'on' : ''}`}>
+                    <span
+                      key={f.id}
+                      className={`fav-folder ${folderId === f.id ? 'on' : ''}`}
+                      data-folder-id={f.id}
+                    >
                       <button
                         title={f.name}
                         onClick={() => setFolderId(f.id)}
@@ -665,7 +686,26 @@ ${lockHint}` : ''}`
                               list.splice(to, 0, it)
                               setFavoriteEmotes(list)
                             },
-                            onDragState: () => undefined
+                            onDragState: () => undefined,
+                            /*
+                             * Dropping on a shelf puts it there. The same drag that reorders the
+                             * collection also files things into it — which is the answer to "how do
+                             * I add an emote to a category": you carry it to the tab.
+                             */
+                            onDropOutside: (target) => {
+                              const chip = target?.closest('.fav-folder') as HTMLElement | null
+                              const id = chip?.dataset.folderId
+                              if (!id) return false
+                              const st = useSettingsStore.getState()
+                              const key = favKeyOf(f)
+                              if (!st.favoriteFolders.find((x) => x.id === id)?.keys.includes(key)) {
+                                st.toggleInFolder(id, key)
+                              }
+                              // a blink, so the drop is seen to have landed somewhere
+                              chip.classList.add('took-it')
+                              window.setTimeout(() => chip.classList.remove('took-it'), 500)
+                              return true
+                            }
                           })
                         }}
                       >
@@ -689,18 +729,7 @@ ${lockHint}` : ''}`
                         )}
                       </button>
                     ))
-                  : shownFavorites.map((f) => (
-                      <span
-                        key={favKeyOf(f)}
-                        className="fav-slot"
-                        onContextMenu={(ev) => {
-                          ev.preventDefault()
-                          setAssignFor(favKeyOf(f))
-                        }}
-                      >
-                        {cell(f)}
-                      </span>
-                    ))}
+                  : shownFavorites.map(cell)}
               </div>
             </>
           ) : (

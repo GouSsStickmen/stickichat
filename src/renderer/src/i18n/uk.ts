@@ -87,6 +87,8 @@ export const uk: Record<TranslationKey, string> = {
   'picker.allFavs': 'Усі',
   'picker.folderDelete': 'Видалити категорію',
   'picker.folderDefault': 'Нова',
+  'picker.folderNone': 'Спершу створи категорію в обраному',
+  'picker.folderWillStar': 'емоут буде додано в обране',
   'picker.folderNew': 'Назва нової категорії',
   'picker.folderRename': 'Нова назва (порожньо — видалити категорію)',
   'picker.folderAssign': 'У яких категоріях',

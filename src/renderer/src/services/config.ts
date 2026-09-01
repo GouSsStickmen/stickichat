@@ -255,6 +255,8 @@ function snapshot(): AppConfig {
     raidFavorites: s.raidFavorites,
     highlightRules: s.highlightRules,
     favoriteEmotes: s.favoriteEmotes,
+    // the shelves are part of the favourites; leaving them out is why a second window opened empty
+    favoriteFolders: s.favoriteFolders,
     accounts: a.accounts.map(({ _accessToken, _refreshToken, ...rest }) => rest),
     tabs: l.tabs,
     activeTabId: l.activeTabId
@@ -357,7 +359,8 @@ function scheduleSettingsSave(): void {
       modButtons: s.modButtons,
       raidFavorites: s.raidFavorites,
       highlightRules: s.highlightRules,
-      favoriteEmotes: s.favoriteEmotes
+      favoriteEmotes: s.favoriteEmotes,
+      favoriteFolders: s.favoriteFolders
     })
     host().configChanged()
   }, 400)
@@ -429,6 +432,7 @@ export function startConfigSync(): () => void {
         settings.setRaidFavorites(cfg.raidFavorites ?? [])
         settings.setHighlightRules(cfg.highlightRules ?? [])
         settings.setFavoriteEmotes(cfg.favoriteEmotes ?? [])
+        settings.setFavoriteFolders(cfg.favoriteFolders ?? [])
         // reconcile accounts with other windows: pick up token rotations, ADD accounts added
         // elsewhere (e.g. the standalone settings window), and drop ones removed elsewhere
         let tokensChanged = false

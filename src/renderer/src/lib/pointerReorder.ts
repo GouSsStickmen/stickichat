@@ -19,6 +19,14 @@ export interface PointerReorderOptions {
   axis: 'x' | 'y' | 'both'
   /** px of movement before the drag engages (protects normal clicks) */
   threshold?: number
+  /**
+   * Where the drag was released, when it went somewhere outside the list.
+   *
+   * Reordering answers "in what order", and dropping answers "into what" — the same gesture, two
+   * questions. Returning true means the drop was taken and the reorder should be treated as
+   * cancelled rather than applied at whatever index the pointer happened to be over.
+   */
+  onDropOutside?: (target: Element | null) => boolean
 }
 
 /** true briefly after a reorder-drag finished — lets click handlers ignore the ghost click */
@@ -81,7 +89,12 @@ export function startPointerReorder(opts: PointerReorderOptions): void {
     lastSwapAt = { x: ev.clientX, y: ev.clientY }
   }
 
-  const onUp = (): void => {
+  const onUp = (ev?: PointerEvent): void => {
+    // a release over something that is not part of the list is a drop, and the caller decides
+    if (active && opts.onDropOutside && ev) {
+      const under = document.elementFromPoint(ev.clientX, ev.clientY)
+      if (!under?.closest(opts.itemSelector)) opts.onDropOutside(under)
+    }
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     // touch only: if the browser decides mid-drag that the gesture was a scroll after all, `pointerup`

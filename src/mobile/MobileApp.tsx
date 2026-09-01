@@ -11,6 +11,7 @@ import SettingsModal from '@renderer/components/settings/SettingsModal'
 import UserCard from '@renderer/components/UserCard'
 import EmoteHoverPreview from '@renderer/components/EmoteHoverPreview'
 import LinkCard from '@renderer/components/LinkCard'
+import EmoteFolderMenu from '@renderer/components/EmoteFolderMenu'
 import ChannelPrompt from '@renderer/components/ChannelPrompt'
 import HypeTrainPopup from '@renderer/components/HypeTrainPopup'
 import Toasts from '@renderer/components/Toasts'
@@ -278,6 +279,7 @@ export default function MobileApp(): React.JSX.Element | null {
       {userCard && <UserCard target={userCard} />}
       <EmoteHoverPreview />
       <LinkCard />
+      <EmoteFolderMenu />
       <ChannelPrompt />
       <HypeTrainPopup />
       <Toasts />

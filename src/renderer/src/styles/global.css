@@ -5746,12 +5746,17 @@ button:has(> svg) {
 }
 
 /* ---------- favourite categories ---------- */
+/* pinned like the sort row: the shelves are what you drop onto, so they cannot scroll away */
 .fav-folders {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
   align-items: center;
-  padding: 2px 0 6px;
+  padding: 4px 0 6px;
+  background: var(--surface-2);
 }
 .fav-folders button {
   display: flex;
@@ -5855,4 +5860,58 @@ button:has(> svg) {
 }
 .fav-slot {
   display: contents;
+}
+
+/* the Alt+right-click category menu, and the blink a chip gives when it takes a drop */
+.emote-folder-menu {
+  z-index: 80;
+  min-width: 190px;
+  max-width: 260px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.efm-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+.efm-head img {
+  height: 22px;
+  width: auto;
+}
+.emote-folder-menu button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.emote-folder-menu button:hover {
+  background: var(--surface-3);
+}
+.efm-empty,
+.efm-note {
+  padding: 4px 6px;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+@keyframes fav-took-it {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px var(--accent); }
+}
+.fav-folder.took-it {
+  animation: fav-took-it 0.5s ease-out;
 }

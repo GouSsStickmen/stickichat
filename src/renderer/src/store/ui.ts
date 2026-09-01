@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { BadgeRef } from '../types'
+import { BadgeRef, FavoriteEmote } from '../types'
 import { useSettingsStore } from './settings'
 import type { ModConfirmRequest } from '../lib/confirmMod'
 
@@ -13,6 +13,14 @@ export interface UserCardTarget {
   badges: BadgeRef[]
   /** pane account used for mod actions from the card */
   accountId: string | null
+  x: number
+  y: number
+}
+
+/** an emote awaiting a decision about which favourite categories it belongs to */
+export interface EmoteFolderMenu {
+  key: string
+  emote: FavoriteEmote
   x: number
   y: number
 }
@@ -143,6 +151,14 @@ interface UiState {
    */
   heldMsgId: string | null
   setHeldMsgId: (v: string | null) => void
+  /**
+   * "Which categories should this emote be in?", opened with Alt+right-click.
+   *
+   * In the store rather than the picker because the same question is asked from chat, where the
+   * picker is not mounted at all — and the answer is the same list either way.
+   */
+  emoteFolderMenu: EmoteFolderMenu | null
+  setEmoteFolderMenu: (v: EmoteFolderMenu | null) => void
   setHypeTrain: (v: HypeTrain | null) => void
   dismissHypeTrain: () => void
   allowHypeTrain: () => void
@@ -208,6 +224,8 @@ export const useUiStore = create<UiState>()((set) => ({
   setModConfirm: (modConfirm) => set({ modConfirm }),
   heldMsgId: null,
   setHeldMsgId: (heldMsgId) => set({ heldMsgId }),
+  emoteFolderMenu: null,
+  setEmoteFolderMenu: (emoteFolderMenu) => set({ emoteFolderMenu }),
   setHypeTrain: (hypeTrain) => set((s) => (hypeTrain && s.hypeDismissed === hypeTrain.channel ? s : { hypeTrain })),
   dismissHypeTrain: () =>
     set((s) => ({ hypeTrain: null, hypeDismissed: s.hypeTrain?.channel ?? s.hypeDismissed })),

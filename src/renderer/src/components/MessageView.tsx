@@ -306,7 +306,28 @@ function TokenView({
           title={title}
           // a tap must not open the page; on touch the handlers below decide what the press meant
           onClick={touch ? undefined : openEmote}
-          onContextMenu={tokenContextHandler(paneId, `${codes} `)}
+          onContextMenu={(ev) => {
+            /*
+             * Alt files it into a favourite category; without Alt this is what it always was —
+             * right-click puts the emote's code into the input.
+             */
+            if (ev.altKey) {
+              ev.preventDefault()
+              useUiStore.getState().setEmoteFolderMenu({
+                key: `${token.emote.provider}:${token.emote.code}`,
+                emote: {
+                  code: token.emote.code,
+                  url: token.emote.url,
+                  provider: token.emote.provider,
+                  zeroWidth: token.emote.zeroWidth
+                },
+                x: ev.clientX,
+                y: ev.clientY
+              })
+              return
+            }
+            tokenContextHandler(paneId, `${codes} `)(ev)
+          }}
           {...(touch ?? {})}
           onMouseEnter={(e) =>
             useUiStore.getState().setEmotePreview({

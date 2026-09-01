@@ -85,6 +85,8 @@ export const en = {
   'picker.allFavs': 'All',
   'picker.folderDelete': 'Delete category',
   'picker.folderDefault': 'New',
+  'picker.folderNone': 'Create a category in the favourites first',
+  'picker.folderWillStar': 'the emote will be added to favourites',
   'picker.folderNew': 'Name of the new category',
   'picker.folderRename': 'New name (empty deletes the category)',
   'picker.folderAssign': 'In which categories',
