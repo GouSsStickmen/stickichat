@@ -11,6 +11,8 @@ export type Token =
   | { kind: 'command'; text: string }
   /** a cheermote like "Cheer100" — bit icon + colored amount */
   | { kind: 'cheer'; url: string; bits: number; color: string }
+  /** a GIPHY gif sent by a tier 2/3 subscriber; `label` is the placeholder text it replaces */
+  | { kind: 'gif'; url: string; label: string }
 
 // an emoji plus any variation selectors / ZWJ continuation (👨‍👩‍👧 etc.), or a country
 // flag (two regional indicators — those are NOT Extended_Pictographic!)
@@ -59,12 +61,24 @@ function parseEmotesTag(tag: string): Range[] {
   return ranges
 }
 
+/** "0-38|QbvMbYwhBqzvxzYRYI|https://media1.giphy.com/..." — range, giphy id, and the file */
+function parseGifsTag(tag: string): { start: number; end: number; url: string } | null {
+  if (!tag) return null
+  const [range, , url] = tag.split('|')
+  if (!range || !url || !/^https?:\/\//.test(url)) return null
+  const [s, e] = range.split('-')
+  const start = parseInt(s, 10)
+  const end = parseInt(e, 10)
+  if (isNaN(start) || isNaN(end)) return null
+  return { start, end, url }
+}
+
 /**
  * Turns a message into render tokens: twitch emotes from the IRC tag,
  * third-party emotes by word lookup, links, mentions, zero-width overlays.
  */
 export function tokenizeMessage(
-  msg: Pick<ChatMessage, 'text' | 'emotesTag'>,
+  msg: Pick<ChatMessage, 'text' | 'emotesTag' | 'gifsTag'>,
   emoteLookup: (code: string) => Emote | undefined,
   mentionColorLookup?: (login: string) => string | undefined,
   dark = true,
@@ -73,6 +87,20 @@ export function tokenizeMessage(
   knownChatter?: (login: string) => boolean
 ): Token[] {
   const cp = Array.from(msg.text) // code points
+
+  /*
+   * A GIF replaces the whole message, so it is handled before anything else is looked at.
+   *
+   * Twitch sends it as a normal message whose text is a placeholder — "[Christmas Spongebob GIF by
+   * Respective]" — plus a `gifs` tag holding "start-end|id|url", the same range convention the
+   * emotes tag uses. One per message: the composer sends a GIF instead of a message, not inside one.
+   */
+  const gif = parseGifsTag(msg.gifsTag ?? '')
+  if (gif) {
+    const label = cp.slice(gif.start, Math.min(gif.end + 1, cp.length)).join('') || msg.text
+    return [{ kind: 'gif', url: gif.url, label }]
+  }
+
   const ranges = parseEmotesTag(msg.emotesTag ?? '')
 
   // slice the message into words/twitch-emote segments

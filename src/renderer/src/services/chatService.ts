@@ -1543,6 +1543,7 @@ class ChatService {
       badges,
       text,
       emotesTag: m.tags['emotes'] || undefined,
+      gifsTag: m.tags['gifs'] || undefined,
       timestamp: m.tags['tmi-sent-ts'] ? parseInt(m.tags['tmi-sent-ts'], 10) : Date.now(),
       isAction,
       isFirstMsg: m.tags['first-msg'] === '1',

@@ -42,6 +42,14 @@ export interface ChatMessage {
   text: string
   /** raw twitch `emotes=` IRC tag, positions are unicode code points */
   emotesTag?: string
+  /**
+   * Twitch's `gifs` tag: "start-end|giphy-id|url".
+   *
+   * A GIF arrives as an ordinary PRIVMSG whose body is a placeholder — "[Christmas Spongebob GIF by
+   * Respective]" — and this tag says which characters of it to replace and with what. Clients that
+   * do not read it show the placeholder, which is exactly what we were doing.
+   */
+  gifsTag?: string
   timestamp: number
   isAction: boolean
   isFirstMsg: boolean

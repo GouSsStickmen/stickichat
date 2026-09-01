@@ -358,6 +358,25 @@ function TokenView({
           </span>
         </span>
       )
+    case 'gif':
+      /*
+       * NOT lazy, like the emotes above: a picture that arrives after the row has been measured
+       * makes the virtualised list jolt. The title keeps the placeholder Twitch sent, so the GIF is
+       * still identifiable when it fails to load or when someone copies the line.
+       */
+      return (
+        <span className="chat-gif" title={token.label}>
+          <img
+            src={token.url}
+            alt={token.label}
+            onLoad={() =>
+              window.dispatchEvent(
+                new CustomEvent('sticki:rowresized', { detail: { deliberate: false } })
+              )
+            }
+          />
+        </span>
+      )
   }
 }
 

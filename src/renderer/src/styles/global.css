@@ -866,6 +866,13 @@ select:focus {
   /* reserve at least a square before the image loads, so text doesn't reflow (and jolt the
      scroll) when a not-yet-loaded emote pops from 0 width to its real width */
   min-width: calc(1.85em * var(--emote-scale));
+  /*
+   * ...and that reservation must not become a stretch. Kappa is 25x28, narrower than the square
+   * being held for it, so the min-width pulled it wider than it is and it drew flattened — visibly
+   * different from the same emote in the hover preview, which reserves nothing. `contain` keeps the
+   * space and lets the picture sit inside it at its own proportions.
+   */
+  object-fit: contain;
 }
 
 /* ---------- Bits power-ups (Twitch-style) ---------- */
@@ -5666,4 +5673,22 @@ button:has(> svg) {
 /* the name in "X gifted a sub to Y": drawn as that person, not as grey system text */
 .msg .gift-recipient {
   font-weight: 700;
+}
+
+/*
+ * A GIF is the whole message, so it is sized like a picture rather than like an emote — but capped,
+ * because a chat that scrolls one image at a time is not a chat.
+ */
+.msg .chat-gif {
+  display: block;
+  margin: 4px 0 2px;
+}
+.msg .chat-gif img {
+  max-width: min(320px, 90%);
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-lg, 8px);
+  /* the intrinsic ratio is kept: object-fit would otherwise crop or stretch the frame */
+  object-fit: contain;
 }
