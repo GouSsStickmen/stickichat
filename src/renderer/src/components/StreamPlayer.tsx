@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settings'
+import { useUiStore } from '../store/ui'
 import { useT } from '../i18n'
 
 interface Props {
@@ -60,7 +61,9 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
       const r = boxRef.current?.getBoundingClientRect()
       if (!r) return
       if (vertical) {
-        const next = Math.max(120, Math.min(900, Math.round(ev.clientY - r.top)))
+        // never past three quarters of the pane: the chat has to stay a chat
+        const ceiling = Math.max(160, Math.round((splitRef?.current?.getBoundingClientRect().height ?? 900) * 0.75))
+        const next = Math.max(120, Math.min(ceiling, Math.round(ev.clientY - r.top)))
         useSettingsStore.getState().setSettings({ playerHeight: next })
       } else {
         // side by side, the chat is what gets sized: the player simply takes what is left
@@ -89,8 +92,6 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
     void window.sticki.playerPort().then(setPort)
   }, [])
 
-  /** broadcaster latency in seconds, straight from getPlaybackStats, or null before it settles */
-  const [latency, setLatency] = useState<number | null>(null)
   useEffect(() => {
     if (!port) return
     const wv = wvRef.current
@@ -99,11 +100,17 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
       wv.executeJavaScript('window.__stickiStats')
         .then((raw) => {
           const s = raw as { latency?: number } | null
-          setLatency(typeof s?.latency === 'number' ? s.latency : null)
+          useUiStore
+            .getState()
+            .setStreamLatency(channel, typeof s?.latency === 'number' ? s.latency : null)
         })
-        .catch(() => setLatency(null))
+        .catch(() => useUiStore.getState().setStreamLatency(channel, null))
     }, 3000)
-    return () => window.clearInterval(id)
+    return () => {
+      window.clearInterval(id)
+      // the pane header must not keep showing a number for a player that is gone
+      useUiStore.getState().setStreamLatency(channel, null)
+    }
   }, [port, channel])
 
   const src = port ? `http://localhost:${port}/?channel=${encodeURIComponent(channel)}` : ''
@@ -123,15 +130,6 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
           className="stream-webview"
           partition="persist:twitch-player"
         />
-      )}
-      {/*
-        The delay, in plain seconds. Twitch's own number, not a guess: it answers the only question
-        a viewer has about it, which is whether the stream is behind enough to be worth reloading.
-      */}
-      {latency !== null && (
-        <div className={`stream-latency ${latency > 30 ? 'bad' : latency > 12 ? 'warn' : ''}`}>
-          {t('player.latency', { s: latency.toFixed(1) })}
-        </div>
       )}
       <div className="stream-bar">
         <button

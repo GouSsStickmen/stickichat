@@ -107,6 +107,7 @@ export const en = {
     'Sign in to Twitch in the player',
   'player.attach': 'Put the player back in the chat',
   'player.layout': 'Beside the chat or above it',
+  'player.latencyHint': 'How far the video is behind what the streamer is doing right now. Under 10 seconds is normal, over 30 is worth restarting the player.',
   'player.latency': 'Delay {s}s',
   'player.signInWhy':
     "Sign in to Twitch so channels you subscribe to stop showing ads. Once, on Twitch's own page.",

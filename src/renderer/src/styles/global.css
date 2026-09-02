@@ -3184,6 +3184,26 @@ input[type='number']::-webkit-inner-spin-button {
   min-height: 0;
   min-width: 0;
 }
+/* stacked: the player is a slab and the chat column takes everything under it */
+.pane-split.is-stacked {
+  flex-direction: column;
+}
+.pane-split.is-stacked .stream-player {
+  /*
+   * A remembered height can outlive the window it was set in: dragged tall on a big screen, or
+   * simply larger than this pane, it pushed the chat to zero and the pane looked like a player
+   * with no chat at all. The chat keeps a quarter of the pane whatever the stored number says.
+   */
+  max-height: 75%;
+}
+.pane-split.is-stacked .pane-chat-col {
+  flex: 1 1 auto;
+  width: auto !important;
+  border-left: 0;
+}
+.pane-split.is-side {
+  flex-direction: row;
+}
 .stream-player-side {
   flex: 1 1 auto;
   min-width: 0;
@@ -3206,21 +3226,15 @@ input[type='number']::-webkit-inner-spin-button {
 body.dragging-split .stream-webview {
   pointer-events: none;
 }
-.stream-latency {
-  position: absolute;
-  left: 6px;
-  top: 6px;
-  padding: 2px 7px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.6);
-  color: var(--text-muted);
-  font-size: 11px;
-  pointer-events: none;
+.pane-latency {
+  margin-left: 10px;
+  color: var(--text-faint);
+  cursor: help;
 }
-.stream-latency.warn {
+.pane-latency.warn {
   color: #fbbf24;
 }
-.stream-latency.bad {
+.pane-latency.bad {
   color: #f87171;
 }
 .stream-resize-x {

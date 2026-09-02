@@ -16,6 +16,14 @@ import { AddressInfo } from 'net'
 let server: Server | null = null
 let port = 0
 
+/** unremarkable, unlikely to be taken, and the same on every launch, which is the point */
+const PREFERRED_PORT = 47823
+
+const handler = (_req: unknown, res: { writeHead: (c: number, h: Record<string, string>) => void; end: (b: string) => void }): void => {
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+  res.end(PAGE)
+}
+
 const PAGE = `<!doctype html>
 <html>
 <head>
@@ -67,19 +75,27 @@ const PAGE = `<!doctype html>
 export function playerServerPort(): Promise<number> {
   if (server && port) return Promise.resolve(port)
   return new Promise((resolve) => {
-    server = createServer((_req, res) => {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
-      res.end(PAGE)
-    })
-    server.on('error', () => {
-      server = null
-      port = 0
-      resolve(0)
-    })
-    // port 0 means "any free one", so this cannot collide with the overlay server or anything else
-    server.listen(0, '127.0.0.1', () => {
+    server = createServer(handler)
+    /*
+     * A FIXED port first, and only a random one if it is taken.
+     *
+     * The origin is what Twitch stores the player's volume and quality against, so an ephemeral
+     * port meant a new origin every launch and a player that came back at full volume every time.
+     * A stable port keeps those settings where the player left them.
+     */
+    const done = (): void => {
       port = (server?.address() as AddressInfo | null)?.port ?? 0
       resolve(port)
+    }
+    server.once('error', () => {
+      server = createServer(handler)
+      server.on('error', () => {
+        server = null
+        port = 0
+        resolve(0)
+      })
+      server.listen(0, '127.0.0.1', done)
     })
+    server.listen(PREFERRED_PORT, '127.0.0.1', done)
   })
 }

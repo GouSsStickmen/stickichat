@@ -156,6 +156,15 @@ interface UiState {
   heldMsgId: string | null
   setHeldMsgId: (v: string | null) => void
   /**
+   * Seconds the stream is behind the broadcaster, per channel.
+   *
+   * Lives here rather than inside the player because it is drawn on the pane's own header strip:
+   * over the video it covered the picture, and it is information about the stream rather than part
+   * of it. Null when no player is running for that channel.
+   */
+  streamLatency: Record<string, number | null>
+  setStreamLatency: (channel: string, seconds: number | null) => void
+  /**
    * "Which categories should this emote be in?", opened with Alt+right-click.
    *
    * In the store rather than the picker because the same question is asked from chat, where the
@@ -226,6 +235,13 @@ export const useUiStore = create<UiState>()((set) => ({
   setModConfirm: (modConfirm) => set({ modConfirm }),
   heldMsgId: null,
   setHeldMsgId: (heldMsgId) => set({ heldMsgId }),
+  streamLatency: {},
+  setStreamLatency: (channel, seconds) =>
+    set((s) =>
+      s.streamLatency[channel] === seconds
+        ? s
+        : { streamLatency: { ...s.streamLatency, [channel]: seconds } }
+    ),
   emoteFolderMenu: null,
   setEmoteFolderMenu: (emoteFolderMenu) => set({ emoteFolderMenu }),
   setHypeTrain: (hypeTrain) => set((s) => (hypeTrain && s.hypeDismissed === hypeTrain.channel ? s : { hypeTrain })),

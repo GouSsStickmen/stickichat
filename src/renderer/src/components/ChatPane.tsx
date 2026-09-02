@@ -94,6 +94,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const playerSide = useSettingsStore((s) => s.settings.playerSideBySide)
   const chatWidth = useSettingsStore((s) => s.settings.chatWidth)
   const sideBySide = playerOpen && playerSide
+  const latency = useUiStore((s) => s.streamLatency[pane.channel])
   /** the split box is the stable thing to measure a drag against; the player's own edge moves */
   const splitRef = useRef<HTMLDivElement>(null)
 
@@ -375,9 +376,22 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           ✕
         </button>
       </div>
-      {showStreamInfo && streamInfo?.game && (
-        <div className="pane-subheader" title={streamInfo.game}>
-          <span className="si-icon"><GameIcon size={13} /></span> {streamInfo.game}
+      {((showStreamInfo && streamInfo?.game) || latency !== null && latency !== undefined) && (
+        <div className="pane-subheader" title={streamInfo?.game}>
+          {showStreamInfo && streamInfo?.game && (
+            <>
+              <span className="si-icon"><GameIcon size={13} /></span> {streamInfo.game}
+            </>
+          )}
+          {/* the delay sits with the other facts about the stream, not painted over the picture */}
+          {latency !== null && latency !== undefined && (
+            <span
+              className={`pane-latency ${latency > 30 ? 'bad' : latency > 12 ? 'warn' : ''}`}
+              title={t('player.latencyHint')}
+            >
+              {t('player.latency', { s: latency.toFixed(1) })}
+            </span>
+          )}
         </div>
       )}
       {searchOpen && <ChatSearch channel={pane.channel} onClose={() => setSearchOpen(false)} />}
@@ -385,44 +399,14 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         <ModToolbar pane={pane} account={account} channelId={channelId} isMod={isMod} />
       )}
       {/*
-        Two arrangements of the same two things. Above the chat the player is a slab of fixed
-        height; beside it the chat becomes a column of fixed width and the player takes the rest,
-        which is the Twitch page's own shape and the only one where a 16:9 video fills what it is
-        given instead of sitting between black bars.
+        Two arrangements of the same two things, in ONE tree for both arrangements, and the player keeps the same parent in each.
+        Rendering the two layouts as separate branches meant React tore the webview down and
+        built a new one every time the layout changed, which restarts the stream and loses the
+        volume with it. Only the classes change now, so the player never unmounts.
       */}
-      {sideBySide ? (
-        /*
-         * Beside the chat: the player takes what is left, and the chat column owns BOTH its
-         * messages and its input, so the box you type in is as wide as the conversation above it
-         * rather than running the whole width under the video.
-         */
-        <div className="pane-split" ref={splitRef}>
-          <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} splitRef={splitRef} />
-          <div className="pane-chat-col" style={{ width: chatWidth }}>
-            <div className="pane-body">
-              <MessageList
-                pane={pane}
-                account={account}
-                channelId={channelId}
-                isMod={isMod}
-                onReply={onReply}
-                scrollLocked={scrollLocked || holdPaused}
-              />
-              {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
-            </div>
-            <InputBox
-              tabId={tabId}
-              pane={pane}
-              account={account}
-              channelId={channelId}
-              replyTo={replyTo}
-              onCancelReply={() => setReplyTo(null)}
-            />
-          </div>
-        </div>
-      ) : (
-        <>
-          {playerOpen && <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} />}
+      <div className={`pane-split ${sideBySide ? 'is-side' : 'is-stacked'}`} ref={splitRef}>
+        {playerOpen && <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} splitRef={splitRef} />}
+        <div className="pane-chat-col" style={sideBySide ? { width: chatWidth } : undefined}>
           <div className="pane-body">
             <MessageList
               pane={pane}
@@ -434,18 +418,16 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             />
             {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
           </div>
-        </>
-      )}
-      {!sideBySide && (
-        <InputBox
-          tabId={tabId}
-          pane={pane}
-          account={account}
-          channelId={channelId}
-          replyTo={replyTo}
-          onCancelReply={() => setReplyTo(null)}
-        />
-      )}
+          <InputBox
+            tabId={tabId}
+            pane={pane}
+            account={account}
+            channelId={channelId}
+            replyTo={replyTo}
+            onCancelReply={() => setReplyTo(null)}
+          />
+        </div>
+      </div>
     </div>
   )
 }
