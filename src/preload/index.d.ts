@@ -15,6 +15,13 @@ export interface StickiApi {
   openEmotePickerWindow(hash: string): Promise<void>
   /** the stream player in its own window — deliberately not a child, so it can live on another monitor */
   openStreamWindow(hash: string): Promise<void>
+  /** open twitch.tv/login in the PLAYER's cookie jar; nothing is read back out of it */
+  twitchSignIn(): Promise<void>
+  /** clear that jar */
+  twitchSignOut(): Promise<void>
+  /** the detached stream window asking the chat to take the player back, then closing itself */
+  returnStream(channel: string): Promise<void>
+  onReturnStream(cb: (channel: string) => void): () => void
   openSettingsWindow(hash: string): Promise<void>
   openWhispersWindow(hash: string): Promise<void>
   openHighlightsWindow(hash: string): Promise<void>

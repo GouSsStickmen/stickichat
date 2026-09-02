@@ -19,6 +19,14 @@ const api = {
   },
   openEmotePickerWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openEmotePicker', hash),
   openStreamWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openStream', hash),
+  twitchSignIn: (): Promise<void> => ipcRenderer.invoke('app:twitchSignIn'),
+  twitchSignOut: (): Promise<void> => ipcRenderer.invoke('app:twitchSignOut'),
+  returnStream: (channel: string): Promise<void> => ipcRenderer.invoke('app:returnStream', channel),
+  onReturnStream: (cb: (channel: string) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, channel: string): void => cb(channel)
+    ipcRenderer.on('app:returnStream', listener)
+    return () => ipcRenderer.removeListener('app:returnStream', listener)
+  },
   openSettingsWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openSettings', hash),
   openWhispersWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openWhispers', hash),
   openHighlightsWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openHighlights', hash),

@@ -2095,6 +2095,10 @@ export interface Settings {
   hotkeys: Partial<Record<HotkeyAction, string>>
   /** height in px of the mobile stream player, remembered between launches */
   playerHeight: number
+  /** player beside the chat instead of above it, the way the Twitch page is laid out */
+  playerSideBySide: boolean
+  /** width of the chat column in that layout, px. The player takes whatever is left. */
+  chatWidth: number
   /**
    * A saved poll or prediction, ready to run again.
    *
@@ -2325,6 +2329,8 @@ export const DEFAULT_SETTINGS: Settings = {
   swipeModEnabled: true,
   swipeModMode: 'swipe',
   playerHeight: 220,
+  playerSideBySide: false,
+  chatWidth: 360,
   pollPresets: [],
   pollDraft: null,
   overlayEnabled: false,

@@ -1,4 +1,14 @@
-import { ipcMain, safeStorage, shell, app, BrowserWindow, desktopCapturer, screen, clipboard } from 'electron'
+import {
+  ipcMain,
+  safeStorage,
+  shell,
+  app,
+  session,
+  BrowserWindow,
+  desktopCapturer,
+  screen,
+  clipboard
+} from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
 import { inlineAssets } from './assets'
@@ -84,6 +94,9 @@ function createChildWindow(
   return win
 }
 
+/** the embedded player's own cookie jar, shared by the player views and the sign-in window */
+export const PLAYER_PARTITION = 'persist:twitch-player'
+
 export function registerIpc(): void {
   ipcMain.handle('secure:encrypt', (_e, plain: string): string => {
     if (!safeStorage.isEncryptionAvailable()) return 'plain:' + Buffer.from(plain, 'utf8').toString('base64')
@@ -98,6 +111,33 @@ export function registerIpc(): void {
     } catch {
       return null
     }
+  })
+
+  /*
+   * A twitch.tv login for the embedded player, in the partition the player itself uses.
+   *
+   * Nothing is read out of it. This is not the session-token route that was tried and removed for
+   * GIFs: the app never touches the cookie, it only lets the player be logged in the way a browser
+   * tab would be, which is what stops ads on channels the viewer is subscribed to.
+   */
+  ipcMain.handle('app:twitchSignIn', () => {
+    const win = new BrowserWindow({
+      width: 520,
+      height: 760,
+      title: 'Twitch',
+      autoHideMenuBar: true,
+      webPreferences: {
+        partition: PLAYER_PARTITION,
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    })
+    void win.loadURL('https://www.twitch.tv/login')
+  })
+
+  /** forget that login: clears the player's own jar and nothing else */
+  ipcMain.handle('app:twitchSignOut', async () => {
+    await session.fromPartition(PLAYER_PARTITION).clearStorageData()
   })
 
   ipcMain.handle('config:get', () => readConfig())
@@ -142,12 +182,18 @@ export function registerIpc(): void {
    * floats above it. 16:9 by default because that is what it will be showing.
    */
   ipcMain.handle('app:openStream', (_e, hash: string) => {
-    createChildWindow(hash, {
-      width: 800,
-      height: 470,
-      title: 'StickiChat — Stream',
+    const win = createChildWindow(hash, {
+      width: 960,
+      height: 540,
+      title: 'StickiChat Stream',
       stateKey: 'stream'
     })
+    /*
+     * Locked to 16:9. The player letterboxes whatever it is given, so a window of any other shape
+     * shows a small video framed in black, which is exactly what "the stream does not adapt to the
+     * window" looks like. Electron measures the ratio on the content area, so the frame is excluded.
+     */
+    win.setAspectRatio(16 / 9)
   })
 
   // standalone user card window (resizable, can be moved anywhere incl. other displays)
@@ -214,6 +260,18 @@ export function registerIpc(): void {
     for (const w of BrowserWindow.getAllWindows()) {
       if (w.webContents.id !== e.sender.id) w.webContents.send('app:emotePicked', payload)
     }
+  })
+
+  /*
+   * "Put it back": the detached stream window asks the chat windows to show the player again for
+   * its channel, then closes itself. The pane cannot be told directly because it does not know
+   * which window the request came from, so this is a broadcast and the panes match by channel.
+   */
+  ipcMain.handle('app:returnStream', (e, channel: string) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w.webContents.id !== e.sender.id) w.webContents.send('app:returnStream', channel)
+    }
+    BrowserWindow.fromWebContents(e.sender)?.close()
   })
 
   // "jump to this message" clicked in a standalone highlights window → main chat scrolls there

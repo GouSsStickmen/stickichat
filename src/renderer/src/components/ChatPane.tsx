@@ -91,6 +91,18 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const [searchOpen, setSearchOpen] = useState(false)
   /** per pane and per session: which channel you want to watch changes constantly */
   const [playerOpen, setPlayerOpen] = useState(false)
+  const playerSide = useSettingsStore((s) => s.settings.playerSideBySide)
+  const chatWidth = useSettingsStore((s) => s.settings.chatWidth)
+
+  /*
+   * The detached window asking to come back. It broadcasts its channel rather than addressing a
+   * pane, because it has no idea which pane, or which window, it came from.
+   */
+  useEffect(() => {
+    return window.sticki.onReturnStream((ch) => {
+      if (ch.toLowerCase() === pane.channel.toLowerCase()) setPlayerOpen(true)
+    })
+  }, [pane.channel])
   // hold-to-pause: chat is paused only while the hotkey is held down (separate from the toggle)
   const [holdPaused, setHoldPaused] = useState(false)
   const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
@@ -369,17 +381,28 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
       {(isMod || hasToolbarButtons) && account && (
         <ModToolbar pane={pane} account={account} channelId={channelId} isMod={isMod} />
       )}
-      {playerOpen && <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} />}
-      <div className="pane-body">
-        <MessageList
-          pane={pane}
-          account={account}
-          channelId={channelId}
-          isMod={isMod}
-          onReply={onReply}
-          scrollLocked={scrollLocked || holdPaused}
-        />
-        {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
+      {/*
+        Two arrangements of the same two things. Above the chat the player is a slab of fixed
+        height; beside it the chat becomes a column of fixed width and the player takes the rest,
+        which is the Twitch page's own shape and the only one where a 16:9 video fills what it is
+        given instead of sitting between black bars.
+      */}
+      <div className={playerOpen && playerSide ? 'pane-split' : 'contents'}>
+        {playerOpen && <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} />}
+        <div
+          className="pane-body"
+          style={playerOpen && playerSide ? { width: chatWidth, flex: '0 0 auto' } : undefined}
+        >
+          <MessageList
+            pane={pane}
+            account={account}
+            channelId={channelId}
+            isMod={isMod}
+            onReply={onReply}
+            scrollLocked={scrollLocked || holdPaused}
+          />
+          {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
+        </div>
       </div>
       <InputBox
         tabId={tabId}

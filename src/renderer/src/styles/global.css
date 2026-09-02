@@ -3168,6 +3168,30 @@ input[type='number']::-webkit-inner-spin-button {
   height: 100%;
   border: 0;
 }
+/* side by side: the player takes what the chat column leaves */
+.pane-split {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+.stream-player-side {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+}
+.stream-resize-x {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+.stream-resize-x:hover {
+  background: var(--accent);
+  opacity: 0.5;
+}
 .stream-bar {
   position: absolute;
   top: 4px;
