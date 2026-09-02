@@ -102,6 +102,7 @@ export const en = {
   'hint.giphyKey': 'Needed for the picker\'s GIF tab. A free key takes a minute at developers.giphy.com — pick \'API\', not \'SDK\'.',
   'picker.gifSearch': 'Search GIFs…',
   'picker.gifNoKey': 'The GIF tab needs a free GIPHY key. Twitch will not hand its own out, and a key baked into open source gets revoked fast — so this one is yours.',
+  'picker.gifSaveKey': 'Save',
   'picker.gifGetKey': 'Get a key',
   'picker.gifOpenSettings': 'Paste it in settings',
   'picker.gifError': 'GIPHY is not answering',

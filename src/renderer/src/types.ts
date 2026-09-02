@@ -1898,7 +1898,7 @@ export interface Settings {
    */
   giphyApiKey: string
   /** GIPHY's content rating filter — the same knob Twitch's keyboard sets for its own picker */
-  giphyRating: 'g' | 'pg' | 'pg-13' | 'r'
+  giphyRating: 'g' | 'pg' | 'pg-13'
   /** px size of the big hover preview in the emote picker */
   emotePreviewSize: number
   /** px size of the preview shown when hovering an emote in a chat message */

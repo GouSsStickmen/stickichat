@@ -586,7 +586,6 @@ ${lockHint}` : ''}`
             state={gifState}
             hasKey={!!giphyKey}
             onPickGif={onPickGif}
-            onClose={onClose}
           />
         ) : query.trim() ? (
           searchResults.length > 0 ? (
@@ -929,8 +928,14 @@ ${lockHint}` : ''}`
           </>
         )}
       </div>
-      {/* always the same height — a popover anchored to the input jumps otherwise */}
-      <div className="picker-preview" style={{ height: previewSize + 26 }}>
+      {/*
+        Always the same height — a popover anchored to the input jumps otherwise. The GIF tab is
+        the exception and drops both strips entirely: the preview belongs to whatever emote was
+        last hovered, which on this tab is something from a different tab, and the hint underneath
+        talks about favouriting emotes, which is not what any of this does.
+      */}
+      {tab !== 'gif' && (
+        <div className="picker-preview" style={{ height: previewSize + 26 }}>
         {preview ? (
           <>
             {preview.provider === 'emoji' ? (
@@ -993,10 +998,11 @@ ${lockHint}` : ''}`
             })()}
           </>
         ) : (
-          <div className="picker-preview-name">{t('picker.previewHint')}</div>
-        )}
-      </div>
-      <div className="picker-hint">{t('picker.favHint')}</div>
+            <div className="picker-preview-name">{t('picker.previewHint')}</div>
+          )}
+        </div>
+      )}
+      {tab !== 'gif' && <div className="picker-hint">{t('picker.favHint')}</div>}
     </div>
   )
 }

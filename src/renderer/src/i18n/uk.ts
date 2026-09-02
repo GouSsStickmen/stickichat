@@ -104,6 +104,7 @@ export const uk: Record<TranslationKey, string> = {
   'hint.giphyKey': 'Потрібен для вкладки GIF у пікері. Безкоштовний ключ створюється за хвилину на developers.giphy.com — обери «API», а не «SDK».',
   'picker.gifSearch': 'Пошук гіфок…',
   'picker.gifNoKey': 'Щоб бачити гіфки, потрібен безкоштовний ключ GIPHY. Твіч свій не віддає, а вшитий у відкритий код ключ швидко відкликають — тому він твій.',
+  'picker.gifSaveKey': 'Зберегти',
   'picker.gifGetKey': 'Отримати ключ',
   'picker.gifOpenSettings': 'Вставити в налаштуваннях',
   'picker.gifError': 'GIPHY не відповідає',

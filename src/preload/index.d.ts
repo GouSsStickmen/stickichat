@@ -6,6 +6,13 @@ export interface StickiApi {
   inlineAssets(value: unknown): Promise<unknown>
   setConfig(cfg: unknown): Promise<boolean>
   openExternal(url: string): Promise<void>
+  /**
+   * Open a real twitch.tv login in its own window and return the session cookie it leaves behind,
+   * or null if the window was closed first. Only the optional native-GIF sending uses this.
+   */
+  twitchWebLogin(): Promise<string | null>
+  /** clear that window's cookie jar */
+  twitchWebLogout(): Promise<void>
   pickScreenColor(): Promise<string | null>
   eyedropperResult(hex: string | null): void
   getVersion(): Promise<string>

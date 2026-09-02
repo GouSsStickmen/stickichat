@@ -13,6 +13,14 @@ import { host } from './platform'
 
 const API = 'https://api.giphy.com/v1/gifs'
 
+/*
+ * Ratings we are willing to ask GIPHY for. Enforced here rather than only in the settings dropdown
+ * because a rating travels from a config file that can be hand-edited or carried over from an
+ * older build — the boundary that talks to GIPHY is the one that has to hold.
+ */
+const ALLOWED_RATINGS = new Set(['g', 'pg', 'pg-13'])
+const safeRating = (rating: string): string => (ALLOWED_RATINGS.has(rating) ? rating : 'pg-13')
+
 /** one GIF, reduced to the four things the picker and the sender actually need */
 export interface GifItem {
   id: string
@@ -97,10 +105,10 @@ async function call(path: string, params: Record<string, string>, key: string): 
 
 /** what the tab shows before anything is typed */
 export function trendingGifs(key: string, rating: string, limit = 50): Promise<GifItem[]> {
-  return call('trending', { limit: String(limit), rating, bundle: 'messaging_non_clips' }, key)
+  return call('trending', { limit: String(limit), rating: safeRating(rating), bundle: 'messaging_non_clips' }, key)
 }
 
 /** search by name — the other half of the keyboard */
 export function searchGifs(key: string, query: string, rating: string, limit = 50): Promise<GifItem[]> {
-  return call('search', { q: query, limit: String(limit), rating, bundle: 'messaging_non_clips' }, key)
+  return call('search', { q: query, limit: String(limit), rating: safeRating(rating), bundle: 'messaging_non_clips' }, key)
 }
