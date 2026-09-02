@@ -36,12 +36,32 @@ interface Props {
  * that, and Twitch stitches ads into the stream anyway, so it would not even work.
  */
 export default function StreamPlayer({ channel, standalone, onClose, slot }: Props): React.JSX.Element {
+  /**
+   * Ask the guest page something, without being able to bring the app down.
+   *
+   * executeJavaScript throws SYNCHRONOUSLY when the webview is not attached and dom-ready has not
+   * fired, so a .catch on the promise never sees it: the error escaped the poller, escaped React,
+   * and took the whole interface with it. Every call goes through here, and nothing is asked
+   * before the page says it is ready.
+   */
+  const ask = (code: string): Promise<unknown> => {
+    try {
+      const wv = wvRef.current
+      if (!wv || !ready) return Promise.resolve(null)
+      return wv.executeJavaScript(code).catch(() => null)
+    } catch {
+      return Promise.resolve(null)
+    }
+  }
+
   const t = useT()
   const side = useSettingsStore((s) => s.settings.playerSideBySide)
   const mode = useSettingsStore((s) => s.settings.playerMode)
   const hideChrome = useSettingsStore((s) => s.settings.playerHideSiteChrome)
   const boxRef = useRef<HTMLDivElement>(null)
   const wvRef = useRef<{ executeJavaScript: (code: string) => Promise<unknown> } | null>(null)
+  /** the guest has loaded at least once; nothing may be asked of it before that */
+  const [ready, setReady] = useState(false)
 
   /*
    * The player lives on a one-page local server rather than at player.twitch.tv directly, because
@@ -63,9 +83,7 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
    * player settings; without it there is simply no number, which is the state this shipped in.
    */
   useEffect(() => {
-    if (mode !== 'site') return
-    const wv = wvRef.current
-    if (!wv) return
+    if (mode !== 'site' || !ready) return
     const read = `(() => {
       const label = [...document.querySelectorAll('*')].find(
         (e) => e.children.length === 0 && /Затримка до стрімера|Latency To Broadcaster/i.test(e.textContent || '')
@@ -77,12 +95,10 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       return m ? parseFloat(m[1].replace(',', '.')) : null
     })()`
     const tick = (): void => {
-      wv.executeJavaScript(read)
-        .then((raw) => {
-          const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : null
-          useUiStore.getState().setStreamLatency(channel, n)
-        })
-        .catch(() => useUiStore.getState().setStreamLatency(channel, null))
+      void ask(read).then((raw) => {
+        const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : null
+        useUiStore.getState().setStreamLatency(channel, n)
+      })
     }
     tick()
     const id = window.setInterval(tick, 3000)
@@ -90,28 +106,26 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       window.clearInterval(id)
       useUiStore.getState().setStreamLatency(channel, null)
     }
-  }, [mode, channel])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, channel, ready])
 
   useEffect(() => {
-    if (mode !== 'embed' || !port) return
-    const wv = wvRef.current
-    if (!wv) return
+    if (mode !== 'embed' || !port || !ready) return
     const id = window.setInterval(() => {
-      wv.executeJavaScript('window.__stickiStats')
-        .then((raw) => {
-          const s = raw as { latency?: number } | null
-          useUiStore
-            .getState()
-            .setStreamLatency(channel, typeof s?.latency === 'number' ? s.latency : null)
-        })
-        .catch(() => useUiStore.getState().setStreamLatency(channel, null))
+      void ask('window.__stickiStats').then((raw) => {
+        const st = raw as { latency?: number } | null
+        useUiStore
+          .getState()
+          .setStreamLatency(channel, typeof st?.latency === 'number' ? st.latency : null)
+      })
     }, 3000)
     return () => {
       window.clearInterval(id)
       // the pane header must not keep showing a number for a player that is gone
       useUiStore.getState().setStreamLatency(channel, null)
     }
-  }, [port, channel, mode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [port, channel, mode, ready])
 
   /*
    * Site mode is the whole of twitch.tv, not a player in a frame.
@@ -175,18 +189,19 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      * player is not already filling the frame, so it cannot toggle theatre back OFF.
      */
     const theatre = (): void => {
-      void wv
-        .executeJavaScript?.(
-          "(() => { const p = document.querySelector('.persistent-player'); " +
-            "return !!p && p.getBoundingClientRect().width < window.innerWidth - 40 })()"
-        )
-        ?.then((needs: unknown) => {
-          if (!needs) return
+      void ask(
+        "(() => { const p = document.querySelector('.persistent-player'); " +
+          "return !!p && p.getBoundingClientRect().width < window.innerWidth - 40 })()"
+      ).then((needs) => {
+        if (!needs) return
+        try {
           for (const type of ['keyDown', 'char', 'keyUp'] as const) {
             wv.sendInputEvent?.({ type, keyCode: 't', modifiers: ['alt'] })
           }
-        })
-        ?.catch?.(() => {})
+        } catch {
+          /* the view can go away between the answer and the key */
+        }
+      })
     }
     const apply = (): void => {
       void wv.insertCSS?.(css)?.catch?.(() => {})
@@ -211,7 +226,19 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
     >
       {src && (
         <webview
-          ref={wvRef as never}
+          ref={(el) => {
+            wvRef.current = el as never
+            if (!el) {
+              setReady(false)
+              return
+            }
+            // dom-ready is the only signal that executeJavaScript will not throw
+            const on = (): void => setReady(true)
+            ;(el as unknown as { addEventListener: (t: string, f: () => void) => void }).addEventListener(
+              'dom-ready',
+              on
+            )
+          }}
           src={src}
           className="stream-webview"
           partition="persist:twitch-player"
