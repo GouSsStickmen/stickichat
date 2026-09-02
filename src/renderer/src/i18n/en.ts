@@ -112,6 +112,13 @@ export const en = {
   'player.signInWhy':
     "Sign in to Twitch so channels you subscribe to stop showing ads. Once, on Twitch's own page.",
   'player.runningHere': 'A player is running here',
+  'player.modeSiteOff': 'Only the player is shown. Click to open the full Twitch page instead: channel points accrue, watch streaks count and redemptions work, because those come from the page rather than the video. Heavier, and latency can no longer be reported.',
+  'player.modeSiteOn': 'The full Twitch page is open: points, streaks and redemptions work. Click to go back to the light player with the latency readout.',
+  'set.playerMode': 'What the player shows',
+  'set.playerModeEmbed': 'Just the player (lighter, shows latency)',
+  'set.playerModeSite': 'The full Twitch page (points, streaks, redemptions)',
+  'set.playerHideSiteChrome': 'Hide Twitch chat and menus on the full page',
+  'hint.playerHideSiteChrome': 'You already have a chat here, and the site menus eat the width. If Twitch changes its markup nothing breaks: the page simply shows in full.',
   'player.show': 'Show the stream',
   'player.hide': 'Hide the stream',
   'player.detach': 'Move to its own window',

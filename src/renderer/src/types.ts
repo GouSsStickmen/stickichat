@@ -2103,6 +2103,17 @@ export interface Settings {
   hotkeys: Partial<Record<HotkeyAction, string>>
   /** height in px of the mobile stream player, remembered between launches */
   playerHeight: number
+  /**
+   * Which Twitch to show.
+   *
+   * 'embed' is the bare player: light, and the only one that will tell us how far behind live it
+   * is, because that number comes from Twitch's embed SDK. 'site' loads twitch.tv itself, which is
+   * heavier but IS the site: channel points accrue, watch streaks count, redemptions work, because
+   * none of that comes from the video, it comes from the page being open.
+   */
+  playerMode: 'embed' | 'site'
+  /** site mode: hide Twitch's own chat and menus, since this app already is the chat */
+  playerHideSiteChrome: boolean
   /** player beside the chat instead of above it, the way the Twitch page is laid out */
   playerSideBySide: boolean
   /** width of the chat column in that layout, px. The player takes whatever is left. */
@@ -2337,6 +2348,8 @@ export const DEFAULT_SETTINGS: Settings = {
   swipeModEnabled: true,
   swipeModMode: 'swipe',
   playerHeight: 220,
+  playerMode: 'embed',
+  playerHideSiteChrome: true,
   playerSideBySide: false,
   chatWidth: 360,
   pollPresets: [],

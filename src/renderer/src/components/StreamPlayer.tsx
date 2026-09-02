@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore, type PlayerSlot } from '../store/ui'
 import { useT } from '../i18n'
-import { PersonIcon, LayoutIcon, CloseIcon, TrayArrowIcon } from './Icons'
+import { PersonIcon, LayoutIcon, CloseIcon, TrayArrowIcon, GlobeIcon } from './Icons'
 
 interface Props {
   channel: string
@@ -38,6 +38,8 @@ interface Props {
 export default function StreamPlayer({ channel, standalone, onClose, slot }: Props): React.JSX.Element {
   const t = useT()
   const side = useSettingsStore((s) => s.settings.playerSideBySide)
+  const mode = useSettingsStore((s) => s.settings.playerMode)
+  const hideChrome = useSettingsStore((s) => s.settings.playerHideSiteChrome)
   const boxRef = useRef<HTMLDivElement>(null)
   const wvRef = useRef<{ executeJavaScript: (code: string) => Promise<unknown> } | null>(null)
 
@@ -94,7 +96,7 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
   }, [])
 
   useEffect(() => {
-    if (!port) return
+    if (mode !== 'embed' || !port) return
     const wv = wvRef.current
     if (!wv) return
     const id = window.setInterval(() => {
@@ -112,9 +114,56 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       // the pane header must not keep showing a number for a player that is gone
       useUiStore.getState().setStreamLatency(channel, null)
     }
-  }, [port, channel])
+  }, [port, channel, mode])
 
-  const src = port ? `http://localhost:${port}/?channel=${encodeURIComponent(channel)}` : ''
+  /*
+   * Site mode is the whole of twitch.tv, not a player in a frame.
+   *
+   * It costs more to run and it is the only way to get the things that come from the page rather
+   * than from the video: channel points tick up, watch streaks count, redemptions can be spent.
+   * None of that reaches an embed, because an embed is not a viewer as far as Twitch is concerned.
+   * Embed mode stays the default, and is the only one that can report latency.
+   */
+  const src =
+    mode === 'site'
+      ? `https://www.twitch.tv/${encodeURIComponent(channel)}`
+      : port
+        ? `http://localhost:${port}/?channel=${encodeURIComponent(channel)}`
+        : ''
+
+  /*
+   * Twitch's own chat and menus, hidden.
+   *
+   * This app is already the chat, and a second one inside the video panel is both a waste of the
+   * width and a way to reply from the wrong place. Done with data-a-target attributes rather than
+   * class names, which are generated and change every build; if Twitch ever drops them the rule
+   * simply matches nothing and the page looks normal.
+   */
+  useEffect(() => {
+    if (mode !== 'site' || !hideChrome) return
+    const wv = wvRef.current as unknown as {
+      addEventListener?: (t: string, f: () => void) => void
+      removeEventListener?: (t: string, f: () => void) => void
+      insertCSS?: (css: string) => Promise<unknown>
+    } | null
+    if (!wv?.addEventListener) return
+    const css = `
+      [data-a-target="right-column-chat-bar"],
+      [data-a-target="right-column__toggle-collapse-btn"],
+      .channel-root__right-column,
+      .top-nav, [data-a-target="top-nav-container"],
+      #sideNav, .side-nav { display: none !important; }
+      .channel-root__player, .persistent-player { width: 100% !important; }
+    `
+    const apply = (): void => void wv.insertCSS?.(css)?.catch?.(() => {})
+    wv.addEventListener('dom-ready', apply)
+    // a single-page app swaps channels without reloading, so re-apply on every navigation
+    wv.addEventListener('did-navigate-in-page', apply)
+    return () => {
+      wv.removeEventListener?.('dom-ready', apply)
+      wv.removeEventListener?.('did-navigate-in-page', apply)
+    }
+  }, [mode, hideChrome, channel])
 
   return (
     <div
@@ -132,6 +181,17 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         />
       )}
       <div className="stream-bar">
+        <button
+          className={`icon-btn ${mode === 'site' ? 'active' : ''}`}
+          title={mode === 'site' ? t('player.modeSiteOn') : t('player.modeSiteOff')}
+          onClick={() =>
+            useSettingsStore
+              .getState()
+              .setSettings({ playerMode: mode === 'site' ? 'embed' : 'site' })
+          }
+        >
+          <GlobeIcon size={15} />
+        </button>
         <button
           className="icon-btn"
           title={t('player.signInWhy')}

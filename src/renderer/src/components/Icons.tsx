@@ -324,3 +324,14 @@ export function LayoutIcon({ side, size }: { side?: boolean; size?: number }): R
     </Glyph>
   )
 }
+
+/** a globe: the whole twitch.tv page rather than just its player */
+export function GlobeIcon({ size }: { size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12 H20.5" />
+      <path d="M12 3.5 C15 7 15 17 12 20.5 C9 17 9 7 12 3.5 Z" />
+    </Glyph>
+  )
+}

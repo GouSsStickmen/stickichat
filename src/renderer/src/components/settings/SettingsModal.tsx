@@ -1703,6 +1703,27 @@ function WindowsSection(): React.JSX.Element {
           onChange={(e) => set({ emotePreviewSize: parseInt(e.target.value, 10) || 112 })}
         />
       </div>
+      <div className="set-group-title">{t('player.show')}</div>
+      <div className="set-row">
+        <label>{t('set.playerMode')}</label>
+        <select
+          value={settings.playerMode}
+          onChange={(e) => set({ playerMode: e.target.value as typeof settings.playerMode })}
+        >
+          <option value="embed">{t('set.playerModeEmbed')}</option>
+          <option value="site">{t('set.playerModeSite')}</option>
+        </select>
+      </div>
+      {settings.playerMode === 'site' && (
+        <div className="set-sub">
+          <Toggle
+            label={t('set.playerHideSiteChrome')}
+            hint={t('hint.playerHideSiteChrome')}
+            value={settings.playerHideSiteChrome}
+            onChange={(v) => set({ playerHideSiteChrome: v })}
+          />
+        </div>
+      )}
       <div className="set-row">
         <label>{t('set.giphyKey')}</label>
         <input
