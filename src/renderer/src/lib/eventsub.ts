@@ -263,7 +263,14 @@ export class EventSubClient {
             this.rateLimitedUntil = 0
             this.onSubOk?.(d)
           } else {
-            console.warn('[eventsub] subscribe failed', d.type, res.status, res.json ?? res.text)
+            // the reason, not "[object Object]": a 403 here is either a missing scope or not
+            // being a moderator of that channel, and those need completely different fixes
+            console.warn(
+              '[eventsub] subscribe failed',
+              d.type,
+              res.status,
+              (res.json as { message?: string } | null)?.message ?? res.text?.slice(0, 200) ?? ''
+            )
             // a 4xx won't fix itself on retry (bad scope / bad condition) — stop hammering it
             // every reconnect; only 5xx / network errors / 429 are worth retrying.
             //

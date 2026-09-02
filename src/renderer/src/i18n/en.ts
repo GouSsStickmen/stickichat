@@ -155,6 +155,8 @@ export const en = {
   'follows.openChat': 'Chat here',
   'follows.noAccount': 'Add an account first.',
   'follows.needScope': 'Showing this list needs permission to read who you follow, and that permission did not exist when you signed in. Twitch grants them only at authorization, so sign in again with the same account and the list will appear.',
+  'set.overlayGifSize': 'Tallest a GIF may be on the overlay',
+  'hint.overlayGifSize': 'GIPHY originals can be half a screen tall. The cap applies to every overlay at once.',
   'poll.title': 'Polls and predictions',
   'poll.short': 'Polls',
   'poll.poll': 'Poll',

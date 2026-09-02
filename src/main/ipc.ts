@@ -184,7 +184,7 @@ export function registerIpc(): void {
    * monitor and leave it there, and a child window is dragged around by its parent and always
    * floats above it. 16:9 by default because that is what it will be showing.
    */
-  ipcMain.handle('app:openStream', (_e, hash: string) => {
+  ipcMain.handle('app:openStream', (_e, hash: string, lockAspect = true) => {
     const win = createChildWindow(hash, {
       width: 960,
       height: 540,
@@ -192,11 +192,13 @@ export function registerIpc(): void {
       stateKey: 'stream'
     })
     /*
-     * Locked to 16:9. The player letterboxes whatever it is given, so a window of any other shape
-     * shows a small video framed in black, which is exactly what "the stream does not adapt to the
-     * window" looks like. Electron measures the ratio on the content area, so the frame is excluded.
+     * 16:9, but only for the bare player.
+     *
+     * The embed letterboxes whatever shape it is given, so locking the window to the video's own
+     * ratio is what makes it fill. A full Twitch page is a website, not a video: locking it to 16:9
+     * left black bars down both sides, because the page was being squeezed into the wrong shape.
      */
-    win.setAspectRatio(16 / 9)
+    if (lockAspect) win.setAspectRatio(16 / 9)
   })
 
   // standalone user card window (resizable, can be moved anywhere incl. other displays)

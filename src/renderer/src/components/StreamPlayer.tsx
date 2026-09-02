@@ -147,13 +147,25 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       insertCSS?: (css: string) => Promise<unknown>
     } | null
     if (!wv?.addEventListener) return
+    /*
+     * Theatre mode, done with CSS rather than by pressing their button.
+     *
+     * Twitch's own toggle lives in a control bar that only exists while the pointer is over the
+     * video, so there is nothing to click at load time, and firing its keyboard shortcut blind
+     * would turn theatre OFF for anyone who already had it on. Hiding the furniture and letting
+     * the player have the height reaches the same place and cannot get out of step with itself.
+     */
     const css = `
       [data-a-target="right-column-chat-bar"],
       [data-a-target="right-column__toggle-collapse-btn"],
       .channel-root__right-column,
       .top-nav, [data-a-target="top-nav-container"],
-      #sideNav, .side-nav { display: none !important; }
-      .channel-root__player, .persistent-player { width: 100% !important; }
+      #sideNav, .side-nav,
+      .channel-info-content,
+      [data-a-target="channel-header-right"] { display: none !important; }
+      .channel-root__player, .persistent-player { width: 100% !important; height: 100vh !important; }
+      .channel-root, .channel-root__info { padding: 0 !important; }
+      html, body { overflow: hidden !important; }
     `
     const apply = (): void => void wv.insertCSS?.(css)?.catch?.(() => {})
     wv.addEventListener('dom-ready', apply)
@@ -223,7 +235,10 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
               onClick={() => {
                 // "move to its own window" has to MOVE it: leaving the pane copy behind means two
                 // players, two audio streams and twice the CPU, which is not what the button says
-                void window.sticki.openStreamWindow(`stream=${encodeURIComponent(channel)}`)
+                void window.sticki.openStreamWindow(
+                  `stream=${encodeURIComponent(channel)}`,
+                  mode === 'embed'
+                )
                 onClose?.()
               }}
             >

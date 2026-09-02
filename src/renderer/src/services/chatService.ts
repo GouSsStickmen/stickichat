@@ -884,11 +884,24 @@ class ChatService {
     const channel = String(event.broadcaster_user_login ?? '').toLowerCase()
     const msgId = String(event.message_id ?? '')
     if (!channel || !msgId) return
-    const modId = String(event.moderator_user_id ?? '')
+    /*
+     * Which account may act on this.
+     *
+     * The hold event carries no moderator id, unlike the update one, so it has to be worked out
+     * the same way the subscription was: the account that moderates this channel, or owns it.
+     * Falling back to "the first account with a token" sent the decision as the wrong user, which
+     * Twitch answers with a 401 that looks like a broken feature.
+     */
+    const bid = String(event.broadcaster_user_id ?? '')
+    const accounts = useAccountsStore.getState().accounts
     const account =
-      useAccountsStore.getState().accounts.find((a) => a.id === modId) ??
-      useAccountsStore.getState().accounts.find((a) => a._accessToken)
+      accounts.find(
+        (a) =>
+          a._accessToken &&
+          (a.moderatedChannelIds.includes(bid) || a.login.toLowerCase() === channel)
+      ) ?? accounts.find((a) => a._accessToken)
     if (!account) return
+    diagInfo('automod', `${channel}: held a message from ${event.user_login ?? '?'}`)
     // "why" comes in two shapes: an AutoMod category, or a term the channel blocked itself
     const reason =
       event.reason === 'blocked_term'

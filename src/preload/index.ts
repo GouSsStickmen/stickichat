@@ -18,7 +18,8 @@ const api = {
     return () => ipcRenderer.removeListener('app:reattach', listener)
   },
   openEmotePickerWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openEmotePicker', hash),
-  openStreamWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openStream', hash),
+  openStreamWindow: (hash: string, lockAspect?: boolean): Promise<void> =>
+    ipcRenderer.invoke('app:openStream', hash, lockAspect),
   playerPort: (): Promise<number> => ipcRenderer.invoke('player:port'),
   twitchSignIn: (): Promise<void> => ipcRenderer.invoke('app:twitchSignIn'),
   twitchSignOut: (): Promise<void> => ipcRenderer.invoke('app:twitchSignOut'),
