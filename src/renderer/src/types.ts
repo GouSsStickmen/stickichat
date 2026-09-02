@@ -1889,6 +1889,16 @@ export interface Settings {
    * grid, which is the worst place for a thing you are hunting.
    */
   pickerSort: 'size' | 'name' | 'overlaysFirst' | 'overlaysLast'
+  /**
+   * GIPHY developer key for the picker's GIF tab, empty until someone pastes one in.
+   *
+   * Twitch's own keyboard gets its key from a first-party endpoint that will not talk to us, so
+   * there is nowhere to borrow one from — and a key baked into a public repo is a key that gets
+   * revoked. The tab explains this and links to where a free one is made.
+   */
+  giphyApiKey: string
+  /** GIPHY's content rating filter — the same knob Twitch's keyboard sets for its own picker */
+  giphyRating: 'g' | 'pg' | 'pg-13' | 'r'
   /** px size of the big hover preview in the emote picker */
   emotePreviewSize: number
   /** px size of the preview shown when hovering an emote in a chat message */
@@ -2177,6 +2187,8 @@ export const DEFAULT_SETTINGS: Settings = {
   emojiNameLang: 'both',
   badgeSize: 18,
   pickerSort: 'size',
+  giphyApiKey: '',
+  giphyRating: 'pg-13',
   emotePreviewSize: 112,
   chatEmoteHoverSize: 128,
   showStreamInfo: true,

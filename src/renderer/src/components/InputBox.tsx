@@ -611,6 +611,13 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             channelId={channelId}
             account={account}
             onPick={(emote) => insertFromPicker(emoteInsertText(emote))}
+            /*
+             * A GIF becomes a link in the box rather than going straight out. Twitch's own GIF
+             * messages are made by a first-party mutation we cannot call, so what we can send is
+             * the media URL — and since that is a normal message, it deserves the normal chance
+             * to be read over before Enter.
+             */
+            onPickGif={(gif) => insertFromPicker(gif.url)}
             onClose={() => setPickerOpen(false)}
           />
         )}

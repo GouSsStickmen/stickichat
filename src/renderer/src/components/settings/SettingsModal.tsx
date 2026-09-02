@@ -1703,6 +1703,32 @@ function WindowsSection(): React.JSX.Element {
           onChange={(e) => set({ emotePreviewSize: parseInt(e.target.value, 10) || 112 })}
         />
       </div>
+      <div className="set-row">
+        <label>{t('set.giphyKey')}</label>
+        <input
+          type="text"
+          spellCheck={false}
+          placeholder={t('set.giphyKeyPlaceholder')}
+          style={{ flex: 1, minWidth: 0 }}
+          value={settings.giphyApiKey}
+          onChange={(e) => set({ giphyApiKey: e.target.value.trim() })}
+        />
+      </div>
+      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {t('hint.giphyKey')}
+      </p>
+      <div className="set-row">
+        <label>{t('set.giphyRating')}</label>
+        <select
+          value={settings.giphyRating}
+          onChange={(e) => set({ giphyRating: e.target.value as typeof settings.giphyRating })}
+        >
+          <option value="g">G</option>
+          <option value="pg">PG</option>
+          <option value="pg-13">PG-13</option>
+          <option value="r">R</option>
+        </select>
+      </div>
     </Framed>
   )
 }

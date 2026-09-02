@@ -3098,6 +3098,56 @@ input[type='number']::-webkit-inner-spin-button {
   text-align: center;
   padding: 18px 0;
 }
+/*
+ * The GIF tab. Two masonry columns rather than the emote grid: a GIF carries its own aspect ratio
+ * and squaring it off cuts the punchline out of the frame.
+ */
+.gif-grid {
+  column-count: 2;
+  column-gap: 6px;
+  padding: 2px;
+}
+.gif-cell {
+  display: block;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  /* a column item that breaks across columns loses half of itself */
+  break-inside: avoid;
+}
+.gif-cell img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 5px;
+}
+.gif-cell:hover {
+  border-color: var(--accent);
+}
+.gif-attribution {
+  color: var(--text-faint);
+  font-size: 11px;
+  text-align: center;
+  padding: 4px 0 6px;
+}
+.gif-nokey {
+  color: var(--text-faint);
+  padding: 14px;
+  line-height: 1.45;
+}
+.gif-nokey p {
+  margin: 0 0 12px;
+}
+.gif-nokey-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 /* kaomoji: wider text cells */
 .kaomoji-grid {
   display: grid;

@@ -12,6 +12,8 @@ import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
 import { StarIcon, LockIcon, PinIcon } from './Icons'
 import { useUiStore } from '../store/ui'
+import { trendingGifs, searchGifs, type GifItem } from '../lib/giphy'
+import GifTab from './GifTab'
 
 // One shared observer: an <img> gets its real src only when it approaches the viewport.
 // Native loading="lazy" still fired THOUSANDS of parallel requests for big 7TV channels
@@ -95,6 +97,11 @@ interface Props {
   channelId: string
   account: Account | undefined
   onPick: (emote: Emote | FavoriteEmote) => void
+  /**
+   * A GIF was chosen. Separate from onPick because a GIF is not an emote and never becomes one:
+   * it is a whole message, and the caller decides whether that means typing a link or sending it.
+   */
+  onPickGif?: (gif: GifItem) => void
   onClose: () => void
   /** rendered as a full standalone window instead of a popover anchored to an input */
   standalone?: boolean
@@ -102,7 +109,7 @@ interface Props {
   fixed?: boolean
 }
 
-type Tab = 'favorites' | 'twitch' | 'thirdparty' | 'emoji' | 'kaomoji'
+type Tab = 'favorites' | 'twitch' | 'thirdparty' | 'emoji' | 'kaomoji' | 'gif'
 
 /**
  * Text to type for a picked emote. A saved COMBINATION expands to the base emote followed by
@@ -192,6 +199,7 @@ export default function EmotePicker({
   channelId,
   account,
   onPick,
+  onPickGif,
   onClose,
   standalone,
   fixed
@@ -206,6 +214,10 @@ export default function EmotePicker({
   const ref = useRef<HTMLDivElement>(null)
   // re-render when newly measured wide emotes are flushed (see noteAspect)
   const [, bumpAspect] = useState(0)
+  const giphyKey = useSettingsStore((s) => s.settings.giphyApiKey)
+  const giphyRating = useSettingsStore((s) => s.settings.giphyRating)
+  const [gifs, setGifs] = useState<GifItem[]>([])
+  const [gifState, setGifState] = useState<'idle' | 'loading' | 'error'>('idle')
   useEffect(() => {
     const fn = (): void => bumpAspect((v) => v + 1)
     aspectSubs.add(fn)
@@ -213,6 +225,39 @@ export default function EmotePicker({
       aspectSubs.delete(fn)
     }
   }, [])
+
+  /*
+   * The GIF tab talks to GIPHY on every keystroke, so it waits for the typing to stop first.
+   * An empty box means "trending" rather than "no results": that is the state the keyboard opens
+   * in, and searching for nothing would just be an error.
+   */
+  useEffect(() => {
+    if (tab !== 'gif' || !giphyKey) return
+    const q = query.trim()
+    let cancelled = false
+    setGifState('loading')
+    const timer = window.setTimeout(
+      () => {
+        const load = q ? searchGifs(giphyKey, q, giphyRating) : trendingGifs(giphyKey, giphyRating)
+        load
+          .then((list) => {
+            if (cancelled) return
+            setGifs(list)
+            setGifState('idle')
+          })
+          .catch(() => {
+            if (cancelled) return
+            setGifs([])
+            setGifState('error')
+          })
+      },
+      q ? 300 : 0
+    )
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [tab, query, giphyKey, giphyRating])
 
   // sub/follower/global twitch emotes for the sending account, plus THIS channel's full
   // set (so its free/locked emotes show even without a sub)
@@ -514,7 +559,8 @@ ${lockHint}` : ''}`
             ['twitch', 'Twitch'],
             ['thirdparty', '7TV · BTTV · FFZ'],
             ['emoji', '🙂 Emoji'],
-            ['kaomoji', '(◕‿◕)']
+            ['kaomoji', '(◕‿◕)'],
+            ['gif', 'GIF']
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button key={key} className={`picker-tab-btn ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
@@ -528,13 +574,21 @@ ${lockHint}` : ''}`
         // in popup mode the message input keeps focus (Enter sends the message);
         // the standalone window has nothing else to focus, so search it is
         autoFocus={standalone}
-        placeholder={t('picker.search')}
+        placeholder={tab === 'gif' ? t('picker.gifSearch') : t('picker.search')}
         value={query}
         spellCheck={false}
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className={`picker-body ${!query.trim() && tab === 'twitch' ? 'picker-body-twitch' : ''}`}>
-        {query.trim() ? (
+        {tab === 'gif' ? (
+          <GifTab
+            gifs={gifs}
+            state={gifState}
+            hasKey={!!giphyKey}
+            onPickGif={onPickGif}
+            onClose={onClose}
+          />
+        ) : query.trim() ? (
           searchResults.length > 0 ? (
             <div className="picker-grid">{searchResults.map(cell)}</div>
           ) : (

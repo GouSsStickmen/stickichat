@@ -54,6 +54,11 @@ export default function EmotePickerWindow({
             JSON.stringify({ paneId: payload.paneId, text: `${emoteInsertText(emote)} ` } satisfies InsertEventDetail)
           )
         }}
+        onPickGif={(gif) => {
+          window.sticki.sendEmotePick(
+            JSON.stringify({ paneId: payload.paneId, text: `${gif.url} ` } satisfies InsertEventDetail)
+          )
+        }}
         /**
          * Escape closes the WINDOW, not the picker inside it.
          *
