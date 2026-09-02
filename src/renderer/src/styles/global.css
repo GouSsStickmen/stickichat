@@ -3430,6 +3430,27 @@ body.dragging-split .stream-webview {
 .poll-noscope p {
   margin: 0 0 10px;
 }
+.poll-payout {
+  margin: 6px 0 2px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--surface-3);
+}
+.poll-payout-head {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.poll-payout-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.poll-payout-num {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
 .poll-note {
   color: var(--text-faint);
   font-size: 11px;

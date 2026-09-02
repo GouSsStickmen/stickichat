@@ -267,8 +267,18 @@ export interface HelixPrediction {
   id: string
   title: string
   status: string
-  outcomes: { id: string; title: string; users: number; points: number; color: string }[]
+  outcomes: {
+    id: string
+    title: string
+    users: number
+    points: number
+    color: string
+    /** who bet the most on this outcome, and what it paid them; Twitch sends the top ten */
+    top: { name: string; used: number; won: number }[]
+  }[]
   locksAt: string
+  /** set once resolved, so the panel can say which side was paid */
+  winningOutcomeId?: string
 }
 
 export async function createPoll(
@@ -380,7 +390,20 @@ export async function getPredictions(
       title: string
       status: string
       locked_at?: string
-      outcomes?: { id: string; title: string; users?: number; channel_points?: number; color?: string }[]
+      winning_outcome_id?: string
+      outcomes?: {
+        id: string
+        title: string
+        users?: number
+        channel_points?: number
+        color?: string
+        top_predictors?: {
+          user_name?: string
+          user_login?: string
+          channel_points_used?: number
+          channel_points_won?: number
+        }[]
+      }[]
     }
     return {
       id: p.id,
@@ -391,9 +414,15 @@ export async function getPredictions(
         title: o.title,
         users: o.users ?? 0,
         points: o.channel_points ?? 0,
-        color: o.color ?? 'BLUE'
+        color: o.color ?? 'BLUE',
+        top: (o.top_predictors ?? []).map((t) => ({
+          name: t.user_name ?? t.user_login ?? '?',
+          used: t.channel_points_used ?? 0,
+          won: t.channel_points_won ?? 0
+        }))
       })),
-      locksAt: p.locked_at ?? ''
+      locksAt: p.locked_at ?? '',
+      winningOutcomeId: p.winning_outcome_id ?? undefined
     }
   })
 }

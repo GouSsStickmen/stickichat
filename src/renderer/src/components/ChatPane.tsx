@@ -22,11 +22,24 @@ import { EyeIcon, ClockIcon, GameIcon } from './Icons'
 
 function formatUptime(startedAt: string): string {
   const ms = Date.now() - new Date(startedAt).getTime()
-  if (ms <= 0) return '0:00'
-  const totalMin = Math.floor(ms / 60000)
-  const h = Math.floor(totalMin / 60)
-  const m = totalMin % 60
-  return `${h}:${String(m).padStart(2, '0')}`
+  if (ms <= 0) return '0:00:00'
+  const total = Math.floor(ms / 1000)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const sec = total % 60
+  return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+/** when it started, in the reader's own clock, for the tooltip on the counter */
+function startedAtLabel(startedAt: string): string {
+  const d = new Date(startedAt)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('uk-UA', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit'
+  })
 }
 
 export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane }): React.JSX.Element {
@@ -53,11 +66,11 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
     return () => ro.disconnect()
   }, [])
 
-  // re-render every minute so the uptime counter ticks
+  // once a second, because the counter shows seconds now
   const [, forceTick] = useState(0)
   useEffect(() => {
     if (!streamInfo) return
-    const id = window.setInterval(() => forceTick((v) => v + 1), 60000)
+    const id = window.setInterval(() => forceTick((v) => v + 1), 1000)
     return () => window.clearInterval(id)
   }, [streamInfo])
   const accounts = useAccountsStore((s) => s.accounts)
@@ -288,7 +301,10 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         {showStreamInfo && streamInfo && (
           <span className="stream-info" title={streamInfo.title}>
             <span className="si-icon"><EyeIcon size={13} /></span> {streamInfo.viewers.toLocaleString('uk-UA')} ·{' '}
-            <span className="si-icon"><ClockIcon size={13} /></span> {formatUptime(streamInfo.startedAt)}
+            <span className="si-icon"><ClockIcon size={13} /></span>{' '}
+            <span title={t('pane.startedAt', { at: startedAtLabel(streamInfo.startedAt) })}>
+              {formatUptime(streamInfo.startedAt)}
+            </span>
             {streamInfo.title ? ` · ${streamInfo.title}` : ''}
           </span>
         )}

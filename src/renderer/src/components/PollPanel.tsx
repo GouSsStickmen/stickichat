@@ -66,13 +66,31 @@ export default function PollPanel({ account, broadcasterId }: Props): React.JSX.
       getPredictions(account, broadcasterId)
     ])
     setPoll(polls.find((p) => p.status === 'ACTIVE') ?? null)
-    setPred(preds.find((p) => p.status === 'ACTIVE' || p.status === 'LOCKED') ?? null)
+    // the newest one whatever its state: a finished prediction still has a result worth reading,
+    // and it is the only place Twitch says who was paid what
+    setPred(preds[0] ?? null)
   }
 
   useEffect(() => {
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [broadcasterId])
+
+  /*
+   * While something is open, the numbers move, so ask again every few seconds.
+   *
+   * Polling rather than EventSub: these are two Helix reads on a limit of 800 points a minute,
+   * they only run while a poll or a prediction is actually live, and a subscription would have to
+   * be set up, torn down and counted against the per-account cap the app is already careful with.
+   */
+  const live =
+    poll?.status === 'ACTIVE' || pred?.status === 'ACTIVE' || pred?.status === 'LOCKED'
+  useEffect(() => {
+    if (!live) return
+    const id = window.setInterval(() => void refresh(), 4000)
+    return () => window.clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, broadcasterId])
 
   const run = async (
     fn: () => Promise<{ ok: boolean; status: number; json: unknown; text: string }>
@@ -172,7 +190,7 @@ export default function PollPanel({ account, broadcasterId }: Props): React.JSX.
                     style={{ width: `${total ? (c.votes / total) * 100 : 0}%` }}
                   />
                   <span className="poll-bar-label">
-                    {c.title}: {c.votes}
+                    {c.title}: {c.votes} ({total ? Math.round((c.votes / total) * 100) : 0}%)
                   </span>
                 </div>
               ))
@@ -183,10 +201,46 @@ export default function PollPanel({ account, broadcasterId }: Props): React.JSX.
                     style={{ width: `${total ? (o.users / total) * 100 : 0}%` }}
                   />
                   <span className="poll-bar-label">
-                    {o.title}: {o.users} ({o.points})
+                    {o.title}: {t('poll.people', { n: o.users })}, {t('poll.points', { n: o.points })}
+                    {total ? ` (${Math.round((o.users / total) * 100)}%)` : ''}
                   </span>
                 </div>
               ))}
+          {/*
+            The result, which is the part nobody can see anywhere else once the prediction closes:
+            which side was paid, and what the biggest bets on it came back as. Twitch sends the top
+            ten predictors per outcome; the panel shows the first few, largest win first.
+          */}
+          {kind === 'prediction' && pred!.status === 'RESOLVED' && (
+            <div className="poll-payout">
+              {(() => {
+                const won = pred!.outcomes.find((o) => o.id === pred!.winningOutcomeId)
+                if (!won) return <div className="poll-note">{t('poll.resolvedNoOutcome')}</div>
+                const paid = won.top.reduce((n, x) => n + x.won, 0)
+                return (
+                  <>
+                    <div className="poll-payout-head">
+                      {t('poll.paidOut', { outcome: won.title, points: paid })}
+                    </div>
+                    {[...won.top]
+                      .sort((a2, b2) => b2.won - a2.won)
+                      .slice(0, 5)
+                      .map((x) => (
+                        <div key={x.name} className="poll-payout-row">
+                          <span>{x.name}</span>
+                          <span className="poll-payout-num">
+                            +{x.won} ({t('poll.staked', { n: x.used })})
+                          </span>
+                        </div>
+                      ))}
+                    {won.top.length === 0 && (
+                      <div className="poll-note">{t('poll.noPredictors')}</div>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+          )}
           <div className="poll-actions">
             {kind === 'poll' ? (
               <>
