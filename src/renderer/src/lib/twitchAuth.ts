@@ -39,7 +39,9 @@ export const TWITCH_SCOPES = [
   // they arrive over PubSub — so anyone authorized before this has to sign in again before the
   // buttons work, and Twitch says so plainly in the 401.
   'channel:manage:polls',
-  'channel:manage:predictions'
+  'channel:manage:predictions',
+  // seeing what AutoMod is holding, and letting it through or not
+  'moderator:manage:automod'
 ].join(' ')
 
 export interface DeviceCodeInfo {

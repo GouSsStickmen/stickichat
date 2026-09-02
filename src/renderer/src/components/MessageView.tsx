@@ -10,9 +10,9 @@ import { openUserCard as openCard } from '../lib/openUserCard'
 import { useSettingsStore, favKey } from '../store/settings'
 import { isDarkTheme } from '../lib/themes'
 import { useUiStore } from '../store/ui'
-import { SevenTvMark } from './Icons'
+import { SevenTvMark, ShieldIcon } from './Icons'
 import { runModButton } from '../services/modActions'
-import { banUser, deleteChatMessage } from '../lib/helix'
+import { banUser, deleteChatMessage, manageAutoModMessage, describeHelixError } from '../lib/helix'
 import BtnIcon from './BtnIcon'
 import EmojiGlyph from './EmojiGlyph'
 import { ReplyTarget, InsertEventDetail } from './InputBox'
@@ -1107,6 +1107,62 @@ function MessageViewInner({
       new CustomEvent<JumpEventDetail>('sticki:jump', {
         detail: { channel: msg.channel, msgId: msg.replyParent.msgId }
       })
+    )
+  }
+
+  /*
+   * A message AutoMod is holding.
+   *
+   * It is not in chat and never was, so nothing else in the buffer refers to it and there is
+   * nothing to strike through or delete: the row IS the decision. Allow and deny go straight to
+   * Twitch, and the row keeps its place afterwards saying what was chosen, because a moderator
+   * scrolling back wants to see that it was handled rather than find a gap.
+   */
+  if (msg.automod) {
+    const held = msg.automod
+    const decide = async (action: 'ALLOW' | 'DENY'): Promise<void> => {
+      const acc = useAccountsStore.getState().accounts.find((a) => a.id === held.accountId)
+      if (!acc) return
+      const res = await manageAutoModMessage(acc, held.msgId, action)
+      if (!res.ok) {
+        useUiStore.getState().toast(describeHelixError(res), 'error')
+        return
+      }
+      // the update event confirms it too, but not always instantly, and the click must feel done
+      useChatStore
+        .getState()
+        .patchAutoMod(msg.channel, msg.id, action === 'ALLOW' ? 'allowed' : 'denied')
+    }
+    return (
+      <div className={`msg automod-row ${held.resolved ? 'settled' : ''}`}>
+        <div className="automod-head">
+          <ShieldIcon size={13} /> {t('automod.held', { reason: held.reason })}
+        </div>
+        <div className="automod-body">
+          <span className="nick" style={{ color: msg.color }}>
+            {msg.displayName}
+          </span>
+          : {msg.text}
+        </div>
+        {held.resolved ? (
+          <div className="automod-done">
+            {held.resolved === 'allowed'
+              ? t('automod.allowed')
+              : held.resolved === 'denied'
+                ? t('automod.denied')
+                : t('automod.expired')}
+          </div>
+        ) : (
+          <div className="automod-actions">
+            <button className="primary" onClick={() => void decide('ALLOW')}>
+              {t('automod.allow')}
+            </button>
+            <button className="danger" onClick={() => void decide('DENY')}>
+              {t('automod.deny')}
+            </button>
+          </div>
+        )}
+      </div>
     )
   }
 

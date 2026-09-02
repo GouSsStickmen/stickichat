@@ -427,6 +427,24 @@ export async function getPredictions(
   })
 }
 
+/**
+ * Allow or deny a message AutoMod is holding.
+ *
+ * The documented endpoint, with the moderator's own id: Twitch decides from that whether this
+ * account may act in that channel, so nothing here needs to know about roles.
+ */
+export async function manageAutoModMessage(
+  account: Account,
+  msgId: string,
+  action: 'ALLOW' | 'DENY'
+): Promise<HttpResponse> {
+  return helixRequest(account, 'POST', '/moderation/automod/message', {}, {
+    user_id: account.id,
+    msg_id: msgId,
+    action
+  })
+}
+
 export interface ChatSettingsPatch {
   slow_mode?: boolean
   slow_mode_wait_time?: number

@@ -62,6 +62,20 @@ export interface ChatMessage {
   isAction: boolean
   isFirstMsg: boolean
   replyParent?: ReplyParent
+  /**
+   * A message AutoMod is holding, waiting for a moderator to allow or deny it.
+   *
+   * It never reached chat, so it has no IRC id and nothing else in the buffer refers to it. The
+   * row carries everything the decision needs: which message to act on, which moderator account
+   * may act, and what AutoMod objected to. `resolved` is set once anyone anywhere handles it, so
+   * the row stops offering buttons that would now fail.
+   */
+  automod?: {
+    msgId: string
+    reason: string
+    accountId: string
+    resolved?: 'allowed' | 'denied' | 'expired'
+  }
   /** system messages: sub notices, raids, timeouts, connection info */
   system?: 'notice' | 'usernotice' | 'info'
   systemText?: string
@@ -2111,6 +2125,15 @@ export interface Settings {
    * heavier but IS the site: channel points accrue, watch streaks count, redemptions work, because
    * none of that comes from the video, it comes from the page being open.
    */
+  /**
+   * Show what AutoMod is holding, with allow and deny, in channels you moderate.
+   *
+   * Its own switch because it is another EventSub topic per channel, and Twitch caps those per
+   * account: someone with thirty channels open has a budget to spend deliberately.
+   */
+  automodQueue: boolean
+  /** tallest a GIF may be on the stream overlay, px: originals can be enormous */
+  overlayGifSize: number
   playerMode: 'embed' | 'site'
   /** site mode: hide Twitch's own chat and menus, since this app already is the chat */
   playerHideSiteChrome: boolean
@@ -2348,6 +2371,8 @@ export const DEFAULT_SETTINGS: Settings = {
   swipeModEnabled: true,
   swipeModMode: 'swipe',
   playerHeight: 220,
+  automodQueue: true,
+  overlayGifSize: 120,
   playerMode: 'embed',
   playerHideSiteChrome: true,
   playerSideBySide: false,

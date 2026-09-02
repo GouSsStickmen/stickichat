@@ -4,6 +4,7 @@ import { chatService } from './services/chatService'
 import { useSettingsStore } from './store/settings'
 import { useAccountsStore } from './store/accounts'
 import { useLayoutStore, nextId, allOpenChannels } from './store/layout'
+import { useChatStore } from './store/chat'
 import { useUiStore } from './store/ui'
 import { DEFAULT_CLIENT_ID } from './config/defaultClientId'
 import Onboarding from './components/Onboarding'
@@ -194,6 +195,38 @@ export default function App(): React.JSX.Element | null {
   useEffect(() => {
     if (location.protocol !== 'http:' || window.location.hash) return
     const onKey = (e: KeyboardEvent): void => {
+      /*
+       * DEV ONLY — a fake AutoMod hold, Ctrl+Alt+Shift+A.
+       *
+       * The held-message row cannot be seen any other way without waiting for AutoMod to actually
+       * catch somebody in a channel you moderate, which is not something that can be arranged on
+       * demand. This puts one in the active channel, through the same store and list as a real
+       * one; the buttons will fail against Twitch, which is the point at which it stops pretending.
+       */
+      if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyA') {
+        e.preventDefault()
+        const st = useLayoutStore.getState()
+        const channel = st.tabs.find((t) => t.id === st.activeTabId)?.panes[0]?.channel
+        const acc = useAccountsStore.getState().accounts[0]
+        if (!channel || !acc) return
+        useChatStore.getState().appendMessages(channel, [
+          {
+            id: `automod-dev-${Date.now()}`,
+            channel,
+            channelId: useChatStore.getState().channelIds[channel] ?? '',
+            userId: '0',
+            login: 'automod_probe',
+            displayName: 'automod_probe',
+            badges: [],
+            text: 'тестове повідомлення, затримане автомодом',
+            timestamp: Date.now(),
+            isAction: false,
+            isFirstMsg: false,
+            automod: { msgId: 'dev', reason: 'swearing', accountId: acc.id }
+          }
+        ])
+        return
+      }
       if (!(e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyF')) return
       e.preventDefault()
       const st = useLayoutStore.getState()

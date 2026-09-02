@@ -335,3 +335,12 @@ export function GlobeIcon({ size }: { size?: number }): React.JSX.Element {
     </Glyph>
   )
 }
+
+/** a shield: AutoMod, holding something back */
+export function ShieldIcon({ size }: { size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <path d="M12 3.5 L19.5 6.5 V12 C19.5 16.2 16.4 19.4 12 20.5 C7.6 19.4 4.5 16.2 4.5 12 V6.5 Z" />
+    </Glyph>
+  )
+}

@@ -78,6 +78,16 @@ function bodyHtml(msg: ChatMessage): { html: string; emotes: string[] } {
               esc(translate(useSettingsStore.getState().settings.language, 'misc.linkShort'))
             : esc(tk.label)
         break
+      case 'gif': {
+        /*
+         * The overlay simply had no case for a GIF, so a message that was nothing but one arrived
+         * on stream as an empty line. Capped in height from settings, because a GIPHY original can
+         * be five hundred pixels tall and would push everything else off the overlay.
+         */
+        const cap = useSettingsStore.getState().settings.overlayGifSize
+        out += `<img class="chat-gif" style="max-height:${cap}px" src="${esc(tk.url)}" alt="${esc(tk.label)}">`
+        break
+      }
       case 'mention':
         out += `<b>${esc(tk.name)}</b>`
         break

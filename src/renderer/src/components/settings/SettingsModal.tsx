@@ -2110,6 +2110,20 @@ function SwipeTiersEditor(): React.JSX.Element {
   )
 }
 
+/** the AutoMod queue switch, kept apart so the moderation section keeps its own shape */
+function AutoModToggle(): React.JSX.Element {
+  const t = useT()
+  const on = useSettingsStore((s) => s.settings.automodQueue)
+  return (
+    <Toggle
+      label={t('set.automodQueue')}
+      hint={t('hint.automodQueue')}
+      value={on}
+      onChange={(v) => useSettingsStore.getState().setSettings({ automodQueue: v })}
+    />
+  )
+}
+
 function ModerationSection(): React.JSX.Element {
   const t = useT()
   const swipeModEnabled = useSettingsStore((s) => s.settings.swipeModEnabled)
@@ -2779,6 +2793,7 @@ function HotkeysSection(): React.JSX.Element {
   ]
   return (
     <Framed>
+      <AutoModToggle />
       <div className="set-group-title">{t('hk.editable')}</div>
       <p className="hint" style={{ color: 'var(--text-faint)', margin: '0 0 6px' }}>
         {t('hk.hint')}

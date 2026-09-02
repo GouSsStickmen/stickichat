@@ -56,6 +56,8 @@ interface ChatState {
   /** retroactively collapse recent subgift lines under a mass-gift header */
   groupGifts: (channel: string, gifter: string, headerId: string, sinceTs: number) => void
   markUserMessagesDeleted: (channel: string, userId: string) => void
+  /** an AutoMod hold was answered, here or anywhere else: stop offering the buttons */
+  patchAutoMod: (channel: string, messageId: string, resolved: 'allowed' | 'denied' | 'expired') => void
   clearChannel: (channel: string) => void
   dropChannel: (channel: string) => void
   setChannelId: (channel: string, id: string) => void
@@ -280,6 +282,19 @@ export const useChatStore = create<ChatState>()((set) => ({
         messages: {
           ...s.messages,
           [channel]: cur.map((m) => (m.id === messageId ? { ...m, deleted: true } : m))
+        }
+      }
+    }),
+  patchAutoMod: (channel, messageId, resolved) =>
+    set((s) => {
+      const cur = s.messages[channel]
+      if (!cur) return s
+      return {
+        messages: {
+          ...s.messages,
+          [channel]: cur.map((m) =>
+            m.id === messageId && m.automod ? { ...m, automod: { ...m.automod, resolved } } : m
+          )
         }
       }
     }),

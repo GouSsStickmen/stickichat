@@ -573,10 +573,24 @@ select:focus {
   flex-wrap: wrap;
   flex-shrink: 0;
 }
-.mod-toolbar button {
+/*
+ * The toolbar's own button look, but NOT for the coloured ones.
+ *
+ * `.mod-toolbar button` and `button.primary` weigh exactly the same, and this one comes later, so
+ * it was quietly stripping the accent off every primary and danger button inside the toolbar and
+ * its popovers while they kept `color: var(--accent-text)`. In themes whose accent-text is white
+ * that merely looked flat; in the ones that set it dark on purpose, Gruvbox, Nord and Rosé, it
+ * came out as near-black on dark grey: measured at 1.41:1, which is not dim, it is invisible.
+ */
+.mod-toolbar button:not(.primary):not(.danger) {
   font-size: var(--fs-md);
   padding: 3px 9px;
   background: var(--surface-3);
+}
+.mod-toolbar button.primary,
+.mod-toolbar button.danger {
+  font-size: var(--fs-md);
+  padding: 3px 9px;
 }
 /* which restrictions the chat has on — only drawn when there ARE any */
 .room-modes {
@@ -3201,6 +3215,38 @@ input[type='number']::-webkit-inner-spin-button {
   border: 0;
 }
 /* side by side: the player takes what the chat column leaves */
+/* AutoMod's queue, inline in the chat it belongs to */
+.automod-row {
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  padding: 6px 10px;
+}
+.automod-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.automod-body {
+  line-height: 1.4;
+}
+.automod-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.automod-done {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.automod-row.settled {
+  opacity: 0.75;
+  border-left-color: var(--border);
+  background: none;
+}
 /* a tab whose player is still going while you read somewhere else */
 .tab-playing {
   display: inline-flex;
@@ -6299,7 +6345,8 @@ button:has(> svg) {
   height: 22px;
   width: auto;
 }
-.emote-folder-menu button {
+/* same trap: the "remove from favourites" entry is a .danger and must keep its colour */
+.emote-folder-menu button:not(.danger) {
   display: flex;
   align-items: center;
   gap: 6px;

@@ -52,6 +52,7 @@ export default function GifTab({ gifs, state, hasKey, onPickGif, onMore }: Props
           <li>{t('picker.gifStep3')}</li>
           <li>{t('picker.gifStep4')}</li>
           <li>{t('picker.gifStep5')}</li>
+          <li>{t('picker.gifStep6')}</li>
         </ol>
         <div className="gif-nokey-actions">
           <input

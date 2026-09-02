@@ -736,6 +736,31 @@ class ChatService {
           key: `mod:${cid}`,
           channelLogin: ch
         })
+        /*
+         * What AutoMod is holding, and the answer to it.
+         *
+         * Two topics rather than one: `hold` is the message arriving, `update` is anyone anywhere
+         * deciding about it, including the streamer on the Twitch site or another moderator.
+         * Without the second, a row would keep offering buttons for something already handled.
+         */
+        if (useSettingsStore.getState().settings.automodQueue) {
+          out.push({
+            account: modAccount,
+            type: 'automod.message.hold',
+            version: '2',
+            condition: { broadcaster_user_id: cid, moderator_user_id: modAccount.id },
+            key: `amh:${cid}`,
+            channelLogin: ch
+          })
+          out.push({
+            account: modAccount,
+            type: 'automod.message.update',
+            version: '2',
+            condition: { broadcaster_user_id: cid, moderator_user_id: modAccount.id },
+            key: `amu:${cid}`,
+            channelLogin: ch
+          })
+        }
         // shoutouts GIVEN in this channel — surface who was shouted out + offer to open them
         if (watched) out.push({
           account: modAccount,
@@ -839,7 +864,65 @@ class ChatService {
       this.handleShoutout(event)
     } else if (type === 'channel.follow') {
       this.handleFollow(event)
+    } else if (type === 'automod.message.hold') {
+      this.handleAutoModHold(event)
+    } else if (type === 'automod.message.update') {
+      this.handleAutoModUpdate(event)
     }
+  }
+
+  /**
+   * A message AutoMod is holding.
+   *
+   * It never reached IRC, so this is the only place it exists at all: without the row, a moderator
+   * watching through this app simply would not know somebody had been stopped. Rendered like any
+   * other message so the nick, badges and colour work, with the decision attached to it.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private handleAutoModHold(event: Record<string, any>): void {
+    if (window.location.hash) return // one window announces, like every other event feed
+    const channel = String(event.broadcaster_user_login ?? '').toLowerCase()
+    const msgId = String(event.message_id ?? '')
+    if (!channel || !msgId) return
+    const modId = String(event.moderator_user_id ?? '')
+    const account =
+      useAccountsStore.getState().accounts.find((a) => a.id === modId) ??
+      useAccountsStore.getState().accounts.find((a) => a._accessToken)
+    if (!account) return
+    // "why" comes in two shapes: an AutoMod category, or a term the channel blocked itself
+    const reason =
+      event.reason === 'blocked_term'
+        ? String(event.blocked_term?.terms_found?.[0]?.term_text ?? 'blocked term')
+        : String(event.automod?.category ?? 'automod')
+    useChatStore.getState().appendMessages(channel, [
+      {
+        id: `automod-${msgId}`,
+        channel,
+        channelId: String(event.broadcaster_user_id ?? ''),
+        userId: String(event.user_id ?? ''),
+        login: String(event.user_login ?? '').toLowerCase(),
+        displayName: String(event.user_name ?? event.user_login ?? '?'),
+        badges: [],
+        text: String(event.message?.text ?? ''),
+        timestamp: Date.now(),
+        isAction: false,
+        isFirstMsg: false,
+        automod: { msgId, reason, accountId: account.id }
+      }
+    ])
+  }
+
+  /** somebody decided, here or on Twitch: the row stops offering buttons that would now fail */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private handleAutoModUpdate(event: Record<string, any>): void {
+    if (window.location.hash) return
+    const channel = String(event.broadcaster_user_login ?? '').toLowerCase()
+    const msgId = String(event.message_id ?? '')
+    if (!channel || !msgId) return
+    const status = String(event.status ?? '').toLowerCase()
+    const resolved =
+      status === 'approved' ? 'allowed' : status === 'denied' ? 'denied' : 'expired'
+    useChatStore.getState().patchAutoMod(channel, `automod-${msgId}`, resolved)
   }
 
   /**
