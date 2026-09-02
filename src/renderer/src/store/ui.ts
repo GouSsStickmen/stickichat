@@ -161,6 +161,9 @@ interface UiState {
    */
   emoteFolderMenu: EmoteFolderMenu | null
   setEmoteFolderMenu: (v: EmoteFolderMenu | null) => void
+  /** the "do you really want native GIF sending" wall is up */
+  gifConsentOpen: boolean
+  setGifConsentOpen: (v: boolean) => void
   setHypeTrain: (v: HypeTrain | null) => void
   dismissHypeTrain: () => void
   allowHypeTrain: () => void
@@ -228,6 +231,8 @@ export const useUiStore = create<UiState>()((set) => ({
   setHeldMsgId: (heldMsgId) => set({ heldMsgId }),
   emoteFolderMenu: null,
   setEmoteFolderMenu: (emoteFolderMenu) => set({ emoteFolderMenu }),
+  gifConsentOpen: false,
+  setGifConsentOpen: (gifConsentOpen) => set({ gifConsentOpen }),
   setHypeTrain: (hypeTrain) => set((s) => (hypeTrain && s.hypeDismissed === hypeTrain.channel ? s : { hypeTrain })),
   dismissHypeTrain: () =>
     set((s) => ({ hypeTrain: null, hypeDismissed: s.hypeTrain?.channel ?? s.hypeDismissed })),

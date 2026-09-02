@@ -14,6 +14,7 @@ import { swapLayout } from '../lib/translit'
 import { TranslitIcon } from './Icons'
 import { hotkeyFor, matchHotkey } from '../lib/hotkeys'
 import EmotePicker, { emoteInsertText } from './EmotePicker'
+import { pickGif } from '../lib/gifPick'
 import EmojiGlyph from './EmojiGlyph'
 import { useT } from '../i18n'
 import { isMobile } from '../lib/platform'
@@ -617,7 +618,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
              * the media URL — and since that is a normal message, it deserves the normal chance
              * to be read over before Enter.
              */
-            onPickGif={(gif) => insertFromPicker(gif.url)}
+            onPickGif={(gif) => void pickGif(gif, channelId, insertFromPicker)}
             onClose={() => setPickerOpen(false)}
           />
         )}

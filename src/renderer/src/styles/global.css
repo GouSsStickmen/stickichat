@@ -3134,6 +3134,35 @@ input[type='number']::-webkit-inner-spin-button {
 .gif-cell:hover {
   border-color: var(--accent);
 }
+/* the consent wall: readable rather than pretty, because it is meant to be read */
+.gif-consent .modal-body {
+  line-height: 1.5;
+}
+.gif-consent-lead {
+  margin: 0 0 10px;
+}
+.gif-consent-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+.gif-consent-list li {
+  margin-bottom: 6px;
+}
+.gif-consent-note {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+.gif-consent-agree {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.gif-consent-agree input {
+  margin-top: 3px;
+}
 .gif-more {
   display: block;
   width: calc(100% - 4px);

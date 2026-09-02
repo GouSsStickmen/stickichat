@@ -9,6 +9,7 @@ import {
   loadTwitchChannelEmotes
 } from '../services/emoteService'
 import EmotePicker, { emoteInsertText } from './EmotePicker'
+import { pickGif } from '../lib/gifPick'
 import Toasts from './Toasts'
 import type { EmotePickerWindowPayload } from '../App'
 import type { InsertEventDetail } from './InputBox'
@@ -54,11 +55,13 @@ export default function EmotePickerWindow({
             JSON.stringify({ paneId: payload.paneId, text: `${emoteInsertText(emote)} ` } satisfies InsertEventDetail)
           )
         }}
-        onPickGif={(gif) => {
-          window.sticki.sendEmotePick(
-            JSON.stringify({ paneId: payload.paneId, text: `${gif.url} ` } satisfies InsertEventDetail)
-          )
-        }}
+        onPickGif={(gif) =>
+          void pickGif(gif, payload.channelId, (text) => {
+            window.sticki.sendEmotePick(
+              JSON.stringify({ paneId: payload.paneId, text: `${text} ` } satisfies InsertEventDetail)
+            )
+          })
+        }
         /**
          * Escape closes the WINDOW, not the picker inside it.
          *

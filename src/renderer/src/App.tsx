@@ -17,6 +17,7 @@ import UpdateBanner from './components/UpdateBanner'
 import EmoteHoverPreview from './components/EmoteHoverPreview'
 import LinkCard from './components/LinkCard'
 import EmoteFolderMenu from './components/EmoteFolderMenu'
+import GifNativeConsent from './components/GifNativeConsent'
 import EmotePickerWindow from './components/EmotePickerWindow'
 import UserCardWindow from './components/UserCardWindow'
 import WhispersWindow from './components/WhispersWindow'
@@ -103,6 +104,7 @@ export default function App(): React.JSX.Element | null {
   const settings = useSettingsStore((s) => s.settings)
   const settingsOpen = useUiStore((s) => s.settingsOpen)
   const addAccountOpen = useUiStore((s) => s.addAccountOpen)
+  const gifConsentOpen = useUiStore((s) => s.gifConsentOpen)
   const userCard = useUiStore((s) => s.userCard)
   const special = useMemo(parseHash, [])
   const detached = special?.kind === 'detached' ? special.data : null
@@ -527,6 +529,8 @@ export default function App(): React.JSX.Element | null {
         <EmotePickerWindow payload={special.data} />
         {/* its own window, its own tree: the menu mounted in the main one does not exist here */}
         <EmoteFolderMenu />
+      {gifConsentOpen && <GifNativeConsent onClose={() => useUiStore.getState().setGifConsentOpen(false)} />}
+        {gifConsentOpen && <GifNativeConsent onClose={() => useUiStore.getState().setGifConsentOpen(false)} />}
         <Toasts />
       </>
     )
@@ -604,6 +608,7 @@ export default function App(): React.JSX.Element | null {
       <EmoteHoverPreview />
       <LinkCard />
       <EmoteFolderMenu />
+      {gifConsentOpen && <GifNativeConsent onClose={() => useUiStore.getState().setGifConsentOpen(false)} />}
       <ChannelPrompt />
       <HypeTrainPopup />
       <Toasts />
