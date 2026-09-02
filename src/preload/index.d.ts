@@ -17,6 +17,14 @@ export interface StickiApi {
   openStreamWindow(hash: string, lockAspect?: boolean): Promise<void>
   /** port of the local one-page server that hosts the Twitch embed SDK (starts on first ask) */
   playerPort(): Promise<number>
+  /** load unpacked Chrome extensions into the player's session; says which ones actually took */
+  extLoad(paths: string[]): Promise<{
+    loaded: { name: string; version: string; path: string }[]
+    failed: { path: string; error: string }[]
+  }>
+  /** folder picker for an unpacked extension */
+  extPick(): Promise<string | null>
+  extRemove(path: string): Promise<void>
   /** open twitch.tv/login in the PLAYER's cookie jar; nothing is read back out of it */
   twitchSignIn(): Promise<void>
   /** clear that jar */

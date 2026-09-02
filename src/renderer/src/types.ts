@@ -2140,6 +2140,13 @@ export interface Settings {
    * account: someone with thirty channels open has a budget to spend deliberately.
    */
   automodQueue: boolean
+  /**
+   * Folders holding unpacked Chrome extensions to run inside the player.
+   *
+   * Paths rather than anything installable: Electron has no Web Store and cannot open a .crx, so
+   * an extension has to already be a folder on disk with its manifest in it.
+   */
+  playerExtensions: string[]
   playerMode: 'embed' | 'site'
   /** site mode: hide Twitch's own chat and menus, since this app already is the chat */
   playerHideSiteChrome: boolean
@@ -2378,6 +2385,7 @@ export const DEFAULT_SETTINGS: Settings = {
   swipeModMode: 'swipe',
   playerHeight: 220,
   automodQueue: true,
+  playerExtensions: [],
   playerMode: 'embed',
   playerHideSiteChrome: true,
   playerSideBySide: false,

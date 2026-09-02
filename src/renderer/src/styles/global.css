@@ -3215,6 +3215,45 @@ input[type='number']::-webkit-inner-spin-button {
   border: 0;
 }
 /* side by side: the player takes what the chat column leaves */
+.ext-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+.ext-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-3);
+}
+.ext-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ext-name {
+  font-weight: 700;
+}
+.ext-state {
+  font-size: 12px;
+}
+.ext-state.ok {
+  color: var(--success, #7ddc7d);
+}
+.ext-state.bad {
+  color: var(--danger);
+}
+.ext-path {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* the list of followed channels, hanging off the top bar like the whispers panel */
 .follows-panel {
   position: absolute;

@@ -1,5 +1,6 @@
 import {
   ipcMain,
+  dialog,
   safeStorage,
   shell,
   app,
@@ -139,6 +140,50 @@ export function registerIpc(): void {
   /** forget that login: clears the player's own jar and nothing else */
   ipcMain.handle('app:twitchSignOut', async () => {
     await session.fromPartition(PLAYER_PARTITION).clearStorageData()
+  })
+
+  /*
+   * Chrome extensions for the player's own session.
+   *
+   * Electron loads UNPACKED extensions only: there is no .crx installer and no Web Store, so a
+   * folder is what this takes. Support is a subset of the Chrome APIs, so an extension either
+   * works or quietly does nothing, and the honest thing is to say which ones actually loaded.
+   * They go into the player's partition, which is the only place a Twitch page runs.
+   */
+  ipcMain.handle('ext:load', async (_e, paths: string[]) => {
+    const part = session.fromPartition(PLAYER_PARTITION)
+    const loaded: { name: string; version: string; path: string }[] = []
+    const failed: { path: string; error: string }[] = []
+    const already = new Set(part.getAllExtensions().map((x) => x.path))
+    for (const p of paths) {
+      if (already.has(p)) {
+        const x = part.getAllExtensions().find((e2) => e2.path === p)
+        if (x) loaded.push({ name: x.name, version: x.version, path: p })
+        continue
+      }
+      try {
+        const ext = await part.loadExtension(p, { allowFileAccess: true })
+        loaded.push({ name: ext.name, version: ext.version, path: p })
+      } catch (err) {
+        failed.push({ path: p, error: String((err as Error)?.message ?? err).slice(0, 200) })
+      }
+    }
+    return { loaded, failed }
+  })
+
+  /** pick a folder that holds an unpacked extension (the one with manifest.json in it) */
+  ipcMain.handle('ext:pick', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const res = win
+      ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+      : await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return res.canceled ? null : res.filePaths[0]
+  })
+
+  ipcMain.handle('ext:remove', (_e, path: string) => {
+    const part = session.fromPartition(PLAYER_PARTITION)
+    const ext = part.getAllExtensions().find((x) => x.path === path)
+    if (ext) part.removeExtension(ext.id)
   })
 
   ipcMain.handle('player:port', () => playerServerPort())

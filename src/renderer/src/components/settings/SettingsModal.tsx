@@ -1,5 +1,6 @@
 import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../../store/settings'
+import ExtensionsSetting from './ExtensionsSetting'
 import { useAccountsStore } from '../../store/accounts'
 import { useUiStore } from '../../store/ui'
 import { useT, TranslationKey } from '../../i18n'
@@ -1724,6 +1725,7 @@ function WindowsSection(): React.JSX.Element {
           />
         </div>
       )}
+      <ExtensionsSetting />
       <div className="set-row">
         <label>{t('set.giphyKey')}</label>
         <input

@@ -53,6 +53,45 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
     void window.sticki.playerPort().then(setPort)
   }, [])
 
+  /*
+   * Latency on the full Twitch page, read off their own stats panel.
+   *
+   * The page gives it up nowhere else: no React tree on the video, no player object on window,
+   * and seekable.end is the 2^30 sentinel rather than a time. Their "Статистика відео" panel does
+   * print it, so this reads that, matched on the label's text rather than on a class name, since
+   * the class names are generated afresh every build. It needs the panel switched on once in the
+   * player settings; without it there is simply no number, which is the state this shipped in.
+   */
+  useEffect(() => {
+    if (mode !== 'site') return
+    const wv = wvRef.current
+    if (!wv) return
+    const read = `(() => {
+      const label = [...document.querySelectorAll('*')].find(
+        (e) => e.children.length === 0 && /Затримка до стрімера|Latency To Broadcaster/i.test(e.textContent || '')
+      )
+      if (!label) return null
+      const row = label.closest('tr') || label.parentElement
+      const text = (row && row.textContent) || ''
+      const m = text.match(/([0-9]+[.,][0-9]+|[0-9]+)\s*(сек|s\b)/i)
+      return m ? parseFloat(m[1].replace(',', '.')) : null
+    })()`
+    const tick = (): void => {
+      wv.executeJavaScript(read)
+        .then((raw) => {
+          const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : null
+          useUiStore.getState().setStreamLatency(channel, n)
+        })
+        .catch(() => useUiStore.getState().setStreamLatency(channel, null))
+    }
+    tick()
+    const id = window.setInterval(tick, 3000)
+    return () => {
+      window.clearInterval(id)
+      useUiStore.getState().setStreamLatency(channel, null)
+    }
+  }, [mode, channel])
+
   useEffect(() => {
     if (mode !== 'embed' || !port) return
     const wv = wvRef.current

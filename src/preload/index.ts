@@ -21,6 +21,10 @@ const api = {
   openStreamWindow: (hash: string, lockAspect?: boolean): Promise<void> =>
     ipcRenderer.invoke('app:openStream', hash, lockAspect),
   playerPort: (): Promise<number> => ipcRenderer.invoke('player:port'),
+  extLoad: (paths: string[]): Promise<{ loaded: { name: string; version: string; path: string }[]; failed: { path: string; error: string }[] }> =>
+    ipcRenderer.invoke('ext:load', paths),
+  extPick: (): Promise<string | null> => ipcRenderer.invoke('ext:pick'),
+  extRemove: (path: string): Promise<void> => ipcRenderer.invoke('ext:remove', path),
   twitchSignIn: (): Promise<void> => ipcRenderer.invoke('app:twitchSignIn'),
   twitchSignOut: (): Promise<void> => ipcRenderer.invoke('app:twitchSignOut'),
   returnStream: (channel: string): Promise<void> => ipcRenderer.invoke('app:returnStream', channel),
