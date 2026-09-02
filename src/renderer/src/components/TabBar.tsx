@@ -10,7 +10,7 @@ import { buildChannelSeed } from '../lib/detachSeed'
 import { useFlip } from '../lib/useFlip'
 import WhisperPanel from './WhisperPanel'
 import { useT } from '../i18n'
-import { ZoomIcon, MailIcon, SpeakerIcon, PinIcon, GearIcon } from './Icons'
+import { ZoomIcon, MailIcon, SpeakerIcon, PinIcon, GearIcon, PlayIcon } from './Icons'
 
 export default function TabBar(): React.JSX.Element {
   const t = useT()
@@ -18,6 +18,7 @@ export default function TabBar(): React.JSX.Element {
   const activeTabId = useLayoutStore((s) => s.activeTabId)
   const connState = useChatStore((s) => s.connState)
   const liveChannels = useChatStore((s) => s.liveChannels)
+  const openPlayers = useUiStore((s) => s.openPlayers)
   const unreadMentions = useChatStore((s) => s.unreadMentions)
   const unreadKeywords = useChatStore((s) => s.unreadKeywords)
   const unreadMessages = useChatStore((s) => s.unreadMessages)
@@ -203,6 +204,7 @@ export default function TabBar(): React.JSX.Element {
       <div className="tabbar-tabs" ref={tabsRef} style={{ zoom: tabScale }}>
       {visibleTabs.map((tab, index) => {
         const hasLive = tab.panes.some((p) => liveChannels[p.channel])
+        const hasPlayer = tab.panes.some((p) => openPlayers.includes(p.channel))
         const hasMention = tab.panes.some((p) => unreadMentions[p.channel])
         const keywordTag = tab.panes.map((p) => unreadKeywords[p.channel]).find(Boolean)
         const hasUnread = !hasMention && tab.panes.some((p) => unreadMessages[p.channel])
@@ -250,6 +252,12 @@ export default function TabBar(): React.JSX.Element {
             title={t('tab.pinHint')}
           >
             {hasLive && <span className="live-dot" title={t('pane.live')} />}
+            {/* a player kept running on this tab: it is still playing while you read another one */}
+            {hasPlayer && (
+              <span className="tab-playing" title={t('player.runningHere')}>
+                <PlayIcon size={10} />
+              </span>
+            )}
             {renaming === tab.id ? (
               <input
                 autoFocus

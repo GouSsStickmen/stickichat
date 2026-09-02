@@ -3179,6 +3179,14 @@ input[type='number']::-webkit-inner-spin-button {
   border: 0;
 }
 /* side by side: the player takes what the chat column leaves */
+/* a tab whose player is still going while you read somewhere else */
+.tab-playing {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  color: var(--accent);
+  opacity: 0.9;
+}
 /* the hole a pane leaves for its player, and the layer that fills it from above */
 .player-slot {
   flex: 0 0 auto;

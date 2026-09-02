@@ -113,6 +113,7 @@ export const uk: Record<TranslationKey, string> = {
   'player.latency': 'Затримка {s} с',
   'player.signInWhy':
     'Увійти на Твіч, щоб не бачити рекламу там, де в тебе є підписка. Вхід один раз, на сторінці самого Твіча.',
+  'player.runningHere': 'Тут працює плеєр',
   'player.show': 'Показати стрім',
   'player.hide': 'Сховати стрім',
   'player.detach': 'Винести в окреме вікно',

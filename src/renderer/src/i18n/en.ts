@@ -111,6 +111,7 @@ export const en = {
   'player.latency': 'Delay {s}s',
   'player.signInWhy':
     "Sign in to Twitch so channels you subscribe to stop showing ads. Once, on Twitch's own page.",
+  'player.runningHere': 'A player is running here',
   'player.show': 'Show the stream',
   'player.hide': 'Hide the stream',
   'player.detach': 'Move to its own window',
