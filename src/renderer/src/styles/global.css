@@ -3201,6 +3201,15 @@ input[type='number']::-webkit-inner-spin-button {
   position: fixed;
   z-index: 6;
 }
+/*
+ * Parked: still exactly where it was, still the same size, simply invisible and click-through.
+ * It has to keep intersecting the viewport, because Twitch pauses a player it thinks nobody can
+ * see, and that check is geometry rather than paint.
+ */
+.player-layer-box.parked {
+  opacity: 0;
+  pointer-events: none;
+}
 .pane-split {
   display: flex;
   flex: 1 1 auto;
