@@ -54,7 +54,9 @@ function createChildWindow(
       // these are secondary windows the user tabs away from constantly (typing in the main
       // window while a picker sits unfocused) — without this Chromium throttles their timers
       // and repaints, which looks exactly like "content stops updating until I reopen it"
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      // the detached stream window hosts the twitch player in a <webview>
+      webviewTag: true
     }
   })
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -129,6 +131,22 @@ export function registerIpc(): void {
       title: 'StickiChat — Emotes',
       stateKey: 'emotepicker',
       parent: BrowserWindow.fromWebContents(e.sender)
+    })
+  })
+
+  /*
+   * The stream in its own window.
+   *
+   * NOT a child of the chat window like the pickers are: the whole point is to put it on another
+   * monitor and leave it there, and a child window is dragged around by its parent and always
+   * floats above it. 16:9 by default because that is what it will be showing.
+   */
+  ipcMain.handle('app:openStream', (_e, hash: string) => {
+    createChildWindow(hash, {
+      width: 800,
+      height: 470,
+      title: 'StickiChat — Stream',
+      stateKey: 'stream'
     })
   })
 

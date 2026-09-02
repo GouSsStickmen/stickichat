@@ -12,6 +12,8 @@ import { hotkeyFor, matchHotkey, matchHoldKey } from '../lib/hotkeys'
 import MessageList from './MessageList'
 import InputBox, { ReplyTarget } from './InputBox'
 import ModToolbar from './ModToolbar'
+import StreamPlayer from './StreamPlayer'
+import { useUiStore } from '../store/ui'
 import ChattersList from './ChattersList'
 import HighlightSidebar from './HighlightSidebar'
 import { AddPaneForm } from './SplitGrid'
@@ -87,6 +89,8 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   // opt-in: a split view starts with every chat scrolling on its own
   const paneSynced = pane.syncScroll === true
   const [searchOpen, setSearchOpen] = useState(false)
+  /** per pane and per session: which channel you want to watch changes constantly */
+  const [playerOpen, setPlayerOpen] = useState(false)
   // hold-to-pause: chat is paused only while the hotkey is held down (separate from the toggle)
   const [holdPaused, setHoldPaused] = useState(false)
   const keydownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
@@ -328,6 +332,20 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           )}
         </span>
         <button
+          className={`icon-btn ${playerOpen ? 'active' : ''}`}
+          title={playerOpen ? t('player.hide') : t('player.show')}
+          onClick={() => {
+            const next = !playerOpen
+            setPlayerOpen(next)
+            // the caveats are worth saying once, and once only — the toast carries its own mute key
+            if (next) {
+              useUiStore.getState().toast(t('player.notice'), 'ok', { muteKey: 'player-notice', ms: 14000 })
+            }
+          }}
+        >
+          ▶
+        </button>
+        <button
           className="icon-btn"
           title={t('user.openChannel')}
           onClick={() => window.sticki.openExternal(`https://www.twitch.tv/${pane.channel}`)}
@@ -351,6 +369,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
       {(isMod || hasToolbarButtons) && account && (
         <ModToolbar pane={pane} account={account} channelId={channelId} isMod={isMod} />
       )}
+      {playerOpen && <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} />}
       <div className="pane-body">
         <MessageList
           pane={pane}

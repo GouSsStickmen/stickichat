@@ -3147,6 +3147,50 @@ input[type='number']::-webkit-inner-spin-button {
 .gif-cell:hover {
   border-color: var(--accent);
 }
+/* the embedded stream: a fixed slab above the chat, its bottom edge draggable */
+.stream-player {
+  position: relative;
+  flex: 0 0 auto;
+  background: #000;
+  overflow: hidden;
+}
+.stream-player-standalone {
+  position: absolute;
+  inset: 0;
+}
+.stream-webview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.stream-bar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.stream-player:hover .stream-bar {
+  opacity: 1;
+}
+.stream-bar .icon-btn {
+  background: rgba(0, 0, 0, 0.6);
+}
+.stream-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.stream-resize:hover {
+  background: var(--accent);
+  opacity: 0.5;
+}
 /* polls and predictions: bars first, numbers second */
 .poll-panel {
   display: flex;

@@ -17,6 +17,7 @@ import UpdateBanner from './components/UpdateBanner'
 import EmoteHoverPreview from './components/EmoteHoverPreview'
 import LinkCard from './components/LinkCard'
 import EmoteFolderMenu from './components/EmoteFolderMenu'
+import StreamPlayer from './components/StreamPlayer'
 import EmotePickerWindow from './components/EmotePickerWindow'
 import UserCardWindow from './components/UserCardWindow'
 import WhispersWindow from './components/WhispersWindow'
@@ -77,6 +78,7 @@ type Special =
   | { kind: 'whispers' }
   | { kind: 'highlights'; channel: string }
   | { kind: 'overlayeditor'; overlayId: string }
+  | { kind: 'stream'; channel: string }
   | null
 
 function parseHash(): Special {
@@ -90,6 +92,7 @@ function parseHash(): Special {
     if (h === '#whispers') return { kind: 'whispers' }
     if (h.startsWith('#highlights=')) return { kind: 'highlights', channel: decodeURIComponent(h.slice(12)) }
     if (h.startsWith('#overlayeditor=')) return { kind: 'overlayeditor', overlayId: decodeURIComponent(h.slice(15)) }
+    if (h.startsWith('#stream=')) return { kind: 'stream', channel: decodeURIComponent(h.slice(8)) }
   } catch {
     /* malformed hash */
   }
@@ -555,6 +558,11 @@ export default function App(): React.JSX.Element | null {
 
   if (special?.kind === 'highlights') {
     return <HighlightsWindow channel={special.channel} />
+  }
+
+  if (special?.kind === 'stream') {
+    // nothing else in this window: no stores to boot, no chat, just the player filling the frame
+    return <StreamPlayer channel={special.channel} standalone />
   }
 
   if (special?.kind === 'overlayeditor') {

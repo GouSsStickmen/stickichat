@@ -68,7 +68,10 @@ function createWindow(): void {
       sandbox: false,
       // this is a chat client meant to keep receiving/updating while the user works in
       // other windows — don't let Chromium throttle it just because it's unfocused
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      // the stream player is a <webview>: the twitch embed insists its `parent` matches the page
+      // holding it, and a packaged build is served from file://, which has no host to match
+      webviewTag: true
     }
   })
 

@@ -18,6 +18,7 @@ const api = {
     return () => ipcRenderer.removeListener('app:reattach', listener)
   },
   openEmotePickerWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openEmotePicker', hash),
+  openStreamWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openStream', hash),
   openSettingsWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openSettings', hash),
   openWhispersWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openWhispers', hash),
   openHighlightsWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openHighlights', hash),

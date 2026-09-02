@@ -13,6 +13,8 @@ export interface StickiApi {
   reattach(payload: string): Promise<void>
   onReattach(cb: (payload: string) => void): () => void
   openEmotePickerWindow(hash: string): Promise<void>
+  /** the stream player in its own window — deliberately not a child, so it can live on another monitor */
+  openStreamWindow(hash: string): Promise<void>
   openSettingsWindow(hash: string): Promise<void>
   openWhispersWindow(hash: string): Promise<void>
   openHighlightsWindow(hash: string): Promise<void>
