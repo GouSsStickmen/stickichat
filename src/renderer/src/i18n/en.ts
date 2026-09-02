@@ -108,6 +108,7 @@ export const en = {
   'picker.gifError': 'GIPHY is not answering',
   'picker.gifEmpty': 'Nothing found',
   'picker.gifLoading': 'Loading…',
+  'picker.gifMore': 'More GIFs',
   'picker.gifPowered': 'Powered by GIPHY',
   'picker.favHint':
     'RMB — favorites and categories · Ctrl+LMB — emote page · Ctrl+Shift+LMB — author channel',

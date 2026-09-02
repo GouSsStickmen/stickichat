@@ -15,6 +15,12 @@ import { useUiStore } from '../store/ui'
 import { trendingGifs, searchGifs, type GifItem } from '../lib/giphy'
 import GifTab from './GifTab'
 
+/*
+ * GIFs per request. 50 is GIPHY's own ceiling for one call, and with a beta key allowing 100
+ * calls an hour, asking for fewer and more often is the wrong trade.
+ */
+const GIF_PAGE = 50
+
 // One shared observer: an <img> gets its real src only when it approaches the viewport.
 // Native loading="lazy" still fired THOUSANDS of parallel requests for big 7TV channels
 // (every hidden section counted as "near"), which crawled for minutes against the CDN.
@@ -218,6 +224,10 @@ export default function EmotePicker({
   const giphyRating = useSettingsStore((s) => s.settings.giphyRating)
   const [gifs, setGifs] = useState<GifItem[]>([])
   const [gifState, setGifState] = useState<'idle' | 'loading' | 'error'>('idle')
+  /** how many pages of 50 have been asked for — reset whenever the search changes */
+  const [gifPage, setGifPage] = useState(0)
+  /** the last page came back short, so there is nothing more to ask for */
+  const [gifsExhausted, setGifsExhausted] = useState(false)
   useEffect(() => {
     const fn = (): void => bumpAspect((v) => v + 1)
     aspectSubs.add(fn)
@@ -231,33 +241,47 @@ export default function EmotePicker({
    * An empty box means "trending" rather than "no results": that is the state the keyboard opens
    * in, and searching for nothing would just be an error.
    */
+  // a new search starts from the top again
+  useEffect(() => {
+    setGifPage(0)
+  }, [query, tab, giphyRating])
+
   useEffect(() => {
     if (tab !== 'gif' || !giphyKey) return
     const q = query.trim()
+    const offset = gifPage * GIF_PAGE
     let cancelled = false
     setGifState('loading')
     const timer = window.setTimeout(
       () => {
-        const load = q ? searchGifs(giphyKey, q, giphyRating) : trendingGifs(giphyKey, giphyRating)
+        const load = q
+          ? searchGifs(giphyKey, q, giphyRating, offset, GIF_PAGE)
+          : trendingGifs(giphyKey, giphyRating, offset, GIF_PAGE)
         load
           .then((list) => {
             if (cancelled) return
-            setGifs(list)
+            // page 0 replaces, later pages append — and the same gif can come back on two pages
+            setGifs((prev) => {
+              if (offset === 0) return list
+              const seen = new Set(prev.map((g) => g.id))
+              return [...prev, ...list.filter((g) => !seen.has(g.id))]
+            })
+            setGifsExhausted(list.length < GIF_PAGE)
             setGifState('idle')
           })
           .catch(() => {
             if (cancelled) return
-            setGifs([])
+            if (offset === 0) setGifs([])
             setGifState('error')
           })
       },
-      q ? 300 : 0
+      q && offset === 0 ? 300 : 0
     )
     return () => {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [tab, query, giphyKey, giphyRating])
+  }, [tab, query, giphyKey, giphyRating, gifPage])
 
   // sub/follower/global twitch emotes for the sending account, plus THIS channel's full
   // set (so its free/locked emotes show even without a sub)
@@ -586,6 +610,7 @@ ${lockHint}` : ''}`
             state={gifState}
             hasKey={!!giphyKey}
             onPickGif={onPickGif}
+            onMore={gifsExhausted ? undefined : () => setGifPage((p) => p + 1)}
           />
         ) : query.trim() ? (
           searchResults.length > 0 ? (

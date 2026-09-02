@@ -10,6 +10,8 @@ interface Props {
   /** without a GIPHY key there is nothing to show, and the tab says so instead of looking broken */
   hasKey: boolean
   onPickGif?: (gif: GifItem) => void
+  /** ask for the next page; absent once GIPHY has run out */
+  onMore?: () => void
 }
 
 /**
@@ -18,7 +20,7 @@ interface Props {
  * Two columns of variable-height thumbnails rather than the square grid the emotes use — a GIF is
  * a picture with its own shape, and cropping it to a square is how you lose the joke.
  */
-export default function GifTab({ gifs, state, hasKey, onPickGif }: Props): React.JSX.Element {
+export default function GifTab({ gifs, state, hasKey, onPickGif, onMore }: Props): React.JSX.Element {
   const t = useT()
   const [keyDraft, setKeyDraft] = useState('')
 
@@ -84,6 +86,11 @@ export default function GifTab({ gifs, state, hasKey, onPickGif }: Props): React
           </button>
         ))}
       </div>
+      {onMore && (
+        <button className="gif-more ghost" disabled={state === 'loading'} onClick={onMore}>
+          {state === 'loading' ? t('picker.gifLoading') : t('picker.gifMore')}
+        </button>
+      )}
       {/* GIPHY's terms ask for the mark wherever their results are shown */}
       <div className="gif-attribution">{t('picker.gifPowered')}</div>
     </>

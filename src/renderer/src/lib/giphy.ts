@@ -54,7 +54,9 @@ interface GiphyGif {
 function toItem(g: GiphyGif): GifItem | null {
   const id = g.id
   const imgs = g.images ?? {}
-  const preview = imgs.fixed_width_small ?? imgs.fixed_width ?? imgs.original
+  // fixed_width is 200px across — sharp at the widths the grid actually uses; the small one
+  // is 100px and visibly upscaled the moment the picker is a window rather than a popover
+  const preview = imgs.fixed_width ?? imgs.fixed_width_small ?? imgs.original
   const full = imgs.original ?? imgs.fixed_width
   if (!id || !preview?.url || !full?.url) return null
   return {
@@ -104,11 +106,31 @@ async function call(path: string, params: Record<string, string>, key: string): 
 }
 
 /** what the tab shows before anything is typed */
-export function trendingGifs(key: string, rating: string, limit = 50): Promise<GifItem[]> {
-  return call('trending', { limit: String(limit), rating: safeRating(rating), bundle: 'messaging_non_clips' }, key)
+export function trendingGifs(key: string, rating: string, offset = 0, limit = 50): Promise<GifItem[]> {
+  return call(
+    'trending',
+    { limit: String(limit), offset: String(offset), rating: safeRating(rating), bundle: 'messaging_non_clips' },
+    key
+  )
 }
 
 /** search by name — the other half of the keyboard */
-export function searchGifs(key: string, query: string, rating: string, limit = 50): Promise<GifItem[]> {
-  return call('search', { q: query, limit: String(limit), rating: safeRating(rating), bundle: 'messaging_non_clips' }, key)
+export function searchGifs(
+  key: string,
+  query: string,
+  rating: string,
+  offset = 0,
+  limit = 50
+): Promise<GifItem[]> {
+  return call(
+    'search',
+    {
+      q: query,
+      limit: String(limit),
+      offset: String(offset),
+      rating: safeRating(rating),
+      bundle: 'messaging_non_clips'
+    },
+    key
+  )
 }

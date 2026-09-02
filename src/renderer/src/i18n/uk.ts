@@ -110,6 +110,7 @@ export const uk: Record<TranslationKey, string> = {
   'picker.gifError': 'GIPHY не відповідає',
   'picker.gifEmpty': 'Нічого не знайшлось',
   'picker.gifLoading': 'Завантаження…',
+  'picker.gifMore': 'Ще гіфки',
   'picker.gifPowered': 'Powered by GIPHY',
   'picker.favHint':
     'ПКМ — обране й категорії · Ctrl+ЛКМ — сторінка емоута · Ctrl+Shift+ЛКМ — канал автора',
