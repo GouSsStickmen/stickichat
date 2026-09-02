@@ -3400,6 +3400,14 @@ body.dragging-split .stream-webview {
   flex: 1;
   min-width: 0;
 }
+.poll-noscope {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.poll-noscope p {
+  margin: 0 0 10px;
+}
 .poll-note {
   color: var(--text-faint);
   font-size: 11px;

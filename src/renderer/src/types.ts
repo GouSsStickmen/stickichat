@@ -13,6 +13,14 @@ export interface Account {
   /** runtime-only decrypted tokens, never persisted */
   _accessToken?: string
   _refreshToken?: string
+  /**
+   * What this token is actually allowed to do, as Twitch last reported it.
+   *
+   * Runtime only, refreshed by the periodic validate. It exists so a feature added after someone
+   * authorized can say "your sign-in predates this, sign in again" instead of letting them press a
+   * button that can only ever answer 401.
+   */
+  _scopes?: string[]
 }
 
 // ---------- Chat ----------

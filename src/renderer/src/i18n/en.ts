@@ -123,6 +123,8 @@ export const en = {
   'poll.presetDelete': 'Delete preset',
   'poll.pointsPerVote': 'Points per extra vote',
   'poll.pointsHint': 'Zero means voting is free. Above zero turns on paid extra votes with channel points.',
+  'poll.needScope': 'Starting polls and predictions needs a permission from Twitch that did not exist when you signed in. An existing sign-in cannot grow it: permissions are granted once, at authorization. Sign in again with the same account and the buttons will work. Nothing else in the app is affected.',
+  'poll.reauth': 'Sign in again',
   'poll.title': 'Polls and predictions',
   'poll.short': 'Polls',
   'poll.poll': 'Poll',

@@ -121,6 +121,16 @@ export default function PollPanel({ account, broadcasterId }: Props): React.JSX.
     setSaving(false)
   }
 
+  /*
+   * Polls and predictions need two scopes that did not exist when most people signed in, and a
+   * token cannot grow new ones. Saying so up front is the whole point: the alternative is a
+   * button that looks fine and can only ever answer 401.
+   */
+  const scopes = account._scopes
+  const missingScope =
+    scopes !== undefined &&
+    !scopes.includes(kind === 'poll' ? 'channel:manage:polls' : 'channel:manage:predictions')
+
   const running = kind === 'poll' ? poll : pred
   const total =
     kind === 'poll'
@@ -143,7 +153,14 @@ export default function PollPanel({ account, broadcasterId }: Props): React.JSX.
         </button>
       </div>
 
-      {running ? (
+      {missingScope ? (
+        <div className="poll-noscope">
+          <p>{t('poll.needScope')}</p>
+          <button className="primary" onClick={() => useUiStore.getState().setAddAccountOpen(true)}>
+            {t('poll.reauth')}
+          </button>
+        </div>
+      ) : running ? (
         <>
           <div className="poll-running-title">{running.title}</div>
           {/* a bar each, so "which way is it going" is answered without reading numbers */}

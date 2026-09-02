@@ -139,6 +139,8 @@ export interface ValidateInfo {
   user_id: string
   client_id: string
   expires_in: number
+  /** everything this token may do; Twitch has always sent it, we simply never read it */
+  scopes?: string[]
 }
 
 export async function validateToken(token: string): Promise<ValidateInfo | null> {
@@ -222,6 +224,8 @@ export async function ensureFreshToken(clientId: string, account: Account): Prom
     const info = await validateToken(account._accessToken)
     if (info) {
       lastValidatedAt.set(account.id, Date.now())
+      // remember what it may do, so features added later can explain themselves before failing
+      if (info.scopes) useAccountsStore.getState().updateAccount(account.id, { _scopes: info.scopes })
       return account._accessToken
     }
   }
