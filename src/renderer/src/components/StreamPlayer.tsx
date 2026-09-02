@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useSettingsStore } from '../store/settings'
 import { useT } from '../i18n'
 
@@ -24,30 +24,34 @@ interface Props {
 export default function StreamPlayer({ channel, standalone, onClose }: Props): React.JSX.Element {
   const t = useT()
   const height = useSettingsStore((s) => s.settings.playerHeight)
-  const [dragging, setDragging] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
 
   /*
    * Drag the bottom edge to resize.
    *
-   * Pointer capture on the handle rather than listeners on the window: the webview swallows mouse
-   * events over itself, so a drag that crossed into the video would otherwise stop dead.
+   * The listeners go on in the pointerdown handler, not in an effect keyed on a "dragging" state.
+   * An effect runs after the render, so a pointerup that arrives in the same tick as the
+   * pointerdown is never seen — and the drag then stays live, quietly resizing the player under
+   * every later mouse movement until something else releases it.
+   *
+   * Position, not delta: the edge follows the cursor exactly, so it cannot drift over a long drag.
    */
-  useEffect(() => {
-    if (!dragging) return
-    const onMove = (e: PointerEvent): void => {
+  const startResize = (e: React.PointerEvent): void => {
+    e.preventDefault()
+    const onMove = (ev: PointerEvent): void => {
       const top = boxRef.current?.getBoundingClientRect().top ?? 0
-      const next = Math.max(120, Math.min(720, Math.round(e.clientY - top)))
+      const next = Math.max(120, Math.min(720, Math.round(ev.clientY - top)))
       useSettingsStore.getState().setSettings({ playerHeight: next })
     }
-    const stop = (): void => setDragging(false)
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', stop)
-    return () => {
+    const stop = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
     }
-  }, [dragging])
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+  }
 
   const src =
     `https://player.twitch.tv/?channel=${encodeURIComponent(channel)}` +
@@ -79,10 +83,7 @@ export default function StreamPlayer({ channel, standalone, onClose }: Props): R
           {/* the whole bottom edge, not a corner grip — it is a horizontal boundary */}
           <div
             className="stream-resize"
-            onPointerDown={(e) => {
-              e.preventDefault()
-              setDragging(true)
-            }}
+            onPointerDown={startResize}
           />
         </>
       )}
