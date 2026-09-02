@@ -12,3 +12,6 @@ dist-mobile/
 
 # the GitHub token the release script keeps, encrypted to this Windows account
 .gh-token
+
+# generated from changelog.ts at publish time
+release-notes.md

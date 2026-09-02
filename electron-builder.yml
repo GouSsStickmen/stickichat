@@ -17,18 +17,8 @@ publish:
   owner: GouSsStickmen
   repo: stickichat
   releaseType: release
-# Shown in the in-app "update available" popup (electron-updater reads the GitHub release
-# body). Update this list every release — items only, no service/signature footer line.
+# Shown in the in-app "update available" popup and as the GitHub release body
+# (electron-updater reads that body). Generated from changelog.ts by scripts/release.ps1 on every
+# publish, so it can no longer be left describing the version before this one.
 releaseInfo:
-  releaseNotes: |
-    StickiChat 0.5.13 - що нового:
-
-    - StickiChat тепер є і на Android: той самий чат з усіма емоутами, 7TV-паінтами і мод-діями, у шелі під палець
-    - На Android є плеєр стріму з картинкою в картинці, а бан і таймаут там питають підтвердження
-    - Відповідь через /me більше не втрачається - повідомлення йде як відповідь
-    - Згадки більше не залежать від того, як людина набрала твій нік
-    - Після обриву зв'язку чат більше не передзвонює за вже прочитані згадки з усіх каналів одразу
-    - Знятий таймаут одразу відкриває поле введення, прибирає таймер і пише про це в чат
-    - Шатаут більше не пишеться двічі; одна подарована підписка - один рядок, з кольоровим ніком отримувача
-    - Емоути підписки більше не двояться в тих, у кого 2-й чи 3-й рівень
-    - Підписки на події Twitch розставлені за важливістю, і застосунок прямо пояснює, чому частина подій не приходить при багатьох відкритих каналах
+  releaseNotesFile: release-notes.md

@@ -43,7 +43,13 @@ if ((git status --porcelain)) {
 }
 
 # the changelog is the one thing nobody notices is missing until users ask what changed
-$changelog = Get-Content 'src/renderer/src/changelog.ts' -Raw
+# read as UTF-8 explicitly: PowerShell 5.1 assumes ANSI for a file without a byte-order mark, and
+# changelog.ts has none, so every Ukrainian line came back as mojibake and went straight into the
+# release notes
+$changelog = [System.IO.File]::ReadAllText(
+  (Join-Path $root 'src/renderer/src/changelog.ts'),
+  [System.Text.Encoding]::UTF8
+)
 if ($changelog -notmatch [regex]::Escape("version: '$version'")) {
   Fail "У changelog.ts немає запису для $version. Додай його перед релізом."
 }
@@ -53,6 +59,32 @@ $existingTag = (git tag --list "v$version")
 if ($existingTag) { Fail "Тег v$version вже існує. Підніми версію в package.json." }
 
 Write-Host '  гілка main, дерево чисте, запис у списку змін є' -ForegroundColor DarkGray
+
+# ---------- release notes, from the one list that is already maintained ----------
+
+# The notes shown in the update popup and on the GitHub release used to be a second copy of the
+# changelog, kept by hand in electron-builder.yml. It was a version behind by the time anyone
+# looked, which means people updating read about the release before theirs. Written from
+# changelog.ts every time instead, so the two cannot disagree.
+$entry = [regex]::Match(
+  $changelog,
+  "version:\s*'" + [regex]::Escape($version) + "'.*?items:\s*\[(.*?)\]\s*\}",
+  [System.Text.RegularExpressions.RegexOptions]::Singleline
+)
+if (-not $entry.Success) { Fail "Не вдалося прочитати пункти для $version із changelog.ts." }
+
+$items = [regex]::Matches($entry.Groups[1].Value, "'([^']*)'") | ForEach-Object { $_.Groups[1].Value }
+if ($items.Count -eq 0) { Fail "У записі $version немає жодного пункту." }
+
+$notes = "StickiChat $version, що нового:`r`n`r`n" + (($items | ForEach-Object { "- $_" }) -join "`r`n") + "`r`n"
+# UTF-8 without a byte-order mark: Set-Content -Encoding utf8 writes one on PowerShell 5.1, and it
+# would show up as stray characters at the top of the release page
+[System.IO.File]::WriteAllText(
+  (Join-Path $root 'release-notes.md'),
+  $notes,
+  (New-Object System.Text.UTF8Encoding($false))
+)
+Write-Host "  опис релізу зібрано з $($items.Count) пунктів списку змін" -ForegroundColor DarkGray
 
 # ---------- the token ----------
 
