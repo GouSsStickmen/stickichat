@@ -603,7 +603,11 @@ ${lockHint}` : ''}`
         spellCheck={false}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <div className={`picker-body ${!query.trim() && tab === 'twitch' ? 'picker-body-twitch' : ''}`}>
+      <div
+        className={`picker-body ${!query.trim() && tab === 'twitch' ? 'picker-body-twitch' : ''} ${
+          tab === 'gif' ? 'picker-body-gif' : ''
+        }`}
+      >
         {tab === 'gif' ? (
           <GifTab
             gifs={gifs}

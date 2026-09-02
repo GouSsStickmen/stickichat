@@ -2941,6 +2941,19 @@ input[type='number']::-webkit-inner-spin-button {
   scrollbar-gutter: stable;
   max-height: 300px;
 }
+/*
+ * The GIF tab gets a HEIGHT, not a max-height.
+ *
+ * Everywhere else the body grows to its content and stops at 300px, which is invisible when the
+ * content is a grid of same-sized emotes. GIFs arrive one at a time at whatever shape they are, so
+ * the popover grew with every image that landed and the whole thing walked up the screen while you
+ * were looking at it. Fixing the height also buys the room GIFs actually need — the standalone
+ * window overrides it back to filling the window, as it does for every tab.
+ */
+.picker-body-gif {
+  height: min(496px, 66vh);
+  max-height: none;
+}
 .picker-section {
   font-size: var(--fs-sm);
   font-weight: 700;

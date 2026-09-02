@@ -540,6 +540,8 @@ export default function App(): React.JSX.Element | null {
       <div className="app">
         <SettingsModal standalone initialSection={special.section} />
         {addAccountOpen && <DeviceAuthModal onClose={() => useUiStore.getState().setAddAccountOpen(false)} />}
+        {/* the switch that raises this wall lives in THIS window, so the wall has to be here too */}
+        {gifConsentOpen && <GifNativeConsent onClose={() => useUiStore.getState().setGifConsentOpen(false)} />}
         {/* the preview button drives THIS window's store — real trains only ever show in the main
             window, but the demo has to appear where the button was pressed */}
         <HypeTrainPopup />

@@ -77,6 +77,9 @@ function parseGifsTag(tag: string): { start: number; end: number; url: string } 
  * Turns a message into render tokens: twitch emotes from the IRC tag,
  * third-party emotes by word lookup, links, mentions, zero-width overlays.
  */
+/** giphy's media CDN, pointing at an actual image rather than a page about one */
+const GIPHY_MEDIA_RE = /^https?:\/\/(?:[a-z0-9-]+\.)?giphy\.com\/media\/\S+\.(?:gif|webp)(?:\?\S*)?$/i
+
 export function tokenizeMessage(
   msg: Pick<ChatMessage, 'text' | 'emotesTag' | 'gifsTag'>,
   emoteLookup: (code: string) => Emote | undefined,
@@ -178,6 +181,19 @@ export function tokenizeMessage(
       const embedded = /https?:\/\/\S+/i.exec(piece)
       if (embedded) {
         if (embedded.index > 0) pushText(piece.slice(0, embedded.index))
+        /*
+         * A bare GIPHY media link is drawn as the GIF it points at.
+         *
+         * Twitch only lets its own clients make real GIF messages, so sending one from here means
+         * sending its URL — and a URL rendered as a URL is not a GIF, it is homework. Everyone
+         * else's client still shows a link, which is the honest cost of the link mode; here it
+         * looks like what it is. Only giphy's own media hosts, and only when the path really ends
+         * at an image, so this cannot swallow ordinary links.
+         */
+        if (GIPHY_MEDIA_RE.test(embedded[0])) {
+          tokens.push({ kind: 'gif', url: embedded[0], label: embedded[0] })
+          continue
+        }
         tokens.push({ kind: 'link', url: embedded[0], label: embedded[0] })
         continue
       }
