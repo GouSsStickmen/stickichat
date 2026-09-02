@@ -108,6 +108,17 @@ class ChatService {
   private modEventChannels = new Set<string>()
   /** channels we've polled at least once (so we don't fire a "went live" alert on startup) */
   private liveKnown = new Set<string>()
+  /**
+   * When each channel's scrollback snapshot was taken.
+   *
+   * JOIN is rate limited to fifteen channels per eleven seconds, so on a launch with a lot of tabs
+   * a channel can be joined half a minute after its history was fetched, and everything said in
+   * between belongs to neither: too late for the snapshot, too early for the live socket. It fell
+   * through that hole silently, which is what "the history did not load fully" actually was.
+   */
+  private historyTakenAt = new Map<string, number>()
+  /** channels whose post-join top-up already ran, so a later ROOMSTATE does not refetch */
+  private historyToppedUp = new Set<string>()
   /** channel -> was live at the previous poll */
   private wasLive = new Map<string, boolean>()
   private started = false
@@ -1203,6 +1214,7 @@ class ChatService {
     const { settings, } = useSettingsStore.getState()
     if (settings.loadHistory && !this.historyLoaded.has(channel)) {
       this.historyLoaded.add(channel)
+      this.historyTakenAt.set(channel, Date.now())
       void this.fetchHistoryMessages(channel, true).then((msgs) => {
         // replay recent redemptions + mod actions (they never come from IRC history)
         const redeems = this.loadPersistedRedeems(channel)
@@ -1226,6 +1238,37 @@ class ChatService {
    * Gated on the history setting: it is the same third-party source, and someone who turned
    * that off has said they do not want us asking it for their channels.
    */
+  /**
+   * Close the gap between "history fetched" and "channel actually joined".
+   *
+   * Runs once per channel, on the ROOMSTATE that confirms the join. Fetches the scrollback again
+   * and seeds only what is newer than the first snapshot: seedMessages merges by id and sorts by
+   * time, so anything already present is ignored and the recovered lines land in their real place
+   * rather than at the end.
+   */
+  private topUpHistoryAfterJoin(channel: string): void {
+    if (this.historyToppedUp.has(channel)) return
+    const takenAt = this.historyTakenAt.get(channel)
+    if (takenAt === undefined) return
+    this.historyToppedUp.add(channel)
+    // a join that landed immediately left no hole worth a second request
+    if (Date.now() - takenAt < 3000) return
+    if (!useSettingsStore.getState().settings.loadHistory) return
+    void this.fetchHistoryMessages(channel, true)
+      .then((msgs) => {
+        const missed = msgs.filter((m) => m.timestamp >= takenAt - 5000)
+        if (!missed.length) return
+        useChatStore.getState().seedMessages(channel, missed)
+        diagInfo(
+          'chat',
+          `${channel}: topped up ${missed.length} message(s) sent while the join was queued`
+        )
+      })
+      .catch(() => {
+        /* best-effort, exactly like the outage backfill */
+      })
+  }
+
   private backfillAfterOutage(downSince: number): void {
     if (!useSettingsStore.getState().settings.loadHistory) return
     const gapSec = Math.round((Date.now() - downSince) / 1000)
@@ -1343,6 +1386,9 @@ class ChatService {
           const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
           if (Object.keys(clean).length) useChatStore.getState().patchRoomModes(m.channel, clean)
         }
+        // Twitch sends ROOMSTATE the instant a JOIN lands, so this is where the join actually
+        // happened, and where the gap between it and the snapshot can finally be closed
+        if (m.channel) this.topUpHistoryAfterJoin(m.channel)
         const id = m.tags['room-id']
         if (id && m.channel) {
           const known = useChatStore.getState().channelIds[m.channel]
