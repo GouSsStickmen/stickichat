@@ -15,6 +15,8 @@ export interface StickiApi {
   openEmotePickerWindow(hash: string): Promise<void>
   /** the stream player in its own window — deliberately not a child, so it can live on another monitor */
   openStreamWindow(hash: string): Promise<void>
+  /** port of the local one-page server that hosts the Twitch embed SDK (starts on first ask) */
+  playerPort(): Promise<number>
   /** open twitch.tv/login in the PLAYER's cookie jar; nothing is read back out of it */
   twitchSignIn(): Promise<void>
   /** clear that jar */

@@ -11,6 +11,7 @@ import {
 } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
+import { playerServerPort } from './playerServer'
 import { inlineAssets } from './assets'
 import {
   overlayClients,
@@ -139,6 +140,8 @@ export function registerIpc(): void {
   ipcMain.handle('app:twitchSignOut', async () => {
     await session.fromPartition(PLAYER_PARTITION).clearStorageData()
   })
+
+  ipcMain.handle('player:port', () => playerServerPort())
 
   ipcMain.handle('config:get', () => readConfig())
   ipcMain.handle('config:set', (_e, cfg: unknown) => writeConfig(cfg))

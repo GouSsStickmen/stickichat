@@ -103,14 +103,18 @@ export const en = {
   'picker.gifKeyOptional': 'The key is optional. Without it you simply have no GIF tab, and the rest of the app works exactly as before.',
   'picker.gifOthersShown': 'GIFs other people send are always shown in chat: with no key and no settings at all.',
   'picker.gifNotNative': 'This is not the same as sending a GIF on Twitch. What goes out is an ordinary link: StickiChat draws it as the GIF, other clients show a link.',
-  'player.signIn': 'Sign in to Twitch in the player',
+  'player.signIn':
+    'Sign in to Twitch in the player',
   'player.attach': 'Put the player back in the chat',
   'player.layout': 'Beside the chat or above it',
+  'player.latency': 'Delay {s}s',
+  'player.signInWhy':
+    "Sign in to Twitch so channels you subscribe to stop showing ads. Once, on Twitch's own page.",
   'player.show': 'Show the stream',
   'player.hide': 'Hide the stream',
   'player.detach': 'Move to its own window',
   'player.notice':
-    "This is Twitch's own player, so the ads are the ones the site would show. There is no honest way to remove them, only a channel subscription or Turbo does. The video always trails the chat by a few seconds.",
+    "This is Twitch's own player, so the ads are the ones the site would show. By default the player watches as a guest, which means ads even on channels you subscribe to. Press the person button and sign in once: Twitch then recognises your subscription and those channels stop showing ads. The login happens on Twitch's own page; the app never sees the password and reads nothing out of that session.",
   'poll.optionDelete': 'Remove this option',
   'poll.savePreset': 'Save as a preset',
   'poll.presetName': 'Preset name',

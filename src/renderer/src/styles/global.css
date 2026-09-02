@@ -3163,7 +3163,16 @@ input[type='number']::-webkit-inner-spin-button {
   inset: 0;
 }
 .stream-webview {
-  display: block;
+  /*
+   * NOT display:block. Electron's webview fills itself with an internal flex child, and the docs
+   * say plainly not to override the display it ships with; setting block left the guest laid out
+   * at a fraction of the element, which is why the video was a postage stamp in a black field no
+   * matter how big the window got. Absolute positioning also gives it a definite size from the
+   * first frame, so the guest is never attached at zero and stretched afterwards.
+   */
+  display: flex;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   border: 0;
@@ -3179,6 +3188,40 @@ input[type='number']::-webkit-inner-spin-button {
   flex: 1 1 auto;
   min-width: 0;
   height: auto;
+}
+/* the chat column in side-by-side: messages above, its own input below */
+.pane-chat-col {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+}
+.pane-chat-col .pane-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* a webview swallows the pointer, so nothing under the cursor may while a drag is live */
+body.dragging-split .stream-webview {
+  pointer-events: none;
+}
+.stream-latency {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text-muted);
+  font-size: 11px;
+  pointer-events: none;
+}
+.stream-latency.warn {
+  color: #fbbf24;
+}
+.stream-latency.bad {
+  color: #f87171;
 }
 .stream-resize-x {
   position: absolute;

@@ -19,6 +19,7 @@ const api = {
   },
   openEmotePickerWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openEmotePicker', hash),
   openStreamWindow: (hash: string): Promise<void> => ipcRenderer.invoke('app:openStream', hash),
+  playerPort: (): Promise<number> => ipcRenderer.invoke('player:port'),
   twitchSignIn: (): Promise<void> => ipcRenderer.invoke('app:twitchSignIn'),
   twitchSignOut: (): Promise<void> => ipcRenderer.invoke('app:twitchSignOut'),
   returnStream: (channel: string): Promise<void> => ipcRenderer.invoke('app:returnStream', channel),

@@ -93,6 +93,9 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const [playerOpen, setPlayerOpen] = useState(false)
   const playerSide = useSettingsStore((s) => s.settings.playerSideBySide)
   const chatWidth = useSettingsStore((s) => s.settings.chatWidth)
+  const sideBySide = playerOpen && playerSide
+  /** the split box is the stable thing to measure a drag against; the player's own edge moves */
+  const splitRef = useRef<HTMLDivElement>(null)
 
   /*
    * The detached window asking to come back. It broadcasts its channel rather than addressing a
@@ -387,31 +390,62 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         which is the Twitch page's own shape and the only one where a 16:9 video fills what it is
         given instead of sitting between black bars.
       */}
-      <div className={playerOpen && playerSide ? 'pane-split' : 'contents'}>
-        {playerOpen && <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} />}
-        <div
-          className="pane-body"
-          style={playerOpen && playerSide ? { width: chatWidth, flex: '0 0 auto' } : undefined}
-        >
-          <MessageList
-            pane={pane}
-            account={account}
-            channelId={channelId}
-            isMod={isMod}
-            onReply={onReply}
-            scrollLocked={scrollLocked || holdPaused}
-          />
-          {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
+      {sideBySide ? (
+        /*
+         * Beside the chat: the player takes what is left, and the chat column owns BOTH its
+         * messages and its input, so the box you type in is as wide as the conversation above it
+         * rather than running the whole width under the video.
+         */
+        <div className="pane-split" ref={splitRef}>
+          <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} splitRef={splitRef} />
+          <div className="pane-chat-col" style={{ width: chatWidth }}>
+            <div className="pane-body">
+              <MessageList
+                pane={pane}
+                account={account}
+                channelId={channelId}
+                isMod={isMod}
+                onReply={onReply}
+                scrollLocked={scrollLocked || holdPaused}
+              />
+              {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
+            </div>
+            <InputBox
+              tabId={tabId}
+              pane={pane}
+              account={account}
+              channelId={channelId}
+              replyTo={replyTo}
+              onCancelReply={() => setReplyTo(null)}
+            />
+          </div>
         </div>
-      </div>
-      <InputBox
-        tabId={tabId}
-        pane={pane}
-        account={account}
-        channelId={channelId}
-        replyTo={replyTo}
-        onCancelReply={() => setReplyTo(null)}
-      />
+      ) : (
+        <>
+          {playerOpen && <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} />}
+          <div className="pane-body">
+            <MessageList
+              pane={pane}
+              account={account}
+              channelId={channelId}
+              isMod={isMod}
+              onReply={onReply}
+              scrollLocked={scrollLocked || holdPaused}
+            />
+            {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
+          </div>
+        </>
+      )}
+      {!sideBySide && (
+        <InputBox
+          tabId={tabId}
+          pane={pane}
+          account={account}
+          channelId={channelId}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+        />
+      )}
     </div>
   )
 }
