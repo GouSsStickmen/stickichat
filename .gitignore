@@ -9,3 +9,6 @@ release/
 
 # mobile (Capacitor) web build
 dist-mobile/
+
+# the GitHub token the release script keeps, encrypted to this Windows account
+.gh-token

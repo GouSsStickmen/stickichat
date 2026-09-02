@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "dist": "electron-vite build && electron-builder --win",
     "release": "electron-vite build && electron-builder --win --publish always",
+    "publish": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1",
     "mobile:dev": "vite --config vite.mobile.config.ts",
     "mobile:build": "vite build --config vite.mobile.config.ts",
     "mobile:sync": "vite build --config vite.mobile.config.ts && cap sync android",

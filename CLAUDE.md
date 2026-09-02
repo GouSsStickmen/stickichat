@@ -34,4 +34,8 @@ Owner GouS_Stickmen, GPL-3.0, Windows only for now.
 ## Release
 
 Bump `version` in `package.json`, add the entry to `src/renderer/src/changelog.ts`, commit as
-`0.5.x: short summary`, then `npm run release` (builds and publishes to GitHub). Current: 0.5.11.
+`0.5.x: short summary`, then `npm run publish`. That script checks the branch, the working tree
+and that the changelog actually mentions this version, asks once for a GitHub token (kept
+encrypted per Windows account in the git-ignored `.gh-token`), pushes, and then builds and
+publishes. `npm run release` is the raw build+publish underneath it and needs `GH_TOKEN` set by
+hand. Current: 0.5.14.
