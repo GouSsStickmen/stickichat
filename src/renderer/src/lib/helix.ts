@@ -735,6 +735,8 @@ export async function getSubInfo(
 }
 
 export interface HelixStream {
+  /** the broadcaster's id; /streams/followed is matched on this rather than on the login */
+  user_id: string
   user_login: string
   type: string
   started_at: string
@@ -785,6 +787,84 @@ export async function getLiveChannels(account: Account, logins: string[]): Promi
     }
   }
   return live
+}
+
+/** one channel this account follows, with whatever it is doing right now */
+export interface FollowedChannel {
+  id: string
+  login: string
+  name: string
+  followedAt: string
+  live?: { title: string; game: string; viewers: number; startedAt: string }
+}
+
+/**
+ * Everything this account follows, and which of them are on air.
+ *
+ * Two calls rather than one because Twitch splits them: /channels/followed lists the follows
+ * whether or not they are live, and /streams/followed returns only the live ones but with the
+ * title, category and viewer count. Merging gives a list that can say "offline" out loud instead
+ * of quietly omitting anyone.
+ */
+export async function getFollowedChannels(account: Account): Promise<FollowedChannel[]> {
+  const out: FollowedChannel[] = []
+  let cursor = ''
+  // a few hundred is normal; the cap stops a runaway loop rather than a real account
+  for (let page = 0; page < 10; page++) {
+    const res = await helixRequest(account, 'GET', '/channels/followed', {
+      user_id: account.id,
+      first: '100',
+      ...(cursor ? { after: cursor } : {})
+    })
+    if (!res.ok) break
+    const json = res.json as {
+      data?: { broadcaster_id: string; broadcaster_login: string; broadcaster_name: string; followed_at: string }[]
+      pagination?: { cursor?: string }
+    } | null
+    for (const f of json?.data ?? []) {
+      out.push({
+        id: f.broadcaster_id,
+        login: (f.broadcaster_login ?? '').toLowerCase(),
+        name: f.broadcaster_name || f.broadcaster_login,
+        followedAt: f.followed_at
+      })
+    }
+    cursor = json?.pagination?.cursor ?? ''
+    if (!cursor) break
+  }
+
+  const liveById = new Map<string, FollowedChannel['live']>()
+  let lc = ''
+  for (let page = 0; page < 10; page++) {
+    const res = await helixRequest(account, 'GET', '/streams/followed', {
+      user_id: account.id,
+      first: '100',
+      ...(lc ? { after: lc } : {})
+    })
+    if (!res.ok) break
+    const json = res.json as {
+      data?: HelixStream[]
+      pagination?: { cursor?: string }
+    } | null
+    for (const st of json?.data ?? []) {
+      liveById.set(st.user_id, {
+        title: st.title ?? '',
+        game: st.game_name ?? '',
+        viewers: st.viewer_count ?? 0,
+        startedAt: st.started_at
+      })
+    }
+    lc = json?.pagination?.cursor ?? ''
+    if (!lc) break
+  }
+  for (const f of out) f.live = liveById.get(f.id)
+
+  // live first, biggest audience at the top, then everyone else by name
+  return out.sort((a, b) => {
+    if (!!a.live !== !!b.live) return a.live ? -1 : 1
+    if (a.live && b.live) return b.live.viewers - a.live.viewers
+    return a.name.localeCompare(b.name)
+  })
 }
 
 interface HelixBadgeSet {

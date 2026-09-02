@@ -133,6 +133,9 @@ interface UiState {
    */
   hypeDismissed: string | null
   whispersOpen: boolean
+  /** the followed-channels list, opened from the top bar */
+  followsOpen: boolean
+  setFollowsOpen: (v: boolean) => void
   /** split mode: scrolling one pane scrolls the others by the same amount */
   /** accounts whose token died and need a full re-authorization (persistent banner) */
   reauthAccounts: { id: string; login: string }[]
@@ -295,6 +298,8 @@ export const useUiStore = create<UiState>()((set) => ({
     set((s) => ({ hypeTrain: null, hypeDismissed: s.hypeTrain?.channel ?? s.hypeDismissed })),
   allowHypeTrain: () => set({ hypeDismissed: null }),
   setWhispersOpen: (whispersOpen) => set({ whispersOpen }),
+  followsOpen: false,
+  setFollowsOpen: (followsOpen) => set({ followsOpen }),
   markReauthNeeded: (id, login) =>
     set((s) =>
       s.reauthAccounts.some((a) => a.id === id)

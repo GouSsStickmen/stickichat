@@ -344,3 +344,12 @@ export function ShieldIcon({ size }: { size?: number }): React.JSX.Element {
     </Glyph>
   )
 }
+
+/** a heart: the channels this account follows */
+export function HeartIcon({ size }: { size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <path d="M12 20 C6 16.2 3.5 13 3.5 9.7 A4.2 4.2 0 0 1 12 7.6 A4.2 4.2 0 0 1 20.5 9.7 C20.5 13 18 16.2 12 20 Z" />
+    </Glyph>
+  )
+}

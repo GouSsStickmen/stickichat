@@ -9,8 +9,9 @@ import { holdConfigSaves, releaseConfigSaves } from '../services/config'
 import { buildChannelSeed } from '../lib/detachSeed'
 import { useFlip } from '../lib/useFlip'
 import WhisperPanel from './WhisperPanel'
+import FollowsPanel from './FollowsPanel'
 import { useT } from '../i18n'
-import { ZoomIcon, MailIcon, SpeakerIcon, PinIcon, GearIcon, PlayIcon } from './Icons'
+import { ZoomIcon, MailIcon, SpeakerIcon, PinIcon, GearIcon, PlayIcon, HeartIcon } from './Icons'
 
 export default function TabBar(): React.JSX.Element {
   const t = useT()
@@ -19,6 +20,7 @@ export default function TabBar(): React.JSX.Element {
   const connState = useChatStore((s) => s.connState)
   const liveChannels = useChatStore((s) => s.liveChannels)
   const openPlayers = useUiStore((s) => s.openPlayers)
+  const followsOpen = useUiStore((s) => s.followsOpen)
   const unreadMentions = useChatStore((s) => s.unreadMentions)
   const unreadKeywords = useChatStore((s) => s.unreadKeywords)
   const unreadMessages = useChatStore((s) => s.unreadMessages)
@@ -152,6 +154,16 @@ export default function TabBar(): React.JSX.Element {
           {unreadWhispers > 0 && <span className="whisper-badge">{unreadWhispers}</span>}
         </button>
         {whispersOpen && <WhisperPanel onClose={() => useUiStore.getState().setWhispersOpen(false)} />}
+      </span>
+      <span style={{ position: 'relative' }}>
+        <button
+          className={`icon-btn ${followsOpen ? 'active' : ''}`}
+          title={t('follows.title')}
+          onClick={() => useUiStore.getState().setFollowsOpen(!followsOpen)}
+        >
+          <HeartIcon size={16} />
+        </button>
+        {followsOpen && <FollowsPanel onClose={() => useUiStore.getState().setFollowsOpen(false)} />}
       </span>
       <button
         className={`icon-btn ${muted ? 'active' : ''}`}

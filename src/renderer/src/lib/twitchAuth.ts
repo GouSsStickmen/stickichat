@@ -41,7 +41,9 @@ export const TWITCH_SCOPES = [
   'channel:manage:polls',
   'channel:manage:predictions',
   // seeing what AutoMod is holding, and letting it through or not
-  'moderator:manage:automod'
+  'moderator:manage:automod',
+  // the list of channels this account follows, and which of them are live
+  'user:read:follows'
 ].join(' ')
 
 export interface DeviceCodeInfo {
