@@ -541,6 +541,13 @@ export interface ChatOverlayConfig extends OverlayBase {
   glowColor: string
   /** emote height in em (1 = text height) */
   emoteScale: number
+  /**
+   * Tallest a GIF may be on this overlay, px.
+   *
+   * Per overlay rather than one global number, because overlays are different sizes: what fits a
+   * full-height chat column is far too big for a strip along the bottom of the screen.
+   */
+  gifMaxHeight: number
 
   // ----- message plate -----
   /** none · fit = plate hugs content · line = full width · panel = one backdrop under all */
@@ -1496,6 +1503,7 @@ export const DEFAULT_CHAT_OVERLAY: Omit<ChatOverlayConfig, 'id' | 'name'> = {
   glowSize: 0,
   glowColor: '#a970ff',
   emoteScale: 1.4,
+  gifMaxHeight: 120,
   plateMode: 'none',
   plateBg: DEFAULT_FILL,
   plateRadius: [8, 8, 8, 8],
@@ -2132,8 +2140,6 @@ export interface Settings {
    * account: someone with thirty channels open has a budget to spend deliberately.
    */
   automodQueue: boolean
-  /** tallest a GIF may be on the stream overlay, px: originals can be enormous */
-  overlayGifSize: number
   playerMode: 'embed' | 'site'
   /** site mode: hide Twitch's own chat and menus, since this app already is the chat */
   playerHideSiteChrome: boolean
@@ -2372,7 +2378,6 @@ export const DEFAULT_SETTINGS: Settings = {
   swipeModMode: 'swipe',
   playerHeight: 220,
   automodQueue: true,
-  overlayGifSize: 120,
   playerMode: 'embed',
   playerHideSiteChrome: true,
   playerSideBySide: false,

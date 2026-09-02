@@ -949,6 +949,25 @@ export default function OverlayEditorWindow({ overlayId }: { overlayId: string }
                 <ColorField value={ov.glowColor} defaultValue="#a970ff" onChange={(v) => update({ glowColor: v })} />
               </div>
             </Row>
+            <Row label={t('oe.gifMaxHeight')}>
+              {/*
+                A slider, not a number box. Typing into the old one fought back: it clamped on
+                every keystroke, so deleting a digit to retype it snapped the value straight back.
+              */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="range"
+                  min={40}
+                  max={480}
+                  step={10}
+                  value={ov.gifMaxHeight ?? 120}
+                  onChange={(e) => update({ gifMaxHeight: parseInt(e.target.value, 10) })}
+                />
+                <span style={{ width: 52, textAlign: 'right', color: 'var(--text-muted)' }}>
+                  {ov.gifMaxHeight ?? 120} px
+                </span>
+              </div>
+            </Row>
             <Row label={t('oe.emoteScale')}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input

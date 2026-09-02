@@ -44,48 +44,6 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
   const wvRef = useRef<{ executeJavaScript: (code: string) => Promise<unknown> } | null>(null)
 
   /*
-   * Drag to resize: the bottom edge when the player sits above the chat, the left edge when it
-   * sits beside it.
-   *
-   * The listeners go on in the pointerdown handler, not in an effect keyed on a "dragging" state.
-   * An effect runs after the render, so a pointerup arriving in the same tick as the pointerdown
-   * is never seen, and the drag then stays live under every later mouse movement.
-   *
-   * Position, not delta: the edge follows the cursor exactly, so it cannot drift over a long drag.
-   */
-  const startResize = (e: React.PointerEvent): void => {
-    e.preventDefault()
-    const vertical = !side
-    // captured once, before anything moves
-    const right = slot?.boxRight ?? window.innerWidth
-    // the webview eats pointer events, so a drag crossing the video would otherwise stop dead
-    document.body.classList.add('dragging-split')
-    const onMove = (ev: PointerEvent): void => {
-      const r = boxRef.current?.getBoundingClientRect()
-      if (!r) return
-      if (vertical) {
-        // never past three quarters of the pane: the chat has to stay a chat
-        const ceiling = Math.max(160, Math.round((slot?.boxHeight ?? 900) * 0.75))
-        const next = Math.max(120, Math.min(ceiling, Math.round(ev.clientY - r.top)))
-        useSettingsStore.getState().setSettings({ playerHeight: next })
-      } else {
-        // side by side, the chat is what gets sized: the player simply takes what is left
-        const next = Math.max(220, Math.min(Math.round(right - 240), Math.round(right - ev.clientX)))
-        useSettingsStore.getState().setSettings({ chatWidth: next })
-      }
-    }
-    const stop = (): void => {
-      document.body.classList.remove('dragging-split')
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', stop)
-      window.removeEventListener('pointercancel', stop)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', stop)
-    window.addEventListener('pointercancel', stop)
-  }
-
-  /*
    * The player lives on a one-page local server rather than at player.twitch.tv directly, because
    * that is the only way to reach Twitch's embed SDK, and the SDK is the only thing that will say
    * how far behind live the video is. Until the port is known there is nothing to load.
@@ -145,6 +103,8 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       addEventListener?: (t: string, f: () => void) => void
       removeEventListener?: (t: string, f: () => void) => void
       insertCSS?: (css: string) => Promise<unknown>
+      executeJavaScript?: (code: string) => Promise<unknown>
+      sendInputEvent?: (e: { type: string; keyCode: string; modifiers: string[] }) => void
     } | null
     if (!wv?.addEventListener) return
     /*
@@ -167,7 +127,33 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       .channel-root, .channel-root__info { padding: 0 !important; }
       html, body { overflow: hidden !important; }
     `
-    const apply = (): void => void wv.insertCSS?.(css)?.catch?.(() => {})
+    /*
+     * Theatre mode, by pressing their own shortcut once per load.
+     *
+     * Alt+T is the player's own toggle and it acts on the page it is sent to, so one window going
+     * into theatre leaves every other stream alone. Sent through sendInputEvent rather than a
+     * synthetic KeyboardEvent, because the page listens for real key events; and only when the
+     * player is not already filling the frame, so it cannot toggle theatre back OFF.
+     */
+    const theatre = (): void => {
+      void wv
+        .executeJavaScript?.(
+          "(() => { const p = document.querySelector('.persistent-player'); " +
+            "return !!p && p.getBoundingClientRect().width < window.innerWidth - 40 })()"
+        )
+        ?.then((needs: unknown) => {
+          if (!needs) return
+          for (const type of ['keyDown', 'char', 'keyUp'] as const) {
+            wv.sendInputEvent?.({ type, keyCode: 't', modifiers: ['alt'] })
+          }
+        })
+        ?.catch?.(() => {})
+    }
+    const apply = (): void => {
+      void wv.insertCSS?.(css)?.catch?.(() => {})
+      // after the page has had a moment to build its player
+      window.setTimeout(theatre, 2500)
+    }
     wv.addEventListener('dom-ready', apply)
     // a single-page app swaps channels without reloading, so re-apply on every navigation
     wv.addEventListener('did-navigate-in-page', apply)
@@ -250,10 +236,6 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
           </>
         )}
       </div>
-      {!standalone && (
-        // the whole edge, not a corner grip: it is one boundary, horizontal or vertical
-        <div className={side ? 'stream-resize-x' : 'stream-resize'} onPointerDown={startResize} />
-      )}
     </div>
   )
 }

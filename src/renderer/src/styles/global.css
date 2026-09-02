@@ -3336,6 +3336,7 @@ input[type='number']::-webkit-inner-spin-button {
 }
 /* the hole a pane leaves for its player, and the layer that fills it from above */
 .player-slot {
+  position: relative;
   flex: 0 0 auto;
   background: #000;
 }
@@ -3412,6 +3413,8 @@ body.dragging-split .stream-webview {
   color: #f87171;
 }
 .stream-resize-x {
+  /* above the player layer, which is drawn over this slot at z-index 6 */
+  z-index: 7;
   position: absolute;
   top: 0;
   bottom: 0;
@@ -3439,6 +3442,8 @@ body.dragging-split .stream-webview {
   background: rgba(0, 0, 0, 0.6);
 }
 .stream-resize {
+  /* above the player layer, which is drawn over this slot at z-index 6 */
+  z-index: 7;
   position: absolute;
   left: 0;
   right: 0;

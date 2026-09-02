@@ -3087,25 +3087,6 @@ function OverlaySection(): React.JSX.Element {
         {t('overlay.hint')}
       </p>
       <Framed>
-      {/* nothing else on this page is per-overlay, and neither is this: it caps every one of them */}
-      <div className="set-row">
-        <label>{t('set.overlayGifSize')}</label>
-        <input
-          type="number"
-          min={40}
-          max={480}
-          step={10}
-          style={{ width: 80 }}
-          value={settings.overlayGifSize}
-          onChange={(e) =>
-            set({ overlayGifSize: Math.min(480, Math.max(40, parseInt(e.target.value, 10) || 120)) })
-          }
-        />
-        <span style={{ color: 'var(--text-faint)' }}>px</span>
-      </div>
-      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
-        {t('hint.overlayGifSize')}
-      </p>
         <Toggle label={t('overlay.enabled')} value={settings.overlayEnabled} onChange={(v) => set({ overlayEnabled: v })} />
         <div className="set-row">
           <label>{t('overlay.port')}</label>

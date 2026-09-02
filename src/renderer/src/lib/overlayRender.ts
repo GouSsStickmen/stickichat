@@ -84,8 +84,7 @@ function bodyHtml(msg: ChatMessage): { html: string; emotes: string[] } {
          * on stream as an empty line. Capped in height from settings, because a GIPHY original can
          * be five hundred pixels tall and would push everything else off the overlay.
          */
-        const cap = useSettingsStore.getState().settings.overlayGifSize
-        out += `<img class="chat-gif" style="max-height:${cap}px" src="${esc(tk.url)}" alt="${esc(tk.label)}">`
+        out += `<img class="chat-gif" src="${esc(tk.url)}" alt="${esc(tk.label)}">`
         break
       }
       case 'mention':

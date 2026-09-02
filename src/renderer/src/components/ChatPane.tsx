@@ -112,6 +112,41 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const playerSide = useSettingsStore((s) => s.settings.playerSideBySide)
   const chatWidth = useSettingsStore((s) => s.settings.chatWidth)
   const sideBySide = playerOpen && playerSide
+
+  /*
+   * Dragging the player's edge. Position, not delta, so it cannot drift; the listeners go on in
+   * the pointerdown handler rather than in an effect, because an effect runs after the render and
+   * would miss a pointerup that arrives in the same tick.
+   */
+  const startResize = (e: React.PointerEvent): void => {
+    e.preventDefault()
+    const vertical = !playerSide
+    const box = splitRef.current?.getBoundingClientRect()
+    const right = box?.right ?? window.innerWidth
+    const boxTop = box?.top ?? 0
+    const boxHeight = box?.height ?? 900
+    document.body.classList.add('dragging-split')
+    const onMove = (ev: PointerEvent): void => {
+      if (vertical) {
+        // the chat keeps at least a quarter of the pane whatever the pointer says
+        const ceiling = Math.max(160, Math.round(boxHeight * 0.75))
+        const next = Math.max(120, Math.min(ceiling, Math.round(ev.clientY - boxTop)))
+        useSettingsStore.getState().setSettings({ playerHeight: next })
+      } else {
+        const next = Math.max(220, Math.min(Math.round(right - 240), Math.round(right - ev.clientX)))
+        useSettingsStore.getState().setSettings({ chatWidth: next })
+      }
+    }
+    const stop = (): void => {
+      document.body.classList.remove('dragging-split')
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+  }
   const latency = useUiStore((s) => s.streamLatency[pane.channel])
 
   /*
@@ -473,7 +508,18 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             className={`player-slot ${sideBySide ? 'is-side' : ''}`}
             ref={slotRef}
             style={sideBySide ? undefined : { height: playerHeight }}
-          />
+          >
+            {/*
+              The resize grip, on the OUTSIDE of the video.
+              It used to sit over the player, and a webview never hands the pointer back: crossing
+              the strip made Twitch decide the mouse had left, so their controls vanished exactly
+              when you reached for the settings gear in the corner. Out here it cannot do that.
+            */}
+            <div
+              className={sideBySide ? 'stream-resize-x' : 'stream-resize'}
+              onPointerDown={startResize}
+            />
+          </div>
         )}
         <div className="pane-chat-col" style={sideBySide ? { width: chatWidth } : undefined}>
           <div className="pane-body">

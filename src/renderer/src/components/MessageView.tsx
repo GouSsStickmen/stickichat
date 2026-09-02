@@ -1133,6 +1133,14 @@ function MessageViewInner({
         .getState()
         .patchAutoMod(msg.channel, msg.id, action === 'ALLOW' ? 'allowed' : 'denied')
     }
+    /*
+     * The buttons are for whoever can actually press them.
+     *
+     * Allow and deny are moderator actions: offered to anyone else they are a promise Twitch will
+     * refuse, and worse, they suggest a viewer is seeing a queue they have no business in. The row
+     * itself stays, because knowing a message was held is useful to the person who wrote it too.
+     */
+    const canDecide = isMod || msg.channel === account?.login?.toLowerCase()
     return (
       <div className={`msg automod-row ${held.resolved ? 'settled' : ''}`}>
         <div className="automod-head">
@@ -1152,7 +1160,7 @@ function MessageViewInner({
                 ? t('automod.denied')
                 : t('automod.expired')}
           </div>
-        ) : (
+        ) : canDecide ? (
           <div className="automod-actions">
             <button className="primary" onClick={() => void decide('ALLOW')}>
               {t('automod.allow')}
@@ -1161,6 +1169,8 @@ function MessageViewInner({
               {t('automod.deny')}
             </button>
           </div>
+        ) : (
+          <div className="automod-done">{t('automod.waiting')}</div>
         )}
       </div>
     )

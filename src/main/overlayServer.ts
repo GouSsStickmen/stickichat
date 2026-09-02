@@ -371,7 +371,7 @@ const OVERLAY_HTML = `<!doctype html>
      the side and the whole stack looks shifted */
   .body .emote-stack { position: relative; display: inline-grid; justify-items: center; align-items: center; vertical-align: -0.3em; }
   .body .emote-stack img.emote { grid-area: 1 / 1; vertical-align: baseline; margin: 0; }
-  .body img.chat-gif { display: block; max-width: 100%; border-radius: 6px; margin: 3px 0; }
+  .body img.chat-gif { display: block; max-width: 100%; max-height: var(--gif-h, 120px); border-radius: 6px; margin: 3px 0; }
   .body .emote-stack img.emote-ov { pointer-events: none; }
   .body img.emoji-img { height: 1.25em; width: 1.25em; object-fit: contain; vertical-align: -0.25em; margin: 0 1px; }
   .decor { position: absolute; pointer-events: none; }
@@ -2164,6 +2164,7 @@ const OVERLAY_HTML = `<!doctype html>
     zone.style.color = cfg.textColor
     zone.style.gap = cfg.lineGap + 'px'
     zone.style.setProperty('--emote-h', cfg.emoteScale + 'em')
+    zone.style.setProperty('--gif-h', (cfg.gifMaxHeight || 120) + 'px')
 
     if (cfg.layout === 'horizontal') {
       zone.style.top = cfg.anchor === 'top' ? '0' : 'auto'

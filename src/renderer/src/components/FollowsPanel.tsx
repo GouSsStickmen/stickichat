@@ -72,7 +72,11 @@ export default function FollowsPanel({ onClose }: { onClose: () => void }): Reac
     <div className="follows-panel">
       <div className="follows-head">
         <b>{t('follows.title')}</b>
-        {list && <span className="follows-count">{t('follows.liveCount', { n: liveCount })}</span>}
+        {list && (
+          <span className="follows-count">
+            {t('follows.counts', { live: liveCount, total: list.length })}
+          </span>
+        )}
         <div className="spacer" />
         <button className="ghost" onClick={() => void load()}>
           {t('follows.refresh')}
