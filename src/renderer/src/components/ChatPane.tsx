@@ -12,7 +12,6 @@ import { hotkeyFor, matchHotkey, matchHoldKey } from '../lib/hotkeys'
 import MessageList from './MessageList'
 import InputBox, { ReplyTarget } from './InputBox'
 import ModToolbar from './ModToolbar'
-import StreamPlayer from './StreamPlayer'
 import { useUiStore } from '../store/ui'
 import ChattersList from './ChattersList'
 import HighlightSidebar from './HighlightSidebar'
@@ -90,11 +89,52 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const paneSynced = pane.syncScroll === true
   const [searchOpen, setSearchOpen] = useState(false)
   /** per pane and per session: which channel you want to watch changes constantly */
-  const [playerOpen, setPlayerOpen] = useState(false)
+  const playerOpen = useUiStore((s) => s.openPlayers.includes(pane.channel))
+  const setPlayerOpen = (on: boolean): void =>
+    useUiStore.getState().togglePlayer(pane.channel, on)
+  const playerHeight = useSettingsStore((s) => s.settings.playerHeight)
+  const slotRef = useRef<HTMLDivElement>(null)
   const playerSide = useSettingsStore((s) => s.settings.playerSideBySide)
   const chatWidth = useSettingsStore((s) => s.settings.chatWidth)
   const sideBySide = playerOpen && playerSide
   const latency = useUiStore((s) => s.streamLatency[pane.channel])
+
+  /*
+   * Where the hole is, republished on a slow tick.
+   *
+   * Polling rather than observing: the slot moves for a dozen unrelated reasons (a tab bar that
+   * wrapped, the mod toolbar appearing, a resized window, a changed layout), and chasing each one
+   * with its own listener would be a list that is never quite complete. Five times a second is
+   * imperceptible and costs a getBoundingClientRect.
+   */
+  useEffect(() => {
+    if (!playerOpen) {
+      useUiStore.getState().setPlayerSlot(pane.channel, null)
+      return
+    }
+    const publish = (): void => {
+      const el = slotRef.current
+      const box = splitRef.current
+      if (!el || !box) return
+      const r = el.getBoundingClientRect()
+      const b = box.getBoundingClientRect()
+      useUiStore.getState().setPlayerSlot(pane.channel, {
+        x: Math.round(r.left),
+        y: Math.round(r.top),
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+        boxRight: Math.round(b.right),
+        boxHeight: Math.round(b.height)
+      })
+    }
+    publish()
+    const id = window.setInterval(publish, 200)
+    return () => {
+      window.clearInterval(id)
+      // the pane is going away, so the player parks itself rather than hanging over the next tab
+      useUiStore.getState().setPlayerSlot(pane.channel, null)
+    }
+  }, [playerOpen, pane.channel])
   /** the split box is the stable thing to measure a drag against; the player's own edge moves */
   const splitRef = useRef<HTMLDivElement>(null)
 
@@ -405,7 +445,18 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         volume with it. Only the classes change now, so the player never unmounts.
       */}
       <div className={`pane-split ${sideBySide ? 'is-side' : 'is-stacked'}`} ref={splitRef}>
-        {playerOpen && <StreamPlayer channel={pane.channel} onClose={() => setPlayerOpen(false)} splitRef={splitRef} />}
+        {/*
+          A hole, not a player. The player itself is drawn by PlayerLayer, above the app, so that
+          looking at another tab does not tear it down and start the stream (and its advert) over.
+          This div only reserves the space and reports where it is.
+        */}
+        {playerOpen && (
+          <div
+            className={`player-slot ${sideBySide ? 'is-side' : ''}`}
+            ref={slotRef}
+            style={sideBySide ? undefined : { height: playerHeight }}
+          />
+        )}
         <div className="pane-chat-col" style={sideBySide ? { width: chatWidth } : undefined}>
           <div className="pane-body">
             <MessageList

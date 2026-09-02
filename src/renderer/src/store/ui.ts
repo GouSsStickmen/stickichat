@@ -27,6 +27,17 @@ export interface EmoteFolderMenu {
   fromFolderId?: string | null
 }
 
+/** a rectangle a pane has reserved for its player, in viewport coordinates */
+export interface PlayerSlot {
+  x: number
+  y: number
+  w: number
+  h: number
+  /** the pane's own box, which the resize drags measure against */
+  boxRight: number
+  boxHeight: number
+}
+
 export interface Toast {
   id: number
   text: string
@@ -165,6 +176,20 @@ interface UiState {
   streamLatency: Record<string, number | null>
   setStreamLatency: (channel: string, seconds: number | null) => void
   /**
+   * Channels with a player running, and where on screen each one should be drawn.
+   *
+   * Both live here rather than in the pane because the pane is unmounted the moment you look at
+   * another tab, and taking the player down with it meant every tab switch restarted the stream
+   * and played another advert. The players are rendered once, above everything, and follow the
+   * empty slot their pane leaves for them; a channel whose pane is not on screen keeps playing
+   * parked off to the side.
+   */
+  openPlayers: string[]
+  togglePlayer: (channel: string, on: boolean) => void
+  /** where the pane wants its player, in viewport coordinates, plus the box to resize against */
+  playerSlots: Record<string, PlayerSlot | null>
+  setPlayerSlot: (channel: string, slot: PlayerSlot | null) => void
+  /**
    * "Which categories should this emote be in?", opened with Alt+right-click.
    *
    * In the store rather than the picker because the same question is asked from chat, where the
@@ -235,6 +260,27 @@ export const useUiStore = create<UiState>()((set) => ({
   setModConfirm: (modConfirm) => set({ modConfirm }),
   heldMsgId: null,
   setHeldMsgId: (heldMsgId) => set({ heldMsgId }),
+  openPlayers: [],
+  togglePlayer: (channel, on) =>
+    set((s) => ({
+      openPlayers: on
+        ? s.openPlayers.includes(channel)
+          ? s.openPlayers
+          : [...s.openPlayers, channel]
+        : s.openPlayers.filter((c) => c !== channel)
+    })),
+  playerSlots: {},
+  setPlayerSlot: (channel, slot) =>
+    set((s) => {
+      const old = s.playerSlots[channel]
+      if (
+        old === slot ||
+        (old && slot && old.x === slot.x && old.y === slot.y && old.w === slot.w && old.h === slot.h)
+      ) {
+        return s
+      }
+      return { playerSlots: { ...s.playerSlots, [channel]: slot } }
+    }),
   streamLatency: {},
   setStreamLatency: (channel, seconds) =>
     set((s) =>

@@ -291,3 +291,36 @@ export function SevenTvMark(): React.JSX.Element {
     </svg>
   )
 }
+
+/** a person in a circle: signing the PLAYER in to Twitch, not the app */
+export function PersonIcon({ size }: { size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <circle cx="12" cy="8.5" r="3.5" />
+      <path d="M5.5 19.5 C5.5 15.9 8.4 14 12 14 C15.6 14 18.5 15.9 18.5 19.5" />
+    </Glyph>
+  )
+}
+
+/**
+ * The two arrangements, drawn as what they are: a frame split top/bottom or left/right, with the
+ * video half filled in. A pair of block characters said nothing about which was which.
+ */
+export function LayoutIcon({ side, size }: { side?: boolean; size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      {side ? (
+        <>
+          <path d="M14 4.5 V19.5" />
+          <path d="M4.5 6.5 H13 V17.5 H4.5 Z" fill="currentColor" stroke="none" opacity="0.45" />
+        </>
+      ) : (
+        <>
+          <path d="M3.5 14 H20.5" />
+          <path d="M4.5 5.5 H19.5 V13 H4.5 Z" fill="currentColor" stroke="none" opacity="0.45" />
+        </>
+      )}
+    </Glyph>
+  )
+}

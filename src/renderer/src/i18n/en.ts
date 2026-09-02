@@ -1203,7 +1203,7 @@ export const en = {
   'misc.timedOut': '{user} timed out for {duration}',
   'misc.banned': '{user} was banned',
   'misc.chatCleared': 'Chat was cleared',
-  'misc.newMessages': 'New messages below',
+  'misc.newMessages': 'New messages',
   'misc.reconnecting': '🔄 Reconnecting…',
   'pane.changeChannel': 'Change the channel in this pane',
   'pane.syncMemberOn': 'This pane follows scroll sync — turn it off here',

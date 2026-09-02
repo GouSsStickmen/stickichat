@@ -1206,7 +1206,7 @@ export const uk: Record<TranslationKey, string> = {
   'misc.timedOut': '{user} отримав таймаут на {duration}',
   'misc.banned': '{user} забанено',
   'misc.chatCleared': 'Чат очищено',
-  'misc.newMessages': 'Нові повідомлення нижче',
+  'misc.newMessages': 'Нові повідомлення',
   'misc.reconnecting': '🔄 Перепідключення…',
   'pane.changeChannel': 'Змінити канал у цій панелі',
   'pane.syncMemberOn': 'Ця панель синхронізує прокрутку — вимкнути для неї',

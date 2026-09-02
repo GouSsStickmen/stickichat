@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settings'
-import { useUiStore } from '../store/ui'
+import { useUiStore, type PlayerSlot } from '../store/ui'
 import { useT } from '../i18n'
+import { PersonIcon, LayoutIcon, CloseIcon, TrayArrowIcon } from './Icons'
 
 interface Props {
   channel: string
@@ -9,13 +10,14 @@ interface Props {
   standalone?: boolean
   onClose?: () => void
   /**
-   * The split container, when the player sits beside the chat.
+   * Where the pane wants this player, and the pane box to resize against.
    *
    * A width drag has to measure against something that does not move. The player's own right edge
    * IS the thing being moved, so measuring from it fed every step back into the next one and the
-   * column jumped around instead of following the cursor.
+   * column jumped around instead of following the cursor. Null when no pane is showing it, which
+   * is also when there is nothing to drag.
    */
-  splitRef?: React.RefObject<HTMLDivElement | null>
+  slot?: PlayerSlot | null
 }
 
 /**
@@ -33,9 +35,8 @@ interface Props {
  * feeding the HLS to a player of our own, which exists mainly to skip ads; this app does not do
  * that, and Twitch stitches ads into the stream anyway, so it would not even work.
  */
-export default function StreamPlayer({ channel, standalone, onClose, splitRef }: Props): React.JSX.Element {
+export default function StreamPlayer({ channel, standalone, onClose, slot }: Props): React.JSX.Element {
   const t = useT()
-  const height = useSettingsStore((s) => s.settings.playerHeight)
   const side = useSettingsStore((s) => s.settings.playerSideBySide)
   const boxRef = useRef<HTMLDivElement>(null)
   const wvRef = useRef<{ executeJavaScript: (code: string) => Promise<unknown> } | null>(null)
@@ -54,7 +55,7 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
     e.preventDefault()
     const vertical = !side
     // captured once, before anything moves
-    const right = splitRef?.current?.getBoundingClientRect().right ?? window.innerWidth
+    const right = slot?.boxRight ?? window.innerWidth
     // the webview eats pointer events, so a drag crossing the video would otherwise stop dead
     document.body.classList.add('dragging-split')
     const onMove = (ev: PointerEvent): void => {
@@ -62,7 +63,7 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
       if (!r) return
       if (vertical) {
         // never past three quarters of the pane: the chat has to stay a chat
-        const ceiling = Math.max(160, Math.round((splitRef?.current?.getBoundingClientRect().height ?? 900) * 0.75))
+        const ceiling = Math.max(160, Math.round((slot?.boxHeight ?? 900) * 0.75))
         const next = Math.max(120, Math.min(ceiling, Math.round(ev.clientY - r.top)))
         useSettingsStore.getState().setSettings({ playerHeight: next })
       } else {
@@ -121,7 +122,6 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
         side && !standalone ? 'stream-player-side' : ''
       }`}
       ref={boxRef}
-      style={standalone || side ? undefined : { height }}
     >
       {src && (
         <webview
@@ -137,7 +137,7 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
           title={t('player.signInWhy')}
           onClick={() => void window.sticki.twitchSignIn()}
         >
-          👤
+          <PersonIcon size={15} />
         </button>
         {standalone ? (
           <button
@@ -145,7 +145,7 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
             title={t('player.attach')}
             onClick={() => void window.sticki.returnStream(channel)}
           >
-            ⇤
+            <TrayArrowIcon dir="in" size={14} />
           </button>
         ) : (
           <>
@@ -154,7 +154,8 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
               title={t('player.layout')}
               onClick={() => useSettingsStore.getState().setSettings({ playerSideBySide: !side })}
             >
-              {side ? '▤' : '▥'}
+              {/* the icon shows what you would GET, which is the arrangement you are not in */}
+              <LayoutIcon side={!side} size={15} />
             </button>
             <button
               className="icon-btn"
@@ -169,7 +170,7 @@ export default function StreamPlayer({ channel, standalone, onClose, splitRef }:
               ⧉
             </button>
             <button className="icon-btn" title={t('player.hide')} onClick={onClose}>
-              ✕
+              <CloseIcon size={13} />
             </button>
           </>
         )}

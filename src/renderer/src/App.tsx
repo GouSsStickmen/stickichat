@@ -17,6 +17,7 @@ import UpdateBanner from './components/UpdateBanner'
 import EmoteHoverPreview from './components/EmoteHoverPreview'
 import LinkCard from './components/LinkCard'
 import EmoteFolderMenu from './components/EmoteFolderMenu'
+import PlayerLayer from './components/PlayerLayer'
 import StreamPlayer from './components/StreamPlayer'
 import EmotePickerWindow from './components/EmotePickerWindow'
 import UserCardWindow from './components/UserCardWindow'
@@ -612,6 +613,7 @@ export default function App(): React.JSX.Element | null {
       <EmoteHoverPreview />
       <LinkCard />
       <EmoteFolderMenu />
+      <PlayerLayer />
       <ChannelPrompt />
       <HypeTrainPopup />
       <Toasts />

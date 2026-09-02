@@ -3154,7 +3154,8 @@ input[type='number']::-webkit-inner-spin-button {
 /* the embedded stream: a fixed slab above the chat, its bottom edge draggable */
 .stream-player {
   position: relative;
-  flex: 0 0 auto;
+  width: 100%;
+  height: 100%;
   background: #000;
   overflow: hidden;
 }
@@ -3178,6 +3179,20 @@ input[type='number']::-webkit-inner-spin-button {
   border: 0;
 }
 /* side by side: the player takes what the chat column leaves */
+/* the hole a pane leaves for its player, and the layer that fills it from above */
+.player-slot {
+  flex: 0 0 auto;
+  background: #000;
+}
+.player-slot.is-side {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+}
+.player-layer-box {
+  position: fixed;
+  z-index: 6;
+}
 .pane-split {
   display: flex;
   flex: 1 1 auto;
@@ -3188,7 +3203,7 @@ input[type='number']::-webkit-inner-spin-button {
 .pane-split.is-stacked {
   flex-direction: column;
 }
-.pane-split.is-stacked .stream-player {
+.pane-split.is-stacked .player-slot {
   /*
    * A remembered height can outlive the window it was set in: dragged tall on a big screen, or
    * simply larger than this pane, it pushed the chat to zero and the pane looked like a player
@@ -3203,11 +3218,6 @@ input[type='number']::-webkit-inner-spin-button {
 }
 .pane-split.is-side {
   flex-direction: row;
-}
-.stream-player-side {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: auto;
 }
 /* the chat column in side-by-side: messages above, its own input below */
 .pane-chat-col {
