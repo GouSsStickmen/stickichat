@@ -3246,6 +3246,52 @@ input[type='number']::-webkit-inner-spin-button {
 .poll-duration input {
   width: 60px;
 }
+.poll-option-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.poll-option-row input {
+  flex: 1;
+  min-width: 0;
+}
+.poll-option-del,
+.poll-preset-del {
+  padding: 2px 6px;
+  line-height: 1;
+  opacity: 0.6;
+}
+.poll-option-del:hover,
+.poll-preset-del:hover {
+  opacity: 1;
+  color: var(--danger, #f87171);
+}
+.poll-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.poll-preset {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.poll-preset-use {
+  border: 0;
+  background: none;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.poll-save-row {
+  display: flex;
+  gap: 4px;
+}
+.poll-save-row input {
+  flex: 1;
+  min-width: 0;
+}
 .poll-note {
   color: var(--text-faint);
   font-size: 11px;

@@ -151,6 +151,27 @@ export interface Emote {
 }
 
 /** a named shelf in the favourites; `keys` are favKey() references into favoriteEmotes */
+/** a poll or prediction worth keeping around */
+export interface PollPreset {
+  id: string
+  name: string
+  kind: 'poll' | 'prediction'
+  title: string
+  options: string[]
+  minutes: number
+  /** polls only: viewers may also pay channel points to vote again */
+  pointsPerVote?: number
+}
+
+/** whatever is half-typed in the panel right now */
+export interface PollDraft {
+  kind: 'poll' | 'prediction'
+  title: string
+  options: string[]
+  minutes: number
+  pointsPerVote: number
+}
+
 export interface FavoriteFolder {
   id: string
   name: string
@@ -2074,6 +2095,18 @@ export interface Settings {
   hotkeys: Partial<Record<HotkeyAction, string>>
   /** height in px of the mobile stream player, remembered between launches */
   playerHeight: number
+  /**
+   * A saved poll or prediction, ready to run again.
+   *
+   * Streams repeat themselves: the same "who wins" prediction every match, the same "what next"
+   * poll every week. Retyping it each time is the whole friction of the feature.
+   */
+  pollPresets: PollPreset[]
+  /**
+   * The unsent draft in the poll panel, so closing the window does not throw it away, and the
+   * next one starts from what was typed last rather than from nothing.
+   */
+  pollDraft: PollDraft | null
   /** swipe-to-moderate timeout tiers (seconds), shortest→longest */
   swipeTimeouts: number[]
   /**
@@ -2292,6 +2325,8 @@ export const DEFAULT_SETTINGS: Settings = {
   swipeModEnabled: true,
   swipeModMode: 'swipe',
   playerHeight: 220,
+  pollPresets: [],
+  pollDraft: null,
   overlayEnabled: false,
   overlayPort: 4715,
   overlayFontSize: 16,

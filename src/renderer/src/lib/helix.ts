@@ -276,13 +276,17 @@ export async function createPoll(
   broadcasterId: string,
   title: string,
   choices: string[],
-  durationSeconds: number
+  durationSeconds: number,
+  /** 0 means votes are free; anything above turns on paid extra votes at that price */
+  pointsPerVote = 0
 ): Promise<HttpResponse> {
   return helixRequest(account, 'POST', '/polls', {}, {
     broadcaster_id: broadcasterId,
     title,
     choices: choices.map((t) => ({ title: t })),
-    duration: durationSeconds
+    duration: durationSeconds,
+    channel_points_voting_enabled: pointsPerVote > 0,
+    ...(pointsPerVote > 0 ? { channel_points_per_vote: pointsPerVote } : {})
   })
 }
 

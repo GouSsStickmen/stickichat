@@ -70,9 +70,12 @@ export default function StreamPlayer({ channel, standalone, onClose }: Props): R
             <button
               className="icon-btn"
               title={t('player.detach')}
-              onClick={() =>
-                window.sticki.openStreamWindow(`stream=${encodeURIComponent(channel)}`)
-              }
+              onClick={() => {
+                // "move to its own window" has to MOVE it: leaving the pane copy behind means two
+                // players, two audio streams and twice the CPU, which is not what the button says
+                void window.sticki.openStreamWindow(`stream=${encodeURIComponent(channel)}`)
+                onClose?.()
+              }}
             >
               ⧉
             </button>

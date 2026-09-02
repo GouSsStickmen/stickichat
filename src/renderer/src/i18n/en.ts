@@ -108,6 +108,12 @@ export const en = {
   'player.detach': 'Move to its own window',
   'player.notice':
     "This is Twitch's own player, so the ads are the ones the site would show. There is no honest way to remove them, only a channel subscription or Turbo does. The video always trails the chat by a few seconds.",
+  'poll.optionDelete': 'Remove this option',
+  'poll.savePreset': 'Save as a preset',
+  'poll.presetName': 'Preset name',
+  'poll.presetDelete': 'Delete preset',
+  'poll.pointsPerVote': 'Points per extra vote',
+  'poll.pointsHint': 'Zero means voting is free. Above zero turns on paid extra votes with channel points.',
   'poll.title': 'Polls and predictions',
   'poll.short': 'Polls',
   'poll.poll': 'Poll',
