@@ -35,10 +35,12 @@ function startedAtLabel(startedAt: string): string {
   const d = new Date(startedAt)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleString('uk-UA', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit'
+    second: '2-digit'
   })
 }
 
@@ -302,7 +304,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           <span className="stream-info" title={streamInfo.title}>
             <span className="si-icon"><EyeIcon size={13} /></span> {streamInfo.viewers.toLocaleString('uk-UA')} ·{' '}
             <span className="si-icon"><ClockIcon size={13} /></span>{' '}
-            <span title={t('pane.startedAt', { at: startedAtLabel(streamInfo.startedAt) })}>
+            <span title={startedAtLabel(streamInfo.startedAt)}>
               {formatUptime(streamInfo.startedAt)}
             </span>
             {streamInfo.title ? ` · ${streamInfo.title}` : ''}

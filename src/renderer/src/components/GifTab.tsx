@@ -35,10 +35,24 @@ export default function GifTab({ gifs, state, hasKey, onPickGif, onMore }: Props
      */
     return (
       <div className="gif-nokey">
+        {/*
+          The limitation goes FIRST, not after the work.
+          Someone about to register for a key deserves to know what they get for it before they
+          spend the two minutes, not once the tab finally opens. It is the same sentence shown
+          above the grid afterwards.
+        */}
+        <p className="gif-warn">{t('picker.gifNotNative')}</p>
         <p>{t('picker.gifNoKey')}</p>
-        {/* the two things someone reading this actually needs to know before deciding to bother */}
         <p className="gif-note">{t('picker.gifKeyOptional')}</p>
         <p className="gif-note">{t('picker.gifOthersShown')}</p>
+        {/* what to click, in order, because the GIPHY dashboard offers two kinds of key */}
+        <ol className="gif-steps">
+          <li>{t('picker.gifStep1')}</li>
+          <li>{t('picker.gifStep2')}</li>
+          <li>{t('picker.gifStep3')}</li>
+          <li>{t('picker.gifStep4')}</li>
+          <li>{t('picker.gifStep5')}</li>
+        </ol>
         <div className="gif-nokey-actions">
           <input
             type="text"
