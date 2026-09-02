@@ -1,5 +1,10 @@
 appId: com.stickmen.stickichat
 productName: StickiChat
+# Windows puts FileDescription in the Task Manager's name column, and FileDescription comes from
+# the description field. Left to package.json it showed the whole one-line pitch about multi-chat
+# and 7TV emotes, which is a fine sentence for a repository and a terrible name for a process.
+extraMetadata:
+  description: StickiChat
 directories:
   output: release
 files:
