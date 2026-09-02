@@ -59,14 +59,40 @@ function toItem(g: GiphyGif): GifItem | null {
   }
 }
 
+/*
+ * A beta key is allowed 100 calls an hour, and that is the whole budget for one person: opening
+ * the tab, every search, every time the picker is reopened. So an answer is kept for ten minutes
+ * and identical requests in flight share one call — reopening the tab or retyping a search you
+ * just ran costs nothing.
+ */
+const TTL_MS = 10 * 60 * 1000
+const cache = new Map<string, { at: number; gifs: GifItem[] }>()
+const inFlight = new Map<string, Promise<GifItem[]>>()
+
 async function call(path: string, params: Record<string, string>, key: string): Promise<GifItem[]> {
   if (!key) return []
-  const qs = new URLSearchParams({ ...params, api_key: key }).toString()
-  const res = await host().request(`${API}/${path}?${qs}`, { method: 'GET' })
-  if (!res.ok) throw new Error(`GIPHY ${res.status}`)
-  const data = (res.json as { data?: GiphyGif[] } | undefined)?.data
-  if (!Array.isArray(data)) return []
-  return data.map(toItem).filter((g): g is GifItem => g !== null)
+  const cacheKey = `${path}|${JSON.stringify(params)}`
+  const hit = cache.get(cacheKey)
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.gifs
+  const running = inFlight.get(cacheKey)
+  if (running) return running
+  const run = (async (): Promise<GifItem[]> => {
+    const qs = new URLSearchParams({ ...params, api_key: key }).toString()
+    const res = await host().request(`${API}/${path}?${qs}`, { method: 'GET' })
+    if (!res.ok) throw new Error(`GIPHY ${res.status}`)
+    const data = (res.json as { data?: GiphyGif[] } | undefined)?.data
+    const gifs = Array.isArray(data)
+      ? data.map(toItem).filter((g): g is GifItem => g !== null)
+      : []
+    cache.set(cacheKey, { at: Date.now(), gifs })
+    return gifs
+  })()
+  inFlight.set(cacheKey, run)
+  try {
+    return await run
+  } finally {
+    inFlight.delete(cacheKey)
+  }
 }
 
 /** what the tab shows before anything is typed */
