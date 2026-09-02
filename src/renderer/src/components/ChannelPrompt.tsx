@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useUiStore } from '../store/ui'
 import { useLayoutStore } from '../store/layout'
 import { useAccountsStore } from '../store/accounts'
@@ -10,12 +10,16 @@ export default function ChannelPrompt(): React.JSX.Element | null {
   const t = useT()
   const prompt = useUiStore((s) => s.channelPrompt)
 
-  // auto-dismiss: a stale raid offer minutes later is just noise
+  /*
+   * Auto-dismiss, because a stale raid offer minutes later is just noise. Held while the pointer
+   * is on it, because a thing that vanishes as you reach for it is worse than no offer at all.
+   */
+  const [held, setHeld] = useState(false)
   useEffect(() => {
-    if (!prompt) return
+    if (!prompt || held) return
     const id = window.setTimeout(() => useUiStore.getState().setChannelPrompt(null), 45000)
     return () => window.clearTimeout(id)
-  }, [prompt])
+  }, [prompt, held])
 
   if (!prompt) return null
 
@@ -43,7 +47,11 @@ export default function ChannelPrompt(): React.JSX.Element | null {
   }
 
   return (
-    <div className="channel-prompt">
+    <div
+      className="channel-prompt"
+      onPointerEnter={() => setHeld(true)}
+      onPointerLeave={() => setHeld(false)}
+    >
       {/* raid/shoutout info on its own line — the nicks and buttons used to blur together */}
       <div className="channel-prompt-text">
         {prompt.shoutout ? '📣 ' : '🚨 '}

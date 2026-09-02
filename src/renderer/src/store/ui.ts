@@ -31,8 +31,10 @@ export interface Toast {
   id: number
   text: string
   kind: 'ok' | 'error'
-  /** stable key for "don't show again" — the message text with volatile bits stripped */
+  /** stable key for "don't show again": the message text with volatile bits stripped */
   muteKey?: string
+  /** how long it should stay, in ms. The row owns the clock so hovering can stop it. */
+  ms: number
 }
 
 export interface EmotePreviewTarget {
@@ -208,15 +210,13 @@ export const useUiStore = create<UiState>()((set) => ({
     // silently drop errors the user has told us to stop showing
     if (muteKey && useSettingsStore.getState().settings.mutedErrors.includes(muteKey)) return
     const id = ++toastId
-    set((s) => ({ toasts: [...s.toasts, { id, text, kind, muteKey }] }))
+    // errors carry explanations now, so they get longer on screen than a confirmation
+    const ms = opts?.ms ?? (kind === 'error' ? 10000 : 3500)
+    set((s) => ({ toasts: [...s.toasts, { id, text, kind, muteKey, ms }] }))
     // error toasts can optionally chime; lazy import avoids a static ui⇄sound cycle
     if (kind === 'error') {
       import('../lib/sound').then((m) => m.playErrorSound()).catch(() => {})
     }
-    // errors carry explanations now — give people time to actually read them
-    setTimeout(() => {
-      useUiStore.getState().dismissToast(id)
-    }, opts?.ms ?? (kind === 'error' ? 10000 : 3500))
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setEmotePreview: (emotePreview) => set({ emotePreview }),

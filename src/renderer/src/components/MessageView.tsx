@@ -969,7 +969,7 @@ function MessageViewInner({
       action.kind === 'delete'
         ? await deleteChatMessage(account, channelId, msg.id)
         : await banUser(account, channelId, msg.userId, action.seconds)
-    if (res.ok) toast(`${action.label} — ${msg.login}`, 'ok')
+    if (res.ok) toast(`${action.label}: ${msg.login}`, 'ok')
     else toast((localizeApiError((res.json as { message?: string })?.message ?? '') || t('mod.actionFail')) + t('err.account', { login: account?.login ?? '' }), 'error')
   }
 
