@@ -181,16 +181,38 @@ button.danger {
   color: var(--accent-text);
 }
 button.ghost {
+  /*
+   * A quiet button is still a button. Muted text on a transparent background gave it no edge at
+   * all, so an ordinary action like "add another option" was indistinguishable from a disabled one
+   * until you tried it. The outline costs nothing and says "this is a control".
+   */
   background: transparent;
   color: var(--text-muted);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+button.ghost:hover {
+  box-shadow: inset 0 0 0 1px transparent;
 }
 button.ghost:hover {
   background: var(--surface-3);
   color: var(--text);
 }
 button:disabled {
-  opacity: 0.45;
+  /*
+   * A flat surface, not a faded one.
+   *
+   * Half-opacity is fine on a grey button and unreadable on a coloured one: themes with a bright
+   * accent set --accent-text dark on purpose, so a disabled .primary was dark text washed over a
+   * washed accent, which reads as broken rather than as inactive. Giving disabled its own pair of
+   * colours makes it legible in every theme and unmistakably not clickable.
+   */
+  background: var(--surface-3);
+  color: var(--text-muted);
   cursor: not-allowed;
+  box-shadow: none;
+}
+button.ghost:disabled {
+  background: transparent;
 }
 
 input,
