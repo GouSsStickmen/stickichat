@@ -529,7 +529,6 @@ export default function App(): React.JSX.Element | null {
         <EmotePickerWindow payload={special.data} />
         {/* its own window, its own tree: the menu mounted in the main one does not exist here */}
         <EmoteFolderMenu />
-      {gifConsentOpen && <GifNativeConsent onClose={() => useUiStore.getState().setGifConsentOpen(false)} />}
         {gifConsentOpen && <GifNativeConsent onClose={() => useUiStore.getState().setGifConsentOpen(false)} />}
         <Toasts />
       </>
