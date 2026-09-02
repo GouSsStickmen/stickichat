@@ -1,14 +1,4 @@
-import {
-  ipcMain,
-  safeStorage,
-  shell,
-  app,
-  session,
-  BrowserWindow,
-  desktopCapturer,
-  screen,
-  clipboard
-} from 'electron'
+import { ipcMain, safeStorage, shell, app, BrowserWindow, desktopCapturer, screen, clipboard } from 'electron'
 import { join } from 'path'
 import { readConfig, writeConfig, readWindowState, writeWindowState } from './storage'
 import { inlineAssets } from './assets'
@@ -92,9 +82,6 @@ function createChildWindow(
   return win
 }
 
-/** cookie jar for the optional twitch.tv web session — kept away from everything else */
-const TWITCH_SESSION_PARTITION = 'persist:twitch-gif'
-
 export function registerIpc(): void {
   ipcMain.handle('secure:encrypt', (_e, plain: string): string => {
     if (!safeStorage.isEncryptionAvailable()) return 'plain:' + Buffer.from(plain, 'utf8').toString('base64')
@@ -109,55 +96,6 @@ export function registerIpc(): void {
     } catch {
       return null
     }
-  })
-
-  /*
-   * A real twitch.tv login, in its own window and its own cookie jar, for the one thing Twitch
-   * will not let a third-party token do: post a GIF message.
-   *
-   * The partition is deliberate — this session touches nothing else the app stores, and clearing
-   * it logs out of exactly this and nothing more. The password is typed into Twitch's own page in
-   * a window the user drives; the app never sees it and never asks for it. What comes back is the
-   * session cookie, which is why the feature is opt-in behind a warning: it is not a scoped token,
-   * it is the whole account.
-   */
-  ipcMain.handle('twitch:webLogin', async (): Promise<string | null> => {
-    const part = session.fromPartition(TWITCH_SESSION_PARTITION)
-    const win = new BrowserWindow({
-      width: 520,
-      height: 760,
-      title: 'Twitch',
-      autoHideMenuBar: true,
-      webPreferences: { partition: TWITCH_SESSION_PARTITION, nodeIntegration: false, contextIsolation: true }
-    })
-    const readToken = async (): Promise<string | null> => {
-      const cookies = await part.cookies.get({ domain: '.twitch.tv', name: 'auth-token' })
-      return cookies[0]?.value || null
-    }
-    return new Promise<string | null>((resolve) => {
-      let done = false
-      const finish = (value: string | null): void => {
-        if (done) return
-        done = true
-        clearInterval(timer)
-        if (!win.isDestroyed()) win.destroy()
-        resolve(value)
-      }
-      // polling rather than a navigation hook: the cookie is set at some point during a login
-      // that can involve 2FA, a captcha and several redirects, and none of those are ours to know
-      const timer = setInterval(() => {
-        void readToken().then((tok) => {
-          if (tok) finish(tok)
-        })
-      }, 1000)
-      win.on('closed', () => finish(null))
-      void win.loadURL('https://www.twitch.tv/login')
-    })
-  })
-
-  /** forget the web session — the off switch has to actually remove something */
-  ipcMain.handle('twitch:webLogout', async (): Promise<void> => {
-    await session.fromPartition(TWITCH_SESSION_PARTITION).clearStorageData()
   })
 
   ipcMain.handle('config:get', () => readConfig())

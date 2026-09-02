@@ -36,6 +36,9 @@ export default function GifTab({ gifs, state, hasKey, onPickGif, onMore }: Props
     return (
       <div className="gif-nokey">
         <p>{t('picker.gifNoKey')}</p>
+        {/* the two things someone reading this actually needs to know before deciding to bother */}
+        <p className="gif-note">{t('picker.gifKeyOptional')}</p>
+        <p className="gif-note">{t('picker.gifOthersShown')}</p>
         <div className="gif-nokey-actions">
           <input
             type="text"
@@ -72,6 +75,11 @@ export default function GifTab({ gifs, state, hasKey, onPickGif, onMore }: Props
 
   return (
     <>
+      {/*
+        Said above the grid, not buried in settings: what leaves this tab is a link, and everyone
+        outside StickiChat sees a link. Better to know that before sending than after.
+      */}
+      <div className="gif-note gif-note-bar">{t('picker.gifNotNative')}</div>
       <div className="gif-grid">
         {gifs.map((g) => (
           <button

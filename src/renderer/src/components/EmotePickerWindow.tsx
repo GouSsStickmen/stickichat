@@ -56,7 +56,7 @@ export default function EmotePickerWindow({
           )
         }}
         onPickGif={(gif) =>
-          void pickGif(gif, payload.channelId, (text) => {
+          pickGif(gif, (text) => {
             window.sticki.sendEmotePick(
               JSON.stringify({ paneId: payload.paneId, text: `${text} ` } satisfies InsertEventDetail)
             )

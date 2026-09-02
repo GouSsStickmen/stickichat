@@ -1718,40 +1718,6 @@ function WindowsSection(): React.JSX.Element {
         {t('hint.giphyKey')}
       </p>
       <div className="set-row">
-        <label>{t('set.gifSendMode')}</label>
-        <select
-          value={settings.gifSendMode}
-          onChange={(e) => {
-            // switching TO native never happens from a dropdown: it goes through the wall of text
-            if (e.target.value === 'native') {
-              useUiStore.getState().setGifConsentOpen(true)
-              return
-            }
-            set({ gifSendMode: 'link' })
-          }}
-        >
-          <option value="link">{t('set.gifSendLink')}</option>
-          <option value="native">{t('set.gifSendNative')}</option>
-        </select>
-      </div>
-      <p className="hint" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
-        {t('hint.gifSendMode')}
-      </p>
-      {settings.gifSessionEnc && (
-        <div className="set-row">
-          <button
-            className="danger"
-            onClick={() => {
-              set({ gifSendMode: 'link', gifSessionEnc: '' })
-              void window.sticki.twitchWebLogout()
-              useUiStore.getState().toast(t('gif.disconnected'))
-            }}
-          >
-            {t('gif.disconnect')}
-          </button>
-        </div>
-      )}
-      <div className="set-row">
         <label>{t('set.giphyRating')}</label>
         <select
           value={settings.giphyRating}

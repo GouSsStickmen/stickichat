@@ -1899,20 +1899,6 @@ export interface Settings {
   giphyApiKey: string
   /** GIPHY's content rating filter — the same knob Twitch's keyboard sets for its own picker */
   giphyRating: 'g' | 'pg' | 'pg-13'
-  /**
-   * What clicking a GIF does.
-   *
-   * 'link' types the media URL into the box: an ordinary message, works from an ordinary token,
-   * renders as a GIF in StickiChat and as a link everywhere else. 'native' posts a real Twitch GIF
-   * message — which Twitch only lets its own clients do, so it needs a twitch.tv web session and
-   * the person switching it on is the one carrying that risk. Default is 'link' on purpose.
-   */
-  gifSendMode: 'link' | 'native'
-  /**
-   * The twitch.tv session cookie for 'native', encrypted with the OS keychain like the account
-   * tokens. Empty means not connected — the mode falls back to 'link' rather than failing.
-   */
-  gifSessionEnc: string
   /** px size of the big hover preview in the emote picker */
   emotePreviewSize: number
   /** px size of the preview shown when hovering an emote in a chat message */
@@ -2203,8 +2189,6 @@ export const DEFAULT_SETTINGS: Settings = {
   pickerSort: 'size',
   giphyApiKey: '',
   giphyRating: 'pg-13',
-  gifSendMode: 'link',
-  gifSessionEnc: '',
   emotePreviewSize: 112,
   chatEmoteHoverSize: 128,
   showStreamInfo: true,

@@ -618,7 +618,7 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
              * the media URL — and since that is a normal message, it deserves the normal chance
              * to be read over before Enter.
              */
-            onPickGif={(gif) => void pickGif(gif, channelId, insertFromPicker)}
+            onPickGif={(gif) => pickGif(gif, insertFromPicker)}
             onClose={() => setPickerOpen(false)}
           />
         )}
