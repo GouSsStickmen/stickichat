@@ -34,7 +34,12 @@ export const TWITCH_SCOPES = [
   'moderator:read:blocked_terms',
   'moderator:read:unban_requests',
   'moderator:read:moderators',
-  'moderator:read:vips'
+  'moderator:read:vips',
+  // starting and resolving polls/predictions FROM the app. Reading them never needed a scope —
+  // they arrive over PubSub — so anyone authorized before this has to sign in again before the
+  // buttons work, and Twitch says so plainly in the 401.
+  'channel:manage:polls',
+  'channel:manage:predictions'
 ].join(' ')
 
 export interface DeviceCodeInfo {

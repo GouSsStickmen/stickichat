@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Account, MESSAGE_ONLY_TYPES, MOD_ONLY_TYPES, Pane } from '../types'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore } from '../store/ui'
+import PollPanel from './PollPanel'
 import { runModButton, resolveUserId } from '../services/modActions'
 import { ChatSettingsPatch, getChatSettings, sendAnnouncement, startRaid, updateChatSettings } from '../lib/helix'
 import BtnIcon from './BtnIcon'
@@ -15,7 +16,7 @@ interface Props {
   isMod: boolean
 }
 
-type PopoverKind = 'raid' | 'announce' | 'modes' | null
+type PopoverKind = 'raid' | 'announce' | 'modes' | 'poll' | null
 
 export default function ModToolbar({ pane, account, channelId, isMod }: Props): React.JSX.Element {
   const t = useT()
@@ -185,6 +186,15 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
         +
       </button>
       <div className="spacer" />
+      {isBroadcaster && (
+        <button
+          className={popover === 'poll' ? 'primary' : ''}
+          title={t('poll.title')}
+          onClick={() => setPopover((p) => (p === 'poll' ? null : 'poll'))}
+        >
+          📊 {t('poll.short')}
+        </button>
+      )}
       {isMod && (
         <>
           <button
@@ -195,6 +205,12 @@ export default function ModToolbar({ pane, account, channelId, isMod }: Props): 
             🛡 {t('modes.title')}
           </button>
         </>
+      )}
+
+      {popover === 'poll' && account && channelId && (
+        <div className="popover" style={{ top: '100%', right: 8, width: 300 }}>
+          <PollPanel account={account} broadcasterId={channelId} />
+        </div>
       )}
 
       {popover === 'raid' && (

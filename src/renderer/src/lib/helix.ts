@@ -242,6 +242,158 @@ export async function cancelRaid(account: Account, broadcasterId: string): Promi
   return helixRequest(account, 'DELETE', '/raids', { broadcaster_id: broadcasterId })
 }
 
+/*
+ * Polls and predictions, the streamer's half.
+ *
+ * Reading them was already covered — PubSub announces a poll or a prediction starting, and the
+ * chat prints an info line. What was missing is the other direction, and unlike GIFs or voting it
+ * is fully documented: Helix creates, ends, locks and resolves them with ordinary scoped tokens.
+ *
+ * The scopes are new, so an account authorized before this existed gets a 401 until it signs in
+ * again — helixRequest already flags that account for re-authorization when the refresh fails, and
+ * a missing scope is reported by describeHelixError rather than swallowed.
+ */
+
+/** one running or finished poll, reduced to what a panel needs to draw */
+export interface HelixPoll {
+  id: string
+  title: string
+  status: string
+  choices: { id: string; title: string; votes: number }[]
+  endsAt: string
+}
+
+export interface HelixPrediction {
+  id: string
+  title: string
+  status: string
+  outcomes: { id: string; title: string; users: number; points: number; color: string }[]
+  locksAt: string
+}
+
+export async function createPoll(
+  account: Account,
+  broadcasterId: string,
+  title: string,
+  choices: string[],
+  durationSeconds: number
+): Promise<HttpResponse> {
+  return helixRequest(account, 'POST', '/polls', {}, {
+    broadcaster_id: broadcasterId,
+    title,
+    choices: choices.map((t) => ({ title: t })),
+    duration: durationSeconds
+  })
+}
+
+/** TERMINATED stops it and shows the result; ARCHIVED hides it from viewers entirely */
+export async function endPoll(
+  account: Account,
+  broadcasterId: string,
+  pollId: string,
+  status: 'TERMINATED' | 'ARCHIVED'
+): Promise<HttpResponse> {
+  return helixRequest(account, 'PATCH', '/polls', {}, {
+    broadcaster_id: broadcasterId,
+    id: pollId,
+    status
+  })
+}
+
+export async function getPolls(account: Account, broadcasterId: string): Promise<HelixPoll[]> {
+  const res = await helixRequest(account, 'GET', '/polls', { broadcaster_id: broadcasterId, first: '1' })
+  if (!res.ok) return []
+  const data = (res.json as { data?: unknown[] } | null)?.data
+  if (!Array.isArray(data)) return []
+  return data.map((raw) => {
+    const p = raw as {
+      id: string
+      title: string
+      status: string
+      ended_at?: string
+      started_at?: string
+      duration?: number
+      choices?: { id: string; title: string; votes?: number }[]
+    }
+    return {
+      id: p.id,
+      title: p.title,
+      status: p.status,
+      choices: (p.choices ?? []).map((c) => ({ id: c.id, title: c.title, votes: c.votes ?? 0 })),
+      endsAt: p.ended_at ?? ''
+    }
+  })
+}
+
+export async function createPrediction(
+  account: Account,
+  broadcasterId: string,
+  title: string,
+  outcomes: string[],
+  windowSeconds: number
+): Promise<HttpResponse> {
+  return helixRequest(account, 'POST', '/predictions', {}, {
+    broadcaster_id: broadcasterId,
+    title,
+    outcomes: outcomes.map((t) => ({ title: t })),
+    prediction_window: windowSeconds
+  })
+}
+
+/**
+ * LOCKED closes betting and leaves it open, RESOLVED pays the winning outcome out, CANCELED
+ * refunds everyone. Resolving needs the outcome to pay.
+ */
+export async function endPrediction(
+  account: Account,
+  broadcasterId: string,
+  predictionId: string,
+  status: 'LOCKED' | 'RESOLVED' | 'CANCELED',
+  winningOutcomeId?: string
+): Promise<HttpResponse> {
+  return helixRequest(account, 'PATCH', '/predictions', {}, {
+    broadcaster_id: broadcasterId,
+    id: predictionId,
+    status,
+    ...(winningOutcomeId ? { winning_outcome_id: winningOutcomeId } : {})
+  })
+}
+
+export async function getPredictions(
+  account: Account,
+  broadcasterId: string
+): Promise<HelixPrediction[]> {
+  const res = await helixRequest(account, 'GET', '/predictions', {
+    broadcaster_id: broadcasterId,
+    first: '1'
+  })
+  if (!res.ok) return []
+  const data = (res.json as { data?: unknown[] } | null)?.data
+  if (!Array.isArray(data)) return []
+  return data.map((raw) => {
+    const p = raw as {
+      id: string
+      title: string
+      status: string
+      locked_at?: string
+      outcomes?: { id: string; title: string; users?: number; channel_points?: number; color?: string }[]
+    }
+    return {
+      id: p.id,
+      title: p.title,
+      status: p.status,
+      outcomes: (p.outcomes ?? []).map((o) => ({
+        id: o.id,
+        title: o.title,
+        users: o.users ?? 0,
+        points: o.channel_points ?? 0,
+        color: o.color ?? 'BLUE'
+      })),
+      locksAt: p.locked_at ?? ''
+    }
+  })
+}
+
 export interface ChatSettingsPatch {
   slow_mode?: boolean
   slow_mode_wait_time?: number
