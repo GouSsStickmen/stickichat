@@ -2010,7 +2010,17 @@ const OVERLAY_HTML = `<!doctype html>
     if (goneBox) return
     goneBox = document.createElement('div')
     goneBox.id = 'gone'
-    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
+    /*
+     * Name the id it asked for.
+     *
+     * "This overlay was deleted" is true and useless: recreating an overlay gives it a NEW id, so
+     * the app has one and this source is still pointing at the old one, and the two look identical
+     * from here. Printing the id turns it into something checkable against the list in StickiChat.
+     */
+    var askedFor = new URLSearchParams(location.search).get('profile') || '?'
+    goneBox.textContent =
+      'Цього оверлея вже немає в StickiChat: ' + askedFor +
+      '. Скопіюй свіжий URL із застосунку, id змінюється щоразу, коли оверлей створюють наново.'
     document.body.appendChild(goneBox)
   }
 
@@ -2727,7 +2737,17 @@ const EMOTE_HTML = `<!doctype html>
     if (goneBox) return
     goneBox = document.createElement('div')
     goneBox.id = 'gone'
-    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
+    /*
+     * Name the id it asked for.
+     *
+     * "This overlay was deleted" is true and useless: recreating an overlay gives it a NEW id, so
+     * the app has one and this source is still pointing at the old one, and the two look identical
+     * from here. Printing the id turns it into something checkable against the list in StickiChat.
+     */
+    var askedFor = new URLSearchParams(location.search).get('profile') || '?'
+    goneBox.textContent =
+      'Цього оверлея вже немає в StickiChat: ' + askedFor +
+      '. Скопіюй свіжий URL із застосунку, id змінюється щоразу, коли оверлей створюють наново.'
     document.body.appendChild(goneBox)
   }
 
@@ -3121,7 +3141,17 @@ const GOAL_HTML = `<!doctype html>
     if (goneBox) return
     goneBox = document.createElement('div')
     goneBox.id = 'gone'
-    goneBox.textContent = 'Цей оверлей видалено в StickiChat. Онови URL джерела в OBS.'
+    /*
+     * Name the id it asked for.
+     *
+     * "This overlay was deleted" is true and useless: recreating an overlay gives it a NEW id, so
+     * the app has one and this source is still pointing at the old one, and the two look identical
+     * from here. Printing the id turns it into something checkable against the list in StickiChat.
+     */
+    var askedFor = new URLSearchParams(location.search).get('profile') || '?'
+    goneBox.textContent =
+      'Цього оверлея вже немає в StickiChat: ' + askedFor +
+      '. Скопіюй свіжий URL із застосунку, id змінюється щоразу, коли оверлей створюють наново.'
     document.body.appendChild(goneBox)
   }
 

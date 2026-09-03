@@ -188,26 +188,35 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      * synthetic KeyboardEvent, because the page listens for real key events; and only when the
      * player is not already filling the frame, so it cannot toggle theatre back OFF.
      */
+    /*
+     * Theatre mode, by pressing their own button.
+     *
+     * Not the keyboard shortcut: that needs the page to have focus, and it does not right after
+     * loading. The button carries no data-a-target, but its label always ends in "(alt+t)" in
+     * every language, which is a steadier handle than a generated class name. It only exists while
+     * the control bar is up, so the pointer is faked over the player first, and it is only pressed
+     * when the video is not already filling the height, so theatre cannot get switched back off.
+     */
     const theatre = (): void => {
-      /*
-       * Height, not width: the CSS above already forces the player to full width, so a width test
-       * always said "theatre is on" and the key was never sent. Height is untouched, and in
-       * theatre the player fills it.
-       */
-      void ask(
-        "(() => { const p = document.querySelector('.persistent-player'); " +
-          "return !!p && p.getBoundingClientRect().height < window.innerHeight - 60 })()"
-      ).then((needs) => {
-        if (!needs) return
-        try {
-          for (const type of ['keyDown', 'char', 'keyUp'] as const) {
-            wv.sendInputEvent?.({ type, keyCode: 't', modifiers: ['alt'] })
-          }
-        } catch {
-          /* the view can go away between the answer and the key */
+      void ask(`(async () => {
+        const p = document.querySelector('.persistent-player')
+        if (!p) return 'no player'
+        const b = p.getBoundingClientRect()
+        if (b.height > window.innerHeight - 60) return 'already'
+        for (let i = 0; i < 4; i++) {
+          p.dispatchEvent(new MouseEvent('mousemove', {
+            bubbles: true, clientX: b.left + b.width / 2, clientY: b.top + b.height - 30 + i
+          }))
+          await new Promise((r) => setTimeout(r, 120))
         }
-      })
+        const btn = [...document.querySelectorAll('button[aria-label]')]
+          .find((x) => /\(alt\+t\)/i.test(x.getAttribute('aria-label') || ''))
+        if (!btn) return 'no button'
+        btn.click()
+        return 'clicked'
+      })()`)
     }
+
     const apply = (): void => {
       void wv.insertCSS?.(css)?.catch?.(() => {})
       // after the page has had a moment to build its player
