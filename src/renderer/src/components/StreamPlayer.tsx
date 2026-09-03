@@ -197,35 +197,66 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      * the control bar is up, so the pointer is faked over the player first, and it is only pressed
      * when the video is not already filling the height, so theatre cannot get switched back off.
      */
-    const theatre = (): void => {
-      void ask(`(async () => {
-        const p = document.querySelector('.persistent-player')
-        if (!p) return 'no player'
-        const b = p.getBoundingClientRect()
-        if (b.height > window.innerHeight - 60) return 'already'
-        for (let i = 0; i < 4; i++) {
-          p.dispatchEvent(new MouseEvent('mousemove', {
-            bubbles: true, clientX: b.left + b.width / 2, clientY: b.top + b.height - 30 + i
-          }))
-          await new Promise((r) => setTimeout(r, 120))
-        }
-        const btn = [...document.querySelectorAll('button[aria-label]')]
-          .find((x) => /\(alt\+t\)/i.test(x.getAttribute('aria-label') || ''))
-        if (!btn) return 'no button'
-        btn.click()
-        return 'clicked'
-      })()`)
+    /*
+     * Theatre mode, as soon as the page can take it.
+     *
+     * One attempt was not enough: the button lives in a control bar that does not exist until the
+     * player has built itself, and how long that takes depends on the stream. So this keeps asking
+     * every second for ten seconds and stops the moment the video fills the height, which is also
+     * the check that stops it ever switching theatre back off for someone who already had it.
+     *
+     * The button is found by its label ending in "(alt+t)", which holds in every language, rather
+     * than by a class name, which Twitch regenerates on every build.
+     */
+    let tries = 0
+    let timer = 0
+    const tryTheatre = (): void => {
+      const view = wvRef.current
+      if (!view) return
+      let p: Promise<unknown>
+      try {
+        p = view.executeJavaScript(`(async () => {
+          const pl = document.querySelector('.persistent-player')
+          if (!pl) return 'waiting'
+          const r = pl.getBoundingClientRect()
+          if (r.height > window.innerHeight - 60) return 'done'
+          for (let i = 0; i < 3; i++) {
+            pl.dispatchEvent(new MouseEvent('mousemove', {
+              bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height - 30
+            }))
+            await new Promise((r2) => setTimeout(r2, 100))
+          }
+          const btn = [...document.querySelectorAll('button[aria-label]')]
+            .find((x) => /\(alt\+t\)/i.test(x.getAttribute('aria-label') || ''))
+          if (!btn) return 'waiting'
+          btn.click()
+          return 'clicked'
+        })()`)
+      } catch {
+        p = Promise.resolve('waiting')
+      }
+      void p
+        .then((res) => {
+          if (res === 'done') return
+          if (++tries < 10) timer = window.setTimeout(tryTheatre, 1000)
+        })
+        .catch(() => {
+          if (++tries < 10) timer = window.setTimeout(tryTheatre, 1000)
+        })
     }
 
     const apply = (): void => {
       void wv.insertCSS?.(css)?.catch?.(() => {})
-      // after the page has had a moment to build its player
-      window.setTimeout(theatre, 2500)
+      tries = 0
+      window.clearTimeout(timer)
+      // straight away, then again each second until the player exists and takes it
+      tryTheatre()
     }
     wv.addEventListener('dom-ready', apply)
     // a single-page app swaps channels without reloading, so re-apply on every navigation
     wv.addEventListener('did-navigate-in-page', apply)
     return () => {
+      window.clearTimeout(timer)
       wv.removeEventListener?.('dom-ready', apply)
       wv.removeEventListener?.('did-navigate-in-page', apply)
     }
