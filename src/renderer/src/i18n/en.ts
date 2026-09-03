@@ -905,6 +905,8 @@ export const en = {
   'oe.anim.none': 'None',
   'oe.sec.text': 'Text',
   'oe.gifMaxHeight': 'Tallest a GIF may be',
+  'oe.testLine': 'Send a test line to this OBS source',
+  'oe.testLineText': 'Test line from StickiChat',
   'oe.emoteScale': 'Emote size',
   'oe.sec.plate': 'Plate / background',
   'oe.shape': 'Plate shape',

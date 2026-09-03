@@ -908,6 +908,8 @@ export const uk: Record<TranslationKey, string> = {
   'oe.anim.none': 'Без анімації',
   'oe.sec.text': 'Текст',
   'oe.gifMaxHeight': 'Найбільша висота гіфки',
+  'oe.testLine': 'Надіслати тестовий рядок у це джерело OBS',
+  'oe.testLineText': 'Тестовий рядок зі StickiChat',
   'oe.emoteScale': 'Розмір емоутів',
   'oe.sec.plate': 'Плашка / фон',
   'oe.shape': 'Форма плашки',

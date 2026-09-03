@@ -3046,6 +3046,8 @@ function OverlaySection(): React.JSX.Element {
   const openChannels = [
     ...new Set([ownChannel, ...tabs.flatMap((tb) => tb.panes).map((pn) => pn.channel)].filter(Boolean))
   ]
+  /** the channel an overlay listens on, the same one its URL carries */
+  const channelFor = (o: OverlayConfig): string => o.channel || firstChannel || ''
   const urlFor = (o: OverlayConfig): string =>
     `http://127.0.0.1:${settings.overlayPort}/overlay?channel=${encodeURIComponent(o.channel || firstChannel || 'КАНАЛ')}&profile=${encodeURIComponent(o.id)}`
   const patchOverlay = (id: string, patch: Partial<OverlayBase>): void =>
@@ -3153,6 +3155,31 @@ function OverlaySection(): React.JSX.Element {
               }}
             >
               {copiedId === o.id ? '✔' : '📋'}
+            </button>
+            {/*
+              A line pushed to the REAL overlay, not the preview.
+              "It works in the preview but the OBS canvas is black" has two very different causes,
+              the page not running and nothing being sent, and from here they look identical. This
+              sends one message down the same path a chat line takes, so the answer is immediate:
+              if it appears in OBS the plumbing is fine and the problem is the source's transform
+              or its scene; if it does not, the page is not running.
+            */}
+            <button
+              title={t('oe.testLine')}
+              onClick={() => {
+                void window.sticki.overlayPush(channelFor(o), {
+                  id: `test-${Date.now()}`,
+                  user: 'StickiChat',
+                  login: 'stickichat',
+                  color: '#a970ff',
+                  badges: [],
+                  html: t('oe.testLineText'),
+                  emotes: [],
+                  ts: Date.now()
+                })
+              }}
+            >
+              ⚡
             </button>
             <button title={t('oe.io.exportOne')} onClick={() => exportOne(o)}>
               ⤓
