@@ -508,18 +508,19 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             className={`player-slot ${sideBySide ? 'is-side' : ''}`}
             ref={slotRef}
             style={sideBySide ? undefined : { height: playerHeight }}
-          >
-            {/*
-              The resize grip, on the OUTSIDE of the video.
-              It used to sit over the player, and a webview never hands the pointer back: crossing
-              the strip made Twitch decide the mouse had left, so their controls vanished exactly
-              when you reached for the settings gear in the corner. Out here it cannot do that.
-            */}
-            <div
-              className={sideBySide ? 'stream-resize-x' : 'stream-resize'}
-              onPointerDown={startResize}
-            />
-          </div>
+          />
+        )}
+        {/*
+          The grip sits between the two, not on top of either.
+          Anywhere over the video it steals the pointer, and a webview never hands it back, so
+          Twitch concluded the mouse had left and hid its controls exactly as you reached for the
+          settings gear in the corner. As its own bar it cannot overlap the picture at all.
+        */}
+        {playerOpen && (
+          <div
+            className={sideBySide ? 'split-grip-x' : 'split-grip-y'}
+            onPointerDown={startResize}
+          />
         )}
         <div className="pane-chat-col" style={sideBySide ? { width: chatWidth } : undefined}>
           <div className="pane-body">

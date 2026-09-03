@@ -176,7 +176,7 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       #sideNav, .side-nav,
       .channel-info-content,
       [data-a-target="channel-header-right"] { display: none !important; }
-      .channel-root__player, .persistent-player { width: 100% !important; height: 100vh !important; }
+      .channel-root__player, .persistent-player { width: 100% !important; }
       .channel-root, .channel-root__info { padding: 0 !important; }
       html, body { overflow: hidden !important; }
     `
@@ -189,9 +189,14 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      * player is not already filling the frame, so it cannot toggle theatre back OFF.
      */
     const theatre = (): void => {
+      /*
+       * Height, not width: the CSS above already forces the player to full width, so a width test
+       * always said "theatre is on" and the key was never sent. Height is untouched, and in
+       * theatre the player fills it.
+       */
       void ask(
         "(() => { const p = document.querySelector('.persistent-player'); " +
-          "return !!p && p.getBoundingClientRect().width < window.innerWidth - 40 })()"
+          "return !!p && p.getBoundingClientRect().height < window.innerHeight - 60 })()"
       ).then((needs) => {
         if (!needs) return
         try {

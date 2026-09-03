@@ -3373,6 +3373,26 @@ input[type='number']::-webkit-inner-spin-button {
   color: var(--accent);
   opacity: 0.9;
 }
+/*
+ * The boundary between the player and the chat, as a bar of its own.
+ * Never over the video: a strip there steals the pointer from the webview, and Twitch reads that
+ * as the mouse leaving the player, which hid its controls at the worst possible moment.
+ */
+.split-grip-y {
+  flex: 0 0 6px;
+  cursor: ns-resize;
+  background: transparent;
+}
+.split-grip-x {
+  flex: 0 0 6px;
+  cursor: ew-resize;
+  background: transparent;
+}
+.split-grip-y:hover,
+.split-grip-x:hover {
+  background: var(--accent);
+  opacity: 0.5;
+}
 /* the hole a pane leaves for its player, and the layer that fills it from above */
 .player-slot {
   position: relative;

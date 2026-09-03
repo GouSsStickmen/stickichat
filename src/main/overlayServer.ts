@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { createServer, Server, ServerResponse } from 'http'
 import { createReadStream } from 'fs'
 import { ASSET_SCHEME, assetFile, assetContentType } from './assets'
@@ -36,6 +37,15 @@ interface SseClient {
   channel: string
   profile: string
   res: ServerResponse
+}
+
+/** the running build, stamped into every overlay page so a stale one can tell */
+function appVersion(): string {
+  try {
+    return app.getVersion()
+  } catch {
+    return 'dev'
+  }
 }
 
 let server: Server | null = null
@@ -209,7 +219,7 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
         Pragma: 'no-cache'
       })
       res.end(
-        kind === 'emotes'
+        (kind === 'emotes'
           ? EMOTE_HTML
           : kind === 'goal'
             ? GOAL_HTML
@@ -218,6 +228,7 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
               : kind === 'roulette'
                 ? WHEEL_HTML
                 : OVERLAY_HTML
+        ).replaceAll('__STICKI_PAGE_VER__', appVersion())
       )
       return
     }
@@ -231,6 +242,8 @@ export function overlayConfigure(enabled: boolean, port: number, newStyles?: Rec
         'Access-Control-Allow-Origin': '*'
       })
       res.write(':ok\n\n')
+      // which build served this page, so a stale one can notice and refresh itself
+      res.write(`event: ver\ndata: ${JSON.stringify(appVersion())}\n\n`)
       // this overlay's config first, then the backlog so the page isn't empty on connect
       const style = styleFor(profile)
       if (style) res.write(`event: cfg\ndata: ${JSON.stringify(style)}\n\n`)
@@ -2259,6 +2272,19 @@ const OVERLAY_HTML = `<!doctype html>
      * it last received and appeared to have become a different overlay. Better to say it, in the
      * source itself, where the person looking for the problem actually is.
      */
+    /*
+     * A browser source can keep yesterday's page forever.
+     *
+     * OBS caches aggressively and only re-fetches when its scene reloads, so an overlay can sit
+     * there running an old script long after the app moved on: a rule added to the page simply
+     * never existed for it, which looks exactly like the feature being broken. The server says
+     * which build it is on connect, and a page from a different one reloads itself.
+     */
+    es.addEventListener('ver', function (e) {
+      try {
+        if (String(JSON.parse(e.data)) !== '__STICKI_PAGE_VER__') location.reload()
+      } catch (err) {}
+    })
     es.addEventListener('gone', function () { gone(true) })
     es.addEventListener('del', function (e) {
       try {
@@ -2710,6 +2736,19 @@ const EMOTE_HTML = `<!doctype html>
     es.addEventListener('cfg', function (e) {
       try { cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false) } catch (err) { /* noop */ }
     })
+    /*
+     * A browser source can keep yesterday's page forever.
+     *
+     * OBS caches aggressively and only re-fetches when its scene reloads, so an overlay can sit
+     * there running an old script long after the app moved on: a rule added to the page simply
+     * never existed for it, which looks exactly like the feature being broken. The server says
+     * which build it is on connect, and a page from a different one reloads itself.
+     */
+    es.addEventListener('ver', function (e) {
+      try {
+        if (String(JSON.parse(e.data)) !== '__STICKI_PAGE_VER__') location.reload()
+      } catch (err) {}
+    })
     es.addEventListener('gone', function () { gone(true) })
     es.onmessage = function (e) {
       try { celebrate(JSON.parse(e.data)) } catch (err) { /* noop */ }
@@ -3090,6 +3129,19 @@ const GOAL_HTML = `<!doctype html>
     var es = new EventSource('/events?channel=' + encodeURIComponent(channel) + '&profile=' + encodeURIComponent(profile))
     es.addEventListener('cfg', function (e) {
       try { cfg = Object.assign(cfg, JSON.parse(e.data)); gone(false); render() } catch (err) { /* noop */ }
+    })
+    /*
+     * A browser source can keep yesterday's page forever.
+     *
+     * OBS caches aggressively and only re-fetches when its scene reloads, so an overlay can sit
+     * there running an old script long after the app moved on: a rule added to the page simply
+     * never existed for it, which looks exactly like the feature being broken. The server says
+     * which build it is on connect, and a page from a different one reloads itself.
+     */
+    es.addEventListener('ver', function (e) {
+      try {
+        if (String(JSON.parse(e.data)) !== '__STICKI_PAGE_VER__') location.reload()
+      } catch (err) {}
     })
     es.addEventListener('gone', function () { gone(true) })
     es.onerror = function () { es.close(); setTimeout(connect, 3000) }
@@ -3691,6 +3743,19 @@ const ALERT_HTML = `<!doctype html>
         // every edit lands here, so the held sample card is rebuilt as the plate is being styled
         previewHold()
       } catch (err) { /* noop */ }
+    })
+    /*
+     * A browser source can keep yesterday's page forever.
+     *
+     * OBS caches aggressively and only re-fetches when its scene reloads, so an overlay can sit
+     * there running an old script long after the app moved on: a rule added to the page simply
+     * never existed for it, which looks exactly like the feature being broken. The server says
+     * which build it is on connect, and a page from a different one reloads itself.
+     */
+    es.addEventListener('ver', function (e) {
+      try {
+        if (String(JSON.parse(e.data)) !== '__STICKI_PAGE_VER__') location.reload()
+      } catch (err) {}
     })
     es.addEventListener('gone', function () { gone(true) })
     es.onmessage = function (e) {
@@ -4393,6 +4458,19 @@ const WHEEL_HTML = `<!doctype html>
         if (spinning) pendingRender = true
         else render()
       } catch (err) { /* noop */ }
+    })
+    /*
+     * A browser source can keep yesterday's page forever.
+     *
+     * OBS caches aggressively and only re-fetches when its scene reloads, so an overlay can sit
+     * there running an old script long after the app moved on: a rule added to the page simply
+     * never existed for it, which looks exactly like the feature being broken. The server says
+     * which build it is on connect, and a page from a different one reloads itself.
+     */
+    es.addEventListener('ver', function (e) {
+      try {
+        if (String(JSON.parse(e.data)) !== '__STICKI_PAGE_VER__') location.reload()
+      } catch (err) {}
     })
     es.addEventListener('gone', function () { gone(true) })
     es.onmessage = function (e) {
