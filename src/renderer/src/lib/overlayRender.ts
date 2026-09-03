@@ -84,7 +84,14 @@ function bodyHtml(msg: ChatMessage): { html: string; emotes: string[] } {
          * on stream as an empty line. Capped in height from settings, because a GIPHY original can
          * be five hundred pixels tall and would push everything else off the overlay.
          */
-        out += `<img class="chat-gif" src="${esc(tk.url)}" alt="${esc(tk.label)}">`
+        /*
+         * The cap is inline AND reads the overlay's own variable.
+         *
+         * Inline so a page cached from before the stylesheet had this rule is still capped, which
+         * is every OBS source that has not reloaded since the update; the variable so each overlay
+         * can still choose its own height once it has the current page.
+         */
+        out += `<img class="chat-gif" style="max-height:var(--gif-h,120px)" src="${esc(tk.url)}" alt="${esc(tk.label)}">`
         break
       }
       case 'mention':

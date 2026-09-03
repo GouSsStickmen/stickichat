@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useUiStore, type PlayerSlot } from '../store/ui'
 import StreamPlayer from './StreamPlayer'
 
@@ -27,6 +27,42 @@ export default function PlayerLayer(): React.JSX.Element {
    */
   const lastSlot = useRef<Record<string, PlayerSlot>>({})
 
+  /*
+   * A nudge whenever the box moves or resizes.
+   *
+   * Chromium hit-tests a webview's guest against a region it updates on its own schedule, and a
+   * box that is moved by script can be left routing real pointer input against where it used to
+   * be. Everything measurable looks right when that happens: the element and the guest agree on
+   * their size, nothing of ours is on top, and injected input reaches the controls perfectly. Only
+   * the actual mouse misses, which is why the far side of the video would stop responding and
+   * Twitch would hide its controls as you reached for the gear.
+   *
+   * Resizing the window by hand clears it, which is the workaround the user found. This is the
+   * same thing, one pixel for one frame, done automatically whenever the geometry changes.
+   */
+  const lastSize = useRef<Record<string, string>>({})
+  const nudged = useRef<Record<string, number>>({})
+  useEffect(() => {
+    for (const channel of open) {
+      const slot = slots[channel]
+      if (!slot) continue
+      // position counts too: a pane that shifts down when the tab bar wraps moves the box
+      const size = `${slot.x},${slot.y} ${slot.w}x${slot.h}`
+      if (lastSize.current[channel] === size) continue
+      lastSize.current[channel] = size
+      window.clearTimeout(nudged.current[channel])
+      nudged.current[channel] = window.setTimeout(() => {
+        const el = document.querySelector<HTMLElement>(`[data-player="${CSS.escape(channel)}"]`)
+        if (!el) return
+        const w = el.style.width
+        el.style.width = `${slot.w - 1}px`
+        requestAnimationFrame(() => {
+          el.style.width = w
+        })
+      }, 250)
+    }
+  }, [open, slots])
+
   return (
     <>
       {open.map((channel) => {
@@ -40,6 +76,7 @@ export default function PlayerLayer(): React.JSX.Element {
         return (
           <div
             key={channel}
+            data-player={channel}
             className={`player-layer-box ${slot ? '' : 'parked'}`}
             style={style}
           >
