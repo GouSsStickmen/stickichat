@@ -781,7 +781,18 @@ function MessageViewInner({
     if (isMention) return undefined
     const myAccountIds = useAccountsStore.getState().accounts.map((a) => a.id)
     const ctx = { caseSensitiveNicks: settings.caseSensitiveNicks, myAccountIds }
-    const rule = highlightRules.find((r) => highlightRuleMatches(msg, r, ctx))
+    /*
+     * A redeemed message is coloured as a redemption first.
+     *
+     * Rules are tried in the order the user arranged them, and "first message" usually sits above
+     * "redemption", so somebody's first message spent on "highlight my message" came out in the
+     * first-message colour and there was no sign a reward had been used at all. The redemption is
+     * the rarer and more expensive fact, so it wins; everything else keeps the user's order.
+     */
+    const rule =
+      (msg.redeemed
+        ? highlightRules.find((r) => r.kind === 'redeem' && highlightRuleMatches(msg, r, ctx))
+        : undefined) ?? highlightRules.find((r) => highlightRuleMatches(msg, r, ctx))
     if (!rule) return undefined
     // adaptColor: tint from the sender's own nick color instead of the rule's fixed color
     const base = rule.adaptColor ? stvCosmetic?.color || msg.color || fallbackColor(msg.login) : rule.color

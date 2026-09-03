@@ -1006,7 +1006,9 @@ const TAB_COLOR_FIELDS: [keyof TabColors, TranslationKey, string][] = [
   ['hoverBg', 'tab.color.hoverBg', '--surface-3'],
   ['activeBg', 'tab.color.activeBg', '--surface-2'],
   ['activeText', 'tab.color.activeText', '--text'],
-  ['activeBorder', 'tab.color.activeBorder', '--border']
+  ['activeBorder', 'tab.color.activeBorder', '--border'],
+  ['playing', 'tab.color.playing', '--accent'],
+  ['muted', 'tab.color.muted', '--text-faint']
 ]
 
 /**
@@ -1715,6 +1717,19 @@ function WindowsSection(): React.JSX.Element {
           <option value="site">{t('set.playerModeSite')}</option>
         </select>
       </div>
+      <div className="set-row">
+        <label>{t('set.tabPlayerHint')}</label>
+        <select
+          value={settings.tabPlayerHint}
+          onChange={(e) => set({ tabPlayerHint: e.target.value as typeof settings.tabPlayerHint })}
+        >
+          <option value="icon">{t('set.tabHintIcon')}</option>
+          <option value="blink">{t('set.tabHintBlink')}</option>
+        </select>
+      </div>
+      <p className="hint" style={{ color: 'var(--text-faint)', margin: '0 0 8px' }}>
+        {t('hint.tabPlayerHint')}
+      </p>
       {settings.playerMode === 'site' && (
         <div className="set-sub">
           <Toggle
@@ -1722,6 +1737,12 @@ function WindowsSection(): React.JSX.Element {
             hint={t('hint.playerHideSiteChrome')}
             value={settings.playerHideSiteChrome}
             onChange={(v) => set({ playerHideSiteChrome: v })}
+          />
+          <Toggle
+            label={t('set.playerAutoClaim')}
+            hint={t('hint.playerAutoClaim')}
+            value={settings.playerAutoClaim}
+            onChange={(v) => set({ playerAutoClaim: v })}
           />
         </div>
       )}

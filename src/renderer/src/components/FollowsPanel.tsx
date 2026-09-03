@@ -19,6 +19,25 @@ import { CloseIcon } from './Icons'
  */
 export default function FollowsPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   const t = useT()
+  /*
+   * Right click on a name copies it.
+   *
+   * The list is where you go looking for somebody's exact login, and every use of one after that
+   * is somewhere else: a command, a message, another app. The tick appears on the row it belongs
+   * to, so with a list this long there is no doubt which name is now on the clipboard.
+   */
+  const [copied, setCopied] = useState<string | null>(null)
+  const copyNick = (login: string): void => {
+    void navigator.clipboard.writeText(login).then(
+      () => {
+        setCopied(login)
+        window.setTimeout(() => setCopied((c) => (c === login ? null : c)), 1600)
+      },
+      () => {
+        /* a refused clipboard is not worth a dialog */
+      }
+    )
+  }
   const account = useAccountsStore((s) => s.accounts.find((a) => a._accessToken))
   const [list, setList] = useState<FollowedChannel[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -105,9 +124,19 @@ export default function FollowsPanel({ onClose }: { onClose: () => void }): Reac
           shown.map((f) => (
             <div key={f.id} className={`follows-row ${f.live ? 'is-live' : ''}`}>
               <div className="follows-main">
-                <span className="follows-name">
+                <span
+                  className="follows-name"
+                  title={t('follows.copyNick')}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    copyNick(f.login)
+                  }}
+                >
                   {f.live && <span className="live-dot" />}
                   {f.name}
+                  {copied === f.login && (
+                    <span className="follows-copied">{t('follows.copied')}</span>
+                  )}
                 </span>
                 {f.live ? (
                   <>

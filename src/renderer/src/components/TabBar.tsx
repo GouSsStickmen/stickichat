@@ -11,7 +11,7 @@ import { useFlip } from '../lib/useFlip'
 import WhisperPanel from './WhisperPanel'
 import FollowsPanel from './FollowsPanel'
 import { useT } from '../i18n'
-import { ZoomIcon, MailIcon, SpeakerIcon, PinIcon, GearIcon, PlayIcon, HeartIcon } from './Icons'
+import { ZoomIcon, MailIcon, SpeakerIcon, PinIcon, GearIcon, HeartIcon } from './Icons'
 
 export default function TabBar(): React.JSX.Element {
   const t = useT()
@@ -20,6 +20,8 @@ export default function TabBar(): React.JSX.Element {
   const connState = useChatStore((s) => s.connState)
   const liveChannels = useChatStore((s) => s.liveChannels)
   const openPlayers = useUiStore((s) => s.openPlayers)
+  const mutedPlayers = useUiStore((s) => s.mutedPlayers)
+  const hint = useSettingsStore((s) => s.settings.tabPlayerHint)
   const followsOpen = useUiStore((s) => s.followsOpen)
   const unreadMentions = useChatStore((s) => s.unreadMentions)
   const unreadKeywords = useChatStore((s) => s.unreadKeywords)
@@ -217,6 +219,10 @@ export default function TabBar(): React.JSX.Element {
       {visibleTabs.map((tab, index) => {
         const hasLive = tab.panes.some((p) => liveChannels[p.channel])
         const hasPlayer = tab.panes.some((p) => openPlayers.includes(p.channel))
+        // muted counts only for a stream that is actually running here
+        const tabMuted =
+          hasPlayer &&
+          tab.panes.every((p) => !openPlayers.includes(p.channel) || mutedPlayers.includes(p.channel))
         const hasMention = tab.panes.some((p) => unreadMentions[p.channel])
         const keywordTag = tab.panes.map((p) => unreadKeywords[p.channel]).find(Boolean)
         const hasUnread = !hasMention && tab.panes.some((p) => unreadMessages[p.channel])
@@ -225,10 +231,12 @@ export default function TabBar(): React.JSX.Element {
           <div
             key={tab.id}
             data-flipid={tab.id}
-            className={`tab ${isActive ? 'active' : ''} ${tab.pinned ? 'pinned' : ''} ${draggingTab === tab.id ? 'dragging' : ''}`}
+            className={`tab ${isActive ? 'active' : ''} ${tab.pinned ? 'pinned' : ''} ${draggingTab === tab.id ? 'dragging' : ''} ${
+              hint === 'blink' && hasPlayer ? (tabMuted ? 'blink-muted' : 'blink-playing') : ''
+            }`}
             onPointerDown={(e) => {
               if (renaming === tab.id) return
-              if ((e.target as HTMLElement).closest('.close, input')) return
+              if ((e.target as HTMLElement).closest('.close, input, .tab-playing')) return
               if (!tabsRef.current) return
               // reorder indices only line up with the DOM when the full list is shown
               if (tabFilter !== 'all') return
@@ -264,12 +272,6 @@ export default function TabBar(): React.JSX.Element {
             title={t('tab.pinHint')}
           >
             {hasLive && <span className="live-dot" title={t('pane.live')} />}
-            {/* a player kept running on this tab: it is still playing while you read another one */}
-            {hasPlayer && (
-              <span className="tab-playing" title={t('player.runningHere')}>
-                <PlayIcon size={10} />
-              </span>
-            )}
             {renaming === tab.id ? (
               <input
                 autoFocus
@@ -304,6 +306,38 @@ export default function TabBar(): React.JSX.Element {
               {hasMention && <span className="mention-dot">@</span>}
               {!hasMention && hasUnread && <span className="unread-dot" title={t('tab.newMessage')} />}
             </span>
+            {/*
+                A player kept running on this tab: it is still playing while you read another one.
+                The speaker says whether you can hear it and turns it on and off, red for silence,
+                so a stream running in another tab can be shut up without going to it first.
+
+                To the right of the name, and its slot is held open whether or not anything plays.
+                A marker that appeared only while a stream ran made the tab wider the moment you
+                started one, sliding the detach and close controls out from under a pointer already
+                on its way to them: you aimed at ✕ and pressed ⧉. On the left it pushed the name
+                away from the edge for nothing, so it sits on this side instead.
+
+                The other way of saying it is the tab blinking in a colour of its own, which needs
+                no slot at all and gives that width back.
+            */}
+            {hint === 'icon' && tab.panes.length > 0 && (
+              <button
+                className={`tab-playing ${hasPlayer ? '' : 'idle'} ${tabMuted ? 'muted' : ''}`}
+                title={hasPlayer ? t(tabMuted ? 'tab.unmute' : 'tab.mute') : undefined}
+                tabIndex={hasPlayer ? 0 : -1}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!hasPlayer) return
+                  // one press speaks for whatever this tab is playing, however many that is
+                  const ui = useUiStore.getState()
+                  for (const p of tab.panes) {
+                    if (ui.openPlayers.includes(p.channel)) ui.setPlayerMuted(p.channel, !tabMuted)
+                  }
+                }}
+              >
+                <SpeakerIcon muted={tabMuted} size={13} />
+              </button>
+            )}
             {/* rendered for EVERY tab (visibility toggled in CSS): if only the active tab
                 had it, activating a tab changed its width and whole rows re-wrapped */}
             {tab.panes.length > 0 && (

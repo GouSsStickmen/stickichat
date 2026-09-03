@@ -3369,9 +3369,74 @@ input[type='number']::-webkit-inner-spin-button {
 .tab-playing {
   display: inline-flex;
   align-items: center;
-  margin-right: 4px;
-  color: var(--accent);
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--tab-playing, var(--accent));
   opacity: 0.9;
+}
+.tab-playing:hover {
+  opacity: 1;
+}
+/* silence has to be obvious from across the bar, not a slightly different glyph */
+.tab-playing.muted {
+  color: var(--danger);
+  opacity: 1;
+}
+/*
+ * Muted is said with the glyph, not with a disc behind it.
+ *
+ * icon-btn.active fills the whole button, which on a speaker reads as a badge stuck over the icon
+ * rather than as a state of the icon itself.
+ */
+.stream-bar .icon-btn.mute-btn.is-muted {
+  background: none;
+  color: var(--danger);
+}
+.stream-bar .icon-btn.mute-btn.is-muted:hover {
+  background: var(--surface-3);
+  color: var(--danger);
+}
+/* the slot keeps its width so starting a stream never moves the tab's own controls */
+.tab-playing.idle {
+  visibility: hidden;
+}
+/*
+ * The other way of pointing at a running stream: the tab itself, breathing.
+ *
+ * Drawn with an inset shadow rather than a background, so the tab keeps whatever colour its state
+ * already gives it and active tabs do not lose theirs. Muted takes its own colour, because a
+ * silent stream and a loud one must not look the same from across the bar.
+ */
+@keyframes tab-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow:
+      inset 0 -2px 0 0 var(--tab-pulse),
+      inset 0 0 14px -5px var(--tab-pulse);
+  }
+}
+.tabbar .tab.blink-playing,
+.tabbar .tab.blink-muted {
+  animation: tab-pulse 2.4s ease-in-out infinite;
+}
+.tabbar .tab.blink-playing {
+  --tab-pulse: var(--tab-playing, var(--accent));
+}
+.tabbar .tab.blink-muted {
+  --tab-pulse: var(--tab-muted, var(--text-faint));
+}
+@media (prefers-reduced-motion: reduce) {
+  .tabbar .tab.blink-playing,
+  .tabbar .tab.blink-muted {
+    animation: none;
+    box-shadow: inset 0 -2px 0 0 var(--tab-pulse);
+  }
 }
 /*
  * The boundary between the player and the chat, as a bar of its own.
@@ -6547,4 +6612,224 @@ button:has(> svg) {
 }
 .emote-folder-menu button.danger {
   color: var(--danger);
+}
+
+/*
+ * Channel points under the input, where Twitch puts them, and the channel's rewards over them.
+ *
+ * Both come out of the Twitch page a player has open, so the row only exists next to a running
+ * stream. It sits in the column rather than over it, so it can never cover the last message. The
+ * chest is deliberately loud: it is a thing that disappears if it is not pressed.
+ */
+/* the dock is what the rewards window hangs off, so it opens upward from the bar it belongs to */
+.points-dock {
+  position: relative;
+}
+.points-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+.points-bar .pb-icon {
+  width: 19px;
+  height: 19px;
+  object-fit: contain;
+}
+.points-bar .pb-dot {
+  color: var(--accent);
+  text-align: center;
+}
+.points-bar .pb-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  color: var(--text);
+}
+.points-bar .pb-mult {
+  padding: 0 4px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface-3);
+  color: var(--accent);
+}
+.points-bar .pb-chest {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  animation: chest-nudge 1.6s ease-in-out infinite;
+}
+.points-bar .pb-rewards {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 13px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.points-bar .pb-rewards:hover {
+  color: var(--text);
+}
+@keyframes chest-nudge {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateY(-2px) scale(1.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .points-bar .pb-chest {
+    animation: none;
+  }
+}
+.rewards-panel {
+  /* opens upward, out of the bar it was pressed from, the way the emote picker does */
+  position: absolute;
+  z-index: 20;
+  bottom: 100%;
+  right: 8px;
+  margin-bottom: 6px;
+  width: 320px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.rewards-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rewards-balance {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.rewards-streak {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.rewards-streak .rs-left {
+  color: var(--text-faint);
+}
+.rewards-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.rewards-ask label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.rewards-said {
+  font-size: 12px;
+  color: var(--success);
+}
+.rewards-note,
+.rewards-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 0;
+}
+.rewards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+.rewards-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.rewards-row .rw-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex: 0 0 20px;
+}
+.rewards-row .rw-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rewards-row .rw-cost {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.rewards-row.off .rw-cost {
+  color: var(--text-faint);
+}
+
+/*
+ * The flame when the number is the page's own, and the flare when that number goes up.
+ *
+ * A streak read from an open player is current, so it is not dimmed the way a possibly stale one
+ * from chat is; the flare is the only moment the app announces a new streak at all.
+ */
+/*
+ * A streak read from the page is exact, but that says nothing about whether TONIGHT counted, so it
+ * must not brighten the flame on its own: lit means counted, grey means not yet, either way.
+ */
+.streak-chip.from-page.claimed {
+  opacity: 1;
+  filter: none;
+}
+.streak-chip.bumped {
+  animation: streak-flare 1.1s ease-in-out 5;
+}
+@keyframes streak-flare {
+  0%,
+  100% {
+    transform: none;
+    filter: none;
+  }
+  50% {
+    transform: scale(1.35);
+    filter: drop-shadow(0 0 6px var(--warning));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .streak-chip.bumped {
+    animation: none;
+    filter: drop-shadow(0 0 5px var(--warning));
+  }
+}
+
+/* the tick that says which name just went to the clipboard */
+.follows-copied {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--success) 22%, transparent);
+  color: var(--success);
+  font-size: 11px;
+}
+.follows-name {
+  cursor: context-menu;
 }

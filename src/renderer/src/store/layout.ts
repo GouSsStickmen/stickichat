@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { Pane, Tab } from '../types'
+import { useUiStore } from './ui'
 
 let idCounter = Date.now() % 100000
 export function nextId(prefix: string): string {
@@ -12,6 +13,16 @@ interface LayoutState {
   setAll: (tabs: Tab[], activeTabId: string | null) => void
   addTab: (name?: string) => string
   closeTab: (id: string) => void
+  /**
+   * Tabs that were closed, newest first, so Ctrl+Shift+T can put them back.
+   *
+   * Kept in memory only, like the tab strip's own live state: this is an undo for the last few
+   * minutes, not a second copy of the layout.
+   */
+  closedTabs: Tab[]
+  reopenTab: () => void
+  /** where each closed tab used to sit, so reopening puts it back rather than at the end */
+  reopenAt: Record<string, number>
   renameTab: (id: string, name: string) => void
   togglePinTab: (id: string) => void
   setActiveTab: (id: string) => void
@@ -25,7 +36,7 @@ interface LayoutState {
   movePane: (tabId: string, paneId: string, toIndex: number) => void
 }
 
-export const useLayoutStore = create<LayoutState>()((set) => ({
+export const useLayoutStore = create<LayoutState>()((set, get) => ({
   tabs: [],
   activeTabId: null,
   setAll: (tabs, activeTabId) => set({ tabs, activeTabId }),
@@ -34,12 +45,47 @@ export const useLayoutStore = create<LayoutState>()((set) => ({
     set((s) => ({ tabs: [...s.tabs, { id, name, panes: [], columns: 0 }], activeTabId: id }))
     return id
   },
-  closeTab: (id) =>
-    set((s) => {
-      const tabs = s.tabs.filter((t) => t.id !== id)
-      const activeTabId = s.activeTabId === id ? (tabs[0]?.id ?? null) : s.activeTabId
-      return { tabs, activeTabId }
-    }),
+  closedTabs: [],
+  reopenTab: () => {
+    const s = get()
+    const [last, ...rest] = s.closedTabs
+    if (!last) return
+    // back where it was, as far as that still makes sense, and in front
+    const at = Math.min(s.reopenAt[last.id] ?? s.tabs.length, s.tabs.length)
+    const tabs = [...s.tabs.slice(0, at), last, ...s.tabs.slice(at)]
+    set({ tabs, closedTabs: rest, activeTabId: last.id })
+  },
+  reopenAt: {},
+  closeTab: (id) => {
+    const s = get()
+    const closing = s.tabs.find((t) => t.id === id)
+    const tabs = s.tabs.filter((t) => t.id !== id)
+    const activeTabId = s.activeTabId === id ? (tabs[0]?.id ?? null) : s.activeTabId
+    set({
+      tabs,
+      activeTabId,
+      closedTabs: closing ? [closing, ...s.closedTabs].slice(0, 20) : s.closedTabs,
+      reopenAt: closing
+        ? { ...s.reopenAt, [closing.id]: s.tabs.findIndex((t) => t.id === id) }
+        : s.reopenAt
+    })
+    /*
+     * A player goes with the tab it was opened from.
+     *
+     * Players are rendered above the app rather than inside their pane, so that looking at another
+     * tab cannot stop the stream. That also meant closing the tab left one playing with nothing on
+     * screen to stop it. Any channel no surviving tab shows loses its player here; a channel still
+     * open somewhere else keeps it.
+     */
+    if (!closing) return
+    const stillShown = new Set(tabs.flatMap((t) => t.panes.map((p) => p.channel)))
+    const ui = useUiStore.getState()
+    for (const pane of closing.panes) {
+      if (!stillShown.has(pane.channel) && ui.openPlayers.includes(pane.channel)) {
+        ui.togglePlayer(pane.channel, false)
+      }
+    }
+  },
   renameTab: (id, name) =>
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, name } : t)) })),
   togglePinTab: (id) =>
@@ -60,9 +106,21 @@ export const useLayoutStore = create<LayoutState>()((set) => ({
     })),
   closePane: (tabId, paneId) =>
     set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, panes: t.panes.filter((p) => p.id !== paneId) } : t
-      )
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t
+        const panes = t.panes.filter((p) => p.id !== paneId)
+        /*
+         * A column count chosen for two chats has to let go when one of them closes.
+         *
+         * The number of columns is the user's when they set one, and the grid keeps drawing that
+         * many cells however few chats are left: the last chat sat in half the tab with dead space
+         * beside it, and the strip that would let it be changed back is only shown while there is
+         * more than one chat, so the only way out was to close the tab and open it again. A count
+         * that no longer fits what is there goes back to automatic.
+         */
+        const columns = panes.length <= 1 || t.columns > panes.length ? 0 : t.columns
+        return { ...t, panes, columns }
+      })
     })),
   updatePane: (tabId, paneId, patch) =>
     set((s) => ({

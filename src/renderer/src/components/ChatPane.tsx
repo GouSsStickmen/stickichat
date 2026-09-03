@@ -13,12 +13,14 @@ import MessageList from './MessageList'
 import InputBox, { ReplyTarget } from './InputBox'
 import ModToolbar from './ModToolbar'
 import { useUiStore } from '../store/ui'
+import { claimBonus } from '../lib/playerPage'
+import RewardsPanel from './RewardsPanel'
 import ChattersList from './ChattersList'
 import HighlightSidebar from './HighlightSidebar'
 import { AddPaneForm } from './SplitGrid'
 import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
-import { EyeIcon, ClockIcon, GameIcon } from './Icons'
+import { EyeIcon, ClockIcon, GameIcon, StarIcon } from './Icons'
 
 function formatUptime(startedAt: string): string {
   const ms = Date.now() - new Date(startedAt).getTime()
@@ -148,6 +150,8 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
     window.addEventListener('pointercancel', stop)
   }
   const latency = useUiStore((s) => s.streamLatency[pane.channel])
+  const points = useUiStore((s) => s.playerPoints[pane.channel])
+  const [rewardsOpen, setRewardsOpen] = useState(false)
 
   /*
    * Where the hole is, republished on a slow tick.
@@ -542,6 +546,56 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             replyTo={replyTo}
             onCancelReply={() => setReplyTo(null)}
           />
+          {/*
+            Channel points sit under the input, the way they do on Twitch itself, and only while a
+            player is open, because that page is where they come from. In the flow of the column
+            rather than floating over it, so the row can never end up on top of the last message,
+            and the rewards window opens upward out of the row it belongs to.
+          */}
+          {points && (
+            <div className="points-dock">
+              {rewardsOpen && (
+                <RewardsPanel channel={pane.channel} onClose={() => setRewardsOpen(false)} />
+              )}
+              <div className="points-bar">
+                {points.icon ? (
+                  <img className="pb-icon" src={points.icon} alt="" />
+                ) : (
+                  <span className="pb-icon pb-dot">◉</span>
+                )}
+                <span
+                  className="pb-value"
+                  title={points.streak ? t('points.hintStreak', { n: points.streak }) : t('points.hint')}
+                >
+                  {points.balanceText ??
+                    (points.balance === null ? '...' : points.balance.toLocaleString('uk-UA'))}
+                </span>
+                {points.multiplier && (
+                  <span className="pb-mult" title={t('points.multiplier')}>
+                    {points.multiplier}
+                  </span>
+                )}
+                {points.chest && (
+                  <button
+                    className="pb-chest"
+                    title={t('points.claim')}
+                    onClick={() => void claimBonus(pane.channel)}
+                  >
+                    🎁
+                  </button>
+                )}
+                <div className="spacer" />
+                <button
+                  className="pb-rewards"
+                  title={t('points.rewards')}
+                  onClick={() => setRewardsOpen((v) => !v)}
+                >
+                  <StarIcon size={13} />
+                  <span>{t('points.rewards')}</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

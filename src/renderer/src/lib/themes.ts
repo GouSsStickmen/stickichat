@@ -387,7 +387,9 @@ const TAB_PROPS: [keyof TabColors, string][] = [
   ['hoverBg', '--tab-hover-bg'],
   ['activeBg', '--tab-active-bg'],
   ['activeText', '--tab-active-text'],
-  ['activeBorder', '--tab-active-border']
+  ['activeBorder', '--tab-active-border'],
+  ['playing', '--tab-playing'],
+  ['muted', '--tab-muted']
 ]
 
 export function applyTheme(id: string): void {

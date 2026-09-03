@@ -76,8 +76,38 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [account, pane.channel, streakVer]
   )
+  /*
+   * The same flame, told two ways.
+   *
+   * Without a player the streak is whatever chat has let slip: Twitch only announces it when you
+   * share it, so the number can be months out of date, and that is what the old wording warns
+   * about. With a player open the page itself says what the streak is, so that number wins, it
+   * appears even when chat has never mentioned one, and the flame flares once when it goes up.
+   */
+  const pageStreak = useUiStore((s) => s.playerPoints[pane.channel]?.streak ?? null)
+  const pageStreakDone = useUiStore((s) => s.playerPoints[pane.channel]?.streakClaimed ?? false)
+  const streakNumber = pageStreak ?? myStreak?.n ?? null
+  const [streakBumped, setStreakBumped] = useState(false)
+  const lastStreak = useRef<number | null>(null)
+  useEffect(() => {
+    if (pageStreak === null) return
+    const before = lastStreak.current
+    lastStreak.current = pageStreak
+    if (before === null || pageStreak <= before) return
+    setStreakBumped(true)
+    const done = window.setTimeout(() => setStreakBumped(false), 6000)
+    return () => window.clearTimeout(done)
+  }, [pageStreak])
   const streamStartTs = streamInfo?.startedAt ? Date.parse(streamInfo.startedAt) : null
   const streakClaimed = !!(myStreak && streamStartTs && myStreak.ts >= streamStartTs)
+  /*
+   * Counted this stream, from whichever source knows.
+   *
+   * Chat announces a streak only when it is shared, so its word is good but rare; the page's
+   * number rising while the stream runs is the other proof, and once either says yes it stays yes
+   * until the stream ends.
+   */
+  const counted = pageStreakDone || streakClaimed
   // keep the draft in sync so switching tabs (which unmounts this pane) doesn't lose it
   useEffect(() => {
     inputDrafts.set(pane.id, text)
@@ -680,19 +710,23 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
             </div>
           )}
         </span>
-        {myStreak && (
+        {streakNumber !== null && (
           <button
             type="button"
-            className={`streak-chip ${streakClaimed ? 'claimed' : 'unclaimed'}`}
+            className={`streak-chip ${counted ? 'claimed' : 'unclaimed'} ${
+              pageStreak !== null ? 'from-page' : ''
+            } ${streakBumped ? 'bumped' : ''}`}
             title={
-              streakClaimed
-                ? t('input.streak.claimed', { n: myStreak.n })
-                : t('input.streak.unclaimed', { n: myStreak.n })
+              pageStreak !== null
+                ? t(counted ? 'points.streakDone' : 'points.streakPending', { n: pageStreak })
+                : streakClaimed
+                  ? t('input.streak.claimed', { n: streakNumber })
+                  : t('input.streak.unclaimed', { n: streakNumber })
             }
             onClick={() => setStreakOpen((v) => !v)}
           >
             🔥
-            {streakOpen ? ` ${myStreak.n}` : ''}
+            {streakOpen ? ` ${streakNumber}` : ''}
           </button>
         )}
         <div className="ta-wrap">

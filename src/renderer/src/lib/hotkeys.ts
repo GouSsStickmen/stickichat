@@ -2,7 +2,16 @@ import { DEFAULT_HOTKEYS, HotkeyAction, Settings } from '../types'
 
 /** effective accelerator for an action: user override or the built-in default */
 export function hotkeyFor(settings: Settings, action: HotkeyAction): string {
-  return settings.hotkeys[action] || DEFAULT_HOTKEYS[action]
+  const set = settings.hotkeys[action]
+  /*
+   * Ctrl+Shift+T belongs to reopening a closed tab now, the way it does in a browser.
+   *
+   * It used to convert the focused field between layouts, so anyone who saved that binding, or
+   * simply saved their hotkeys while it was the default, still carries it. Their conversion moves
+   * to the new default instead of fighting the tab for the same keystroke.
+   */
+  if (action === 'translit' && set === 'Ctrl+Shift+T') return DEFAULT_HOTKEYS.translit
+  return set || DEFAULT_HOTKEYS[action]
 }
 
 /**

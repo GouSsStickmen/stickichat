@@ -1735,7 +1735,7 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   scrollLock: 'Ctrl+L',
   /** hold to pause the chat (scroll lock while held); releasing resumes */
   pauseHold: 'Alt',
-  translit: 'Ctrl+Shift+T',
+  translit: 'Ctrl+Alt+T',
   /** send the input's text WITHOUT clearing it */
   sendKeep: 'Ctrl+Enter',
   /** re-send the previously sent message */
@@ -1855,6 +1855,10 @@ export interface TabColors {
   activeBg: string
   activeText: string
   activeBorder: string
+  /** the blink of a tab with a stream running on it */
+  playing: string
+  /** the same blink once that stream is muted, so the two states never read alike */
+  muted: string
 }
 
 export interface Settings {
@@ -2150,6 +2154,20 @@ export interface Settings {
   playerMode: 'embed' | 'site'
   /** site mode: hide Twitch's own chat and menus, since this app already is the chat */
   playerHideSiteChrome: boolean
+  /**
+   * How a tab says a stream is running on it: its own small speaker, or the tab itself blinking.
+   *
+   * The speaker also says whether that stream is muted, at the cost of a fixed slot of width in
+   * every tab that has channels in it. The blink gives the width back.
+   */
+  tabPlayerHint: 'icon' | 'blink'
+  /**
+   * Take the bonus chest as soon as it shows up.
+   *
+   * It appears about every fifteen minutes and is gone if nobody presses it, which is the whole
+   * difference between watching a stream and collecting from it.
+   */
+  playerAutoClaim: boolean
   /** player beside the chat instead of above it, the way the Twitch page is laid out */
   playerSideBySide: boolean
   /** width of the chat column in that layout, px. The player takes whatever is left. */
@@ -2388,6 +2406,8 @@ export const DEFAULT_SETTINGS: Settings = {
   playerExtensions: [],
   playerMode: 'embed',
   playerHideSiteChrome: true,
+  tabPlayerHint: 'icon',
+  playerAutoClaim: true,
   playerSideBySide: false,
   chatWidth: 360,
   pollPresets: [],

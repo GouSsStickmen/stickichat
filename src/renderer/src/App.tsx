@@ -507,6 +507,24 @@ export default function App(): React.JSX.Element | null {
     return () => window.removeEventListener('keydown', onKey)
   }, [booted, onboarded, special, t])
 
+  /*
+   * Ctrl+Shift+T brings back the last closed tab, the way a browser does.
+   *
+   * It used to convert the focused field between layouts; that moved to Ctrl+Alt+T so this one can
+   * mean what it means everywhere else, in a text field or out of one.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyT')) return
+      const st = useLayoutStore.getState()
+      if (st.closedTabs.length === 0) return
+      e.preventDefault()
+      st.reopenTab()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Ctrl+Shift+T (configurable) — convert the focused field's text between layouts (укр ⇄ eng)
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {

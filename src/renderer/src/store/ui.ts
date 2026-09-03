@@ -3,6 +3,41 @@ import { BadgeRef, FavoriteEmote } from '../types'
 import { useSettingsStore } from './settings'
 import type { ModConfirmRequest } from '../lib/confirmMod'
 
+/** everything the open Twitch page says about this channel's points */
+export interface PagePoints {
+  balance: number | null
+  /** the balance exactly as the page writes it, abbreviations and all */
+  balanceText: string | null
+  chest: boolean
+  icon: string | null
+  multiplier: string | null
+  live: boolean
+  streak: number | null
+  streakLeft: number | null
+  streakReward: number | null
+  /** the streak as it stood when this stream started, so a rise during it can be spotted */
+  streakBase: number | null
+  /** which stream that base belongs to (its start time), so a new stream starts over */
+  streakStream: string | null
+  /** this stream has been counted towards the streak */
+  streakClaimed: boolean
+}
+
+const EMPTY_POINTS: PagePoints = {
+  balance: null,
+  balanceText: null,
+  chest: false,
+  icon: null,
+  multiplier: null,
+  live: false,
+  streak: null,
+  streakLeft: null,
+  streakReward: null,
+  streakBase: null,
+  streakStream: null,
+  streakClaimed: false
+}
+
 export interface UserCardTarget {
   channel: string
   channelId: string
@@ -189,6 +224,26 @@ interface UiState {
    */
   openPlayers: string[]
   togglePlayer: (channel: string, on: boolean) => void
+  /**
+   * Streams silenced the way a browser silences a tab.
+   *
+   * Turning the player's own volume down is the obvious way to shut a stream up and the wrong one:
+   * Twitch counts a muted player as not watching and stops the channel points. This mutes the
+   * webview instead, so as far as the page is concerned the sound is still playing.
+   *
+   * Kept here rather than inside the player because the player is re-created whenever the layout
+   * changes, and silence should not come back on by itself.
+   */
+  mutedPlayers: string[]
+  setPlayerMuted: (channel: string, muted: boolean) => void
+  /**
+   * What the open Twitch page says about this channel's points.
+   *
+   * Read out of the page rather than fetched: viewer side channel points exist in no API we are
+   * allowed to call. Only a channel with a running player in site mode ever appears here.
+   */
+  playerPoints: Record<string, PagePoints>
+  setPlayerPoints: (channel: string, points: Partial<PagePoints> | null) => void
   /** where the pane wants its player, in viewport coordinates, plus the box to resize against */
   playerSlots: Record<string, PlayerSlot | null>
   setPlayerSlot: (channel: string, slot: PlayerSlot | null) => void
@@ -271,6 +326,33 @@ export const useUiStore = create<UiState>()((set) => ({
           ? s.openPlayers
           : [...s.openPlayers, channel]
         : s.openPlayers.filter((c) => c !== channel)
+    })),
+  playerPoints: {},
+  setPlayerPoints: (channel, points) =>
+    set((s) => {
+      const old = s.playerPoints[channel]
+      if (!points) {
+        if (!old) return {}
+        const next = { ...s.playerPoints }
+        delete next[channel]
+        return { playerPoints: next }
+      }
+      // merged, because the balance and the streak arrive from two different reads
+      const merged = { ...EMPTY_POINTS, ...old, ...points }
+      // the poll runs every few seconds: only a real change should wake the panes
+      if (old && (Object.keys(merged) as (keyof PagePoints)[]).every((k) => merged[k] === old[k])) {
+        return {}
+      }
+      return { playerPoints: { ...s.playerPoints, [channel]: merged } }
+    }),
+  mutedPlayers: [],
+  setPlayerMuted: (channel, muted) =>
+    set((s) => ({
+      mutedPlayers: muted
+        ? s.mutedPlayers.includes(channel)
+          ? s.mutedPlayers
+          : [...s.mutedPlayers, channel]
+        : s.mutedPlayers.filter((c) => c !== channel)
     })),
   playerSlots: {},
   setPlayerSlot: (channel, slot) =>
