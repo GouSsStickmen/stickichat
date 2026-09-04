@@ -396,6 +396,17 @@ class ChatService {
       return
     }
     const total = (e.tally ?? []).reduce((sum, c) => sum + c.votes, 0)
+    /*
+     * The topic has spoken, so the card the page was standing in for can go.
+     *
+     * A prediction read out of their panel is filed under "prediction" because the page has no id
+     * for it; the topic's own id is different, so without this the channel would end up with two
+     * cards for the same prediction the moment somebody bet on it.
+     */
+    if (e.id && e.kind === 'prediction') {
+      const stand = (ui.pagePolls[channel] ?? []).find((c) => c.id === 'prediction')
+      if (stand && stand.id !== e.id) ui.setPagePoll(channel, null, 'prediction')
+    }
     const was = mine
     // an update must never take a finished one back to life
     if (was?.ended) return

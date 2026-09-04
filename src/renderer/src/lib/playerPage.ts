@@ -425,16 +425,19 @@ export function readPoll(channel: string): Promise<PagePoll | null> {
 /**
  * Put points on one side of a prediction, with the amount you choose.
  *
- * The outcome is found by its own name, which is the one thing about their card we actually know:
- * the label comes from Twitch's prediction topic, the same place the card in the app is drawn from.
- * It used to be found by position among the "label 39% (12780)" buttons a POLL is made of, and a
- * prediction is not made of those at all, so the press landed on nothing and the points never
- * left. Position is still the fallback, for a card the topic never described.
+ * Their card in the chat column is COLLAPSED, and that is the whole reason this used to do
+ * nothing: it shows the question and a "Прогноз" button, and the outcomes are not in the page at
+ * all until that button is pressed. Measured on a live prediction, four outcomes deep:
  *
- * Nothing is pressed unless the amount matches what was asked for. Their card carries a button per
- * outcome with a default amount written on it and a "Прогноз із власною сумою" for the rest; if
- * neither can be made to say the number the reader typed, this comes back with the reason instead
- * of spending a different amount than they meant.
+ *   1. the collapsed card's own "Прогноз" opens their panel;
+ *   2. each outcome is a ScInteractable, NOT a button, and reads "n_vizion70 %69" — so it is found
+ *      by the name at the front of it, which is the name their topic gave us;
+ *   3. pressing one offers a quick button with the default amount on it ("10") and
+ *      "Прогноз із власною сумою" for anything else;
+ *   4. the custom flow has a number field and confirms with "Голосувати".
+ *
+ * Nothing is pressed unless the amount matches what was asked for, so a mismatch comes back with
+ * a reason rather than spending a number the reader did not choose.
  */
 export function betPrediction(
   channel: string,
@@ -446,26 +449,23 @@ export function betPrediction(
     channel,
     `(async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms))
-      ${POLL_SCRIPT}
+      const text = (e) => (e.textContent || '').trim()
       const want = ${JSON.stringify(String(amount))}
       const name = ${JSON.stringify(label ?? '')}
-      /*
-       * Pressed as a mouse would, then as a click.
-       *
-       * Their own player controls ignore a bare .click() outright, and there is no telling from
-       * here which of the two a card built this week listens for, so it gets both.
-       */
-      const press = (el) => {
-        const r = el.getBoundingClientRect()
-        const at = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true,
-          clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }
-        try { el.dispatchEvent(new PointerEvent('pointerdown', at)) } catch (e) {}
-        el.dispatchEvent(new MouseEvent('mousedown', at))
-        try { el.dispatchEvent(new PointerEvent('pointerup', at)) } catch (e) {}
-        el.dispatchEvent(new MouseEvent('mouseup', at))
-        el.click()
+      const col = document.querySelector('.right-column') || document.body
+      const panel = () =>
+        [...document.querySelectorAll('[class*="Attached"]')].find((e) => /Прогноз|Predict/i.test(text(e)))
+      const rows = () => {
+        const p = panel()
+        if (!p) return []
+        return [...p.querySelectorAll('[class*="ScInteractable"]')].filter((e) => text(e).length > 1)
       }
-      const digitsOnly = (t) => {
+      const digits = (t) => {
+        let out = ''
+        for (const ch of t) if (ch >= '0' && ch <= '9') out += ch
+        return out
+      }
+      const looksNumeric = (t) => {
         if (!t || t.length > 12) return false
         let seen = false
         for (const ch of t) {
@@ -474,71 +474,75 @@ export function betPrediction(
         }
         return seen
       }
-      const asNumber = (t) => {
-        let out = ''
-        for (const ch of t) if (ch >= '0' && ch <= '9') out += ch
-        return out
+      /* their panel, opened from the collapsed card if it is not up already */
+      let p = panel()
+      if (!p) {
+        const open = [...col.querySelectorAll('button')].find((b) => /^(Прогноз|Predict)$/i.test(text(b)))
+        if (!open) return 'noOutcome'
+        open.click()
+        for (let i = 0; i < 16 && !panel(); i++) await wait(250)
+        p = panel()
+        if (!p) return 'noOutcome'
       }
-      /* the outcome's own row: the deepest thing that says exactly its name, walked up until the
-         box around it holds a button of its own */
-      const rowByName = () => {
-        if (!name) return null
-        const said = [...document.querySelectorAll('div,span,p,button,h1,h2,h3,h4,h5,strong,label')]
-          .filter((e) => (e.textContent || '').trim() === name)
-        const leaf = said[said.length - 1]
-        if (!leaf) return null
-        let row = leaf
-        for (let i = 0; i < 7 && row; i++) {
-          if (row.querySelector('button')) return row
-          row = row.parentElement
-        }
-        return leaf.parentElement
+      /* it remembers where it was left: back out of an outcome to see the list again */
+      for (let i = 0; i < 3 && rows().length === 0; i++) {
+        const back = [...p.querySelectorAll('button')].find((b) =>
+          /Назад|Back/i.test(b.getAttribute('aria-label') || '')
+        )
+        if (!back) break
+        back.click()
+        await wait(700)
+        p = panel() || p
       }
-      let opts = optionButtons()
-      if (opts.length < 2 && expand()) {
-        await wait(900)
-        opts = optionButtons()
-      }
-      const row = rowByName()
-      const spot = row ?? (opts[${index}] ? opts[${index}].b.parentElement : null)
-      if (!spot) return 'noOutcome'
-      /* the amount already on a button in this outcome's own row: one press and it is placed */
-      const quick = [...spot.querySelectorAll('button')].filter(
-        (b) => !b.disabled && digitsOnly((b.textContent || '').trim())
-      )
-      const exact = quick.find((b) => asNumber((b.textContent || '').trim()) === want)
+      const list = rows()
+      const row = (name ? list.find((e) => text(e).indexOf(name) === 0) : null) ?? list[${index}]
+      if (!row) return 'noOutcome'
+      row.click()
+      await wait(1200)
+      p = panel() || p
+      /* the default amount is already on a button: one press and it is placed */
+      const quick = [...p.querySelectorAll('button')].filter((b) => !b.disabled && looksNumeric(text(b)))
+      const exact = quick.find((b) => digits(text(b)) === want)
       if (exact) {
-        press(exact)
-        await wait(900)
+        exact.click()
+        await wait(1200)
+        const done = panel()
+        if (done) {
+          const shut = [...done.querySelectorAll('button')].find((b) =>
+            /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
+          )
+          if (shut) shut.click()
+        }
         return 'placed'
       }
       /* anything else goes through their own custom-amount flow */
-      const custom = [...document.querySelectorAll('button')].find((b) =>
-        /власною сумою|Custom amount/i.test((b.textContent || '').trim())
-      )
-      if (!custom) return quick.length ? 'noAmount' : 'noOutcome'
-      press(custom)
-      await wait(1200)
-      const field = [...document.querySelectorAll('input')].find(
-        (i) => i.type === 'number' || i.inputMode === 'numeric' || i.type === 'text'
+      const custom = [...p.querySelectorAll('button')].find((b) => /власною сумою|Custom/i.test(text(b)))
+      if (!custom) return 'noAmount'
+      custom.click()
+      await wait(1300)
+      p = panel() || p
+      const field = [...p.querySelectorAll('input')].find(
+        (i) => i.type === 'number' || i.inputMode === 'numeric'
       )
       if (!field) return 'noAmount'
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')
       setter.set.call(field, want)
       field.dispatchEvent(new Event('input', { bubbles: true }))
       field.dispatchEvent(new Event('change', { bubbles: true }))
-      await wait(400)
-      /* the side, again by name, since the dialog is a card of its own */
-      const side = rowByName() ?? spot
-      const sideBtn = [...side.querySelectorAll('button')].find((b) => !b.disabled) ?? side
-      press(sideBtn)
-      await wait(500)
-      const confirm = [...document.querySelectorAll('button')].find((b) =>
-        /^(Прогноз|Поставити|Predict|Place)/i.test((b.textContent || '').trim())
+      await wait(600)
+      const go = [...p.querySelectorAll('button')].find((b) =>
+        /^(Голосувати|Прогноз|Поставити|Vote|Predict|Place)$/i.test(text(b))
       )
-      if (!confirm || confirm.disabled) return 'refused'
-      press(confirm)
-      await wait(900)
+      if (!go || go.disabled) return 'refused'
+      go.click()
+      await wait(1300)
+      const after = panel()
+      if (after) {
+        const shut = [...after.querySelectorAll('button')].find((b) =>
+          /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
+        )
+        if (shut) shut.click()
+      }
       return 'placed'
     })()`
   ) as Promise<'placed' | 'noOutcome' | 'noAmount' | 'refused' | null>
@@ -1638,5 +1642,103 @@ export function cancelShare(channel: string): Promise<boolean | null> {
       x.click()
       return true
     })()`
+  )
+}
+
+/** a prediction as their own panel shows it, for when the topic has told us nothing */
+export interface PagePrediction {
+  question: string
+  /** "Подання заявок завершується за 7:55", as they write it */
+  timeLeft: string | null
+  options: { label: string; share: string; votes: string }[]
+}
+
+/**
+ * Read a running prediction out of their panel.
+ *
+ * The topics are the proper source and they carry the clock and the tally, but they only speak
+ * when something happens: start the app in the middle of a prediction nobody is betting on, or
+ * reload it, and there is nothing to draw a card from at all — which is exactly how the card
+ * disappeared while the prediction was still running.
+ *
+ * So the page is asked, the same way everything else here is. Their card in the column is
+ * collapsed and holds only the question, so the panel behind its "Прогноз" button is opened, the
+ * outcomes read off it — each is a ScInteractable whose leaves are the name, the share and the
+ * points — and the panel is put back as it was found.
+ */
+export function readPagePrediction(channel: string): Promise<PagePrediction | null> {
+  return serial(channel, () =>
+    ask<PagePrediction>(
+      channel,
+      `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      const text = (e) => (e.textContent || '').trim()
+      const col = document.querySelector('.right-column') || document.body
+      const panel = () =>
+        [...document.querySelectorAll('[class*="Attached"]')].find((e) => /Прогноз|Predict/i.test(text(e)))
+      const rows = () => {
+        const p = panel()
+        if (!p) return []
+        return [...p.querySelectorAll('[class*="ScInteractable"]')].filter((e) => text(e).length > 1)
+      }
+      const wasOpen = !!panel()
+      let p = panel()
+      if (!p) {
+        const open = [...col.querySelectorAll('button')].find((b) => /^(Прогноз|Predict)$/i.test(text(b)))
+        if (!open) return null
+        open.click()
+        for (let i = 0; i < 16 && !panel(); i++) await wait(250)
+        p = panel()
+        if (!p) return null
+      }
+      for (let i = 0; i < 3 && rows().length === 0; i++) {
+        const back = [...p.querySelectorAll('button')].find((b) =>
+          /Назад|Back/i.test(b.getAttribute('aria-label') || '')
+        )
+        if (!back) break
+        back.click()
+        await wait(700)
+        p = panel() || p
+      }
+      const list = rows()
+      if (list.length < 2) {
+        if (!wasOpen) {
+          const shut = [...p.querySelectorAll('button')].find((b) =>
+            /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
+          )
+          if (shut) shut.click()
+        }
+        return null
+      }
+      const options = list.map((row) => {
+        const said = [...row.querySelectorAll('*')]
+          .filter((e) => e.children.length === 0 && text(e))
+          .map((e) => text(e))
+        return {
+          label: said[0] || text(row),
+          share: (said[1] || '').replace(/ /g, ''),
+          votes: said[2] || ''
+        }
+      })
+      /* the question and their countdown, from the lines that are not outcomes */
+      const lines = [...p.querySelectorAll('*')]
+        .filter((e) => e.children.length === 0 && text(e))
+        .map((e) => text(e))
+      const names = options.map((o) => o.label)
+      const spare = lines.filter(
+        (t) => t.length > 2 && t.length < 120 && names.indexOf(t) < 0 && !/^[0-9 ]+%?$/.test(t)
+      )
+      const clock = spare.find((t) => /завершується|closes|Подання/i.test(t)) || null
+      const question =
+        spare.find((t) => t !== clock && !/^(Прогноз|Predict|Прогнозуй)/i.test(t)) || ''
+      if (!wasOpen) {
+        const shut = [...(panel() ?? p).querySelectorAll('button')].find((b) =>
+          /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
+        )
+        if (shut) shut.click()
+      }
+      return { question, timeLeft: clock, options }
+    })()`
+    )
   )
 }

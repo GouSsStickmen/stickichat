@@ -9,9 +9,10 @@ import {
   claimBonus,
   readPoll,
   readDrops,
-  readBarShare
+  readBarShare,
+  readPagePrediction
 } from '../lib/playerPage'
-import { useT } from '../i18n'
+import { translate, useT } from '../i18n'
 import {
   PersonIcon,
   LayoutIcon,
@@ -89,6 +90,8 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
   const statsTried = useRef('')
   /** clears the finished poll a minute after the page drops it */
   const pollGone = useRef(0)
+  /** when their prediction panel was last opened to read a card the topics never sent */
+  const predRead = useRef(0)
   /** undoes whatever the last webview element had attached to it */
   const wvWatch = useRef<(() => void) | null>(null)
 
@@ -371,6 +374,48 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         if (gone) return
         useUiStore.getState().setPlayerShare(channel, prompt, 'bar')
       })
+      /*
+       * A prediction the topics have not told us about.
+       *
+       * They only speak when something happens, so a prediction that started before the app did —
+       * or before it reloaded — leaves nothing to draw a card from, while the prediction itself is
+       * plainly still running in the page. This notices that and reads it out of their panel.
+       *
+       * Only when there is no card at all, and at most once every twenty seconds, because reading
+       * it means opening their panel.
+       */
+      const haveCard = (useUiStore.getState().pagePolls[channel] ?? []).some((c) => c.isPrediction)
+      if (!haveCard && Date.now() - predRead.current > 20000) {
+        predRead.current = Date.now()
+        void readPagePrediction(channel).then((pred) => {
+          if (gone || !pred || pred.options.length < 2) return
+          const ui = useUiStore.getState()
+          if ((ui.pagePolls[channel] ?? []).some((c) => c.isPrediction)) return
+          ui.setPagePoll(channel, {
+            id: 'prediction',
+            kind: translate(useSettingsStore.getState().settings.language, 'poll.prediction'),
+            question: pred.question,
+            options: pred.options.map((o) => ({
+              label: o.label,
+              share: o.share,
+              votes: o.votes,
+              picked: false,
+              mine: 0
+            })),
+            open: true,
+            locked: false,
+            voted: false,
+            ended: false,
+            timeLeft: pred.timeLeft,
+            ran: null,
+            endsAt: null,
+            runsFor: null,
+            isPrediction: true,
+            winner: null,
+            payouts: []
+          })
+        })
+      }
       void readPoll(channel).then((poll) => {
         const ui = useUiStore.getState()
         if (poll) {
