@@ -13,7 +13,7 @@ import MessageList from './MessageList'
 import InputBox, { ReplyTarget } from './InputBox'
 import ModToolbar from './ModToolbar'
 import { useUiStore } from '../store/ui'
-import { claimBonus, pressShare } from '../lib/playerPage'
+import { armShare, cancelShare, claimBonus, sendShare } from '../lib/playerPage'
 import RewardsPanel from './RewardsPanel'
 import DropsPanel from './DropsPanel'
 import PagePollCard from './PagePollCard'
@@ -243,6 +243,9 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const drops = useUiStore((s) => s.playerDrops[pane.channel])
   const share = useUiStore((s) => s.playerShare[pane.channel])
   const shareTucked = useUiStore((s) => s.shareTucked[pane.channel] ?? false)
+  const [sharing, setSharing] = useState(false)
+  /** their chat box is armed and these are the words waiting to go with it; null = not armed */
+  const [shareWords, setShareWords] = useState<string | null>(null)
   const dropsGot = useUiStore((s) => s.dropsGot[pane.channel]) ?? []
   const pagePolls = useUiStore((s) => s.pagePolls[pane.channel])
   const pollHidden = useUiStore((s) => s.pagePollHidden[pane.channel] ?? false)
@@ -682,15 +685,79 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
                 <b>{share.title}</b>
                 {share.note && <span className="sc-note">{share.note}</span>}
               </span>
-              <button
-                className="primary"
-                onClick={() => {
-                  void pressShare(pane.channel)
-                  useUiStore.getState().dismissShare(pane.channel)
-                }}
-              >
-                {t('player.share')}
-              </button>
+              {/*
+                Sharing is two steps, because theirs is.
+
+                Their button does not post anything: it arms the page's chat box and waits for a
+                message to celebrate with, which is then typed into that box for real. So the press
+                opens the line to write, and the card only closes once the words have actually gone.
+                It used to close on the first press, which looked exactly like a share while
+                nothing at all reached chat.
+              */}
+              {shareWords === null ? (
+                <button
+                  className="primary"
+                  disabled={sharing}
+                  onClick={() => {
+                    setSharing(true)
+                    void armShare(pane.channel).then((ok) => {
+                      setSharing(false)
+                      if (ok) setShareWords('')
+                      else
+                        useUiStore
+                          .getState()
+                          .toast(t(ok === null ? 'drops.needPlayer' : 'player.shareFailed'), 'error')
+                    })
+                  }}
+                >
+                  {sharing ? t('player.sharing') : t('player.share')}
+                </button>
+              ) : (
+                <>
+                  <input
+                    className="sc-words"
+                    autoFocus
+                    value={shareWords}
+                    placeholder={t('player.shareWords')}
+                    onChange={(e) => setShareWords(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && shareWords.trim()) e.currentTarget.blur()
+                      if (e.key === 'Escape') {
+                        void cancelShare(pane.channel)
+                        setShareWords(null)
+                      }
+                    }}
+                  />
+                  <button
+                    className="primary"
+                    disabled={sharing || !shareWords.trim()}
+                    onClick={() => {
+                      const words = shareWords.trim()
+                      setSharing(true)
+                      void sendShare(pane.channel, words).then((ok) => {
+                        setSharing(false)
+                        if (ok) {
+                          setShareWords(null)
+                          useUiStore.getState().dismissShare(pane.channel)
+                        } else {
+                          useUiStore.getState().toast(t('player.shareFailed'), 'error')
+                        }
+                      })
+                    }}
+                  >
+                    {sharing ? t('player.sharing') : t('player.shareSend')}
+                  </button>
+                  <button
+                    className="ghost"
+                    onClick={() => {
+                      void cancelShare(pane.channel)
+                      setShareWords(null)
+                    }}
+                  >
+                    {t('misc.cancel')}
+                  </button>
+                </>
+              )}
               {/* out of the way, not turned down: it goes into the icon beside the rewards */}
               <button
                 className="ghost sc-x"

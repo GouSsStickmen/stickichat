@@ -35,6 +35,15 @@ export type PageAsk = (code: string) => Promise<unknown>
 export interface PageHandle {
   ask: PageAsk
   typeAndSend: (text: string) => Promise<void>
+  /**
+   * A real mouse click at a point in the page, which only the player can send.
+   *
+   * Some of their buttons will not take a synthetic click at all — the player controls are the
+   * known case, and their share offer turned out to be another: a plain .click() closed the panel
+   * and posted nothing. This sends the same events a mouse does, so the page cannot tell the
+   * difference.
+   */
+  pressAt: (x: number, y: number) => Promise<void>
 }
 
 const pages = new Map<string, PageHandle>()
@@ -821,7 +830,7 @@ export function readStreak(channel: string): Promise<{
           if (said.indexOf(t) < 0) said.push(t)
         }
         if (said.length === 0) return null
-        return { title: said[0], note: said.slice(1).join(' ') }
+        return { title: said[0], note: said.slice(1).join(' '), from: 'panel' }
       }
       const share = shareOf()
       return {
@@ -1397,21 +1406,166 @@ export interface SharePrompt {
   title: string
   /** the line under it: "Ти отримав(-ла) додаткову нагороду: 450!" */
   note: string
+  /**
+   * Which of their two places it was found in.
+   *
+   * A watch streak sits in the rewards panel and waits there until it is shared. An anniversary or
+   * a subscription comes as a bar over the chat box instead, marked "Видно лише тобі", and that one
+   * has a clock on it: when it runs out it drops into the chat and scrolls away with everything
+   * else. So the bar is looked for on the fast tick and the panel on the slow one, and neither
+   * reading is allowed to clear the other's offer.
+   */
+  from: 'bar' | 'panel'
 }
 
-/**
- * Press their share button, in the panel where the offer lives.
+/*
+ * The share offer that comes as a bar over their chat box.
  *
- * It posts the line to chat as you, which is why it is only ever pressed from a press of our own.
- * Queued with everything else that drives their panels, so it cannot land in the middle of a
- * reward being read.
+ * Found by the button, which says only "Поділитися", inside the chat column and outside the
+ * balance panel — the panel's own offer is read on a different pass, and the channel header's
+ * share button (data-a-target="share-button") is not in that column at all.
  */
-export function pressShare(channel: string): Promise<boolean | null> {
+const SHARE_BAR = `
+  const barButton = () => {
+    const col = document.querySelector('.right-column')
+    if (!col) return null
+    return (
+      [...col.querySelectorAll('button')].find((b) => {
+        if (b.closest('[class*="Attached"]')) return false
+        const target = b.getAttribute('data-a-target') || ''
+        /*
+         * Not their send button, which says "Поділитися" too while the box is armed.
+         *
+         * That is what put "0 19 496 Посилення та нагороди Усі..." on our card as the thing being
+         * shared: the send button matched, and the card walked up into the whole chat row.
+         */
+        if (target === 'share-button' || target === 'chat-send-button') return false
+        const label = (b.getAttribute('aria-label') || '').trim()
+        return /^(Поділитися|Share)$/i.test((b.textContent || '').trim()) || /^(Поділитися|Share)$/i.test(label)
+      }) || null
+    )
+  }
+  /*
+   * The offer's own card, stopping short of the chat box.
+   *
+   * Their bar sits right above the input and shares a parent with it a couple of levels up, so
+   * "the first ancestor with some text in it" swallowed the whole row: the card came out reading
+   * "0 19 496 Посилення та нагороди Усі..." which is the balance panel and the emote picker.
+   */
+  const barCard = (b) => {
+    let card = b
+    for (let i = 0; i < 7 && card.parentElement; i++) {
+      const up = card.parentElement
+      if (up.querySelector('[data-a-target="chat-input"]')) return card
+      card = up
+      if ((card.textContent || '').trim().length > 24) return card
+    }
+    return card
+  }
+`
+
+/** their bar over the chat box, while it is up */
+export function readBarShare(channel: string): Promise<SharePrompt | null> {
+  return ask<SharePrompt>(
+    channel,
+    `(() => {
+      ${SHARE_BAR}
+      const b = barButton()
+      if (!b) return null
+      const card = barCard(b)
+      const own = (el) =>
+        [...el.childNodes]
+          .filter((n) => n.nodeType === 3)
+          .map((n) => (n.textContent || '').trim())
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+      const said = []
+      for (const el of [card, ...card.querySelectorAll('*')]) {
+        const t = own(el)
+        if (!t || t.length > 160) continue
+        if (/^(Поділитися|Share|Нове|New|Видно лише тобі|Only visible to you)$/i.test(t)) continue
+        if (said.indexOf(t) < 0) said.push(t)
+      }
+      if (said.length === 0) return null
+      return { title: said[0], note: said.slice(1).join(' '), from: 'bar' }
+    })()`
+  )
+}
+
+/*
+ * Sharing takes two steps, because that is how their own page does it.
+ *
+ * Pressing the offer in the panel does not post anything: measured on a live streak, it arms the
+ * page's chat box instead — a prompt appears over it reading "Поділися своєю серією переглядів!"
+ * and their send button changes from "Чат" to "Поділитися". The words are then typed and sent
+ * through THAT box, exactly like a reward that asks for a message, and Twitch decorates them with
+ * the streak. Pressing and walking away posts nothing at all, which is what "the card disappeared
+ * and nothing was in chat" was.
+ */
+const SHARE_PROMPT = `
+  /*
+   * Whether their chat box is armed for a share, told by their own send button.
+   *
+   * It reads "Чат" normally and "Поділитися" while a share is waiting to be written, whatever the
+   * share is about. The words over the box are not a test: they are different for every kind of
+   * offer — "Поділися своєю серією переглядів!" for a streak, "Поділись річницею підписки в чаті!"
+   * for an anniversary — and matching one of them meant the app called a perfectly armed box a
+   * failure, said so, and then pressed their button a second time, which sent the share with an
+   * empty message.
+   */
+  const sendButton = () => document.querySelector('[data-a-target="chat-send-button"]')
+  const armedNow = () => {
+    const s = sendButton()
+    if (!s) return false
+    const said = ((s.textContent || '') + ' ' + (s.getAttribute('aria-label') || '')).trim()
+    return /Поділитися|Share/i.test(said)
+  }
+  /** the box the prompt is wrapped around, for its own close button */
+  const promptBox = () => {
+    let n = document.querySelector('[data-a-target="chat-input"]')
+    for (let i = 0; i < 14 && n; i++) {
+      n = n.parentElement
+      if (!n) break
+      if ((n.textContent || '').trim().length > 600) return null
+      const x = [...n.querySelectorAll('button')].find((b) =>
+        /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
+      )
+      if (x) return n
+    }
+    return null
+  }
+`
+
+/**
+ * Press their offer, which arms the page's chat box for the share.
+ *
+ * Their panel closes itself on the press, so nothing is read back out of it; the prompt over the
+ * chat box is what says it worked.
+ */
+export function armShare(channel: string): Promise<boolean | null> {
   return serial(channel, () =>
     ask<boolean>(
       channel,
       `(async () => {
       ${PANEL_SCRIPT}
+      ${SHARE_PROMPT}
+      ${SHARE_BAR}
+      /* already armed: pressing again would send it with nothing written in it */
+      if (armedNow()) return true
+      const waitForPrompt = async () => {
+        for (let i = 0; i < 12; i++) {
+          await wait(250)
+          if (armedNow()) return true
+        }
+        return false
+      }
+      /* the bar over the chat box first: it is the one with a clock on it */
+      const bar = barButton()
+      if (bar && !bar.disabled) {
+        bar.click()
+        if (await waitForPrompt()) return true
+      }
       const p = await openPanel()
       if (!p) return false
       const box = p.querySelector('[class*="watchStreak"]')
@@ -1421,10 +1575,68 @@ export function pressShare(channel: string): Promise<boolean | null> {
       )
       if (!b || b.disabled) return false
       b.click()
-      await wait(900)
-      closePanel(p)
-      return true
+      return await waitForPrompt()
     })()`
     )
+  )
+}
+
+/**
+ * Send the words through their armed chat box.
+ *
+ * Only the player can type for real, and their editor takes nothing else — the same reason a
+ * reward that wants a message goes through here. The prompt disappearing is what says it went.
+ */
+export async function sendShare(channel: string, words: string): Promise<boolean | null> {
+  const page = pages.get(channel)
+  if (!page) return null
+  const armed = await ask<boolean>(
+    channel,
+    `(() => {
+      ${SHARE_PROMPT}
+      return armedNow()
+    })()`
+  )
+  if (!armed) return false
+  await page.typeAndSend(words)
+  /*
+   * Waited for, not glanced at.
+   *
+   * Their prompt takes a moment to go after the message does, and a single look 600ms later
+   * reported failure on a share that had plainly worked — the line was in chat and the app showed
+   * an error over it. The box emptying is the other half of the answer: their editor leaves a
+   * refused message sitting in it, so an empty box after typing means it went.
+   */
+  const ok = await ask<boolean>(
+    channel,
+    `(async () => {
+      ${SHARE_PROMPT}
+      for (let i = 0; i < 16; i++) {
+        await wait(250)
+        if (!armedNow()) return true
+      }
+      const box = document.querySelector('[data-a-target="chat-input"]')
+      return !!box && (box.textContent || '').trim() === ''
+    })()`
+  )
+  return ok === true
+}
+
+/** Put their prompt away without sending anything: it has a close of its own. */
+export function cancelShare(channel: string): Promise<boolean | null> {
+  return ask<boolean>(
+    channel,
+    `(() => {
+      ${SHARE_PROMPT}
+      if (!armedNow()) return true
+      const wrap = promptBox()
+      if (!wrap) return false
+      const x = [...wrap.querySelectorAll('button')].find((b) =>
+        /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
+      )
+      if (!x) return false
+      x.click()
+      return true
+    })()`
   )
 }

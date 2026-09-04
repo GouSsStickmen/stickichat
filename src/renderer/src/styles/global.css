@@ -6960,6 +6960,11 @@ button:has(> svg) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.share-card .sc-words {
+  flex: 1 1 140px;
+  min-width: 90px;
+  padding: 4px 6px;
+}
 .share-card .sc-x {
   padding: 0 4px;
   color: var(--accent);

@@ -398,7 +398,7 @@ interface UiState {
    * itself is about something else.
    */
   playerShare: Record<string, SharePrompt | null>
-  setPlayerShare: (channel: string, prompt: SharePrompt | null) => void
+  setPlayerShare: (channel: string, prompt: SharePrompt | null, from?: 'bar' | 'panel') => void
   shareDismissed: Record<string, string>
   dismissShare: (channel: string) => void
   /**
@@ -640,9 +640,17 @@ export const useUiStore = create<UiState>()((set) => ({
         shareTucked: { ...s.shareTucked, [channel]: false }
       }
     }),
-  setPlayerShare: (channel, prompt) =>
+  setPlayerShare: (channel, prompt, from) =>
     set((s) => {
       const old = s.playerShare[channel]
+      /*
+       * Two readings, two places, and neither may clear the other.
+       *
+       * The bar over their chat box is looked for every few seconds; the panel's own offer only
+       * every few minutes. Without this the fast reading, finding no bar, wiped the streak offer
+       * the slow one had just found.
+       */
+      if (from && old && old.from !== from && !prompt) return {}
       if (!prompt) {
         if (!old && !s.shareDismissed[channel]) return {}
         /*

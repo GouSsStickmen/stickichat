@@ -8,7 +8,8 @@ import {
   readStreak,
   claimBonus,
   readPoll,
-  readDrops
+  readDrops,
+  readBarShare
 } from '../lib/playerPage'
 import { useT } from '../i18n'
 import {
@@ -359,6 +360,17 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
     })()`
     const tick = (): void => {
       void ask(look)
+      /*
+       * Their share bar over the chat box, while it is up.
+       *
+       * This one has a clock on it: when it runs out the offer drops into the chat and scrolls
+       * away with the messages, so it has to be caught while it is there. One look for a button in
+       * the chat column, on the same few seconds as everything else here.
+       */
+      void readBarShare(channel).then((prompt) => {
+        if (gone) return
+        useUiStore.getState().setPlayerShare(channel, prompt, 'bar')
+      })
       void readPoll(channel).then((poll) => {
         const ui = useUiStore.getState()
         if (poll) {
@@ -557,7 +569,33 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         await ask(release)
       }
     }
-    registerPlayerPage(channel, { ask, typeAndSend })
+    /*
+     * A real click, for the buttons that will not take a synthetic one.
+     *
+     * Same events the video-stats gear needs, and for the same reason. The caller makes the target
+     * hittable first (their panels live in a column we make click-through), then hands over the
+     * point to press.
+     */
+    const pressAt = async (x: number, y: number): Promise<void> => {
+      const view = wvRef.current as unknown as {
+        sendInputEvent?: (e: Record<string, unknown>) => void
+      } | null
+      const send = (e: Record<string, unknown>): void => {
+        try {
+          view?.sendInputEvent?.(e)
+        } catch {
+          /* the view can go away mid-press */
+        }
+      }
+      const rest = (ms: number): Promise<void> => new Promise((done) => window.setTimeout(done, ms))
+      send({ type: 'mouseMove', x, y })
+      await rest(120)
+      send({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+      await rest(90)
+      send({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+      await rest(120)
+    }
+    registerPlayerPage(channel, { ask, typeAndSend, pressAt })
     let stop = false
     const tick = async (): Promise<void> => {
       const now = await readPoints(channel)
@@ -586,7 +624,7 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         streakClaimed: st.counted
       })
       // their "share this" offer sits in the same footer, and stays there until it is shared
-      useUiStore.getState().setPlayerShare(channel, st.share)
+      useUiStore.getState().setPlayerShare(channel, st.share, 'panel')
       return st.streak !== null
     }
     /*
@@ -739,6 +777,13 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         visibility: visible !important;
       }
       .sticki-typing {
+        opacity: 0 !important;
+      }
+      .sticki-press, .sticki-press * {
+        visibility: visible !important;
+        pointer-events: auto !important;
+      }
+      .sticki-press {
         opacity: 0 !important;
       }
       .sticki-modal, .sticki-modal * {
