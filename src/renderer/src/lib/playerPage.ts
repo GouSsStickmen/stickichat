@@ -442,8 +442,21 @@ export function readPoll(channel: string): Promise<PagePoll | null> {
 const PRED_SCRIPT = `
   const text = (e) => (e.textContent || '').trim()
   const col = document.querySelector('.right-column') || document.body
+  /*
+   * THEIR prediction view, and not merely a panel with the word "prediction" in it.
+   *
+   * The rewards panel mentions a running prediction in a row of its own, so "any Attached box
+   * that says Прогноз" matched it too: the reader walked its cards and built a prediction whose
+   * outcomes were the reward prices, 10, 77, 100, 200 and the rest, under the question with a
+   * winner's name stuck to the end of it. The prediction view opens with its own heading and
+   * carries their submissions clock; the rewards panel opens with "Посилення та нагороди".
+   */
   const predPanel = () =>
-    [...document.querySelectorAll('[class*="Attached"]')].find((e) => /Прогноз|Predict/i.test(text(e)))
+    [...document.querySelectorAll('[class*="Attached"]')].find((e) => {
+      const t = text(e)
+      if (/Посилення та нагороди|Boosts and rewards/i.test(t)) return false
+      return /^(Прогноз|Predict)/i.test(t) || /Подання заявок|submissions close/i.test(t)
+    })
   const predRows = () => {
     const p = predPanel()
     if (!p) return []
@@ -503,9 +516,12 @@ const PRED_SCRIPT = `
       }
       if (!box) return null
       await wait(400)
-      const entry = [...box.querySelectorAll('button')].find((b) =>
-        /Для прогнозів|прогноз|prediction/i.test(text(b))
-      )
+      /* the row of a prediction that is still taking bets, not one that has already been settled */
+      const entry = [...box.querySelectorAll('button')].find((b) => {
+        const t = text(b)
+        if (/завершився|завершено|Результат|resolved|ended/i.test(t)) return false
+        return /Для прогнозів|лишилось|прогноз|prediction/i.test(t)
+      })
       if (!entry) return null
       entry.click()
       for (let i = 0; i < 16 && predRows().length === 0; i++) await wait(250)
@@ -1835,6 +1851,18 @@ export function readPagePrediction(channel: string): Promise<PagePrediction | nu
       const p = await openPred()
       if (!p) return null
       const list = predRows()
+      const over = /завершився|завершено|Результат|resolved/i.test(text(p))
+      /* prices, not outcomes: a list of numbers is the rewards panel, whatever the box said */
+      const allNumbers =
+        list.length > 0 &&
+        list.every((row) => {
+          const first = ([...row.querySelectorAll('*')]
+            .filter((e) => e.children.length === 0 && text(e))
+            .map((e) => text(e))[0] || text(row)).replace(/ /g, '')
+          if (!first) return true
+          for (const ch of first) if (ch < '0' || ch > '9') return false
+          return true
+        })
       const shut = () => {
         if (wasOpen) return
         const box = predPanel()
@@ -1844,7 +1872,7 @@ export function readPagePrediction(channel: string): Promise<PagePrediction | nu
         )
         if (x) x.click()
       }
-      if (list.length < 2) {
+      if (list.length < 2 || over || allNumbers) {
         shut()
         return null
       }
