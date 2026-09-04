@@ -762,6 +762,15 @@ export function readStreak(channel: string): Promise<{
   left: number | null
   reward: number | null
   counted: boolean
+  /**
+   * Their "share this" offer, which lives in this same footer.
+   *
+   * Measured on a live streak: the footer reads "Твоя серія переглядів: 7 / Ти отримав(-ла)
+   * додаткову нагороду: 450!" with a Поділитися button in it, and it stays there until it is
+   * shared. That makes the panel the place to find it — the card Twitch throws over the chat when
+   * the streak lands is gone a minute later, and this is the same offer, still open.
+   */
+  share: SharePrompt | null
 } | null> {
   return serial(channel, () =>
     ask(
@@ -783,14 +792,53 @@ export function readStreak(channel: string): Promise<{
       const wide = groove ? groove.getBoundingClientRect().width : 0
       const done = fill ? fill.getBoundingClientRect().width : 0
       closePanel(p)
+      /*
+       * The share offer, out of the same footer.
+       *
+       * Its lines are not plain leaves: the reward line wraps an icon, so the text sits in text
+       * nodes beside it. Each element's OWN text is collected instead, and the words that belong
+       * to their button and their "new" badge are left out.
+       */
+      const own = (el) =>
+        [...el.childNodes]
+          .filter((n) => n.nodeType === 3)
+          .map((n) => (n.textContent || '').trim())
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+      const shareOf = () => {
+        const box = p.querySelector('[class*="watchStreak"]')
+        if (!box) return null
+        const button = [...box.querySelectorAll('button')].find((b) =>
+          /^(Поділитися|Share)$/i.test((b.textContent || '').trim())
+        )
+        if (!button) return null
+        const said = []
+        for (const el of [box, ...box.querySelectorAll('*')]) {
+          const t = own(el)
+          if (!t || t.length > 160) continue
+          if (/^(Поділитися|Share|Нове|New)$/i.test(t)) continue
+          if (said.indexOf(t) < 0) said.push(t)
+        }
+        if (said.length === 0) return null
+        return { title: said[0], note: said.slice(1).join(' ') }
+      }
+      const share = shareOf()
       return {
         streak: streak ? Number(streak) : null,
         left: ahead[1] ? Number(ahead[1]) : null,
         reward: ahead[2] ? Number(ahead[2]) : null,
-        counted: wide > 0 && done / wide > 0.99
+        counted: wide > 0 && done / wide > 0.99,
+        share: share
       }
     })()`
-    ) as Promise<{ streak: number | null; left: number | null; reward: number | null; counted: boolean } | null>
+    ) as Promise<{
+      streak: number | null
+      left: number | null
+      reward: number | null
+      counted: boolean
+      share: SharePrompt | null
+    } | null>
   )
 }
 
@@ -1351,75 +1399,32 @@ export interface SharePrompt {
   note: string
 }
 
-/*
- * Their "Поділитися" card, whatever it is for.
- *
- * Twitch drops one of these into the chat when something has just happened to you on the channel:
- * a watch streak taken, a subscription reward, and more besides. It is a card with a line or two
- * about what you got and a button that posts it to chat, and it is the only place that offer
- * exists — so ours finds theirs and presses it.
- *
- * Found by the button, inside the chat column. The channel header carries a share button of its
- * own (data-a-target="share-button", the one that copies a link to the stream), and it is not in
- * that column, which is what tells the two apart.
- */
-const SHARE_SCRIPT = `
-  const text = (e) => (e.textContent || '').trim()
-  const shareButton = () => {
-    const col = document.querySelector('.right-column')
-    if (!col) return null
-    return (
-      [...col.querySelectorAll('button')].find((b) => {
-        if (b.getAttribute('data-a-target') === 'share-button') return false
-        const label = b.getAttribute('aria-label') || ''
-        return /^(Поділитися|Share)/i.test(label) || /^(Поділитися|Share)$/i.test(text(b))
-      }) || null
-    )
-  }
-  const shareCard = (b) => {
-    let card = b
-    for (let i = 0; i < 7 && card.parentElement; i++) {
-      card = card.parentElement
-      const said = [...card.querySelectorAll('*')].filter((e) => e.children.length === 0 && text(e))
-      if (said.length >= 2) return card
-    }
-    return card
-  }
-`
-
-export function readShare(channel: string): Promise<SharePrompt | null> {
-  return ask<SharePrompt>(
-    channel,
-    `(() => {
-      ${SHARE_SCRIPT}
-      const b = shareButton()
-      if (!b) return null
-      const card = shareCard(b)
-      const said = [...card.querySelectorAll('*')]
-        .filter((e) => e.children.length === 0 && text(e))
-        .map((e) => text(e))
-        /* the words on their own buttons are not what the card is about */
-        .filter((t) => !/^(Поділитися|Share|Інші варіанти|More options)$/i.test(t) && t.length < 140)
-      if (said.length === 0) return null
-      return { title: said[0], note: said.slice(1).join(' ') }
-    })()`
-  )
-}
-
 /**
- * Press their share button.
+ * Press their share button, in the panel where the offer lives.
  *
  * It posts the line to chat as you, which is why it is only ever pressed from a press of our own.
+ * Queued with everything else that drives their panels, so it cannot land in the middle of a
+ * reward being read.
  */
 export function pressShare(channel: string): Promise<boolean | null> {
-  return ask<boolean>(
-    channel,
-    `(() => {
-      ${SHARE_SCRIPT}
-      const b = shareButton()
+  return serial(channel, () =>
+    ask<boolean>(
+      channel,
+      `(async () => {
+      ${PANEL_SCRIPT}
+      const p = await openPanel()
+      if (!p) return false
+      const box = p.querySelector('[class*="watchStreak"]')
+      if (!box) return false
+      const b = [...box.querySelectorAll('button')].find((x) =>
+        /^(Поділитися|Share)$/i.test((x.textContent || '').trim())
+      )
       if (!b || b.disabled) return false
       b.click()
+      await wait(900)
+      closePanel(p)
       return true
     })()`
+    )
   )
 }

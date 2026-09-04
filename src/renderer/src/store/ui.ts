@@ -644,8 +644,18 @@ export const useUiStore = create<UiState>()((set) => ({
     set((s) => {
       const old = s.playerShare[channel]
       if (!prompt) {
-        if (!old) return {}
-        return { playerShare: { ...s.playerShare, [channel]: null } }
+        if (!old && !s.shareDismissed[channel]) return {}
+        /*
+         * Their offer is out of the page, so the note that we turned it down can go too.
+         *
+         * It is remembered by the words on the card, and a streak reads the same words every time
+         * it comes round: kept for good, one shared streak would have hidden every later one. It
+         * only has to outlive the moment between our card closing and their button going.
+         */
+        return {
+          playerShare: { ...s.playerShare, [channel]: null },
+          shareDismissed: { ...s.shareDismissed, [channel]: '' }
+        }
       }
       // the one it was closed for stays closed; a card about something else is a new offer
       if (s.shareDismissed[channel] === prompt.title) return {}

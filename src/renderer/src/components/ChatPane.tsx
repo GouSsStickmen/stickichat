@@ -759,40 +759,6 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
                   </button>
                 )}
                 <div className="spacer" />
-                {/* the folded-away share offer, one press from coming back */}
-                {share && shareTucked && (
-                  <button
-                    className="pb-share"
-                    title={t('player.shareBack', { what: share.title })}
-                    onClick={() => useUiStore.getState().tuckShare(pane.channel, false)}
-                  >
-                    {/* an arrow leaving its box: the same thing their own share button means */}
-                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden>
-                      <path
-                        d="M11.2 4.2H6.2a2 2 0 0 0-2 2v7.6a2 2 0 0 0 2 2h7.6a2 2 0 0 0 2-2V8.8"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M9.6 10.4 15.8 4.2"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M11.8 4.2h4v4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
-                )}
                 {/* the tucked-away poll or prediction, one press from coming back */}
                 {(pagePolls?.length ?? 0) > 0 && pollHidden && (
                   <button
@@ -823,6 +789,40 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
                         stroke="currentColor"
                         strokeWidth="1.9"
                         strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                )}
+                {/* the folded-away share offer, one press from coming back */}
+                {share && shareTucked && (
+                  <button
+                    className="pb-share"
+                    title={t('player.shareBack', { what: share.title })}
+                    onClick={() => useUiStore.getState().tuckShare(pane.channel, false)}
+                  >
+                    {/* an arrow leaving its box: the same thing their own share button means */}
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden>
+                      <path
+                        d="M11.2 4.2H6.2a2 2 0 0 0-2 2v7.6a2 2 0 0 0 2 2h7.6a2 2 0 0 0 2-2V8.8"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M9.6 10.4 15.8 4.2"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M11.8 4.2h4v4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       />
                     </svg>
                   </button>

@@ -8,8 +8,7 @@ import {
   readStreak,
   claimBonus,
   readPoll,
-  readDrops,
-  readShare
+  readDrops
 } from '../lib/playerPage'
 import { useT } from '../i18n'
 import {
@@ -360,16 +359,6 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
     })()`
     const tick = (): void => {
       void ask(look)
-      /*
-       * Their "share this" card, if one is up.
-       *
-       * Cheap enough to ask for on the same tick as the balance: one look for a button in the chat
-       * column. It comes and goes on its own, so it is read rather than waited for.
-       */
-      void readShare(channel).then((prompt) => {
-        if (gone) return
-        useUiStore.getState().setPlayerShare(channel, prompt)
-      })
       void readPoll(channel).then((poll) => {
         const ui = useUiStore.getState()
         if (poll) {
@@ -439,7 +428,6 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       gone = true
       window.clearInterval(id)
       useUiStore.getState().setPagePoll(channel, null)
-      useUiStore.getState().setPlayerShare(channel, null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, channel])
@@ -597,6 +585,8 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         streakReward: st.reward,
         streakClaimed: st.counted
       })
+      // their "share this" offer sits in the same footer, and stays there until it is shared
+      useUiStore.getState().setPlayerShare(channel, st.share)
       return st.streak !== null
     }
     /*
@@ -654,7 +644,7 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      * a fix for anything, it is simply the least often each one can run and still be right.
      */
     const timer = window.setInterval(() => void tick(), 8000)
-    const streakTimer = window.setInterval(() => void readTheStreak(), 900000)
+    const streakTimer = window.setInterval(() => void readTheStreak(), 300000)
     const dropsTimer = window.setInterval(() => void readTheDrops(), 180000)
     return () => {
       stop = true
@@ -662,6 +652,7 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       window.clearInterval(streakTimer)
       window.clearInterval(dropsTimer)
       useUiStore.getState().setPlayerDrops(channel, null)
+      useUiStore.getState().setPlayerShare(channel, null)
       registerPlayerPage(channel, null)
     }
     // ask is rebuilt on every render by design, and asking too early simply answers null
