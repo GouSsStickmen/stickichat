@@ -2,6 +2,122 @@ import { create } from 'zustand'
 import { BadgeRef, FavoriteEmote } from '../types'
 import { useSettingsStore } from './settings'
 import type { ModConfirmRequest } from '../lib/confirmMod'
+import type { DropsInfo } from '../lib/playerPage'
+
+/*
+ * What identifies one poll from another, for remembering a dismissal.
+ *
+ * Not the question: the same card can reach us from two places, Twitch's topic and a reading of
+ * the page, and the page does not always find the question. The options are the same either way,
+ * which is what makes them the reliable name for it. Without this, closing a finished card only
+ * cleared it, the next reading of the page built it again from scratch, without the winner, and it
+ * came back from the dead.
+ */
+function pollKey(poll: PagePollState | null | undefined): string {
+  if (!poll) return ''
+  // sorted, because a finished poll comes back with the winner first and the same card would
+  // otherwise look like a different one
+  return poll.options
+    .map((o) => o.label.trim())
+    .sort()
+    .join('|')
+}
+
+/** enough of a drop to say whether it has landed */
+interface PagePollDropLike {
+  claim: boolean
+  percent: number
+  earned?: boolean
+}
+
+/** a card closed by hand: which one it was, and when */
+interface PollDismissal {
+  key: string
+  id: string
+  at: number
+}
+
+/** ids the page reading invents when Twitch's own id never reached us */
+const NAMELESS = ['page', 'poll', 'prediction']
+
+/**
+ * Whether a card was closed by hand and must stay closed.
+ *
+ * Matched on the id whenever there is a real one, and only on the option labels when there is not.
+ *
+ * The labels alone were the whole test, and they are not one: a prediction is usually the same two
+ * words every time, so closing one finished "Так / Ні" card quietly blocked EVERY later prediction
+ * with those outcomes — the app announced the next one in chat and then showed no card for it at
+ * all, for the rest of the session. Twitch's id is different for each, which is exactly the
+ * distinction that was missing. The label match is kept for the one case that needs it, a reading
+ * of the page rebuilding a card we have just closed, and it lets go after a quarter of an hour,
+ * because by then their card is long out of the page and any match is a new poll.
+ */
+function dismissed(gone: PollDismissal[] | undefined, poll: PagePollState): boolean {
+  if (!gone?.length) return false
+  if (poll.id && !NAMELESS.includes(poll.id)) return gone.some((d) => d.id === poll.id)
+  const key = pollKey(poll)
+  return gone.some((d) => d.key === key && Date.now() - d.at < 900000)
+}
+
+/** a poll or prediction as the page shows it */
+export interface PagePollState {
+  /**
+   * Twitch's own id for it, and the reason this is a list rather than one card per channel.
+   *
+   * A channel can run a poll and a prediction at the same time, and Twitch shows both: keyed by
+   * one card per channel, whichever arrived last hid the other.
+   */
+  id: string
+  kind: string
+  question: string
+  options: { label: string; share: string; votes: string; picked: boolean; mine: number }[]
+  open: boolean
+  voted: boolean
+  /** the poll is over: kept on screen a little longer, with the winner marked */
+  ended: boolean
+  /**
+   * Submissions are closed but the result is not in yet.
+   *
+   * A prediction sits like this for as long as the streamer takes to pick a winner, which can be
+   * most of a stream: nothing more can be staked, and the card says so instead of offering presses
+   * that would be refused.
+   */
+  locked: boolean
+  /** the outcome Twitch declared the winner, when it says so outright */
+  winner: string | null
+  /** who was paid what, for a prediction that has been resolved */
+  payouts: { name: string; points: number }[]
+  /** how long is left, as the page writes it */
+  timeLeft: string | null
+  /** how much of the run is gone, 0 to 1 */
+  ran: number | null
+  /**
+   * When voting closes, from Twitch's own poll topic.
+   *
+   * Their card in the page has no countdown in it at all, so this is where the clock comes from;
+   * the card ticks it down itself rather than asking anybody every second.
+   */
+  endsAt: number | null
+  /** how long the whole thing runs for, so the bar knows what a full bar means */
+  runsFor: number | null
+  /**
+   * A prediction rather than a poll.
+   *
+   * They are taken part in differently: a poll wants one press, a prediction wants an amount of
+   * channel points on one side, and its card has to offer that.
+   */
+  isPrediction: boolean
+  /**
+   * What THIS account has put on each outcome, by label, as far as we know it ourselves.
+   *
+   * Twitch's topic names only the top ten predictors of each side, so a modest bet of our own is
+   * simply not in it: the card had no way to show what you had staked, and the side you backed was
+   * not marked at all until you were among the biggest bettors on it. What we placed ourselves is
+   * remembered here instead, and every update takes the larger of the two.
+   */
+  myStakes?: Record<string, number>
+}
 
 /** everything the open Twitch page says about this channel's points */
 export interface PagePoints {
@@ -15,11 +131,7 @@ export interface PagePoints {
   streak: number | null
   streakLeft: number | null
   streakReward: number | null
-  /** the streak as it stood when this stream started, so a rise during it can be spotted */
-  streakBase: number | null
-  /** which stream that base belongs to (its start time), so a new stream starts over */
-  streakStream: string | null
-  /** this stream has been counted towards the streak */
+  /** this stream has been counted towards the streak, as the page's own progress bar says */
   streakClaimed: boolean
 }
 
@@ -33,8 +145,6 @@ const EMPTY_POINTS: PagePoints = {
   streak: null,
   streakLeft: null,
   streakReward: null,
-  streakBase: null,
-  streakStream: null,
   streakClaimed: false
 }
 
@@ -243,6 +353,79 @@ interface UiState {
    * allowed to call. Only a channel with a running player in site mode ever appears here.
    */
   playerPoints: Record<string, PagePoints>
+  /**
+   * What the open page says about this channel's drops.
+   *
+   * Same reason as the points: a viewer's progress towards a drop exists in no API we may call,
+   * only in the page, and only while a player is running there.
+   */
+  playerDrops: Record<string, DropsInfo>
+  setPlayerDrops: (channel: string, info: DropsInfo | null) => void
+  /**
+   * Rewards that finished while we were watching, per channel.
+   *
+   * The chest lights up for these and keeps lighting up until the panel is opened, so a drop that
+   * lands while you are reading something else is still there to be noticed afterwards.
+   */
+  dropsGot: Record<string, string[]>
+  clearDropsGot: (channel: string) => void
+  /**
+   * The drops this account already owns, from Twitch's own inventory page.
+   *
+   * The channel page knows what is on offer and how far along it is, and says nothing at all once
+   * a drop has been earned: their chest simply goes. The inventory is the other half, and the only
+   * place that names what was actually received and when.
+   */
+  dropsOwned: { name: string; when: string; icon: string | null }[]
+  /** when that list was last read, so the panel does not load their page on every open */
+  dropsOwnedAt: number
+  setDropsOwned: (items: { name: string; when: string; icon: string | null }[]) => void
+  /**
+   * What each reward says about itself, per channel, keyed the way the list keys them.
+   *
+   * Read one at a time out of the page while the rewards panel is open, and kept here so it is
+   * only ever read once: opening a reward's own card in their panel is the only place the
+   * streamer's explanation exists.
+   */
+  rewardDesc: Record<string, Record<string, string>>
+  setRewardDesc: (channel: string, key: string, desc: string) => void
+  /**
+   * Every poll and prediction running in a channel, drawn by the app itself.
+   *
+   * Their own cards cannot be moved out of the page, and shown over the video they flickered as
+   * their React redrew them, so the state comes from Twitch's own topics and the app draws from
+   * this, passing votes back to their buttons.
+   */
+  pagePolls: Record<string, PagePollState[]>
+  /** add one or update it in place, matched on its id */
+  setPagePoll: (channel: string, poll: PagePollState | null, id?: string) => void
+  /**
+   * Closed by hand, and it must stay closed.
+   *
+   * Clearing the card was not enough: Twitch keeps its own card in the page for a while after the
+   * voting ends, so the next reading built the whole thing again from scratch, without the winner
+   * this time, and the card came back from the dead. A dismissal is remembered against the poll it
+   * was for, so only a NEW poll can put a card back.
+   */
+  dismissPagePoll: (channel: string, id?: string) => void
+  /**
+   * How much this account has just put on one outcome, remembered card-side.
+   *
+   * Twitch's topic lists the top ten predictors of a side and nobody else, so our own bet is
+   * usually invisible in it. This is what makes the card able to say "you have 300 on this one"
+   * the moment the points leave, and to keep saying it as the topic sends its updates.
+   */
+  notePagePollStake: (channel: string, id: string, label: string, points: number) => void
+  /** cards closed by hand, per channel */
+  pagePollDismissed: Record<string, PollDismissal[]>
+  /**
+   * Folded away into the little button beside the channel rewards, per channel.
+   *
+   * A locked prediction can hang about for an hour, and a panel across the top of the chat for an
+   * hour is in the way. Out of sight but one press from coming back.
+   */
+  pagePollHidden: Record<string, boolean>
+  hidePagePoll: (channel: string, hidden: boolean) => void
   setPlayerPoints: (channel: string, points: Partial<PagePoints> | null) => void
   /** where the pane wants its player, in viewport coordinates, plus the box to resize against */
   playerSlots: Record<string, PlayerSlot | null>
@@ -327,6 +510,58 @@ export const useUiStore = create<UiState>()((set) => ({
           : [...s.openPlayers, channel]
         : s.openPlayers.filter((c) => c !== channel)
     })),
+  pagePolls: {},
+  pagePollDismissed: {},
+  pagePollHidden: {},
+  hidePagePoll: (channel, hidden) =>
+    set((s) => ({ pagePollHidden: { ...s.pagePollHidden, [channel]: hidden } })),
+  dismissPagePoll: (channel, id) =>
+    set((s) => {
+      const list = s.pagePolls[channel] ?? []
+      const gone = id ? list.filter((p) => p.id === id) : list
+      const at = Date.now()
+      return {
+        pagePolls: { ...s.pagePolls, [channel]: id ? list.filter((p) => p.id !== id) : [] },
+        pagePollDismissed: {
+          ...s.pagePollDismissed,
+          [channel]: [
+            ...(s.pagePollDismissed[channel] ?? []),
+            ...gone.map((p) => ({ key: pollKey(p), id: p.id, at }))
+          ].slice(-10)
+        }
+      }
+    }),
+  setPagePoll: (channel, poll, id) =>
+    set((s) => {
+      const list = s.pagePolls[channel] ?? []
+      if (!poll) {
+        const next = id ? list.filter((p) => p.id !== id) : []
+        if (next.length === list.length && next.length === 0) return {}
+        return { pagePolls: { ...s.pagePolls, [channel]: next } }
+      }
+      if (dismissed(s.pagePollDismissed[channel], poll)) return {}
+      const at = list.findIndex((p) => p.id === poll.id)
+      if (at >= 0 && JSON.stringify(list[at]) === JSON.stringify(poll)) return {}
+      const next = at >= 0 ? list.map((p, i) => (i === at ? poll : p)) : [...list, poll]
+      return { pagePolls: { ...s.pagePolls, [channel]: next } }
+    }),
+  notePagePollStake: (channel, id, label, points) =>
+    set((s) => {
+      const list = s.pagePolls[channel] ?? []
+      const at = list.findIndex((p) => p.id === id)
+      if (at < 0) return {}
+      const card = list[at]
+      const had = card.myStakes?.[label] ?? 0
+      const mine = had + points
+      const grown = {
+        ...card,
+        myStakes: { ...(card.myStakes ?? {}), [label]: mine },
+        options: card.options.map((o) =>
+          o.label === label ? { ...o, mine: Math.max(o.mine, mine), picked: true } : o
+        )
+      }
+      return { pagePolls: { ...s.pagePolls, [channel]: list.map((p, i) => (i === at ? grown : p)) } }
+    }),
   playerPoints: {},
   setPlayerPoints: (channel, points) =>
     set((s) => {
@@ -344,6 +579,77 @@ export const useUiStore = create<UiState>()((set) => ({
         return {}
       }
       return { playerPoints: { ...s.playerPoints, [channel]: merged } }
+    }),
+  playerDrops: {},
+  dropsGot: {},
+  rewardDesc: {},
+  setRewardDesc: (channel, key, desc) =>
+    set((s) => {
+      const had = s.rewardDesc[channel] ?? {}
+      if (had[key] === desc) return {}
+      return { rewardDesc: { ...s.rewardDesc, [channel]: { ...had, [key]: desc } } }
+    }),
+  clearDropsGot: (channel) =>
+    set((s) => (s.dropsGot[channel]?.length ? { dropsGot: { ...s.dropsGot, [channel]: [] } } : {})),
+  dropsOwned: [],
+  dropsOwnedAt: 0,
+  setDropsOwned: (items) => set({ dropsOwned: items, dropsOwnedAt: Date.now() }),
+  setPlayerDrops: (channel, info) =>
+    set((s) => {
+      const old = s.playerDrops[channel]
+      if (!info) {
+        if (!old) return {}
+        const next = { ...s.playerDrops }
+        delete next[channel]
+        return { playerDrops: next }
+      }
+      /*
+       * One campaign, several drops, each with a life of its own.
+       *
+       * A channel can offer more than one at a time — one for watching and one for subscribing is
+       * the usual pair — and as each is earned Twitch takes THAT card out of its panel and leaves
+       * the rest. So the reading is merged with the last one rather than replacing it: a reward
+       * that was there and is not any more has landed, and it stays in our list marked as landed,
+       * while the others go on counting. Handled the same way whether one of three goes or the
+       * chest disappears altogether, which is what the last of them looks like.
+       */
+      const before = old?.items ?? []
+      const got = [...(s.dropsGot[channel] ?? [])]
+      const mark = (name: string): void => {
+        if (name && !got.includes(name)) got.push(name)
+      }
+      const done = (d: PagePollDropLike): boolean => !!d.earned || d.claim || d.percent >= 100
+      const now = info.items.map((item) => {
+        const was = before.find((b) => b.name === item.name)
+        if (done(item) && !(was && done(was))) mark(item.name)
+        // a card their panel still shows, but which we already know arrived, stays marked
+        return was?.earned ? { ...item, earned: true } : item
+      })
+      const landed = before
+        .filter((b) => !info.items.some((i) => i.name === b.name))
+        .map((b) => {
+          if (!b.earned) mark(b.name)
+          return { ...b, earned: true, percent: 100 }
+        })
+      const merged = { ...info, items: [...now, ...landed], gone: !info.any }
+      if (
+        old &&
+        JSON.stringify(old) === JSON.stringify(merged) &&
+        (s.dropsGot[channel] ?? []).length === got.length
+      ) {
+        return {}
+      }
+      // nothing here at all, and nothing ever was: forget the channel rather than keep an empty one
+      if (!info.any && merged.items.length === 0) {
+        if (!old) return {}
+        const next = { ...s.playerDrops }
+        delete next[channel]
+        return { playerDrops: next }
+      }
+      return {
+        playerDrops: { ...s.playerDrops, [channel]: merged },
+        dropsGot: { ...s.dropsGot, [channel]: got }
+      }
     }),
   mutedPlayers: [],
   setPlayerMuted: (channel, muted) =>

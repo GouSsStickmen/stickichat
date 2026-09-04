@@ -444,6 +444,17 @@ select:focus {
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  /*
+   * The row wraps rather than running off the edge.
+   *
+   * In a narrow split the buttons simply overflowed: measured on a 439px pane, the header wanted
+   * 453px and the close button sat 25px past the right edge, unreachable. Wrapping puts the tail
+   * of the row on a second line instead, which is a taller header and a chat you can still close.
+   */
+  flex-wrap: wrap;
+}
+.pane-header .channel-name {
+  min-width: 0;
 }
 .pane-header .channel-name {
   font-weight: 600;
@@ -6624,6 +6635,13 @@ button:has(> svg) {
 /* the dock is what the rewards window hangs off, so it opens upward from the bar it belongs to */
 .points-dock {
   position: relative;
+  /*
+   * Measured against itself, so the row can give things up in order as the chat narrows.
+   *
+   * The rewards button keeps its place at the right edge and loses its words first; the balance
+   * and the slot the "+N" lands in are what must stay legible.
+   */
+  container-type: inline-size;
 }
 .points-bar {
   display: flex;
@@ -6647,12 +6665,239 @@ button:has(> svg) {
   font-variant-numeric: tabular-nums;
   font-size: 15px;
   color: var(--text);
+  white-space: nowrap;
+}
+.points-bar .pb-icon {
+  flex: 0 0 auto;
+}
+/* the moment points land: the number lights up and the gain floats beside it */
+.points-bar .pb-value.gained {
+  color: var(--success);
+  animation: points-pop 0.6s ease-out;
+}
+@keyframes points-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.points-bar .pb-gain {
+  min-width: 62px;
+  color: var(--success);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+}
+.points-bar .pb-gain.show {
+  animation: points-rise 3.2s ease-out forwards;
+}
+@keyframes points-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  12% {
+    opacity: 1;
+    transform: none;
+  }
+  75% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .points-bar .pb-value.gained,
+  .points-bar .pb-gain {
+    animation: none;
+  }
 }
 .points-bar .pb-mult {
   padding: 0 4px;
   border-radius: var(--radius-sm, 4px);
   background: var(--surface-3);
   color: var(--accent);
+}
+/*
+ * Twitch's own drops chest, in our bar.
+ *
+ * Quiet while a drop is only making progress, and lit the moment one is finished: a drop that
+ * lands while you are reading is worth noticing, and their own chest does the same thing.
+ */
+.points-bar .pb-drops {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.points-bar .pb-drops:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+/* a campaign is running here */
+.points-bar .pb-drops.live {
+  color: var(--accent);
+}
+/*
+ * A reward has landed and nobody has looked yet.
+ *
+ * Shaken rather than merely coloured: a drop arrives while you are reading something else, and the
+ * only thing that catches an eye which is elsewhere is movement. It stops the moment the panel is
+ * opened, which is what marks it as seen.
+ */
+.points-bar .pb-drops.got {
+  color: var(--accent);
+  /* shaken AND lit: the shake catches the eye, the glow says it is still waiting to be looked at */
+  animation:
+    chest-shake 1.4s ease-in-out infinite,
+    chest-glow 1.6s ease-in-out infinite;
+}
+@keyframes chest-glow {
+  0%,
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 0 transparent;
+    filter: none;
+  }
+  50% {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent) 28%, transparent);
+    filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 60%, transparent));
+  }
+}
+@keyframes chest-shake {
+  0%,
+  62%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  66% {
+    transform: rotate(-11deg) scale(1.06);
+  }
+  72% {
+    transform: rotate(9deg) scale(1.06);
+  }
+  78% {
+    transform: rotate(-7deg) scale(1.04);
+  }
+  84% {
+    transform: rotate(5deg) scale(1.02);
+  }
+  90% {
+    transform: rotate(-3deg) scale(1.01);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* no movement, but it still has to stand out: the lit state stays as a still glow */
+  .points-bar .pb-drops.got {
+    animation: none;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+}
+.drops-panel .drops-about {
+  margin: 0;
+}
+.drops-panel .drops-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+/* the campaign art is full size in their panel; here it is a thumbnail beside the words */
+.drops-panel .drop-row .rw-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+}
+.drops-panel .drop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.drops-panel .drop-row.done {
+  border-color: var(--success);
+}
+.drops-panel .drop-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.drops-panel .drop-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drops-panel .drop-game,
+.drops-panel .drop-need {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drops-panel .drop-bar {
+  display: block;
+  height: 3px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.drops-panel .drop-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+/* the inventory reader is a whole Twitch page: loaded, read and never seen */
+.drops-inventory-view {
+  position: absolute;
+  left: -4000px;
+  top: 0;
+  width: 1200px;
+  height: 900px;
+  visibility: hidden;
+  pointer-events: none;
+}
+.drops-panel .drops-owned-head {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.drops-panel .drop-row.owned {
+  border-style: dashed;
+}
+.drops-panel .drop-pc {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.drops-panel .drop-row.done .drop-pc {
+  color: var(--success);
 }
 .points-bar .pb-chest {
   background: none;
@@ -6663,7 +6908,42 @@ button:has(> svg) {
   line-height: 1;
   animation: chest-nudge 1.6s ease-in-out infinite;
 }
+@container (max-width: 340px) {
+  .points-bar .pb-rewards span {
+    display: none;
+  }
+  .points-bar .pb-gain {
+    min-width: 46px;
+  }
+}
+@container (max-width: 250px) {
+  .points-bar .pb-mult {
+    display: none;
+  }
+}
+/* .spacer is styled per container in this file; the points row needs its own */
+.points-bar .spacer {
+  flex: 1;
+}
+/* the tucked-away poll, sitting next to the rewards button it hid behind */
+.points-bar .pb-poll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  flex: 0 0 auto;
+  padding: 0;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  cursor: pointer;
+}
+.points-bar .pb-poll:hover {
+  color: var(--text);
+}
 .points-bar .pb-rewards {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -6741,6 +7021,24 @@ button:has(> svg) {
   font-size: 12px;
   color: var(--text-muted);
 }
+/* pressed but not spent yet: what it is, what it says, and the press that costs the points */
+.rewards-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+}
+.rewards-confirm .rc-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rewards-row.chosen {
+  border-color: var(--accent);
+}
 .rewards-said {
   font-size: 12px;
   color: var(--success);
@@ -6777,6 +7075,12 @@ button:has(> svg) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rewards-ask .rw-ask-desc,
+.rewards-confirm .rw-ask-desc {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-muted);
 }
 .rewards-row .rw-cost {
   font-variant-numeric: tabular-nums;
@@ -6832,4 +7136,282 @@ button:has(> svg) {
 }
 .follows-name {
   cursor: context-menu;
+}
+
+/*
+ * The channel's running poll or prediction, at the top of the chat.
+ *
+ * Twitch's own card stays in the page it belongs to; this is the app's, drawn from what that page
+ * says, so it sits where a chat pane can put it and never flickers with their re-renders. Each row
+ * carries its share as its own fill, which keeps the label and the numbers readable over it.
+ */
+.page-poll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 8px 0;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  /*
+   * Measured against itself, so the header can give things up in order as the chat narrows.
+   *
+   * The controls keep their corner and the heading loses its words first: nothing in the row used
+   * to be allowed to shrink, so in a narrow chat the three of them were pushed clean out of the
+   * card and the close cross ended up outside its right edge.
+   */
+  container-type: inline-size;
+}
+.page-poll .pp-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+/* the heading is the one part that yields; the badge, the clock and the controls keep their size */
+.page-poll .pp-kind {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-poll .pp-over,
+.page-poll .pp-clock,
+.page-poll .pp-tuck,
+.page-poll .pp-fold,
+.page-poll .pp-x {
+  flex: 0 0 auto;
+}
+@container (max-width: 260px) {
+  /* the question underneath says what it is; the corner is worth more than the word for it */
+  .page-poll .pp-kind {
+    display: none;
+  }
+}
+/* .spacer is styled per container in this file; without this the buttons bunched up on the left
+   and the close cross sat 323px short of the corner it belongs in */
+.page-poll .pp-head .spacer {
+  flex: 1;
+}
+/*
+ * The three controls in the corner are drawn in the theme's accent, not in muted grey.
+ *
+ * They used to take three different greys from three different tokens, so the chevron came out
+ * dimmer than the cross beside it and read as disabled.
+ */
+.page-poll .pp-tuck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--accent);
+  cursor: pointer;
+}
+.page-poll .pp-tuck:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.page-poll .pp-x {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--accent);
+  cursor: pointer;
+}
+.page-poll .pp-x:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.page-poll .pp-fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--accent);
+  cursor: pointer;
+}
+.page-poll .pp-fold:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.page-poll .pp-fold:hover {
+  color: var(--text);
+}
+.page-poll .pp-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.page-poll .pp-timebar {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.page-poll .pp-timebar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 1s linear;
+}
+.page-poll .pp-over {
+  padding: 0 5px;
+  border-radius: var(--radius-xl);
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+/*
+ * The option that won, once the poll is over: a green field and a cup that hops, as on Twitch.
+ *
+ * The green is the row's own fill taken up to full strength rather than a border, so the winner
+ * reads at a glance from across the chat, and the cup moves once a second to draw the eye to it.
+ */
+.page-poll .pp-opt.won {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, var(--surface));
+}
+.page-poll .pp-opt.won .pp-fill {
+  background: color-mix(in srgb, var(--success) 42%, transparent);
+}
+/* the points we have on this outcome, the way Twitch writes "Використано 10" */
+.page-poll .pp-mine {
+  position: relative;
+  padding: 0 6px;
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.page-poll .pp-crown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--success) 26%, transparent);
+  color: var(--success);
+  font-size: 11px;
+}
+.page-poll .pp-trophy {
+  display: inline-block;
+  font-size: 12px;
+  animation: poll-trophy 1.6s ease-in-out infinite;
+}
+@keyframes poll-trophy {
+  0%,
+  60%,
+  100% {
+    transform: none;
+  }
+  70% {
+    transform: translateY(-3px) rotate(-8deg) scale(1.15);
+  }
+  85% {
+    transform: translateY(-1px) rotate(6deg) scale(1.08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-poll .pp-trophy {
+    animation: none;
+  }
+}
+.page-poll.is-over .pp-opt {
+  cursor: default;
+}
+.page-poll .pp-q {
+  font-weight: 600;
+  color: var(--text);
+}
+.page-poll .pp-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page-poll .pp-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* pick, then confirm: the amount and the confirm sit under the row that was chosen */
+.page-poll .pp-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 2px;
+}
+.page-poll .pp-confirm input {
+  width: 78px;
+  padding: 3px 6px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.page-poll .pp-opt.chosen {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.page-poll .pp-payouts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.page-poll .pp-opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+/* the side your own points are on: a bar down its edge, so it reads as yours at a glance */
+.page-poll .pp-opt.picked {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+/* what came of the last press, when the page would not take it */
+.page-poll .pp-said {
+  font-size: 12px;
+  color: var(--warn, #ffb84d);
+}
+.page-poll .pp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  pointer-events: none;
+  transition: width 0.4s ease;
+}
+.page-poll .pp-label {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-poll .pp-share {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }

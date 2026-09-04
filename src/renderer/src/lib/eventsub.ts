@@ -1,5 +1,5 @@
 import { Account } from '../types'
-import { createEventSubSubscription, describeHelixError } from './helix'
+import { createEventSubSubscription, deleteEventSubSubscription, describeHelixError } from './helix'
 import { retryAfterMs } from './http'
 import { diagInfo, diagSocket, diagWarn } from './diag'
 
@@ -74,6 +74,16 @@ export class EventSubClient {
   private rateStep = 0
   /** last reported "waiting out a backoff" count, so the line marks changes not passes */
   private lastHeld = -1
+  /**
+   * The id Twitch gave each subscription, so the ones we stop wanting can be taken back.
+   *
+   * A websocket session keeps every subscription it was ever handed until the socket itself goes.
+   * Closing a chat parted its IRC channel and left the subscription running, so raids and
+   * redemptions kept arriving from a channel that is not open anywhere; they also count against
+   * the session's own cap.
+   */
+  private subIds = new Map<string, { id: string; account: Account }>()
+
   /** coalesces the burst of resync() calls that arrives when many channels open at once */
   private resyncTimer: number | null = null
   private getDesired: () => EventSubDesired[]
@@ -224,6 +234,24 @@ export class EventSubClient {
     }, delay)
   }
 
+  /** hand back everything this session no longer wants */
+  private async dropUnwanted(): Promise<void> {
+    if (!this.sessionId) return
+    const wanted = new Set(this.getDesired().map((d) => d.key))
+    for (const [key, sub] of [...this.subIds]) {
+      if (wanted.has(key)) continue
+      this.subIds.delete(key)
+      this.created.delete(key)
+      this.retryAt.delete(key)
+      this.retryStep.delete(key)
+      try {
+        await deleteEventSubSubscription(sub.account, sub.id)
+      } catch {
+        // it will go with the session anyway; the events are already ignored by the app
+      }
+    }
+  }
+
   /** (re)create every desired subscription not yet made for this session */
   private async subscribeAll(): Promise<void> {
     if (!this.sessionId || this.subscribing) return
@@ -248,6 +276,8 @@ export class EventSubClient {
           const res = await createEventSubSubscription(d.account, d.type, d.version, d.condition, this.sessionId)
           // 409 = already exists for this session; both mean "it's active now"
           if (res.ok || res.status === 409) {
+            const made = (res.json as { data?: { id?: string }[] } | null)?.data?.[0]?.id
+            if (made) this.subIds.set(d.key, { id: made, account: d.account })
             if (this.retryStep.has(d.key)) {
               diagInfo('eventsub', `${d.type} for ${d.account.login} succeeded after backing off`)
             }
@@ -366,7 +396,7 @@ export class EventSubClient {
         if (this.reconnectTimer === null) this.connect()
         return
       }
-      void this.subscribeAll()
+      void this.dropUnwanted().then(() => this.subscribeAll())
     }, 400)
   }
 
@@ -404,5 +434,61 @@ export class EventSubClient {
     } catch {
       /* noop */
     }
+  }
+}
+
+/**
+ * One socket per account, because Twitch will not put two on the same one.
+ *
+ * "websocket transport cannot have subscriptions created by different users", HTTP 400, on every
+ * start: a session belongs to whoever created its first subscription, and everything the second
+ * account wanted was refused from then on. With two accounts signed in that meant the second one
+ * never received a whisper at all, and nothing said so outside the diagnostics log.
+ *
+ * So the wanted subscriptions are dealt out by the account that authorizes them, and each account
+ * gets a client of its own. An account with nothing to subscribe to costs nothing: its client sees
+ * an empty list and stays off the wire.
+ */
+export class EventSubPool {
+  private links = new Map<string, EventSubClient>()
+  private closed = false
+
+  constructor(
+    private getDesired: () => EventSubDesired[],
+    private onEvent: EventHandler,
+    private onSubError?: SubErrorHandler,
+    private onSubOk?: (desired: EventSubDesired) => void
+  ) {
+    this.resync()
+  }
+
+  resync(): void {
+    if (this.closed) return
+    let all: EventSubDesired[] = []
+    try {
+      all = this.getDesired()
+    } catch {
+      return
+    }
+    for (const d of all) {
+      const id = d.account.id
+      if (this.links.has(id)) continue
+      this.links.set(
+        id,
+        new EventSubClient(
+          () => this.getDesired().filter((x) => x.account.id === id),
+          this.onEvent,
+          this.onSubError,
+          this.onSubOk
+        )
+      )
+    }
+    for (const link of this.links.values()) link.resync()
+  }
+
+  close(): void {
+    this.closed = true
+    for (const link of this.links.values()) link.close()
+    this.links.clear()
   }
 }

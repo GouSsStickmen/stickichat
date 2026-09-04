@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { readRewards, redeemReward, hasPlayerPage, type RewardList } from '../lib/playerPage'
+import {
+  readRewards,
+  readRewardDesc,
+  redeemReward,
+  hasPlayerPage,
+  type RewardList
+} from '../lib/playerPage'
 import { useUiStore } from '../store/ui'
 import { useT } from '../i18n'
 import { CloseIcon } from './Icons'
@@ -30,6 +36,7 @@ export default function RewardsPanel({
     (s) => s.playerPoints[channel]?.balanceText ?? s.playerPoints[channel]?.balance?.toLocaleString('uk-UA') ?? null
   )
   const open = hasPlayerPage(channel)
+  const descs = useUiStore((s) => s.rewardDesc[channel]) ?? {}
 
   const load = async (): Promise<void> => {
     setBusy(true)
@@ -37,12 +44,7 @@ export default function RewardsPanel({
     setList(rows)
     // the streak only shows up in this panel, so this is the one chance to record it
     if (rows?.streak != null) {
-      const now = useUiStore.getState().playerPoints[channel]
-      useUiStore.getState().setPlayerPoints(channel, {
-        balance: now?.balance ?? null,
-        chest: now?.chest ?? false,
-        streak: rows.streak
-      })
+      useUiStore.getState().setPlayerPoints(channel, { streak: rows.streak })
     }
     setBusy(false)
   }
@@ -62,12 +64,38 @@ export default function RewardsPanel({
    * The page it would be typed into is deliberately invisible, so the request comes back out to
    * this panel and goes in with the second attempt.
    */
+  /*
+   * Pressed, but not spent yet.
+   *
+   * A press on a reward used to redeem it there and then, which is one slip away from spending
+   * five thousand points on the wrong thing, and it also left no moment at which the streamer's
+   * own description of the reward could be read. Now the press opens the reward, and a second
+   * press on the confirm is what actually redeems it.
+   */
+  const [pending, setPending] = useState<{ key: string; name: string; cost: number | null } | null>(
+    null
+  )
   const [asking, setAsking] = useState<{ key: string; name: string } | null>(null)
   const [words, setWords] = useState('')
+
+  /** the first press: show what it is, and read its description if it is not known yet */
+  const [reading, setReading] = useState(false)
+  const choose = async (key: string, name: string, cost: number | null): Promise<void> => {
+    setSaid(null)
+    setAsking(null)
+    setPending({ key, name, cost })
+    // an empty one is worth one more try at the moment somebody is actually looking at it
+    if (useUiStore.getState().rewardDesc[channel]?.[key]) return
+    setReading(true)
+    const said = await readRewardDesc(channel, key)
+    if (said !== null) useUiStore.getState().setRewardDesc(channel, key, said)
+    setReading(false)
+  }
 
   const redeem = async (key: string, name: string, text?: string): Promise<void> => {
     setSaid(t('points.redeeming', { name }))
     const res = await redeemReward(channel, key, text)
+    if (res.desc) useUiStore.getState().setRewardDesc(channel, key, res.desc)
     if (res.state === 'needsText') {
       setAsking({ key, name })
       setWords('')
@@ -124,9 +152,46 @@ export default function RewardsPanel({
             </div>
           )}
           {said && <div className="rewards-said">{said}</div>}
+          {pending && (
+            <div className="rewards-confirm">
+              <b>{pending.name}</b>
+              {/*
+                The streamer's own explanation, read out of their card for this very moment.
+
+                Nothing is written when there is none. It used to say "the streamer wrote no
+                description" the moment a reading came back empty, and a reading came back empty
+                whenever two of them collided in the page, so it said that about rewards that
+                plainly do have one.
+              */}
+              {descs[pending.key] ? (
+                <span className="rw-ask-desc">{descs[pending.key]}</span>
+              ) : reading ? (
+                <span className="rw-ask-desc">{t('points.reading')}</span>
+              ) : null}
+              <div className="rc-row">
+                <button
+                  className="primary"
+                  onClick={() => {
+                    const p = pending
+                    setPending(null)
+                    void redeem(p.key, p.name)
+                  }}
+                >
+                  {pending.cost === null
+                    ? t('points.redeemNow')
+                    : t('points.redeemFor', { n: pending.cost.toLocaleString('uk-UA') })}
+                </button>
+                <button className="ghost" onClick={() => setPending(null)}>
+                  {t('misc.cancel')}
+                </button>
+              </div>
+            </div>
+          )}
           {asking && (
             <div className="rewards-ask">
               <label>{t('points.needText', { name: asking.name })}</label>
+              {/* the streamer's own words about it: usually they say what to write here */}
+              {descs[asking.key] && <span className="rw-ask-desc">{descs[asking.key]}</span>}
               <input
                 autoFocus
                 value={words}
@@ -152,9 +217,11 @@ export default function RewardsPanel({
               list.rewards.map((r) => (
                 <button
                   key={r.key}
-                  className={`rewards-row ${r.disabled ? 'off' : ''}`}
+                  className={`rewards-row ${r.disabled ? 'off' : ''} ${
+                    pending?.key === r.key ? 'chosen' : ''
+                  }`}
                   disabled={r.disabled}
-                  onClick={() => void redeem(r.key, r.name)}
+                  onClick={() => void choose(r.key, r.name, r.cost)}
                 >
                   {r.icon ? (
                     <img className="rw-icon" src={r.icon} alt="" />

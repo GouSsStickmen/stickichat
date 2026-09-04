@@ -904,6 +904,21 @@ export async function createEventSubSubscription(
   })
 }
 
+/**
+ * Drop a subscription this session no longer wants.
+ *
+ * Creating them is not the whole job: a websocket session keeps every subscription it was ever
+ * given until the socket goes, so a channel closed in the app went on delivering raids and
+ * redemptions from a chat that is not open anywhere. There is also a cap per session, and stale
+ * ones eat it.
+ */
+export async function deleteEventSubSubscription(
+  account: Account,
+  id: string
+): Promise<HttpResponse> {
+  return helixRequest(account, 'DELETE', '/eventsub/subscriptions', { id })
+}
+
 interface HelixCheermote {
   prefix: string
   tiers: {

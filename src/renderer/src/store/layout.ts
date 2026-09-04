@@ -36,6 +36,24 @@ interface LayoutState {
   movePane: (tabId: string, paneId: string, toIndex: number) => void
 }
 
+/*
+ * A player belongs to the chat it was opened from.
+ *
+ * Players are rendered above the app rather than inside their pane, so that looking at another tab
+ * cannot stop the stream. That also means nothing stops one when its chat goes: closing the tab, or
+ * closing one chat of a split, left a stream playing with no way to see it or stop it. Any channel
+ * that no surviving pane shows loses its player here; one still open elsewhere keeps it.
+ */
+function dropOrphanPlayers(surviving: Tab[], gone: Pane[]): void {
+  const stillShown = new Set(surviving.flatMap((t) => t.panes.map((p) => p.channel)))
+  const ui = useUiStore.getState()
+  for (const pane of gone) {
+    if (!stillShown.has(pane.channel) && ui.openPlayers.includes(pane.channel)) {
+      ui.togglePlayer(pane.channel, false)
+    }
+  }
+}
+
 export const useLayoutStore = create<LayoutState>()((set, get) => ({
   tabs: [],
   activeTabId: null,
@@ -69,22 +87,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         ? { ...s.reopenAt, [closing.id]: s.tabs.findIndex((t) => t.id === id) }
         : s.reopenAt
     })
-    /*
-     * A player goes with the tab it was opened from.
-     *
-     * Players are rendered above the app rather than inside their pane, so that looking at another
-     * tab cannot stop the stream. That also meant closing the tab left one playing with nothing on
-     * screen to stop it. Any channel no surviving tab shows loses its player here; a channel still
-     * open somewhere else keeps it.
-     */
-    if (!closing) return
-    const stillShown = new Set(tabs.flatMap((t) => t.panes.map((p) => p.channel)))
-    const ui = useUiStore.getState()
-    for (const pane of closing.panes) {
-      if (!stillShown.has(pane.channel) && ui.openPlayers.includes(pane.channel)) {
-        ui.togglePlayer(pane.channel, false)
-      }
-    }
+    if (closing) dropOrphanPlayers(tabs, closing.panes)
   },
   renameTab: (id, name) =>
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, name } : t)) })),
@@ -104,7 +107,8 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
           : t
       )
     })),
-  closePane: (tabId, paneId) =>
+  closePane: (tabId, paneId) => {
+    const gone = get().tabs.find((t) => t.id === tabId)?.panes.find((p) => p.id === paneId)
     set((s) => ({
       tabs: s.tabs.map((t) => {
         if (t.id !== tabId) return t
@@ -121,15 +125,32 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         const columns = panes.length <= 1 || t.columns > panes.length ? 0 : t.columns
         return { ...t, panes, columns }
       })
-    })),
-  updatePane: (tabId, paneId, patch) =>
+    }))
+    if (gone) dropOrphanPlayers(get().tabs, [gone])
+  },
+  updatePane: (tabId, paneId, patch) => {
+    const before = get()
+      .tabs.find((t) => t.id === tabId)
+      ?.panes.find((p) => p.id === paneId)
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === tabId
           ? { ...t, panes: t.panes.map((p) => (p.id === paneId ? { ...p, ...patch } : p)) }
           : t
       )
-    })),
+    }))
+    /*
+     * A pane pointed somewhere else leaves its old channel with nothing showing it.
+     *
+     * Closing a chat already takes its player with it; changing the channel with the pencil did
+     * not, so the stream that was there kept playing somewhere out of sight, talking away with
+     * neither video nor chat on screen and nothing to close it by. Same rule as closing: the
+     * player goes unless some other pane still has that channel open.
+     */
+    if (before && patch.channel && patch.channel !== before.channel) {
+      dropOrphanPlayers(get().tabs, [before])
+    }
+  },
   moveTab: (tabId, toIndex) =>
     set((s) => {
       const from = s.tabs.findIndex((t) => t.id === tabId)

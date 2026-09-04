@@ -185,6 +185,19 @@ function serveOverlaysEarly(): void {
   }
 }
 
+/*
+ * Keep the stream playing when the app is not the window in front.
+ *
+ * backgroundThrottling:false already keeps our own timers running, but the video lives in a
+ * webview, and Chromium has a second set of rules for a window it thinks nobody is looking at: an
+ * occluded or minimised window has its renderer backgrounded and its media suspended. That is why
+ * the stream paused itself on switching to another app or folding the chat away. These three
+ * switches turn that behaviour off for the whole process; they have to be set before ready.
+ */
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+
 app.whenReady().then(() => {
   // no application menu at all: with autoHideMenuBar the default File/Edit/View bar still
   // pops in on Alt, which the user doesn't want (and we have our own context menus)

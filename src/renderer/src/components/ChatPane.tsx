@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { MESSAGE_ONLY_TYPES, MOD_ONLY_TYPES, Pane } from '../types'
 import { useChatStore, lookupUserBadges } from '../store/chat'
 import { useAccountsStore } from '../store/accounts'
@@ -15,6 +15,8 @@ import ModToolbar from './ModToolbar'
 import { useUiStore } from '../store/ui'
 import { claimBonus } from '../lib/playerPage'
 import RewardsPanel from './RewardsPanel'
+import DropsPanel from './DropsPanel'
+import PagePollCard from './PagePollCard'
 import ChattersList from './ChattersList'
 import HighlightSidebar from './HighlightSidebar'
 import { AddPaneForm } from './SplitGrid'
@@ -109,10 +111,20 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const playerOpen = useUiStore((s) => s.openPlayers.includes(pane.channel))
   const setPlayerOpen = (on: boolean): void =>
     useUiStore.getState().togglePlayer(pane.channel, on)
-  const playerHeight = useSettingsStore((s) => s.settings.playerHeight)
   const slotRef = useRef<HTMLDivElement>(null)
   const playerSide = useSettingsStore((s) => s.settings.playerSideBySide)
-  const chatWidth = useSettingsStore((s) => s.settings.chatWidth)
+  /*
+   * The split's own sizes, per pane, with the settings as the default.
+   *
+   * They were read straight from the settings, which made them one size for the whole app: in a
+   * split, pulling one chat's edge to give one stream more room pulled every other chat with it.
+   * The drag writes to the pane now; the settings are what a pane that has never been dragged
+   * starts out at.
+   */
+  const defaultPlayerHeight = useSettingsStore((s) => s.settings.playerHeight)
+  const defaultChatWidth = useSettingsStore((s) => s.settings.chatWidth)
+  const playerHeight = pane.playerHeight ?? defaultPlayerHeight
+  const chatWidth = pane.chatWidth ?? defaultChatWidth
   const sideBySide = playerOpen && playerSide
 
   /*
@@ -133,10 +145,10 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         // the chat keeps at least a quarter of the pane whatever the pointer says
         const ceiling = Math.max(160, Math.round(boxHeight * 0.75))
         const next = Math.max(120, Math.min(ceiling, Math.round(ev.clientY - boxTop)))
-        useSettingsStore.getState().setSettings({ playerHeight: next })
+        useLayoutStore.getState().updatePane(tabId, pane.id, { playerHeight: next })
       } else {
         const next = Math.max(220, Math.min(Math.round(right - 240), Math.round(right - ev.clientX)))
-        useSettingsStore.getState().setSettings({ chatWidth: next })
+        useLayoutStore.getState().updatePane(tabId, pane.id, { chatWidth: next })
       }
     }
     const stop = (): void => {
@@ -149,9 +161,93 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
     window.addEventListener('pointerup', stop)
     window.addEventListener('pointercancel', stop)
   }
+  /*
+   * How big the split actually is, so the saved sizes can be kept inside it.
+   *
+   * chatWidth and playerHeight are saved in pixels, and the drag keeps them sensible; making the
+   * window smaller does not. A chat that was 900px wide in a wide window covered the player
+   * completely in a narrow one, with no grip left to drag back. So the saved size is a wish, and
+   * what is used is that wish trimmed to what is here.
+   */
+  const [splitBox, setSplitBox] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = splitRef.current
+    if (!el) return
+    const watch = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect
+      setSplitBox((old) =>
+        Math.abs(old.w - r.width) < 2 && Math.abs(old.h - r.height) < 2
+          ? old
+          : { w: Math.round(r.width), h: Math.round(r.height) }
+      )
+    })
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [playerOpen])
+  // the player keeps 240px across and 140px down, whatever the saved sizes say
+  const fitChat = splitBox.w > 0 ? Math.max(200, Math.min(chatWidth, splitBox.w - 240)) : chatWidth
+  const fitPlayer =
+    splitBox.h > 0 ? Math.max(120, Math.min(playerHeight, splitBox.h - 140)) : playerHeight
+
+  /*
+   * Keep a popover inside the window once it has a size.
+   *
+   * These are placed by their distance from the right edge, measured off the button that opened
+   * them. In a narrow split that button is itself near the left edge, and a 238px form anchored to
+   * it started at -70: the channel field was off screen with no way to reach it. Nothing can be
+   * worked out before the thing is laid out, so it is nudged after.
+   *
+   * The nudge is written straight onto the element rather than into state. State fed the effect
+   * that set it, and the two took turns until React gave up with "maximum update depth exceeded"
+   * and the whole app went blank.
+   */
+  const keepInside = (el: HTMLDivElement | null): void => {
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    if (r.width === 0) return
+    if (r.left < 8) el.style.right = `${Math.max(8, window.innerWidth - 8 - r.width)}px`
+    if (r.bottom > window.innerHeight - 8) {
+      el.style.top = `${Math.max(8, window.innerHeight - 8 - r.height)}px`
+    }
+  }
+  const addPopRef = useRef<HTMLDivElement>(null)
+  const editPopRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    keepInside(addPopRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addPaneOpen])
+  useLayoutEffect(() => {
+    keepInside(editPopRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editOpen])
+
   const latency = useUiStore((s) => s.streamLatency[pane.channel])
   const points = useUiStore((s) => s.playerPoints[pane.channel])
+  const drops = useUiStore((s) => s.playerDrops[pane.channel])
+  const dropsGot = useUiStore((s) => s.dropsGot[pane.channel]) ?? []
+  const pagePolls = useUiStore((s) => s.pagePolls[pane.channel])
+  const pollHidden = useUiStore((s) => s.pagePollHidden[pane.channel] ?? false)
   const [rewardsOpen, setRewardsOpen] = useState(false)
+  const [dropsOpen, setDropsOpen] = useState(false)
+  /*
+   * A flash of "+N" whenever the balance grows.
+   *
+   * Points arrive quietly: watching a stream tops them up every few minutes and a claimed chest
+   * adds a lump, and the only sign was a number that happened to be bigger the next time you
+   * looked. The gain is worked out from our own last reading, so it counts everything, however it
+   * arrived, and it is only shown while a player is actually feeding us readings.
+   */
+  const [gain, setGain] = useState(0)
+  const lastPoints = useRef<number | null>(null)
+  const balance = points?.balance ?? null
+  useEffect(() => {
+    const before = lastPoints.current
+    lastPoints.current = balance
+    if (before === null || balance === null || balance <= before) return
+    setGain(balance - before)
+    const done = window.setTimeout(() => setGain(0), 3200)
+    return () => window.clearTimeout(done)
+  }, [balance])
 
   /*
    * Where the hole is, republished on a slow tick.
@@ -278,7 +374,13 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   }
 
   return (
-    <div className="pane" onMouseEnter={bindHotkeys} onMouseLeave={unbindHotkeys}>
+    <div
+      className="pane"
+      // the channel this pane shows, so things drawn outside it (the hype train popup) can find it
+      data-channel={pane.channel}
+      onMouseEnter={bindHotkeys}
+      onMouseLeave={unbindHotkeys}
+    >
       <div
         className={`pane-header ${dragging ? 'dragging' : ''}`}
         ref={headRef}
@@ -365,6 +467,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           </button>
           {addPaneOpen && (
             <div
+              ref={addPopRef}
               className="popover add-pane-pop"
               style={{ position: 'fixed', top: addPanePos?.top ?? 40, right: addPanePos?.right ?? 8 }}
               onDragStart={(e) => e.stopPropagation()}
@@ -388,6 +491,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           </button>
           {editOpen && (
             <div
+              ref={editPopRef}
               className="popover add-pane-pop"
               style={{ position: 'fixed', top: editPos?.top ?? 40, right: editPos?.right ?? 8 }}
             >
@@ -511,7 +615,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           <div
             className={`player-slot ${sideBySide ? 'is-side' : ''}`}
             ref={slotRef}
-            style={sideBySide ? undefined : { height: playerHeight }}
+            style={sideBySide ? undefined : { height: fitPlayer }}
           />
         )}
         {/*
@@ -526,7 +630,11 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             onPointerDown={startResize}
           />
         )}
-        <div className="pane-chat-col" style={sideBySide ? { width: chatWidth } : undefined}>
+        <div className="pane-chat-col" style={sideBySide ? { width: fitChat } : undefined}>
+          {/* the channel's running poll or prediction, above the messages and only as wide as the
+              chat, since that is the column it belongs to. Tucked away it lives as a button in the
+              points row instead */}
+          {!pollHidden && <PagePollCard channel={pane.channel} />}
           <div className="pane-body">
             <MessageList
               pane={pane}
@@ -557,6 +665,9 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
               {rewardsOpen && (
                 <RewardsPanel channel={pane.channel} onClose={() => setRewardsOpen(false)} />
               )}
+              {dropsOpen && (
+                <DropsPanel channel={pane.channel} onClose={() => setDropsOpen(false)} />
+              )}
               <div className="points-bar">
                 {points.icon ? (
                   <img className="pb-icon" src={points.icon} alt="" />
@@ -564,11 +675,19 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
                   <span className="pb-icon pb-dot">◉</span>
                 )}
                 <span
-                  className="pb-value"
+                  className={`pb-value ${gain > 0 ? 'gained' : ''}`}
                   title={points.streak ? t('points.hintStreak', { n: points.streak }) : t('points.hint')}
                 >
                   {points.balanceText ??
                     (points.balance === null ? '...' : points.balance.toLocaleString('uk-UA'))}
+                </span>
+                {/*
+                  The gain has a slot of its own, always there and empty most of the time.
+                  Sitting in the flow it shoved the rewards button aside every time points landed,
+                  and floating over the row it landed ON that button and could not be read.
+                */}
+                <span className={`pb-gain ${gain > 0 ? 'show' : ''}`}>
+                  {gain > 0 ? `+${gain.toLocaleString('uk-UA')}` : ''}
                 </span>
                 {points.multiplier && (
                   <span className="pb-mult" title={t('points.multiplier')}>
@@ -585,10 +704,103 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
                   </button>
                 )}
                 <div className="spacer" />
+                {/* the tucked-away poll or prediction, one press from coming back */}
+                {(pagePolls?.length ?? 0) > 0 && pollHidden && (
+                  <button
+                    className="pb-poll"
+                    title={t('poll.reopen')}
+                    onClick={() => useUiStore.getState().hidePagePoll(pane.channel, false)}
+                  >
+                    {/* their own prediction mark: a clock face with a plus, as on Twitch */}
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden>
+                      <path
+                        d="M10 3.6a6.4 6.4 0 1 0 6.3 7.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.9"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M10 6.6V10l2.4 1.6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.9"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M14.4 3.2v4M12.4 5.2h4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.9"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                )}
+                {/*
+                  Twitch's own drops chest, in our own bar and always in it.
+
+                  Drawn even on a channel with no campaign running, so its place in the row does
+                  not move about; lit in the accent when there IS one, and shaking once a reward
+                  has landed, until the panel is opened and it has been seen. Right beside the
+                  rewards button, because the two are the same kind of thing.
+                */}
+                <button
+                  className={`pb-drops ${drops?.any ? 'live' : ''} ${
+                    dropsGot.length > 0 || drops?.items.some((d) => d.claim) ? 'got' : ''
+                  }`}
+                  title={
+                    dropsGot.length > 0
+                      ? t('drops.gotNamed', { names: dropsGot.join(', ') })
+                      : drops?.any
+                        ? t('drops.chest')
+                        : t('drops.noneHere')
+                  }
+                  onClick={() => {
+                    setRewardsOpen(false)
+                    setDropsOpen((v) => !v)
+                    useUiStore.getState().clearDropsGot(pane.channel)
+                  }}
+                >
+                  {/*
+                    A chest: lid, body and its lock, in the theme's own colours.
+
+                    Drawn as three rectangles rather than paths so it is exactly symmetrical in
+                    its box — the glow is a halo around that box, and a shape sitting a pixel off
+                    centre inside it reads as a crooked glow.
+                  */}
+                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden>
+                    <rect
+                      x="3.4"
+                      y="4.6"
+                      width="17.2"
+                      height="5.2"
+                      rx="1.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                    />
+                    <rect
+                      x="4.3"
+                      y="9.8"
+                      width="15.4"
+                      height="9.6"
+                      rx="1.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                    />
+                    <rect x="10.4" y="9.8" width="3.2" height="3.4" fill="currentColor" />
+                  </svg>
+                </button>
                 <button
                   className="pb-rewards"
                   title={t('points.rewards')}
-                  onClick={() => setRewardsOpen((v) => !v)}
+                  onClick={() => {
+                    setDropsOpen(false)
+                    setRewardsOpen((v) => !v)
+                  }}
                 >
                   <StarIcon size={13} />
                   <span>{t('points.rewards')}</span>

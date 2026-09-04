@@ -24,7 +24,7 @@ import {
   playHypeTrainLevelSound
 } from '../lib/sound'
 import { getLiveChannels, getUsers, getUserChatColors } from '../lib/helix'
-import { EventSubClient, EventSubDesired } from '../lib/eventsub'
+import { EventSubDesired, EventSubPool } from '../lib/eventsub'
 import { recordWatchStreak } from '../lib/watchStreaks'
 import { hlIngest } from './hlAccumulator'
 
@@ -33,7 +33,7 @@ const SUB_EVENT_IDS = new Set([
   'sub', 'resub', 'subgift', 'submysterygift',
   'giftpaidupgrade', 'anongiftpaidupgrade', 'primepaidupgrade'
 ])
-import { HypeTrainEvent, PollEvent, PubSubClient, RaidEvent, RedemptionEvent } from '../lib/pubsub'
+import { HypeTrainEvent, PollEvent, PubSubPool, RaidEvent, RedemptionEvent } from '../lib/pubsub'
 import { diagInfo, diagWarn } from '../lib/diag'
 import { queueWrite } from '../lib/lsWriter'
 
@@ -101,8 +101,8 @@ class ChatService {
   private streamStartedAt = new Map<string, string>()
   /** "channel:login" -> active mass-gift group (individual subgifts collapse under it) */
   private mysteryGifts = new Map<string, { id: string; until: number }>()
-  private eventSub: EventSubClient | null = null
-  private pubSub: PubSubClient | null = null
+  private eventSub: EventSubPool | null = null
+  private pubSub: PubSubPool | null = null
   /** channels with an ACTIVE channel.moderate subscription (their bare IRC ban/timeout
    *  lines are suppressed — the full "who did it" lines replace them) */
   private modEventChannels = new Set<string>()
@@ -208,7 +208,7 @@ class ChatService {
     // Whisper/raid subs live in the main window only; the MOD FEED also runs in utility
     // windows that show chat (usercard/highlights/detached), each with its own store.
     if (isMain || hash.startsWith('#usercard') || hash.startsWith('#highlights') || hash.startsWith('#detached')) {
-      this.eventSub = new EventSubClient(
+      this.eventSub = new EventSubPool(
         () => this.desiredEventSubs(isMain),
         (type, event, envelopeId) => this.handleEventSub(type, event, envelopeId),
         (desired, status) => this.onEventSubError(desired, status),
@@ -226,7 +226,7 @@ class ChatService {
     // names, which no viewer-token EventSub subscription can — same trick Chatterino uses.
     // Runs in the main window AND the standalone highlights window (its redeems tab).
     if (!window.location.hash || window.location.hash.startsWith('#highlights')) {
-      this.pubSub = new PubSubClient(
+      this.pubSub = new PubSubPool(
         () => useAccountsStore.getState().accounts.find((a) => a._accessToken),
         () => {
           const ids = useChatStore.getState().channelIds
@@ -302,6 +302,14 @@ class ChatService {
     const ids = useChatStore.getState().channelIds
     const channel = Object.keys(ids).find((login) => ids[login] === e.channelId)
     if (!channel) return
+    /*
+     * Only for chats that are actually open.
+     *
+     * The id map outlives a closed tab, and so did the topic on the wire, so a raid from a channel
+     * closed some time ago still announced itself and offered to open the target. EventSub's side
+     * has always checked this; this side had not.
+     */
+    if (!allOpenChannels(useLayoutStore.getState().tabs).includes(channel)) return
     const key = `${channel}:${e.targetLogin}`
     if (e.kind === 'cancel') {
       // aborted raid: forget it, so the NEXT raid to the same target prompts again
@@ -322,7 +330,14 @@ class ChatService {
     this.promptAddChannel(channel, e.targetLogin)
   }
 
-  /** a poll or prediction just started — announce it with an info line in that chat */
+  /**
+   * A poll or prediction: announced once, and kept up to date for the card in the chat.
+   *
+   * The state comes from here rather than from the page, because Twitch's own card carries no
+   * clock and no numbers we could read: these topics carry how long is left, how the votes stand
+   * and the moment it is over, which is when the result should be drawn rather than a minute later
+   * when their card finally disappears. The page is still what casts a vote.
+   */
   private handlePollStart(e: PollEvent): void {
     // the standalone highlights window shares the PubSub client — only the main window announces
     if (window.location.hash) return
@@ -330,8 +345,94 @@ class ChatService {
     const channel = Object.keys(ids).find((login) => ids[login] === e.channelId)
     if (!channel) return
     const lang = useSettingsStore.getState().settings.language
-    const key = e.kind === 'prediction' ? 'info.predictionStart' : 'info.pollStart'
-    this.localInfo(channel, translate(lang, key, { title: e.title, choices: e.choices.join(' · ') }))
+    if (e.phase === 'create') {
+      const key = e.kind === 'prediction' ? 'info.predictionStart' : 'info.pollStart'
+      this.localInfo(channel, translate(lang, key, { title: e.title, choices: e.choices.join(' · ') }))
+    }
+    const ui = useUiStore.getState()
+    // one channel can run a poll and a prediction at once, so each is found by its own id
+    const mine = (ui.pagePolls[channel] ?? []).find((p) => p.id === e.id)
+    if (e.phase === 'end') {
+      const had = mine
+      if (had) {
+        ui.setPagePoll(channel, {
+          ...had,
+          open: false,
+          locked: false,
+          ended: true,
+          timeLeft: null,
+          ran: 1,
+          winner: e.winner ?? had.winner,
+          payouts: e.payouts ?? had.payouts,
+          // the final numbers come with the ending, so the card shows the result, not the last tick
+          options: e.tally
+            ? e.tally.map((c) => {
+                const total = (e.tally ?? []).reduce((sum, x) => sum + x.votes, 0)
+                // what we put on it ourselves beats the topic, which names only the top ten
+                const mine = Math.max(c.mine, had.myStakes?.[c.title] ?? 0)
+                return {
+                  label: c.title,
+                  share: total > 0 ? `${Math.round((c.votes / total) * 100)}%` : '0%',
+                  votes: String(c.votes),
+                  picked: mine > 0,
+                  mine
+                }
+              })
+            : had.options
+        })
+      }
+      /*
+       * The finished card stands for a while, then goes for good.
+       *
+       * Dismissed rather than merely cleared: Twitch keeps its own card in the page long after a
+       * prediction is resolved, and a plain clear let the next reading of the page build the whole
+       * thing again, without the result, which is how a resolved prediction ended up hanging
+       * across the top of the chat with no way to be rid of it.
+       */
+      window.setTimeout(() => {
+        const now = (useUiStore.getState().pagePolls[channel] ?? []).find((p) => p.id === e.id)
+        if (now?.ended) useUiStore.getState().dismissPagePoll(channel, e.id)
+      }, 180000)
+      return
+    }
+    const total = (e.tally ?? []).reduce((sum, c) => sum + c.votes, 0)
+    const was = mine
+    // an update must never take a finished one back to life
+    if (was?.ended) return
+    // LOCKED means the streamer has yet to pick a winner: nothing more can be staked
+    const locked = /LOCKED/i.test(e.status ?? '')
+    ui.setPagePoll(channel, {
+      id: e.id || (e.kind === 'prediction' ? 'prediction' : 'poll'),
+      kind: translate(lang, e.kind === 'prediction' ? 'poll.prediction' : 'poll.current'),
+      question: e.title,
+      options: (e.tally ?? e.choices.map((title) => ({ title, votes: 0, mine: 0 }))).map((c) => {
+        // what we staked ourselves beats the topic, which names only the top ten predictors
+        const mine = Math.max(c.mine, was?.myStakes?.[c.title] ?? 0)
+        return {
+          label: c.title,
+          share: total > 0 ? `${Math.round((c.votes / total) * 100)}%` : '0%',
+          votes: String(c.votes),
+          // the side we have backed, if any: Twitch allows adding to it and nothing else
+          picked: mine > 0,
+          mine
+        }
+      }),
+      myStakes: was?.myStakes,
+      // whether THIS account has voted is only known from the page; keep what it told us
+      open: !locked,
+      locked,
+      voted: was?.voted ?? false,
+      ended: false,
+      timeLeft: null,
+      ran: null,
+      endsAt: e.endsAt ?? was?.endsAt ?? null,
+      // measured once, at the start: the bar needs to know what a full bar is worth
+      runsFor:
+        was?.runsFor ?? (e.endsAt ? Math.max(1000, e.endsAt - Date.now()) : null),
+      isPrediction: e.kind === 'prediction',
+      winner: null,
+      payouts: []
+    })
   }
 
   /** level of the train we last announced, per channel — progression fires per contribution */

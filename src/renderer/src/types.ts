@@ -1812,6 +1812,15 @@ export interface Pane {
    * until you say otherwise, which is what anyone expects the first time they split the view.
    */
   syncScroll?: boolean
+  /**
+   * How wide the chat is beside the player, and how tall the player is above it, in pixels.
+   *
+   * Per pane, because the size used to live in the settings and every chat in a split shared it:
+   * dragging one chat's edge to see more of one stream dragged every other chat along with it.
+   * Unset means "whatever the settings say", which is still what a fresh pane starts from.
+   */
+  chatWidth?: number
+  playerHeight?: number
 }
 
 export interface Tab {

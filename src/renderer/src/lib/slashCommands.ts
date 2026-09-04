@@ -16,6 +16,7 @@ import {
 import { resolveUserId } from '../services/modActions'
 import { chatService } from '../services/chatService'
 import { HttpResponse } from './http'
+import { hasPlayerPage, sendChatLine } from './playerPage'
 
 export interface SlashContext {
   account: Account
@@ -418,7 +419,20 @@ export async function runSlashCommand(text: string, ctx: SlashContext): Promise<
   const name = (parts.shift() ?? '').toLowerCase()
   const cmd = SLASH_COMMANDS.find((c) => c.name === name)
   if (!cmd) {
-    ctx.toast(`Невідома команда: /${name}`, 'error')
+    /*
+     * Anything this app has no Helix call for goes to the open player page.
+     *
+     * Twitch took most commands out of IRC, and the ones left over, /poll, /prediction, /endpoll,
+     * /marker, /commercial, only work in the web client. The player IS a web client, logged in as
+     * this account, so the line is typed into its chat box and Twitch's own answer is read back.
+     */
+    if (hasPlayerPage(ctx.channel)) {
+      const res = await sendChatLine(ctx.channel, text)
+      if (res.ok) ctx.toast(`/${name} пішла через плеєр. Відповідь Твіча буде у вікні плеєра.`, 'ok')
+      else ctx.toast(`Плеєр не прийняв /${name}. Спробуй ще раз за секунду.`, 'error')
+      return true
+    }
+    ctx.toast(`Невідома команда: /${name}. Відкрий плеєр повною сторінкою, і команди Твіча працюватимуть звідси.`, 'error')
     return true
   }
   const rest = text.slice(1 + name.length).trim()

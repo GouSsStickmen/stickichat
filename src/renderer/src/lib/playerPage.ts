@@ -58,6 +58,32 @@ async function ask<T>(channel: string, code: string): Promise<T | null> {
   }
 }
 
+/**
+ * One panel at a time, per channel.
+ *
+ * Everything that drives their own panels shares one page and one set of them: the balance panel
+ * is where the rewards, the streak and each reward's description come from, and the drops chest
+ * opens another. Several of these run on their own timers, and they were free to collide — the
+ * background walk that reads descriptions was opening a reward card while a press was opening a
+ * different one, and both came back having found nothing. Measured on a live channel: with the
+ * walk running, most descriptions read as empty, and the panel then said the streamer had written
+ * none at all.
+ *
+ * So they queue. Each waits for the one before it on that channel, whether it succeeded or not,
+ * and a page that has gone away simply answers null as before.
+ */
+const queues = new Map<string, Promise<unknown>>()
+
+function serial<T>(channel: string, run: () => Promise<T>): Promise<T> {
+  const prev = queues.get(channel) ?? Promise.resolve()
+  const next = prev.then(run, run)
+  queues.set(
+    channel,
+    next.catch(() => {})
+  )
+  return next
+}
+
 export interface PointsReading {
   /** the balance as a number, approximate when the page has abbreviated it */
   balance: number | null
@@ -87,25 +113,15 @@ export function readPoints(channel: string): Promise<PointsReading | null> {
       const sum = document.querySelector('[data-test-selector="community-points-summary"]')
       if (!sum) return null
       /*
+       * The points balance, from the element that says it is the points balance.
+       *
        * The summary holds several things at once: the bits balance, the points balance, the
-       * channel's icon and, while the stream is live, a multiplier badge. innerText keeps them on
-       * separate lines, where textContent would run "0" bits and "138 736" points together into
-       * "0138 736".
+       * channel's icon and, while the stream is live, a multiplier badge. Picking by position gets
+       * the bits on some channels, because innerText reads "0" then "138 736" on one and the other
+       * way round on another; the labelled element cannot be mistaken.
        *
-       * The balance is therefore the LAST line that is only digits, ignoring anything from a "+"
-       * onwards, which is the increment still rolling up after a claim.
-       */
-      /*
-       * Twitch labels the two balances, and that label is the only reliable way to tell them
-       * apart: on one channel innerText reads "0" then "138 736", on another the points come
-       * first, and picking by position gets the bits instead of the points.
-       */
-      /*
-       * Read twice, and only believe a number that holds still.
-       *
-       * Their digits roll one by one when the balance changes, and a read caught mid roll comes
-       * back with some of them missing: 139 769 read as "1 397" and the app showed that. Two reads
-       * a third of a second apart agree except during the animation, and a third settles it.
+       * Read twice, and only believe a number that holds still: their digits roll one by one when
+       * the balance changes, and a read caught mid roll comes back with some of them missing.
        */
       const copoText = () => {
         const c = document.querySelector('[data-test-selector="copo-balance-string"]')
@@ -120,8 +136,9 @@ export function readPoints(channel: string): Promise<PointsReading | null> {
       // "139,7 тис." and "1,2 млн" are the page's own shorthand: kept for display, and turned into
       // a rough number for anything that needs to compare
       const scale = /тис|k/i.test(shown) ? 1000 : /млн|m/i.test(shown) ? 1000000 : 1
-      const digits = shown.replace(/[^0-9.,]/g, '').replace(/\s/g, '').replace(',', '.')
+      const digits = shown.replace(/[^0-9.,]/g, '').replace(',', '.')
       const labelled = digits ? Math.round(parseFloat(digits) * scale) : null
+      // the multiplier has no label of its own, so it is picked out of the summary's own lines
       const lines = (sum.innerText || sum.textContent || '')
         .split(String.fromCharCode(10))
         .map((l) => l.trim())
@@ -130,8 +147,11 @@ export function readPoints(channel: string): Promise<PointsReading | null> {
       let multiplier = null
       for (const line of lines) {
         const clean = line.split('+')[0].trim()
-        if (/^[0-9][0-9\\s]*$/.test(clean)) balance = Number(clean.replace(/[^0-9]/g, ''))
-        else if (/^[xх]\\s?[0-9]+([.,][0-9]+)?$/i.test(clean)) multiplier = clean.replace(/\\s/g, '')
+        const bare = clean.replace(/[0-9]/g, '').trim()
+        if (bare === '' && clean.replace(/[^0-9]/g, '') !== '')
+          balance = Number(clean.replace(/[^0-9]/g, ''))
+        else if (/^[xх][^0-9]{0,2}[0-9]+([.,][0-9]+)?$/i.test(clean))
+          multiplier = clean.replace(/ /g, '')
       }
       const chest = [...sum.querySelectorAll('button')].some((b) =>
         /бонус|bonus/i.test(b.getAttribute('aria-label') || '')
@@ -162,6 +182,402 @@ export function claimBonus(channel: string): Promise<boolean | null> {
       )
       if (!b) return false
       b.click()
+      return true
+    })()`
+  )
+}
+
+/**
+ * Send one line through the page's own chat box, command and all.
+ *
+ * This is how the commands Twitch took away from IRC still work: /poll, /prediction, /endpoll,
+ * /marker and the rest are refused over the chat connection and accepted by the web client, and
+ * the web client is exactly what the player has open. Typed as real keystrokes, because their
+ * editor ignores anything else.
+ *
+ * Their own answer is deliberately NOT reported back. It arrives as a line in THEIR chat, and
+ * there is no selector that separates it from ordinary chat, so reading "the last line" showed
+ * whatever a bot had just posted and read as if that were the reply.
+ */
+export async function sendChatLine(channel: string, line: string): Promise<{ ok: boolean }> {
+  const page = pages.get(channel)
+  if (!page) return { ok: false }
+  try {
+    await page.typeAndSend(line)
+  } catch {
+    return { ok: false }
+  }
+  const empty = await ask<boolean>(
+    channel,
+    `(() => {
+      const box = document.querySelector('[data-a-target="chat-input"]')
+      return !!box && (box.innerText || '').trim() === ''
+    })()`
+  )
+  return { ok: empty === true }
+}
+
+export interface PagePoll {
+  /** "Поточне опитування" or the prediction's own heading, as the page writes it */
+  kind: string
+  question: string
+  options: { label: string; share: string; votes: string; picked: boolean; mine: number }[]
+  /** a vote can still be cast: their own button is there and this account has not voted yet */
+  open: boolean
+  /** this account has already voted in it */
+  voted: boolean
+  /** how long is left, as the page writes it ("00:41"), when it says so */
+  timeLeft: string | null
+  /** how much of the run is gone, 0 to 1, from their own bar */
+  ran: number | null
+}
+
+
+/*
+ * A poll or a prediction, read out of the chat column so the app can draw it itself.
+ *
+ * Their card cannot be moved: it lives in the page, inside a column we hide, so wherever it is put
+ * it still lands over the video, and drawn there it flickered every time their React redrew it. So
+ * the contents are copied out and the app draws its own card at the top of the chat, which is
+ * where it was wanted; voting is passed back to their buttons, the only thing that can cast a vote.
+ *
+ * Measured on a live poll rather than guessed: each option is a BUTTON whose text is the label
+ * followed by its share, "так100% (1)", the vote goes in with a button reading exactly
+ * "Голосувати", and the card itself is collapsed by default, which is why nothing here depends on
+ * it being open. textContent throughout, never innerText: the column is hidden, and hidden text is
+ * not "rendered" text, so innerText comes back empty.
+ */
+const POLL_SCRIPT = `
+  /*
+   * Searched across the whole page, not inside the chat column.
+   *
+   * The expanded card's own buttons are not where its text is: the column carries the words while
+   * the buttons live elsewhere in the tree, so a search bounded by the column found the heading and
+   * no options at all. The pattern of an option, "<label><number>% (<votes>)", is specific enough
+   * to look for everywhere.
+   */
+  const col = document
+  /*
+   * An option row is parsed by hand, with no regex at all.
+   *
+   * "так100% (1)" is the whole of it: a label, its share, and the count in brackets. A pattern
+   * would have been shorter and would also have been the fourth thing in this file broken by a
+   * template literal eating one backslash out of it, so the characters are counted instead.
+   */
+  const parseOption = (t) => {
+    const pi = t.indexOf('%')
+    if (pi < 1) return null
+    const open = t.indexOf('(', pi)
+    const close = t.lastIndexOf(')')
+    if (open < 0 || close !== t.length - 1) return null
+    let i = pi - 1
+    while (i >= 0 && t[i] >= '0' && t[i] <= '9') i--
+    const share = t.slice(i + 1, pi)
+    if (!share) return null
+    return { label: t.slice(0, i + 1).trim(), share: share + '%', votes: t.slice(open + 1, close).trim() }
+  }
+  const optionButtons = () =>
+    [...document.querySelectorAll('button')]
+      .map((b) => ({ b, text: (b.textContent || '').trim() }))
+      .filter((x) => x.text.length < 60 && parseOption(x.text))
+  /*
+   * Their card starts collapsed, and collapsed it holds no options at all: not hidden ones, none.
+   * So it is opened once, by its own "Розгорнути" button, and stays open after that.
+   */
+  const expand = () => {
+    const b = [...document.querySelectorAll('button')].find((x) =>
+      /Розгорнути|Expand/i.test(x.getAttribute('aria-label') || '')
+    )
+    if (!b) return false
+    b.click()
+    return true
+  }
+  /*
+   * The countdown and the bar that goes with it.
+   *
+   * Their card writes the time as "0:41" or "00:41" near the options and draws a bar that empties
+   * as it runs. The time is found as the nearest leaf of that shape; the bar as the progress fill
+   * closest to the options, measured against its own groove.
+   */
+  const clockLeaf = () => {
+    const looksLikeTime = (t) => {
+      const at = t.indexOf(':')
+      if (at < 1 || at > 2 || t.length - at !== 3) return false
+      for (const ch of t.replace(':', '')) if (ch < '0' || ch > '9') return false
+      return true
+    }
+    const near = optionButtons()[0]
+    if (!near) return null
+    const card = near.b.closest('div,section,article')
+    const host = card ? card.parentElement || card : document
+    const leaf = [...host.querySelectorAll('*')].find(
+      (e) => e.children.length === 0 && looksLikeTime((e.textContent || '').trim())
+    )
+    return leaf ? (leaf.textContent || '').trim() : null
+  }
+  const barRan = () => {
+    const near = optionButtons()[0]
+    if (!near) return null
+    let scope = near.b.parentElement
+    for (let i = 0; i < 4 && scope; i++) {
+      const groove = scope.querySelector('[class*="ScProgressBarWrapper"]')
+      const fill = scope.querySelector('[class*="ScProgressBarFill"]')
+      if (groove && fill) {
+        const wide = groove.getBoundingClientRect().width
+        if (wide > 0) return Math.min(1, fill.getBoundingClientRect().width / wide)
+      }
+      scope = scope.parentElement
+    }
+    return null
+  }
+  const voteButton = () =>
+    [...col.querySelectorAll('button')].find((b) => /^(Голосувати|Vote)$/i.test((b.textContent || '').trim()))
+  /*
+   * The kind and the question, taken from what sits just above the options.
+   *
+   * Matching the heading's own words was too brittle: it reads "Поточне опитування" while the poll
+   * runs and something else as it closes, and when the match missed, the card came out with no
+   * question at all. The options are the anchor instead: in page order, the leaf before the first
+   * of them is the question, and the one before that is the heading.
+   */
+  const heading = () => {
+    const opts = optionButtons()
+    if (!opts.length) return { kind: '', question: '' }
+    const leaves = [...document.querySelectorAll('*')].filter(
+      (e) => e.children.length === 0 && (e.textContent || '').trim()
+    )
+    const firstOption = opts[0].b
+    let at = -1
+    for (let i = 0; i < leaves.length; i++) {
+      if (firstOption.contains(leaves[i])) {
+        at = i
+        break
+      }
+    }
+    if (at < 1) return { kind: '', question: '' }
+    const before = leaves
+      .slice(Math.max(0, at - 4), at)
+      .map((e) => (e.textContent || '').trim())
+      .filter((t) => t.length < 120)
+    const kindAt = before.findIndex((t) => /опитуванн|прогноз|poll|predict/i.test(t))
+    return {
+      kind: kindAt >= 0 ? before[kindAt] : '',
+      question: kindAt >= 0 ? before[kindAt + 1] || '' : before[before.length - 1] || ''
+    }
+  }
+`
+
+export function readPoll(channel: string): Promise<PagePoll | null> {
+  return ask<PagePoll>(
+    channel,
+    `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      ${POLL_SCRIPT}
+      let opts = optionButtons()
+      // no options in sight: their card starts collapsed, and its own button is the way in. Asking
+      // the heading first was a mistake, since the heading is now derived FROM the options
+      if (opts.length < 2 && expand()) {
+        await wait(900)
+        opts = optionButtons()
+      }
+      if (opts.length < 2) return null
+      const head = heading()
+      const vote = voteButton()
+      const options = opts.map(({ b, text }) => {
+        const part = parseOption(text)
+        return {
+          label: part ? part.label : text,
+          share: part ? part.share : '',
+          votes: part ? part.votes : '',
+          picked: b.getAttribute('aria-checked') === 'true' || b.getAttribute('aria-pressed') === 'true',
+          mine: 0
+        }
+      })
+      /*
+       * "Open" means a vote can still be cast, which is NOT the same as their button being
+       * enabled: Twitch keeps "Голосувати" disabled until an option is picked, and reading that as
+       * "voting is closed" greyed out our own options so nothing could be picked at all. What ends
+       * voting is the poll going away, or this account having voted, which the page says outright.
+       */
+      const voted = /Проголосовано|You voted|Ви проголосували/i.test(document.body.textContent || '')
+      return {
+        kind: head.kind,
+        question: head.question,
+        options,
+        open: !!vote && !voted,
+        voted,
+        timeLeft: clockLeaf(),
+        ran: barRan()
+      }
+    })()`
+  )
+}
+
+/**
+ * Put points on one side of a prediction, with the amount you choose.
+ *
+ * The outcome is found by its own name, which is the one thing about their card we actually know:
+ * the label comes from Twitch's prediction topic, the same place the card in the app is drawn from.
+ * It used to be found by position among the "label 39% (12780)" buttons a POLL is made of, and a
+ * prediction is not made of those at all, so the press landed on nothing and the points never
+ * left. Position is still the fallback, for a card the topic never described.
+ *
+ * Nothing is pressed unless the amount matches what was asked for. Their card carries a button per
+ * outcome with a default amount written on it and a "Прогноз із власною сумою" for the rest; if
+ * neither can be made to say the number the reader typed, this comes back with the reason instead
+ * of spending a different amount than they meant.
+ */
+export function betPrediction(
+  channel: string,
+  index: number,
+  amount: number,
+  label?: string
+): Promise<'placed' | 'noOutcome' | 'noAmount' | 'refused' | null> {
+  return ask(
+    channel,
+    `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      ${POLL_SCRIPT}
+      const want = ${JSON.stringify(String(amount))}
+      const name = ${JSON.stringify(label ?? '')}
+      /*
+       * Pressed as a mouse would, then as a click.
+       *
+       * Their own player controls ignore a bare .click() outright, and there is no telling from
+       * here which of the two a card built this week listens for, so it gets both.
+       */
+      const press = (el) => {
+        const r = el.getBoundingClientRect()
+        const at = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true,
+          clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }
+        try { el.dispatchEvent(new PointerEvent('pointerdown', at)) } catch (e) {}
+        el.dispatchEvent(new MouseEvent('mousedown', at))
+        try { el.dispatchEvent(new PointerEvent('pointerup', at)) } catch (e) {}
+        el.dispatchEvent(new MouseEvent('mouseup', at))
+        el.click()
+      }
+      const digitsOnly = (t) => {
+        if (!t || t.length > 12) return false
+        let seen = false
+        for (const ch of t) {
+          if (ch >= '0' && ch <= '9') seen = true
+          else if (ch !== ' ') return false
+        }
+        return seen
+      }
+      const asNumber = (t) => {
+        let out = ''
+        for (const ch of t) if (ch >= '0' && ch <= '9') out += ch
+        return out
+      }
+      /* the outcome's own row: the deepest thing that says exactly its name, walked up until the
+         box around it holds a button of its own */
+      const rowByName = () => {
+        if (!name) return null
+        const said = [...document.querySelectorAll('div,span,p,button,h1,h2,h3,h4,h5,strong,label')]
+          .filter((e) => (e.textContent || '').trim() === name)
+        const leaf = said[said.length - 1]
+        if (!leaf) return null
+        let row = leaf
+        for (let i = 0; i < 7 && row; i++) {
+          if (row.querySelector('button')) return row
+          row = row.parentElement
+        }
+        return leaf.parentElement
+      }
+      let opts = optionButtons()
+      if (opts.length < 2 && expand()) {
+        await wait(900)
+        opts = optionButtons()
+      }
+      const row = rowByName()
+      const spot = row ?? (opts[${index}] ? opts[${index}].b.parentElement : null)
+      if (!spot) return 'noOutcome'
+      /* the amount already on a button in this outcome's own row: one press and it is placed */
+      const quick = [...spot.querySelectorAll('button')].filter(
+        (b) => !b.disabled && digitsOnly((b.textContent || '').trim())
+      )
+      const exact = quick.find((b) => asNumber((b.textContent || '').trim()) === want)
+      if (exact) {
+        press(exact)
+        await wait(900)
+        return 'placed'
+      }
+      /* anything else goes through their own custom-amount flow */
+      const custom = [...document.querySelectorAll('button')].find((b) =>
+        /власною сумою|Custom amount/i.test((b.textContent || '').trim())
+      )
+      if (!custom) return quick.length ? 'noAmount' : 'noOutcome'
+      press(custom)
+      await wait(1200)
+      const field = [...document.querySelectorAll('input')].find(
+        (i) => i.type === 'number' || i.inputMode === 'numeric' || i.type === 'text'
+      )
+      if (!field) return 'noAmount'
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')
+      setter.set.call(field, want)
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+      field.dispatchEvent(new Event('change', { bubbles: true }))
+      await wait(400)
+      /* the side, again by name, since the dialog is a card of its own */
+      const side = rowByName() ?? spot
+      const sideBtn = [...side.querySelectorAll('button')].find((b) => !b.disabled) ?? side
+      press(sideBtn)
+      await wait(500)
+      const confirm = [...document.querySelectorAll('button')].find((b) =>
+        /^(Прогноз|Поставити|Predict|Place)/i.test((b.textContent || '').trim())
+      )
+      if (!confirm || confirm.disabled) return 'refused'
+      press(confirm)
+      await wait(900)
+      return 'placed'
+    })()`
+  ) as Promise<'placed' | 'noOutcome' | 'noAmount' | 'refused' | null>
+}
+
+/**
+ * Take part: a vote in a poll, or points on one side of a prediction.
+ *
+ * The two are pressed differently, which is the whole reason this is one function. A poll wants
+ * its option and then "Голосувати". A prediction has no such button: each outcome carries its own
+ * button with the amount written on it, so pressing the outcome and then the button under it is
+ * what places the points.
+ */
+export function votePoll(channel: string, index: number): Promise<boolean | null> {
+  return ask<boolean>(
+    channel,
+    `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      ${POLL_SCRIPT}
+      let opts = optionButtons()
+      if (opts.length < 2 && expand()) {
+        await wait(900)
+        opts = optionButtons()
+      }
+      const pick = opts[${index}]
+      if (!pick) return false
+      pick.b.click()
+      await wait(600)
+      const vote = voteButton()
+      if (vote && !vote.disabled) {
+        vote.click()
+        await wait(900)
+        return true
+      }
+      /*
+       * A prediction: the amount buttons are the side you are backing, one per outcome, with the
+       * number of points written on them. The one in this outcome's own row is the one to press;
+       * failing that, the nth of them, since they sit in outcome order.
+       */
+      const amounts = [...document.querySelectorAll('button')].filter((b) => {
+        const t = (b.textContent || '').trim()
+        return t.length > 0 && t.length < 10 && t.replace(/[0-9 ]/g, '') === '' && !b.disabled
+      })
+      const own = amounts.find((b) => pick.b.parentElement && pick.b.parentElement.contains(b))
+      const bet = own ?? amounts[${index}]
+      if (!bet) return false
+      bet.click()
+      await wait(900)
       return true
     })()`
   )
@@ -210,6 +626,14 @@ export interface RewardList {
  */
 const PANEL_SCRIPT = `
   const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  /*
+   * Prices are recognised without a single backslash on purpose.
+   *
+   * These scripts reach the page as template literals and one round of escaping is eaten on the
+   * way: \s arrives as a literal "s", which silently dropped every price with a space in it and,
+   * elsewhere, the streak number. "Digits and spaces only" says the same thing and survives.
+   */
+  const onlyDigits = (t) => t.replace(/[^0-9]/g, '') !== '' && t.replace(/[0-9]/g, '').trim() === ''
   const balanceButton = () =>
     [...document.querySelectorAll('button')].find((b) =>
       /Баланси|Balances/i.test(b.getAttribute('aria-label') || '')
@@ -221,7 +645,7 @@ const PANEL_SCRIPT = `
   const cards = (p) =>
     [...p.querySelectorAll('button')]
       .map((b) => ({ b, cost: (b.textContent || '').trim(), whole: (b.parentElement?.textContent || '').trim() }))
-      .filter((x) => /^[0-9][0-9\\s]*$/.test(x.cost) && x.whole.length > x.cost.length)
+      .filter((x) => onlyDigits(x.cost) && x.whole.length > x.cost.length)
   const backToList = async (p) => {
     /*
      * The panel remembers where it was left.
@@ -284,21 +708,26 @@ const PANEL_SCRIPT = `
 `
 
 export function readRewards(channel: string): Promise<RewardList | null> {
-  return ask<RewardList>(
-    channel,
+  return serial(channel, () =>
+    ask<RewardList>(
+      channel,
     `(async () => {
       ${PANEL_SCRIPT}
       const p = await openPanel()
       if (!p) return null
       const text = p.textContent || ''
-      const streak = (text.match(/серія переглядів:\\s*(\\d+)/i) || text.match(/watch streak:?\\s*(\\d+)/i) || [])[1]
-      const ahead = text.match(/Ще\\s*(\\d+)\\s*стрим[^0-9]*(\\d+)/i) || text.match(/(\\d+)\\s*more stream[^0-9]*(\\d+)/i) || []
+      const streak = (text.match(/серія переглядів[^0-9]{0,4}([0-9]+)/i) ||
+        text.match(/watch streak[^0-9]{0,4}([0-9]+)/i) || [])[1]
+      const ahead =
+        text.match(/Ще[^0-9]{0,3}([0-9]+)[^0-9]+([0-9]+)/i) ||
+        text.match(/([0-9]+)[^0-9]{0,3}more stream[^0-9]+([0-9]+)/i) ||
+        []
       const rewards = cards(p).map((x) => {
         const img = x.b.querySelector('img') || x.b.parentElement?.querySelector('img')
         return {
           key: x.whole,
           name: x.whole.slice(x.cost.length).trim(),
-          cost: Number(x.cost.replace(/\\s/g, '')),
+          cost: Number(x.cost.replace(/[^0-9]/g, '')),
           disabled: x.b.disabled || x.b.getAttribute('aria-disabled') === 'true',
           icon: img ? img.src : null
         }
@@ -312,37 +741,57 @@ export function readRewards(channel: string): Promise<RewardList | null> {
         streakReward: ahead[2] ? Number(ahead[2]) : null
       }
     })()`
+    )
   )
 }
 
 /**
- * Just the watch streak, without the reward list.
+ * The watch streak, and whether this stream has been counted towards it.
  *
- * The streak is written nowhere else in the page: not on the channel, not in chat, only inside the
- * rewards panel, next to "Твоя серія переглядів". So this opens that panel, reads the three
- * numbers and closes it again. The panel is invisible and takes no clicks from the mouse, so
- * nothing about that is visible to whoever is watching.
+ * Both live in one card at the foot of the rewards panel and nowhere else in the page. The number
+ * is in its title; whether tonight counted is in the green bar under it, which fills as the stream
+ * is watched and is full once the streak has been taken. That bar is the reliable answer, and it
+ * is right immediately, where watching the number rise could only ever notice a streak taken while
+ * the app happened to be running and got it wrong after every restart.
+ *
+ * Measured shape: the card carries a watchStreakFooter class, the groove is ScProgressBarWrapper
+ * and the fill is ScProgressBarFill; full means fill width equals groove width.
  */
-export function readStreak(
-  channel: string
-): Promise<{ streak: number | null; left: number | null; reward: number | null } | null> {
-  return ask(
-    channel,
+export function readStreak(channel: string): Promise<{
+  streak: number | null
+  left: number | null
+  reward: number | null
+  counted: boolean
+} | null> {
+  return serial(channel, () =>
+    ask(
+      channel,
     `(async () => {
       ${PANEL_SCRIPT}
       const p = await openPanel()
       if (!p) return null
       const text = p.textContent || ''
-      const streak = (text.match(/серія переглядів:\\s*(\\d+)/i) || text.match(/watch streak:?\\s*(\\d+)/i) || [])[1]
-      const ahead = text.match(/Ще\\s*(\\d+)\\s*стрим[^0-9]*(\\d+)/i) || text.match(/(\\d+)\\s*more stream[^0-9]*(\\d+)/i) || []
+      const streak = (text.match(/серія переглядів[^0-9]{0,4}([0-9]+)/i) ||
+        text.match(/watch streak[^0-9]{0,4}([0-9]+)/i) || [])[1]
+      const ahead =
+        text.match(/Ще[^0-9]{0,3}([0-9]+)[^0-9]+([0-9]+)/i) ||
+        text.match(/([0-9]+)[^0-9]{0,3}more stream[^0-9]+([0-9]+)/i) ||
+        []
+      const card = document.querySelector('[class*="watchStreakFooter"]')
+      const groove = card && card.querySelector('[class*="ScProgressBarWrapper"]')
+      const fill = card && card.querySelector('[class*="ScProgressBarFill"]')
+      const wide = groove ? groove.getBoundingClientRect().width : 0
+      const done = fill ? fill.getBoundingClientRect().width : 0
       closePanel(p)
       return {
         streak: streak ? Number(streak) : null,
         left: ahead[1] ? Number(ahead[1]) : null,
-        reward: ahead[2] ? Number(ahead[2]) : null
+        reward: ahead[2] ? Number(ahead[2]) : null,
+        counted: wide > 0 && done / wide > 0.99
       }
     })()`
-  ) as Promise<{ streak: number | null; left: number | null; reward: number | null } | null>
+    ) as Promise<{ streak: number | null; left: number | null; reward: number | null; counted: boolean } | null>
+  )
 }
 
 export interface RedeemResult {
@@ -351,6 +800,13 @@ export interface RedeemResult {
   balance?: string
   /** what the page itself said about it, when it said anything */
   message?: string
+  /**
+   * The streamer's own explanation of the reward, read off the card this press opened.
+   *
+   * Free to take here: the view has to be opened to press the button anyway, and for a reward
+   * that wants a line of text this is where it says what to write.
+   */
+  desc?: string
 }
 
 /**
@@ -369,9 +825,95 @@ export interface RedeemResult {
  * When neither appears, whatever the page said about it is handed back rather than guessed at: it
  * is the page that knows a reward is out of stock, on cooldown, or only for a live stream.
  */
+/**
+ * What a reward says about itself.
+ *
+ * Their card in the list carries the price and the name and nothing else; the explanation the
+ * streamer wrote lives in the reward's own view, one press in. Measured there: the leaves read
+ * name, then the description, then the label on the confirm button, so the description is
+ * everything between the two. A reward without one goes straight from the name to the button and
+ * comes back empty.
+ *
+ * It matters most for the rewards that ask for a line of text, because that description is where
+ * it says WHAT to write, and until now the app asked for the words without passing on the
+ * question.
+ *
+ * The view is left as it was found: back to the list, never Escape, which would also take the
+ * player out of theatre mode.
+ */
+export function readRewardDesc(channel: string, key: string): Promise<string | null> {
+  return serial(channel, () =>
+    ask<string>(
+      channel,
+    `(async () => {
+      ${PANEL_SCRIPT}
+      let p = await openPanel()
+      if (!p) return null
+      const want = ${JSON.stringify(key)}
+      const card = cards(p).find((x) => x.whole === want)
+      if (!card) return null
+      /*
+       * The name is cut off the front of the card, not matched out of it.
+       *
+       * Their key is the price and the name run together, "5 000не зайобуй", and the space in the
+       * price is a non-breaking one. A pattern for "digits and spaces" cannot be written here: the
+       * script reaches the page as a template literal and one backslash of it is eaten, so \s
+       * arrives as a literal "s" and the strip stopped at the first zero. Measured: the name came
+       * out as "000не зайобуй", which matched nothing in the card, so every reward priced in
+       * thousands looked like a reward with no description at all. The card already knows its own
+       * price, and cutting exactly that many characters cannot be got wrong.
+       */
+      const name = card.whole.slice(card.cost.length).trim()
+      const isConfirm = (t) => /^(Отримати|Обміняти|Redeem|Get)/i.test(t)
+      /* Twitch's own footnote about live-only rewards is not the streamer's description */
+      const theirs = (t) => /тільки під час стриму|тільки під час трансляц|while the stream is live|only be redeemed/i.test(t)
+      const readLeaves = () => {
+        const box = panel()
+        if (!box) return []
+        return [...box.querySelectorAll('*')]
+          .filter((e) => e.children.length === 0 && (e.textContent || '').trim())
+          .map((e) => (e.textContent || '').trim())
+      }
+      card.b.click()
+      let leaves = []
+      let opened = false
+      for (let i = 0; i < 16; i++) {
+        await wait(250)
+        leaves = readLeaves()
+        if (leaves.some(isConfirm)) {
+          opened = true
+          break
+        }
+      }
+      let at = leaves.indexOf(name)
+      if (at < 0) at = leaves.findIndex((t) => t.indexOf(name) >= 0)
+      const out = []
+      for (let i = at + 1; i < leaves.length && at >= 0; i++) {
+        const t = leaves[i]
+        if (isConfirm(t) || onlyDigits(t)) break
+        if (theirs(t)) continue
+        out.push(t)
+      }
+      p = panel() || p
+      await backToList(p)
+      /*
+       * "Could not read it" and "there is nothing to read" are different answers.
+       *
+       * The caller remembers what comes back, so a card that had not finished rendering used to be
+       * remembered as a reward with no description at all — and one that does have one then said
+       * "the streamer wrote no description" for the rest of the session. null means ask again.
+       */
+      if (!opened || at < 0) return null
+      return out.join(' ')
+    })()`
+    )
+  )
+}
+
 export function redeemReward(channel: string, key: string, text?: string): Promise<RedeemResult> {
-  return ask<RedeemResult>(
-    channel,
+  return serial(channel, () =>
+    ask<RedeemResult>(
+      channel,
     `(async () => {
       ${PANEL_SCRIPT}
       const p = await openPanel()
@@ -440,8 +982,36 @@ export function redeemReward(channel: string, key: string, text?: string): Promi
         prompt = null
       }
 
+      /*
+       * What the streamer wrote about this reward, taken while its card is open.
+       *
+       * The leaves of the open card read name, description, then the label on the confirm button,
+       * so the description is what lies between the two; a reward without one comes back empty.
+       */
+      const describe = () => {
+        const box = panel()
+        if (!box) return ''
+        const leaves = [...box.querySelectorAll('*')]
+          .filter((e) => e.children.length === 0 && (e.textContent || '').trim())
+          .map((e) => (e.textContent || '').trim())
+        const isConfirm = (t) => /^(Отримати|Обміняти|Redeem|Get)/i.test(t)
+        const theirs = (t) => /тільки під час стриму|тільки під час трансляц|while the stream is live|only be redeemed/i.test(t)
+        let at = leaves.indexOf(name)
+        if (at < 0) at = leaves.findIndex((t) => t.indexOf(name) >= 0)
+        if (at < 0) return ''
+        const out = []
+        for (let i = at + 1; i < leaves.length; i++) {
+          const t = leaves[i]
+          if (isConfirm(t) || onlyDigits(t)) break
+          if (theirs(t)) continue
+          out.push(t)
+        }
+        return out.join(' ')
+      }
+      const desc = describe()
+
       // the prompt is up: the words have to be typed for real, which only the player can do
-      if (prompt && !go) return { state: said ? 'armed' : 'needsText', balance: before }
+      if (prompt && !go) return { state: said ? 'armed' : 'needsText', balance: before, desc }
 
       if (go) {
         const view = go.closest('[class*="Attached"]')
@@ -541,4 +1111,234 @@ export function redeemReward(channel: string, key: string, text?: string): Promi
     )
     return gone ? { state: 'pressed' as const } : { state: 'refused' as const }
   })
+  )
+}
+
+/** one reward a drops campaign is offering on this channel */
+export interface DropItem {
+  /** the reward's own name, as their card writes it */
+  name: string
+  /** the game it belongs to */
+  game: string
+  /** what is still wanted, in their words: "Ще 1 підписка", "Дивись ще 15 хв" */
+  need: string
+  /** how far along, 0 to 100, off their own progress bar */
+  percent: number
+  /** the picture of the reward */
+  icon: string | null
+  /** their card is offering to hand it over: it has been earned */
+  claim: boolean
+  /**
+   * This one has landed, set by the store rather than read.
+   *
+   * A campaign can offer several drops at once, one for watching and one for subscribing, say. As
+   * each is earned Twitch takes THAT card out of the panel and leaves the others, so a reward that
+   * was in the last reading and is not in this one is a reward that has arrived. Kept in the list
+   * and marked, because otherwise the one that landed vanished from our panel too and the reader
+   * was never told which of the two it was.
+   */
+  earned?: boolean
+}
+
+export interface DropsInfo {
+  /** the channel is running drops at all, which is what their chest in the chat bar means */
+  any: boolean
+  items: DropItem[]
+  /** "Доступні Drops: 1" */
+  offered: number | null
+  /** the line at the top of their panel, which names the campaign's category */
+  about: string | null
+  /**
+   * Twitch has stopped offering this campaign on the channel, set by the store rather than read.
+   *
+   * Their chest disappears from the chat bar the moment there is nothing left to earn, which is
+   * what happens when the drop is claimed: measured on a live campaign, the sub drop sat at 0%,
+   * the viewer gifted a subscription, and the chest and its whole panel were simply gone the next
+   * time the page was asked. The last reading is kept and marked, because otherwise the app threw
+   * away everything it knew at the exact moment the reward arrived.
+   */
+  gone?: boolean
+}
+
+/*
+ * Drops, read out of their own panel.
+ *
+ * There is no API for this either: the drops a viewer is making progress on live in the private
+ * GraphQL, and what we can reach is the page. Twitch puts a chest in the chat bar of a channel
+ * that has a campaign running (data-a-target="drops-button", the same shape as their bits button)
+ * and the panel behind it lists every reward with a progress bar of its own.
+ *
+ * Measured on a live campaign rather than guessed: the panel is found by its heading, each reward
+ * is the smallest box that holds both a progress bar and the reward's picture, and inside it the
+ * three lines are the reward, the game and what is still needed. The bar carries its own number in
+ * aria-valuenow, so the percentage is read rather than worked out from pixel widths.
+ *
+ * The panel is a toggle: it is opened if it was shut, and shut again afterwards, so a reading
+ * leaves the page as it found it. Never closed with Escape, which would take the player out of
+ * theatre mode as well.
+ */
+const DROPS_SCRIPT = `
+  const text = (e) => (e.textContent || '').trim()
+  const leaves = (root) =>
+    [...root.querySelectorAll('*')].filter((e) => e.children.length === 0 && text(e))
+  const panelHead = () =>
+    [...document.querySelectorAll('*')].find(
+      (e) => e.children.length === 0 && /Drops та інше|Drops and more/i.test(text(e))
+    )
+  const panelOf = (head) => {
+    let box = head
+    for (let i = 0; i < 8 && box.parentElement; i++) {
+      box = box.parentElement
+      if (box.getBoundingClientRect().height > 200) break
+    }
+    return box
+  }
+  const onlyDigits = (t) => {
+    let out = ''
+    for (const ch of t) if (ch >= '0' && ch <= '9') out += ch
+    return out
+  }
+`
+
+export function readDrops(channel: string): Promise<DropsInfo | null> {
+  return serial(channel, () =>
+    ask<DropsInfo>(
+      channel,
+    `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      ${DROPS_SCRIPT}
+      const btn = document.querySelector('[data-a-target="drops-button"]')
+      if (!btn) return { any: false, items: [], offered: null, about: null }
+      let head = panelHead()
+      const wasOpen = !!head
+      if (!head) {
+        btn.click()
+        /* waited for rather than slept through: a page still building can take a second or two
+           to draw the panel, and a fixed wait came back with an empty list */
+        for (let i = 0; i < 12 && !head; i++) {
+          await wait(250)
+          head = panelHead()
+        }
+      }
+      /* their chest is there but the panel would not open: that is a failed reading, not an
+         empty campaign, and saying "no items" here would mark every drop as claimed */
+      if (!head) return null
+      const panel = panelOf(head)
+      const all = leaves(panel).map(text)
+      const about = all[1] && !/Доступні|available|Drops за|Drops for/i.test(all[1]) ? all[1] : null
+      let offered = null
+      for (const t of all) {
+        if (!/Доступні Drops|Drops available/i.test(t)) continue
+        const n = onlyDigits(t)
+        if (n) offered = Number(n)
+      }
+      /*
+       * Read twice, a moment apart, and only believe a list that agrees with itself.
+       *
+       * A drop that has been earned really does leave their panel, and that is how we know it
+       * arrived; a panel that has not finished drawing looks exactly the same for a moment. Two
+       * readings that match cost half a second and keep the app from announcing a claim that has
+       * not happened.
+       */
+      const readItems = () => {
+      const seen = []
+      const items = []
+      for (const wrap of panel.querySelectorAll('[class*="ScProgressBarWrapper"]')) {
+        /* the card is the smallest box round this bar that also carries the reward's picture */
+        let card = wrap
+        for (let i = 0; i < 6 && card.parentElement; i++) {
+          card = card.parentElement
+          if (card.querySelector('img')) break
+        }
+        if (seen.indexOf(card) >= 0) continue
+        seen.push(card)
+        const words = leaves(card)
+          .map(text)
+          .filter((t) => !/Доступні Drops|Drops available|Drops за|Drops for/i.test(t))
+        const img = card.querySelector('img')
+        const pc = Number(wrap.getAttribute('aria-valuenow') || '0')
+        const claim = [...card.querySelectorAll('button')].some((b) =>
+          /Отримати|Забрати|Claim/i.test(text(b))
+        )
+        items.push({
+          name: words[0] || '',
+          game: words[1] || '',
+          need: words[2] || '',
+          percent: Number.isFinite(pc) ? Math.max(0, Math.min(100, pc)) : 0,
+          icon: img ? img.src : null,
+          claim: claim
+        })
+      }
+        return items
+      }
+      let items = readItems()
+      const names = () => items.map((x) => x.name).sort().join('|')
+      for (let i = 0; i < 3; i++) {
+        const was = names()
+        await wait(600)
+        items = readItems()
+        if (names() === was) break
+      }
+      if (!wasOpen) {
+        btn.click()
+        await wait(400)
+      }
+      return { any: true, items, offered, about }
+    })()`
+    )
+  )
+}
+
+/**
+ * Take a drop their panel is offering.
+ *
+ * Twitch hands most of them over by itself, but a campaign can hold one behind a button, and then
+ * it sits there unclaimed until somebody presses it. The card is found by the reward's own name,
+ * for the same reason the prediction outcomes are.
+ */
+export function claimDrop(channel: string, name: string): Promise<boolean | null> {
+  return serial(channel, () =>
+    ask<boolean>(
+      channel,
+    `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      ${DROPS_SCRIPT}
+      const btn = document.querySelector('[data-a-target="drops-button"]')
+      if (!btn) return false
+      let head = panelHead()
+      const wasOpen = !!head
+      if (!head) {
+        btn.click()
+        await wait(1300)
+        head = panelHead()
+      }
+      if (!head) return false
+      const want = ${JSON.stringify(name)}
+      const panel = panelOf(head)
+      let took = false
+      for (const wrap of panel.querySelectorAll('[class*="ScProgressBarWrapper"]')) {
+        let card = wrap
+        for (let i = 0; i < 6 && card.parentElement; i++) {
+          card = card.parentElement
+          if (card.querySelector('img')) break
+        }
+        const words = leaves(card).map(text)
+        if (want && words.indexOf(want) < 0) continue
+        const take = [...card.querySelectorAll('button')].find((b) =>
+          /Отримати|Забрати|Claim/i.test(text(b))
+        )
+        if (!take || take.disabled) continue
+        take.click()
+        await wait(900)
+        took = true
+        break
+      }
+      if (!wasOpen) {
+        btn.click()
+        await wait(400)
+      }
+      return took
+    })()`
+    )
+  )
 }

@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settings'
 import { useUiStore, type PlayerSlot } from '../store/ui'
 import { useChatStore } from '../store/chat'
-import { registerPlayerPage, readPoints, readStreak, claimBonus } from '../lib/playerPage'
+import {
+  registerPlayerPage,
+  readPoints,
+  readStreak,
+  claimBonus,
+  readPoll,
+  readDrops
+} from '../lib/playerPage'
 import { useT } from '../i18n'
 import {
   PersonIcon,
@@ -77,6 +84,12 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
   const wvRef = useRef<{ executeJavaScript: (code: string) => Promise<unknown> } | null>(null)
   /** the guest has loaded at least once; nothing may be asked of it before that */
   const [ready, setReady] = useState(false)
+  /** which page we have already offered to switch the video stats on for */
+  const statsTried = useRef('')
+  /** clears the finished poll a minute after the page drops it */
+  const pollGone = useRef(0)
+  /** undoes whatever the last webview element had attached to it */
+  const wvWatch = useRef<(() => void) | null>(null)
 
   /*
    * The player lives on a one-page local server rather than at player.twitch.tv directly, because
@@ -141,46 +154,116 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       window.setTimeout(() => send({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 }), 140)
       window.setTimeout(() => send({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 }), 230)
     }
-    const ensureStats = async (): Promise<void> => {
-      // the overlay is drawn a little after the player, so a single look can miss one that is
-      // already on, and pressing the switch then turns it OFF
-      for (let i = 0; i < 8; i++) {
-        const have = await ask(
-          `!!document.querySelector('[data-a-target="player-overlay-video-stats"]')`
-        )
-        if (have === true) return
-        await rest(600)
-      }
+    /*
+     * Switching their video stats on, in a way that does not depend on timing.
+     *
+     * Every step used to be a guess at how long the last one would take, and mostly the guess was
+     * wrong: the menu had not rendered when we looked for "Розширені", so nothing was pressed and
+     * the settings menu was left standing open over the video. Now each step waits for the thing
+     * it needs, the result is checked, and the menu is closed whether or not any of it worked.
+     */
+    const gearAt = async (): Promise<number[] | null> => {
       const at = (await ask(`(() => {
         const g = document.querySelector('[data-a-target="player-settings-button"]')
         if (!g) return null
         const r = g.getBoundingClientRect()
-        return r.width ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null
+        if (!r.width) return null
+        const x = Math.round(r.left + r.width / 2)
+        const y = Math.round(r.top + r.height / 2)
+        // only worth pressing if the gear is what a press there would hit
+        const top = document.elementFromPoint(x, y)
+        if (!top || !(top === g || g.contains(top) || top.contains(g))) return null
+        return [x, y]
       })()`)) as number[] | null
-      if (!Array.isArray(at)) return
-      pressAt(at[0], at[1])
-      await rest(1500)
-      await ask(`(async () => {
-        const wait = (ms) => new Promise((r) => setTimeout(r, ms))
-        const adv = document.querySelector('[data-a-target="player-settings-menu-item-advanced"]')
-        if (!adv) return false
-        adv.click()
-        await wait(900)
-        const box = document.querySelector('[data-a-target="player-settings-submenu-advanced-video-stats"]')
-        const input = box && (box.querySelector('input[type="checkbox"]') || box.querySelector('input'))
-        if (!input) return false
-        // their switch is remembered per account: only press it when it is actually off
-        if (!input.checked) input.click()
-        await wait(800)
-        return true
-      })()`)
-      // their menu closes the way it opened: with a real press on the gear
-      pressAt(at[0], at[1])
-      await rest(600)
+      return Array.isArray(at) ? at : null
+    }
+    const menuOpen = (): Promise<unknown> =>
+      ask(`!!document.querySelector('[data-a-target="player-settings-menu"]')`)
+    const closeMenu = async (at: number[] | null): Promise<void> => {
+      /*
+       * Closed with their own button, never with Escape.
+       *
+       * Escape does close the settings menu, and it also leaves theatre mode, so switching the
+       * stats on quietly undid the theatre mode the player had just been put into.
+       */
+      for (let i = 0; i < 3; i++) {
+        if ((await menuOpen()) !== true) return
+        if (!at) return
+        pressAt(at[0], at[1])
+        await rest(700)
+      }
+    }
+    const statsOn = (): Promise<unknown> =>
+      ask(`!!document.querySelector('[data-a-target="player-overlay-video-stats"]')`)
+    const waitFor = async (code: string, tries: number): Promise<boolean> => {
+      for (let i = 0; i < tries; i++) {
+        if ((await ask(code)) === true) return true
+        await rest(400)
+      }
+      return false
+    }
+    const ensureStats = async (): Promise<void> => {
+      // the overlay is drawn a little after the player, and pressing the switch on one that is
+      // already on turns it OFF, so it gets a fair look first
+      if (await waitFor(`!!document.querySelector('[data-a-target="player-overlay-video-stats"]')`, 10)) {
+        return
+      }
+      /*
+       * Wait for the gear as long as it takes, then press it at most twice.
+       *
+       * The player takes ten to fifteen seconds to build itself on a slow join, so the waiting has
+       * to be patient; the pressing must not be. A loop that kept trying kept opening their
+       * settings menu over the video, which is worse than having no latency reading. Pressing
+       * blindly at remembered coordinates is worse still: on a bar that has moved, that press
+       * lands on the video and pauses the stream, so the point is checked first.
+       */
+      let at: number[] | null = null
+      for (let wait = 0; wait < 20 && !at; wait++) {
+        at = await gearAt()
+        if (!at) await rest(3000)
+      }
+      if (!at) return
+      for (let attempt = 0; attempt < 2; attempt++) {
+        pressAt(at[0], at[1])
+        const menu = await waitFor(
+          `!!document.querySelector('[data-a-target="player-settings-menu-item-advanced"]')`,
+          10
+        )
+        if (!menu) {
+          await closeMenu(at)
+          continue
+        }
+        await ask(`(() => {
+          const adv = document.querySelector('[data-a-target="player-settings-menu-item-advanced"]')
+          if (adv) adv.click()
+          return true
+        })()`)
+        const submenu = await waitFor(
+          `!!document.querySelector('[data-a-target="player-settings-submenu-advanced-video-stats"]')`,
+          10
+        )
+        if (submenu) {
+          await ask(`(() => {
+            const box = document.querySelector('[data-a-target="player-settings-submenu-advanced-video-stats"]')
+            const input = box && (box.querySelector('input[type="checkbox"]') || box.querySelector('input'))
+            if (!input) return false
+            // their switch is remembered per account: only press it when it is actually off
+            if (!input.checked) input.click()
+            return true
+          })()`)
+          await waitFor(`!!document.querySelector('[data-a-target="player-overlay-video-stats"]')`, 8)
+        }
+        await closeMenu(at)
+        if ((await statsOn()) === true) return
+      }
     }
     let alive = true
     void (async () => {
-      await ensureStats()
+      // once for this page: a remount must not send it round again
+      if (statsTried.current !== src) {
+        statsTried.current = src
+        await ensureStats()
+      }
       if (alive) tick()
     })()
     const id = window.setInterval(tick, 5000)
@@ -234,6 +317,119 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
    * simply matches nothing and the page looks normal.
    */
   /*
+   * What is running in the page: their poll builder, and the poll or prediction itself.
+   *
+   * The builder is theirs to draw, so it is only lifted out of the hidden column into the middle
+   * of the picture. The poll is copied out and drawn by the app at the top of the chat: their card
+   * flickered over the video as their React redrew it, and the chat is where it belongs anyway.
+   * Voting still goes to their buttons, since nothing else can cast a vote.
+   */
+  useEffect(() => {
+    if (mode !== 'site') return
+    const look = `(() => {
+      const col = document.querySelector('.right-column') || document.body
+      /*
+       * Their own dialogs, in case one opens inside the column we hide.
+       *
+       * "/poll" opens Twitch's poll builder through the chat settings, and that would be filled in
+       * blind in there, so it is lifted to the middle of the picture. A dialog rendered at the top
+       * of the page, which is the usual case, never matches this and is left where it is.
+       *
+       * The running poll itself is NOT surfaced: it is read out of the page instead and the app
+       * draws it at the top of the chat, because over the video it flickered every time their React
+       * redrew the card, and the chat is where it was wanted.
+       */
+      const builder = [...col.querySelectorAll('div,section,form')].filter((e) => {
+        const t = (e.textContent || '').trim()
+        if (!/^(Створити нове опитування|Створити прогноз|Create a new poll|Create a prediction)/i.test(t)) {
+          return false
+        }
+        return e.getBoundingClientRect().height > 120
+      })
+      const dialog =
+        col.querySelector('[role="dialog"]') ??
+        builder.sort((a, b) => a.getBoundingClientRect().height - b.getBoundingClientRect().height)[0]
+      const marked = [...document.querySelectorAll('.sticki-modal, .sticki-surfaced')]
+      for (const e of marked) if (e !== dialog) e.classList.remove('sticki-modal', 'sticki-surfaced')
+      if (!dialog) return null
+      dialog.classList.add('sticki-modal')
+      return 'dialog'
+    })()`
+    const tick = (): void => {
+      void ask(look)
+      void readPoll(channel).then((poll) => {
+        const ui = useUiStore.getState()
+        if (poll) {
+          window.clearTimeout(pollGone.current)
+          /*
+           * Two sources, one card, and each owns what it actually knows.
+           *
+           * Twitch's poll and prediction topics know the state: how long is left, how the votes
+           * stand, and the moment it is over. The page knows one thing the topics never say,
+           * which is whether THIS account has taken part, and it is also the only way to cast a
+           * vote. So a reading of the page contributes that and nothing else once the topic has
+           * spoken; it is used whole only when the topic has said nothing, which is what happens
+           * for something that started before the app was running.
+           *
+           * Taken whole it did real harm: a prediction has no "Голосувати" button at all, so the
+           * page reading declared voting closed and greyed out every outcome.
+           */
+          /*
+           * The page's reading is the fallback, under the id "page".
+           *
+           * A channel can run a poll and a prediction at once and Twitch shows both, so the topics
+           * are the source of truth per id. The page cannot tell one from the other, so it only
+           * fills in for a card the topics have not mentioned at all, which is what happens for
+           * something that started before the app was running.
+           */
+          const list = ui.pagePolls[channel] ?? []
+          const fromTopic = list.find((p) => p.id !== 'page')
+          if (fromTopic) {
+            // the one thing only the page knows: whether this account has taken part
+            for (const p of list) ui.setPagePoll(channel, { ...p, voted: poll.voted }, p.id)
+            return
+          }
+          ui.setPagePoll(channel, {
+            ...poll,
+            id: 'page',
+            ended: false,
+            endsAt: null,
+            runsFor: null,
+            isPrediction: false,
+            locked: false,
+            winner: null,
+            payouts: []
+          })
+          return
+        }
+        /*
+         * The page has nothing to say. That is not the same as "it is over".
+         *
+         * When the state came from Twitch's own topic, the topic is what ends it: predictions in
+         * particular are not in the page in a shape this reader knows, and taking that silence for
+         * an ending marked a running prediction "завершено" within seconds of it starting. Only a
+         * card we learned about from the page alone is ended by the page dropping it.
+         */
+        const had = (ui.pagePolls[channel] ?? []).find((p) => p.id === 'page')
+        if (!had || had.ended) return
+        ui.setPagePoll(channel, { ...had, open: false, ended: true }, 'page')
+        window.clearTimeout(pollGone.current)
+        pollGone.current = window.setTimeout(
+          () => useUiStore.getState().dismissPagePoll(channel, 'page'),
+          60000
+        )
+      })
+    }
+    tick()
+    const id = window.setInterval(tick, 4000)
+    return () => {
+      window.clearInterval(id)
+      useUiStore.getState().setPagePoll(channel, null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, channel])
+
+  /*
    * The page, offered to the rest of the app, and read for points.
    *
    * Only site mode has a real Twitch page in it, so that is the only mode that registers one and
@@ -256,12 +452,25 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      * spent exactly as they are for a person typing.
      */
     const typeAndSend = async (words: string): Promise<void> => {
+      const rest = (ms: number): Promise<void> => new Promise((done) => window.setTimeout(done, ms))
       const view = wvRef.current as unknown as {
         focus?: () => void
         sendInputEvent?: (e: Record<string, unknown>) => void
       } | null
       if (!view?.sendInputEvent) return
-      await ask(`(() => {
+      /*
+       * The column has to be focusable for the length of this, and hidden is not focusable.
+       *
+       * The chat box lives in the column we hide, and visibility:hidden takes an element out of the
+       * focus order entirely: box.focus() did nothing, so the characters went nowhere near Twitch
+       * and landed in the app instead, which is how a /poll ended up opening our own settings. For
+       * the few seconds of typing the column is made visible and completely transparent, which
+       * focuses fine and shows nothing.
+       */
+      const grab = `(() => {
+        for (const c of document.querySelectorAll('.right-column, .channel-root__right-column')) {
+          c.classList.add('sticki-typing')
+        }
         const box = document.querySelector('[data-a-target="chat-input"]')
         if (!box) return false
         box.focus()
@@ -271,20 +480,79 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         sel.removeAllRanges()
         sel.addRange(range)
         document.execCommand('delete')
+        return document.activeElement === box
+      })()`
+      const boxText = `(() => {
+        const box = document.querySelector('[data-a-target="chat-input"]')
+        return box ? (box.innerText || '').trim() : null
+      })()`
+      const release = `(() => {
+        for (const c of document.querySelectorAll('.sticki-typing')) c.classList.remove('sticki-typing')
         return true
-      })()`)
-      const rest = (ms: number): Promise<void> => new Promise((done) => window.setTimeout(done, ms))
-      view.focus?.()
-      await rest(250)
-      for (const ch of words) {
-        view.sendInputEvent({ type: 'char', keyCode: ch })
-        await rest(45)
+      })()`
+      const type = async (): Promise<boolean> => {
+        // focus first, and check it took: without it the keystrokes go to the app
+        let held = false
+        for (let i = 0; i < 5 && !held; i++) {
+          held = (await ask(grab)) === true
+          if (!held) await rest(400)
+        }
+        if (!held) return false
+        /*
+         * And wait for the guest to actually HAVE the keyboard.
+         *
+         * webview.focus() is a request, not a fact: the first command after the app itself had
+         * focus went out while the guest was still catching up, the characters fell into our own
+         * input instead, and only a second attempt worked. So our field lets go first, the view is
+         * asked for focus, and the page is given three seconds to say it has it.
+         *
+         * Not a hard requirement, mind: document.hasFocus() is false whenever the app window is
+         * not the focused window at all, and what really decides this is whether the characters
+         * landed, which the check after typing does.
+         */
+        const had = document.activeElement as HTMLElement | null
+        had?.blur?.()
+        view.focus?.()
+        for (let i = 0; i < 15; i++) {
+          await rest(200)
+          const armed =
+            (await ask(`(() => {
+              const box = document.querySelector('[data-a-target="chat-input"]')
+              return !!box && document.hasFocus() && document.activeElement === box
+            })()`)) === true
+          if (armed) break
+          view.focus?.()
+        }
+        for (const ch of words) {
+          view.sendInputEvent?.({ type: 'char', keyCode: ch })
+          await rest(25)
+        }
+        await rest(400)
+        // and check the box really holds what was typed before committing to Enter
+        return (await ask(boxText)) === words
       }
-      await rest(400)
-      view.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
-      view.sendInputEvent({ type: 'char', keyCode: 'Return' })
-      view.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
-      await rest(600)
+      try {
+        let typed = false
+        for (let attempt = 0; attempt < 3 && !typed; attempt++) typed = await type()
+        if (!typed) return
+        /*
+         * Enter until the box is empty, because the first one is not a send.
+         *
+         * Typing "/..." opens Twitch's own command autocomplete, and Enter there PICKS the
+         * suggestion rather than sending the line: the text sat in their box, nothing happened, and
+         * the command only went out when it was typed a second time. This is that second press,
+         * made automatic, and it stops as soon as the box is clear.
+         */
+        for (let press = 0; press < 3; press++) {
+          view.sendInputEvent?.({ type: 'keyDown', keyCode: 'Return' })
+          view.sendInputEvent?.({ type: 'char', keyCode: 'Return' })
+          view.sendInputEvent?.({ type: 'keyUp', keyCode: 'Return' })
+          await rest(500)
+          if ((await ask(boxText)) === '') break
+        }
+      } finally {
+        await ask(release)
+      }
     }
     registerPlayerPage(channel, { ask, typeAndSend })
     let stop = false
@@ -303,36 +571,65 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      * and it changes once a stream rather than once a minute. Once on the way in, then every five
      * minutes, which is often enough to catch the moment it goes up while you are watching.
      */
-    const readTheStreak = async (): Promise<void> => {
+    const readTheStreak = async (): Promise<boolean> => {
       // opening their panel while nobody is looking at the app is pure waste
-      if (document.hidden) return
+      if (document.hidden) return false
       const st = await readStreak(channel)
-      if (stop || !st) return
-      /*
-       * Whether THIS stream has been counted, which is a different question from what the streak
-       * is. Twitch says nothing about it directly, so it is watched for: the streak that stood
-       * when this stream began is kept, and the moment the number goes above it the stream has
-       * counted. That verdict then holds until the next stream starts, the way the flame on Twitch
-       * stays lit for the rest of the evening.
-       */
-      const started = useChatStore.getState().streamInfo[channel]?.startedAt ?? null
-      const had = useUiStore.getState().playerPoints[channel]
-      const fresh = !had || had.streakStream !== started
-      const base = fresh ? st.streak : had.streakBase
-      const claimed = fresh
-        ? false
-        : had.streakClaimed || (st.streak !== null && base !== null && st.streak > base)
+      if (stop || !st) return false
       useUiStore.getState().setPlayerPoints(channel, {
         streak: st.streak,
         streakLeft: st.left,
         streakReward: st.reward,
-        streakBase: base,
-        streakStream: started,
-        streakClaimed: claimed
+        streakClaimed: st.counted
       })
+      return st.streak !== null
+    }
+    /*
+     * Keep asking until the page answers once.
+     *
+     * The panel cannot open until the page has built itself, which takes ten to fifteen seconds on
+     * a slow join, and a single early attempt followed by the quarter hourly one meant the flame
+     * sat on the number chat had guessed for fifteen minutes.
+     */
+    const firstStreak = async (): Promise<void> => {
+      for (let i = 0; i < 20 && !stop; i++) {
+        if (await readTheStreak()) return
+        await new Promise((done) => window.setTimeout(done, 15000))
+      }
+    }
+    /*
+     * Drops, read the same way and about as rarely.
+     *
+     * Their chest is only in the chat bar of a channel that has a campaign running, and reading
+     * what is in it means opening their panel, so this asks once the page is up and then every
+     * three minutes. Progress moves in quarter hours, so nothing is lost by not asking oftener,
+     * and a drop that lands is caught within a minute or two of landing.
+     */
+    const readTheDrops = async (): Promise<boolean> => {
+      if (document.hidden) return false
+      const info = await readDrops(channel)
+      if (stop || !info) return false
+      // passed through as it came: the store is what knows that a chest going away means a claim
+      useUiStore.getState().setPlayerDrops(channel, info)
+      // an answer worth stopping for: either there are no drops here, or we have read them
+      return !info.any || info.items.length > 0
+    }
+    /*
+     * Keep asking until the page answers properly.
+     *
+     * Their chest appears in the chat bar well before the panel behind it will open, so the first
+     * reading of a page that is still building came back with the chest found and nothing in it,
+     * and the chest sat in our bar with an empty panel until the three minute timer came round.
+     */
+    const firstDrops = async (): Promise<void> => {
+      for (let i = 0; i < 10 && !stop; i++) {
+        if (await readTheDrops()) return
+        await new Promise((done) => window.setTimeout(done, 10000))
+      }
     }
     void tick()
-    window.setTimeout(() => void readTheStreak(), 9000)
+    window.setTimeout(() => void firstStreak(), 9000)
+    window.setTimeout(() => void firstDrops(), 12000)
     /*
      * Deliberately slow.
      *
@@ -343,10 +640,13 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      */
     const timer = window.setInterval(() => void tick(), 8000)
     const streakTimer = window.setInterval(() => void readTheStreak(), 900000)
+    const dropsTimer = window.setInterval(() => void readTheDrops(), 180000)
     return () => {
       stop = true
       window.clearInterval(timer)
       window.clearInterval(streakTimer)
+      window.clearInterval(dropsTimer)
+      useUiStore.getState().setPlayerDrops(channel, null)
       registerPlayerPage(channel, null)
     }
     // ask is rebuilt on every render by design, and asking too early simply answers null
@@ -401,8 +701,12 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      *
      * display:none would also fix that, and did, but it takes the column out of the layout, and
      * the channel points live in there: with no box to open against, their rewards panel never
-     * opens and the streak and the reward list cannot be read at all. Transparent and
+     * opens and the streak and the reward list cannot be read at all. Hidden and
      * pointer-events:none keeps every one of those working while the mouse passes straight through.
+     *
+     * visibility rather than opacity, because a poll or a prediction is brought BACK from inside
+     * this column, and a child cannot out-shine an opacity:0 parent, while visibility:visible on
+     * the child does exactly that.
      *
      * No comments inside this string: one in the selector list stops the whole block applying.
      */
@@ -419,10 +723,46 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         pointer-events: none !important;
       }
       .right-column, .right-column--theatre, .channel-root__right-column {
-        opacity: 0 !important;
+        visibility: hidden !important;
         pointer-events: none !important;
       }
+      .sticki-surfaced, .sticki-surfaced * {
+        visibility: visible !important;
+      }
+      .sticki-typing, .sticki-typing * {
+        visibility: visible !important;
+      }
+      .sticki-typing {
+        opacity: 0 !important;
+      }
+      .sticki-modal, .sticki-modal * {
+        visibility: visible !important;
+      }
+      .sticki-modal {
+        pointer-events: auto !important;
+        position: fixed !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        max-height: 86vh !important;
+        overflow: auto !important;
+        z-index: 3200 !important;
+      }
+      .sticki-surfaced {
+        pointer-events: auto !important;
+        position: fixed !important;
+        top: 14px !important;
+        right: 14px !important;
+        width: 320px !important;
+        max-height: 60vh !important;
+        overflow: auto !important;
+        z-index: 3100 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55) !important;
+      }
       html, body { overflow: hidden !important; }
+      *::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
+      * { scrollbar-width: none !important; }
     `
     /*
      * Theatre mode, by pressing their own shortcut once per load.
@@ -446,8 +786,15 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      *
      * One attempt is not enough: nothing responds until the player has built itself, and how long
      * that takes depends on the stream. So this keeps asking every 1.2s for ten tries and stops the
-     * moment the player fills the height, which is also the check that keeps it from ever switching
-     * theatre back off for someone who already had it on.
+     * moment the page says it is in theatre mode.
+     *
+     * Their own class, not the player's height. The height was measured against the frame, and
+     * with the top bar and the channel info hidden the player fills the frame WITHOUT theatre mode
+     * as well: measured at 466 of 466 on a page that was not in theatre at all. Worse, the answer
+     * changed while the frame was being resized, and Twitch fires did-navigate-in-page freely, so
+     * opening a split ran this again, read "not filling the height" mid-reflow and pressed alt+T on
+     * a page that already had theatre on. A couple of those in a row is how the player ended up
+     * with theatre OFF exactly when the split opened. The class says the state outright.
      */
     let tries = 0
     let timer = 0
@@ -465,7 +812,9 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
           el.executeJavaScript?.(`(() => {
             const pl = document.querySelector('.persistent-player')
             if (!pl) return 'waiting'
-            return pl.getBoundingClientRect().height > window.innerHeight - 60 ? 'done' : 'go'
+            return document.querySelector('.persistent-player--theatre, .right-column--theatre')
+              ? 'done'
+              : 'go'
           })()`) ?? Promise.resolve('waiting')
       } catch {
         p = Promise.resolve('waiting')
@@ -564,31 +913,37 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       {src && (
         <webview
           ref={(el) => {
-            wvRef.current = el as never
-            if (!el) {
-              setReady(false)
-              return
-            }
             /*
-             * Readiness is asked for, not waited for.
+             * Readiness is asked for, not waited for, and the asking is cleaned up after.
              *
              * dom-ready says executeJavaScript will not throw, and listening for it worked right
              * up until the listener was attached after it had already fired: a re-render that
              * detaches and re-attaches the element, or a hot reload, and the flag stayed false for
-             * good. Everything that needs the page then went quiet, including the points poll.
-             * Asking the view a trivial question until it answers cannot miss its moment.
+             * good. Asking the view a trivial question until it answers cannot miss its moment.
+             *
+             * Both the listener and that poll used to be added on every ref call and removed on
+             * none, so a session of opening and closing players piled them up on the same element
+             * until Electron warned about eleven did-stop-loading listeners on one WebContents.
              */
+            wvRef.current = el as never
+            wvWatch.current?.()
+            wvWatch.current = null
+            if (!el) {
+              setReady(false)
+              return
+            }
             const on = (): void => setReady(true)
-            ;(el as unknown as { addEventListener: (t: string, f: () => void) => void }).addEventListener(
-              'dom-ready',
-              on
-            )
-            const view = el as unknown as { executeJavaScript?: (c: string) => Promise<unknown> }
+            const node = el as unknown as {
+              addEventListener: (t: string, f: () => void) => void
+              removeEventListener?: (t: string, f: () => void) => void
+              executeJavaScript?: (c: string) => Promise<unknown>
+            }
+            node.addEventListener('dom-ready', on)
             let tries = 0
             const probe = window.setInterval(() => {
               if (tries++ > 40) return window.clearInterval(probe)
               try {
-                void view.executeJavaScript?.('1')?.then(
+                void node.executeJavaScript?.('1')?.then(
                   () => {
                     window.clearInterval(probe)
                     setReady(true)
@@ -599,9 +954,16 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
                 /* not attached yet: that is what the next round is for */
               }
             }, 500)
+            wvWatch.current = () => {
+              window.clearInterval(probe)
+              node.removeEventListener?.('dom-ready', on)
+            }
           }}
           src={src}
           className="stream-webview"
+          // the guest is its own renderer with its own rules: without this it is throttled the
+          // moment the window stops being the one in front, which is when the stream paused
+          webpreferences="backgroundThrottling=no"
           partition="persist:twitch-player"
         />
       )}
