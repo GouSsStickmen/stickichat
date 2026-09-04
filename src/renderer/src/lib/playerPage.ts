@@ -463,13 +463,52 @@ const PRED_SCRIPT = `
     }
     return seen
   }
+  /*
+   * Two ways in, because their card in the chat is not always there.
+   *
+   * The card over the chat is the obvious one and it is cheap, but it comes and goes: a
+   * prediction that was already running when the stream was opened, or one whose card has been
+   * scrolled past, leaves nothing in the column to press — and that is why a bet came back
+   * "не видно на сторінці" on the second prediction of an evening while the first had worked.
+   *
+   * The other way is the balance panel, where a running prediction sits as a row of its own
+   * ("хто виграє? Для прогнозів лишилось 13:45"), and pressing it opens the same panel with the
+   * same outcomes. Measured on both routes.
+   */
   const openPred = async () => {
     let p = predPanel()
     if (!p) {
       const open = [...col.querySelectorAll('button')].find((b) => /^(Прогноз|Predict)$/i.test(text(b)))
-      if (!open) return null
-      open.click()
-      for (let i = 0; i < 16 && !predPanel(); i++) await wait(250)
+      if (open) {
+        open.click()
+        for (let i = 0; i < 16 && !predPanel(); i++) await wait(250)
+      }
+      p = predPanel()
+    }
+    if (!p) {
+      /* their balance panel, and the prediction row inside it */
+      const balances = [...document.querySelectorAll('button')].find((b) =>
+        /Баланси|Balances/i.test(b.getAttribute('aria-label') || '')
+      )
+      if (!balances) return null
+      const anyPanel = () =>
+        [...document.querySelectorAll('[class*="Attached"]')].find((e) =>
+          /нагород|reward|Прогноз|Predict/i.test(text(e))
+        )
+      let box = anyPanel()
+      if (!box) {
+        balances.click()
+        for (let i = 0; i < 16 && !anyPanel(); i++) await wait(250)
+        box = anyPanel()
+      }
+      if (!box) return null
+      await wait(400)
+      const entry = [...box.querySelectorAll('button')].find((b) =>
+        /Для прогнозів|прогноз|prediction/i.test(text(b))
+      )
+      if (!entry) return null
+      entry.click()
+      for (let i = 0; i < 16 && predRows().length === 0; i++) await wait(250)
       p = predPanel()
       if (!p) return null
     }
@@ -1791,42 +1830,22 @@ export function readPagePrediction(channel: string): Promise<PagePrediction | nu
       channel,
       `(async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms))
-      const text = (e) => (e.textContent || '').trim()
-      const col = document.querySelector('.right-column') || document.body
-      const panel = () =>
-        [...document.querySelectorAll('[class*="Attached"]')].find((e) => /Прогноз|Predict/i.test(text(e)))
-      const rows = () => {
-        const p = panel()
-        if (!p) return []
-        return [...p.querySelectorAll('[class*="ScInteractable"]')].filter((e) => text(e).length > 1)
-      }
-      const wasOpen = !!panel()
-      let p = panel()
-      if (!p) {
-        const open = [...col.querySelectorAll('button')].find((b) => /^(Прогноз|Predict)$/i.test(text(b)))
-        if (!open) return null
-        open.click()
-        for (let i = 0; i < 16 && !panel(); i++) await wait(250)
-        p = panel()
-        if (!p) return null
-      }
-      for (let i = 0; i < 3 && rows().length === 0; i++) {
-        const back = [...p.querySelectorAll('button')].find((b) =>
-          /Назад|Back/i.test(b.getAttribute('aria-label') || '')
+      ${PRED_SCRIPT}
+      const wasOpen = !!predPanel()
+      const p = await openPred()
+      if (!p) return null
+      const list = predRows()
+      const shut = () => {
+        if (wasOpen) return
+        const box = predPanel()
+        if (!box) return
+        const x = [...box.querySelectorAll('button')].find((b) =>
+          /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
         )
-        if (!back) break
-        back.click()
-        await wait(700)
-        p = panel() || p
+        if (x) x.click()
       }
-      const list = rows()
       if (list.length < 2) {
-        if (!wasOpen) {
-          const shut = [...p.querySelectorAll('button')].find((b) =>
-            /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
-          )
-          if (shut) shut.click()
-        }
+        shut()
         return null
       }
       const options = list.map((row) => {
@@ -1839,7 +1858,6 @@ export function readPagePrediction(channel: string): Promise<PagePrediction | nu
           votes: said[2] || ''
         }
       })
-      /* the question and their countdown, from the lines that are not outcomes */
       const lines = [...p.querySelectorAll('*')]
         .filter((e) => e.children.length === 0 && text(e))
         .map((e) => text(e))
@@ -1847,15 +1865,10 @@ export function readPagePrediction(channel: string): Promise<PagePrediction | nu
       const spare = lines.filter(
         (t) => t.length > 2 && t.length < 120 && names.indexOf(t) < 0 && !/^[0-9 ]+%?$/.test(t)
       )
-      const clock = spare.find((t) => /завершується|closes|Подання/i.test(t)) || null
+      const clock = spare.find((t) => /завершується|closes|Подання|лишилось/i.test(t)) || null
       const question =
         spare.find((t) => t !== clock && !/^(Прогноз|Predict|Прогнозуй)/i.test(t)) || ''
-      if (!wasOpen) {
-        const shut = [...(panel() ?? p).querySelectorAll('button')].find((b) =>
-          /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
-        )
-        if (shut) shut.click()
-      }
+      shut()
       return { question, timeLeft: clock, options }
     })()`
     )
