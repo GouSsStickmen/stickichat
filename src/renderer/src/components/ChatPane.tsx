@@ -118,12 +118,12 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
    * copy of the same chat is a chat and nothing else.
    */
   const ownsPlayer = useLayoutStore((s) => {
-    for (const tab of s.tabs) {
-      for (const p of tab.panes) {
-        if (p.channel === pane.channel) return p.id === pane.id
-      }
-    }
-    return true
+    // this tab's panes, not the whole layout: the same channel sitting in some other tab is not
+    // on screen at the same time, and counting it there left the visible pane unable to open a
+    // player at all
+    const tab = s.tabs.find((t) => t.id === tabId)
+    const first = tab?.panes.find((p) => p.channel === pane.channel)
+    return !first || first.id === pane.id
   })
   const playerOpen = channelPlaying && ownsPlayer
   const setPlayerOpen = (on: boolean): void =>
@@ -242,6 +242,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const points = useUiStore((s) => s.playerPoints[pane.channel])
   const drops = useUiStore((s) => s.playerDrops[pane.channel])
   const share = useUiStore((s) => s.playerShare[pane.channel])
+  const shareTucked = useUiStore((s) => s.shareTucked[pane.channel] ?? false)
   const dropsGot = useUiStore((s) => s.dropsGot[pane.channel]) ?? []
   const pagePolls = useUiStore((s) => s.pagePolls[pane.channel])
   const pollHidden = useUiStore((s) => s.pagePollHidden[pane.channel] ?? false)
@@ -675,7 +676,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             for good once it has been shared or dismissed — pressing it posts the line to chat as
             you, so it is only ever pressed from a press here.
           */}
-          {share && (
+          {share && !shareTucked && (
             <div className="share-card">
               <span className="sc-what">
                 <b>{share.title}</b>
@@ -690,10 +691,11 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
               >
                 {t('player.share')}
               </button>
+              {/* out of the way, not turned down: it goes into the icon beside the rewards */}
               <button
                 className="ghost sc-x"
-                title={t('misc.close')}
-                onClick={() => useUiStore.getState().dismissShare(pane.channel)}
+                title={t('player.shareTuck')}
+                onClick={() => useUiStore.getState().tuckShare(pane.channel, true)}
               >
                 ✕
               </button>
@@ -757,6 +759,40 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
                   </button>
                 )}
                 <div className="spacer" />
+                {/* the folded-away share offer, one press from coming back */}
+                {share && shareTucked && (
+                  <button
+                    className="pb-share"
+                    title={t('player.shareBack', { what: share.title })}
+                    onClick={() => useUiStore.getState().tuckShare(pane.channel, false)}
+                  >
+                    {/* an arrow leaving its box: the same thing their own share button means */}
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden>
+                      <path
+                        d="M11.2 4.2H6.2a2 2 0 0 0-2 2v7.6a2 2 0 0 0 2 2h7.6a2 2 0 0 0 2-2V8.8"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M9.6 10.4 15.8 4.2"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M11.8 4.2h4v4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                )}
                 {/* the tucked-away poll or prediction, one press from coming back */}
                 {(pagePolls?.length ?? 0) > 0 && pollHidden && (
                   <button

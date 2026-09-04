@@ -6965,6 +6965,25 @@ button:has(> svg) {
   color: var(--accent);
 }
 
+/* the folded-away share offer, in the same row and the same accent as the poll beside it */
+.points-bar .pb-share {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--accent);
+  cursor: pointer;
+}
+.points-bar .pb-share:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
 /* the tucked-away poll, sitting next to the rewards button it hid behind */
 .points-bar .pb-poll {
   display: inline-flex;

@@ -402,6 +402,15 @@ interface UiState {
   shareDismissed: Record<string, string>
   dismissShare: (channel: string) => void
   /**
+   * Folded away into the little button beside the channel rewards, per channel.
+   *
+   * Closing their offer is not the same as turning it down: the card is in the way of the chat,
+   * and the share is still worth having a minute later. It goes into an icon and comes back from
+   * there; only sharing it, or the offer itself changing, ends it.
+   */
+  shareTucked: Record<string, boolean>
+  tuckShare: (channel: string, tucked: boolean) => void
+  /**
    * Every poll and prediction running in a channel, drawn by the app itself.
    *
    * Their own cards cannot be moved out of the page, and shown over the video they flickered as
@@ -618,13 +627,17 @@ export const useUiStore = create<UiState>()((set) => ({
   dropsGot: {},
   playerShare: {},
   shareDismissed: {},
+  shareTucked: {},
+  tuckShare: (channel, tucked) =>
+    set((s) => ({ shareTucked: { ...s.shareTucked, [channel]: tucked } })),
   dismissShare: (channel) =>
     set((s) => {
       const now = s.playerShare[channel]
       if (!now) return {}
       return {
         playerShare: { ...s.playerShare, [channel]: null },
-        shareDismissed: { ...s.shareDismissed, [channel]: now.title }
+        shareDismissed: { ...s.shareDismissed, [channel]: now.title },
+        shareTucked: { ...s.shareTucked, [channel]: false }
       }
     }),
   setPlayerShare: (channel, prompt) =>
@@ -637,7 +650,12 @@ export const useUiStore = create<UiState>()((set) => ({
       // the one it was closed for stays closed; a card about something else is a new offer
       if (s.shareDismissed[channel] === prompt.title) return {}
       if (old && old.title === prompt.title && old.note === prompt.note) return {}
-      return { playerShare: { ...s.playerShare, [channel]: prompt } }
+      // a different offer is a different card: it deserves to be seen rather than to arrive folded
+      const tucked = old && old.title === prompt.title ? s.shareTucked[channel] : false
+      return {
+        playerShare: { ...s.playerShare, [channel]: prompt },
+        shareTucked: { ...s.shareTucked, [channel]: !!tucked }
+      }
     }),
   rewardDesc: {},
   setRewardDesc: (channel, key, desc) =>

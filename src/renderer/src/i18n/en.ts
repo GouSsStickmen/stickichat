@@ -200,6 +200,8 @@ export const en = {
   'poll.reopen': 'Show the channel poll or prediction',
   'player.show': 'Show the stream',
   'player.share': 'Share',
+  'player.shareTuck': 'Fold into the icon beside the channel rewards; you can still share later',
+  'player.shareBack': 'Show: {what}',
   'player.inOtherPane': 'This stream is already shown in the other pane for this channel',
   'player.hide': 'Hide the stream',
   'player.detach': 'Move to its own window',
