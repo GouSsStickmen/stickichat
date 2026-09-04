@@ -8,7 +8,8 @@ import {
   readStreak,
   claimBonus,
   readPoll,
-  readDrops
+  readDrops,
+  readShare
 } from '../lib/playerPage'
 import { useT } from '../i18n'
 import {
@@ -326,6 +327,8 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
    */
   useEffect(() => {
     if (mode !== 'site') return
+    /** the effect has been torn down: a reading in flight must not write to a gone channel */
+    let gone = false
     const look = `(() => {
       const col = document.querySelector('.right-column') || document.body
       /*
@@ -357,6 +360,16 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
     })()`
     const tick = (): void => {
       void ask(look)
+      /*
+       * Their "share this" card, if one is up.
+       *
+       * Cheap enough to ask for on the same tick as the balance: one look for a button in the chat
+       * column. It comes and goes on its own, so it is read rather than waited for.
+       */
+      void readShare(channel).then((prompt) => {
+        if (gone) return
+        useUiStore.getState().setPlayerShare(channel, prompt)
+      })
       void readPoll(channel).then((poll) => {
         const ui = useUiStore.getState()
         if (poll) {
@@ -423,8 +436,10 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
     tick()
     const id = window.setInterval(tick, 4000)
     return () => {
+      gone = true
       window.clearInterval(id)
       useUiStore.getState().setPagePoll(channel, null)
+      useUiStore.getState().setPlayerShare(channel, null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, channel])

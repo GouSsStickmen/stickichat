@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { BadgeRef, FavoriteEmote } from '../types'
 import { useSettingsStore } from './settings'
 import type { ModConfirmRequest } from '../lib/confirmMod'
-import type { DropsInfo } from '../lib/playerPage'
+import type { DropsInfo, SharePrompt } from '../lib/playerPage'
 
 /*
  * What identifies one poll from another, for remembering a dismissal.
@@ -390,6 +390,18 @@ interface UiState {
   rewardDesc: Record<string, Record<string, string>>
   setRewardDesc: (channel: string, key: string, desc: string) => void
   /**
+   * Twitch's own "share this" card, as the open page shows it.
+   *
+   * It appears when something has just happened to you on the channel — a watch streak taken, a
+   * subscription reward — and it is the only place that offer lives, so it is read out of the page
+   * and drawn where the rest of the app can see it. Closed by hand it stays closed until the card
+   * itself is about something else.
+   */
+  playerShare: Record<string, SharePrompt | null>
+  setPlayerShare: (channel: string, prompt: SharePrompt | null) => void
+  shareDismissed: Record<string, string>
+  dismissShare: (channel: string) => void
+  /**
    * Every poll and prediction running in a channel, drawn by the app itself.
    *
    * Their own cards cannot be moved out of the page, and shown over the video they flickered as
@@ -574,6 +586,28 @@ export const useUiStore = create<UiState>()((set) => ({
       }
       // merged, because the balance and the streak arrive from two different reads
       const merged = { ...EMPTY_POINTS, ...old, ...points }
+      /*
+       * A reading that lost the balance does not mean the balance is gone.
+       *
+       * Twitch borrows that spot in its chat bar for a moment when something lands: a streak
+       * takes it over with a flame and a number of its own, and while that is up there is no
+       * points balance in the page to read at all. Ours went to "..." at exactly the moment the
+       * reader was looking at it. What was last known stays until a real number replaces it.
+       */
+      if (!merged.balanceText && old?.balanceText) {
+        merged.balanceText = old.balanceText
+        /*
+         * The number goes with the words, not on its own.
+         *
+         * Without the labelled element the reading falls back to any digits-only line in their
+         * summary, and while the streak chip is up that line is the streak itself: the balance
+         * would have read 6, and climbing back to 172 057 afterwards would have been announced as
+         * a gain of a hundred and seventy thousand points.
+         */
+        if (old.balance != null) merged.balance = old.balance
+      }
+      if (merged.balance === null && old?.balance != null) merged.balance = old.balance
+      if (merged.icon === null && old?.icon) merged.icon = old.icon
       // the poll runs every few seconds: only a real change should wake the panes
       if (old && (Object.keys(merged) as (keyof PagePoints)[]).every((k) => merged[k] === old[k])) {
         return {}
@@ -582,6 +616,29 @@ export const useUiStore = create<UiState>()((set) => ({
     }),
   playerDrops: {},
   dropsGot: {},
+  playerShare: {},
+  shareDismissed: {},
+  dismissShare: (channel) =>
+    set((s) => {
+      const now = s.playerShare[channel]
+      if (!now) return {}
+      return {
+        playerShare: { ...s.playerShare, [channel]: null },
+        shareDismissed: { ...s.shareDismissed, [channel]: now.title }
+      }
+    }),
+  setPlayerShare: (channel, prompt) =>
+    set((s) => {
+      const old = s.playerShare[channel]
+      if (!prompt) {
+        if (!old) return {}
+        return { playerShare: { ...s.playerShare, [channel]: null } }
+      }
+      // the one it was closed for stays closed; a card about something else is a new offer
+      if (s.shareDismissed[channel] === prompt.title) return {}
+      if (old && old.title === prompt.title && old.note === prompt.note) return {}
+      return { playerShare: { ...s.playerShare, [channel]: prompt } }
+    }),
   rewardDesc: {},
   setRewardDesc: (channel, key, desc) =>
     set((s) => {

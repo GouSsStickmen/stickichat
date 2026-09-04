@@ -6925,6 +6925,46 @@ button:has(> svg) {
 .points-bar .spacer {
   flex: 1;
 }
+/*
+ * Twitch's own "share this" offer, above the input where their own card puts it.
+ *
+ * One line about what happened and the button that posts it. Accent border, because it is a thing
+ * that just happened rather than part of the furniture.
+ */
+.share-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 6px;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+}
+.share-card .sc-what {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.share-card .sc-what b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-card .sc-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-card .sc-x {
+  padding: 0 4px;
+  color: var(--accent);
+}
+
 /* the tucked-away poll, sitting next to the rewards button it hid behind */
 .points-bar .pb-poll {
   display: inline-flex;

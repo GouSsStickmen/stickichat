@@ -1342,3 +1342,84 @@ export function claimDrop(channel: string, name: string): Promise<boolean | null
     )
   )
 }
+
+/** what Twitch is offering to let you share, in its own words */
+export interface SharePrompt {
+  /** the heading of their card: "Твоя серія переглядів: 7" */
+  title: string
+  /** the line under it: "Ти отримав(-ла) додаткову нагороду: 450!" */
+  note: string
+}
+
+/*
+ * Their "Поділитися" card, whatever it is for.
+ *
+ * Twitch drops one of these into the chat when something has just happened to you on the channel:
+ * a watch streak taken, a subscription reward, and more besides. It is a card with a line or two
+ * about what you got and a button that posts it to chat, and it is the only place that offer
+ * exists — so ours finds theirs and presses it.
+ *
+ * Found by the button, inside the chat column. The channel header carries a share button of its
+ * own (data-a-target="share-button", the one that copies a link to the stream), and it is not in
+ * that column, which is what tells the two apart.
+ */
+const SHARE_SCRIPT = `
+  const text = (e) => (e.textContent || '').trim()
+  const shareButton = () => {
+    const col = document.querySelector('.right-column')
+    if (!col) return null
+    return (
+      [...col.querySelectorAll('button')].find((b) => {
+        if (b.getAttribute('data-a-target') === 'share-button') return false
+        const label = b.getAttribute('aria-label') || ''
+        return /^(Поділитися|Share)/i.test(label) || /^(Поділитися|Share)$/i.test(text(b))
+      }) || null
+    )
+  }
+  const shareCard = (b) => {
+    let card = b
+    for (let i = 0; i < 7 && card.parentElement; i++) {
+      card = card.parentElement
+      const said = [...card.querySelectorAll('*')].filter((e) => e.children.length === 0 && text(e))
+      if (said.length >= 2) return card
+    }
+    return card
+  }
+`
+
+export function readShare(channel: string): Promise<SharePrompt | null> {
+  return ask<SharePrompt>(
+    channel,
+    `(() => {
+      ${SHARE_SCRIPT}
+      const b = shareButton()
+      if (!b) return null
+      const card = shareCard(b)
+      const said = [...card.querySelectorAll('*')]
+        .filter((e) => e.children.length === 0 && text(e))
+        .map((e) => text(e))
+        /* the words on their own buttons are not what the card is about */
+        .filter((t) => !/^(Поділитися|Share|Інші варіанти|More options)$/i.test(t) && t.length < 140)
+      if (said.length === 0) return null
+      return { title: said[0], note: said.slice(1).join(' ') }
+    })()`
+  )
+}
+
+/**
+ * Press their share button.
+ *
+ * It posts the line to chat as you, which is why it is only ever pressed from a press of our own.
+ */
+export function pressShare(channel: string): Promise<boolean | null> {
+  return ask<boolean>(
+    channel,
+    `(() => {
+      ${SHARE_SCRIPT}
+      const b = shareButton()
+      if (!b || b.disabled) return false
+      b.click()
+      return true
+    })()`
+  )
+}

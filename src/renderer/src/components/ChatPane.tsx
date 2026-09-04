@@ -13,7 +13,7 @@ import MessageList from './MessageList'
 import InputBox, { ReplyTarget } from './InputBox'
 import ModToolbar from './ModToolbar'
 import { useUiStore } from '../store/ui'
-import { claimBonus } from '../lib/playerPage'
+import { claimBonus, pressShare } from '../lib/playerPage'
 import RewardsPanel from './RewardsPanel'
 import DropsPanel from './DropsPanel'
 import PagePollCard from './PagePollCard'
@@ -108,7 +108,24 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const paneSynced = pane.syncScroll === true
   const [searchOpen, setSearchOpen] = useState(false)
   /** per pane and per session: which channel you want to watch changes constantly */
-  const playerOpen = useUiStore((s) => s.openPlayers.includes(pane.channel))
+  const channelPlaying = useUiStore((s) => s.openPlayers.includes(pane.channel))
+  /*
+   * One pane per channel gets the player, and it is the first of them.
+   *
+   * There is one player per channel and every pane showing that channel was publishing where it
+   * wanted it, five times a second: with the same stream open twice in a split, the player was
+   * dragged between the two holes and flickered. The first pane in the layout owns it; a second
+   * copy of the same chat is a chat and nothing else.
+   */
+  const ownsPlayer = useLayoutStore((s) => {
+    for (const tab of s.tabs) {
+      for (const p of tab.panes) {
+        if (p.channel === pane.channel) return p.id === pane.id
+      }
+    }
+    return true
+  })
+  const playerOpen = channelPlaying && ownsPlayer
   const setPlayerOpen = (on: boolean): void =>
     useUiStore.getState().togglePlayer(pane.channel, on)
   const slotRef = useRef<HTMLDivElement>(null)
@@ -224,6 +241,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
   const latency = useUiStore((s) => s.streamLatency[pane.channel])
   const points = useUiStore((s) => s.playerPoints[pane.channel])
   const drops = useUiStore((s) => s.playerDrops[pane.channel])
+  const share = useUiStore((s) => s.playerShare[pane.channel])
   const dropsGot = useUiStore((s) => s.dropsGot[pane.channel]) ?? []
   const pagePolls = useUiStore((s) => s.pagePolls[pane.channel])
   const pollHidden = useUiStore((s) => s.pagePollHidden[pane.channel] ?? false)
@@ -550,7 +568,10 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
         </span>
         <button
           className={`icon-btn ${playerOpen ? 'active' : ''}`}
-          title={playerOpen ? t('player.hide') : t('player.show')}
+          disabled={!ownsPlayer}
+          title={
+            !ownsPlayer ? t('player.inOtherPane') : playerOpen ? t('player.hide') : t('player.show')
+          }
           onClick={() => {
             const next = !playerOpen
             setPlayerOpen(next)
@@ -646,6 +667,38 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             />
             {showHighlightSidebar && <HighlightSidebar channel={pane.channel} />}
           </div>
+          {/*
+            Twitch's own "share this" card, brought out of the page it lives in.
+
+            It shows up when something has just happened to you on the channel: a streak taken, a
+            subscription reward. Above the input, which is where their own card sits, and it closes
+            for good once it has been shared or dismissed — pressing it posts the line to chat as
+            you, so it is only ever pressed from a press here.
+          */}
+          {share && (
+            <div className="share-card">
+              <span className="sc-what">
+                <b>{share.title}</b>
+                {share.note && <span className="sc-note">{share.note}</span>}
+              </span>
+              <button
+                className="primary"
+                onClick={() => {
+                  void pressShare(pane.channel)
+                  useUiStore.getState().dismissShare(pane.channel)
+                }}
+              >
+                {t('player.share')}
+              </button>
+              <button
+                className="ghost sc-x"
+                title={t('misc.close')}
+                onClick={() => useUiStore.getState().dismissShare(pane.channel)}
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <InputBox
             tabId={tabId}
             pane={pane}

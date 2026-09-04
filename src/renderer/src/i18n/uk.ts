@@ -201,6 +201,8 @@ export const uk: Record<TranslationKey, string> = {
   'poll.tuck': 'Згорнути в значок біля нагород каналу',
   'poll.reopen': 'Показати опитування або прогноз каналу',
   'player.show': 'Показати стрім',
+  'player.share': 'Поділитися',
+  'player.inOtherPane': 'Цей стрім уже показано в іншій панелі з цим самим каналом',
   'player.hide': 'Сховати стрім',
   'player.detach': 'Винести в окреме вікно',
   'player.notice':

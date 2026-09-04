@@ -199,6 +199,8 @@ export const en = {
   'poll.tuck': 'Tuck it into the button beside the channel rewards',
   'poll.reopen': 'Show the channel poll or prediction',
   'player.show': 'Show the stream',
+  'player.share': 'Share',
+  'player.inOtherPane': 'This stream is already shown in the other pane for this channel',
   'player.hide': 'Hide the stream',
   'player.detach': 'Move to its own window',
   'player.notice':
