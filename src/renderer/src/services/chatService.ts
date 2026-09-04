@@ -353,7 +353,18 @@ class ChatService {
     // one channel can run a poll and a prediction at once, so each is found by its own id
     const mine = (ui.pagePolls[channel] ?? []).find((p) => p.id === e.id)
     if (e.phase === 'end') {
-      const had = mine
+      /*
+       * The card may be the one the page put up, under its own name.
+       *
+       * A prediction read out of their panel is filed as "prediction" because the page has no id
+       * for it, so an ending that arrives by topic would have found nothing to end and the card
+       * would have stood there, still counting, after the points were paid out.
+       */
+      const had =
+        mine ??
+        (e.kind === 'prediction'
+          ? (ui.pagePolls[channel] ?? []).find((p) => p.id === 'prediction')
+          : undefined)
       if (had) {
         ui.setPagePoll(channel, {
           ...had,
@@ -389,9 +400,10 @@ class ChatService {
        * thing again, without the result, which is how a resolved prediction ended up hanging
        * across the top of the chat with no way to be rid of it.
        */
+      const endedId = had?.id ?? e.id
       window.setTimeout(() => {
-        const now = (useUiStore.getState().pagePolls[channel] ?? []).find((p) => p.id === e.id)
-        if (now?.ended) useUiStore.getState().dismissPagePoll(channel, e.id)
+        const now = (useUiStore.getState().pagePolls[channel] ?? []).find((p) => p.id === endedId)
+        if (now?.ended) useUiStore.getState().dismissPagePoll(channel, endedId)
       }, 180000)
       return
     }

@@ -44,6 +44,14 @@ export interface PageHandle {
    * difference.
    */
   pressAt: (x: number, y: number) => Promise<void>
+  /**
+   * Type into one of their fields with real keys, and say whether the characters landed.
+   *
+   * Their inputs are React-controlled: setting .value and firing an input event puts the digits on
+   * screen without their component ever learning about them, so the amount stayed at nothing and
+   * the bet was placed for nothing. Real characters go through the same path a person's do.
+   */
+  typeInto: (selector: string, text: string) => Promise<boolean>
 }
 
 const pages = new Map<string, PageHandle>()
@@ -422,130 +430,241 @@ export function readPoll(channel: string): Promise<PagePoll | null> {
   )
 }
 
+/*
+ * Everything about their prediction panel, in one place.
+ *
+ * Their card in the chat column is collapsed: it holds the question and a "Прогноз" button, and
+ * the outcomes are not in the page at all until that button is pressed. Measured on a live
+ * prediction with four outcomes: each outcome is a ScInteractable rather than a button and reads
+ * "n_vizion70 %69", pressing one offers the default amount on a button of its own plus "Прогноз
+ * із власною сумою", and the custom flow confirms with "Голосувати".
+ */
+const PRED_SCRIPT = `
+  const text = (e) => (e.textContent || '').trim()
+  const col = document.querySelector('.right-column') || document.body
+  const predPanel = () =>
+    [...document.querySelectorAll('[class*="Attached"]')].find((e) => /Прогноз|Predict/i.test(text(e)))
+  const predRows = () => {
+    const p = predPanel()
+    if (!p) return []
+    return [...p.querySelectorAll('[class*="ScInteractable"]')].filter((e) => text(e).length > 1)
+  }
+  const digitsOf = (t) => {
+    let out = ''
+    for (const ch of t) if (ch >= '0' && ch <= '9') out += ch
+    return out
+  }
+  const numericLabel = (t) => {
+    if (!t || t.length > 12) return false
+    let seen = false
+    for (const ch of t) {
+      if (ch >= '0' && ch <= '9') seen = true
+      else if (ch !== ' ') return false
+    }
+    return seen
+  }
+  const openPred = async () => {
+    let p = predPanel()
+    if (!p) {
+      const open = [...col.querySelectorAll('button')].find((b) => /^(Прогноз|Predict)$/i.test(text(b)))
+      if (!open) return null
+      open.click()
+      for (let i = 0; i < 16 && !predPanel(); i++) await wait(250)
+      p = predPanel()
+      if (!p) return null
+    }
+    for (let i = 0; i < 3 && predRows().length === 0; i++) {
+      const back = [...p.querySelectorAll('button')].find((b) =>
+        /Назад|Back/i.test(b.getAttribute('aria-label') || '')
+      )
+      if (!back) break
+      back.click()
+      await wait(700)
+      p = predPanel() || p
+    }
+    return predPanel() || p
+  }
+  /*
+   * Their warning for moderators, which stops the bet dead until it is answered.
+   *
+   * Measured on a live prediction: pressing an amount as a moderator of the channel opens "Ти
+   * береш участь як модератор. Прогноз створено стримером. Участь у ньому позбавить можливості
+   * обирати результат." with Скасувати and "Я все ж хочу взяти участь". Nothing is staked until
+   * that second button is pressed, which is exactly why the points never left — and it is not a
+   * dialog to press on somebody's behalf, since taking part costs a moderator the right to pick
+   * the winner. So it is reported back and answered from our own card.
+   */
+  const modWarning = () => {
+    const p = predPanel()
+    if (!p) return null
+    if (!/як модератор|as a moderator/i.test(text(p))) return null
+    return (
+      [...p.querySelectorAll('button')].find((b) =>
+        /все ж хочу|still want|anyway/i.test(text(b))
+      ) || null
+    )
+  }
+  /* their warning is put away when it is handed on: the answer comes back as a fresh attempt */
+  const dropWarning = () => {
+    const p = predPanel()
+    if (!p) return
+    const no = [...p.querySelectorAll('button')].find((b) => /^(Скасувати|Cancel)$/i.test(text(b)))
+    if (no) no.click()
+  }
+  /* what the page says the balance is, digits only, for telling a placed bet from a refused one */
+  const balanceDigits = () => {
+    const c = document.querySelector('[data-test-selector="copo-balance-string"]')
+    return c ? digitsOf(text(c)) : ''
+  }
+  const rowPoints = (name) => {
+    const row = predRows().find((e) => text(e).indexOf(name) === 0)
+    if (!row) return ''
+    const said = [...row.querySelectorAll('*')]
+      .filter((e) => e.children.length === 0 && text(e))
+      .map((e) => text(e))
+    return digitsOf(said[2] || '')
+  }
+`
+
 /**
  * Put points on one side of a prediction, with the amount you choose.
  *
- * Their card in the chat column is COLLAPSED, and that is the whole reason this used to do
- * nothing: it shows the question and a "Прогноз" button, and the outcomes are not in the page at
- * all until that button is pressed. Measured on a live prediction, four outcomes deep:
- *
- *   1. the collapsed card's own "Прогноз" opens their panel;
- *   2. each outcome is a ScInteractable, NOT a button, and reads "n_vizion70 %69" — so it is found
- *      by the name at the front of it, which is the name their topic gave us;
- *   3. pressing one offers a quick button with the default amount on it ("10") and
- *      "Прогноз із власною сумою" for anything else;
- *   4. the custom flow has a number field and confirms with "Голосувати".
- *
- * Nothing is pressed unless the amount matches what was asked for, so a mismatch comes back with
- * a reason rather than spending a number the reader did not choose.
+ * Three steps, because their amount field is React-controlled and will not take a written value:
+ * the outcome is chosen, the digits are typed with real keys, and only then is their "Голосувати"
+ * pressed. And it is checked afterwards rather than assumed — measured on a live prediction, the
+ * old way came back "placed" for a bet Twitch never took, so our card said "ти поставив 179" while
+ * every outcome in their own panel still stood at zero. Now the balance has to move, or the chosen
+ * outcome's own total has to grow, before this says the points went.
  */
-export function betPrediction(
+export async function betPrediction(
   channel: string,
   index: number,
   amount: number,
-  label?: string
-): Promise<'placed' | 'noOutcome' | 'noAmount' | 'refused' | null> {
-  return ask(
-    channel,
-    `(async () => {
+  label?: string,
+  force?: boolean
+): Promise<'placed' | 'noOutcome' | 'noAmount' | 'refused' | 'modWarning' | null> {
+  const page = pages.get(channel)
+  if (!page) return null
+  return serial(channel, async () => {
+    const want = String(amount)
+    const ready = await ask<{ state: string; before: string; points: string }>(
+      channel,
+      `(async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms))
-      const text = (e) => (e.textContent || '').trim()
-      const want = ${JSON.stringify(String(amount))}
+      ${PRED_SCRIPT}
       const name = ${JSON.stringify(label ?? '')}
-      const col = document.querySelector('.right-column') || document.body
-      const panel = () =>
-        [...document.querySelectorAll('[class*="Attached"]')].find((e) => /Прогноз|Predict/i.test(text(e)))
-      const rows = () => {
-        const p = panel()
-        if (!p) return []
-        return [...p.querySelectorAll('[class*="ScInteractable"]')].filter((e) => text(e).length > 1)
-      }
-      const digits = (t) => {
-        let out = ''
-        for (const ch of t) if (ch >= '0' && ch <= '9') out += ch
-        return out
-      }
-      const looksNumeric = (t) => {
-        if (!t || t.length > 12) return false
-        let seen = false
-        for (const ch of t) {
-          if (ch >= '0' && ch <= '9') seen = true
-          else if (ch !== ' ') return false
-        }
-        return seen
-      }
-      /* their panel, opened from the collapsed card if it is not up already */
-      let p = panel()
-      if (!p) {
-        const open = [...col.querySelectorAll('button')].find((b) => /^(Прогноз|Predict)$/i.test(text(b)))
-        if (!open) return 'noOutcome'
-        open.click()
-        for (let i = 0; i < 16 && !panel(); i++) await wait(250)
-        p = panel()
-        if (!p) return 'noOutcome'
-      }
-      /* it remembers where it was left: back out of an outcome to see the list again */
-      for (let i = 0; i < 3 && rows().length === 0; i++) {
-        const back = [...p.querySelectorAll('button')].find((b) =>
-          /Назад|Back/i.test(b.getAttribute('aria-label') || '')
-        )
-        if (!back) break
-        back.click()
-        await wait(700)
-        p = panel() || p
-      }
-      const list = rows()
+      const want = ${JSON.stringify(want)}
+      let p = await openPred()
+      if (!p) return { state: 'noOutcome', before: '', points: '' }
+      const list = predRows()
       const row = (name ? list.find((e) => text(e).indexOf(name) === 0) : null) ?? list[${index}]
-      if (!row) return 'noOutcome'
+      if (!row) return { state: 'noOutcome', before: '', points: '' }
+      const before = balanceDigits()
+      const points = name ? rowPoints(name) : ''
       row.click()
       await wait(1200)
-      p = panel() || p
-      /* the default amount is already on a button: one press and it is placed */
-      const quick = [...p.querySelectorAll('button')].filter((b) => !b.disabled && looksNumeric(text(b)))
-      const exact = quick.find((b) => digits(text(b)) === want)
+      p = predPanel() || p
+      const quick = [...p.querySelectorAll('button')].filter((b) => !b.disabled && numericLabel(text(b)))
+      const exact = quick.find((b) => digitsOf(text(b)) === want)
       if (exact) {
         exact.click()
         await wait(1200)
-        const done = panel()
-        if (done) {
-          const shut = [...done.querySelectorAll('button')].find((b) =>
-            /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
-          )
-          if (shut) shut.click()
+        const warn = modWarning()
+        if (warn) {
+          if (!${JSON.stringify(force === true)}) {
+            dropWarning()
+            return { state: 'modWarning', before: before, points: points }
+          }
+          warn.click()
+          await wait(1200)
         }
-        return 'placed'
+        return { state: 'pressed', before: before, points: points }
       }
-      /* anything else goes through their own custom-amount flow */
       const custom = [...p.querySelectorAll('button')].find((b) => /власною сумою|Custom/i.test(text(b)))
-      if (!custom) return 'noAmount'
+      if (!custom) return { state: 'noAmount', before: before, points: points }
       custom.click()
       await wait(1300)
-      p = panel() || p
+      p = predPanel() || p
       const field = [...p.querySelectorAll('input')].find(
         (i) => i.type === 'number' || i.inputMode === 'numeric'
       )
-      if (!field) return 'noAmount'
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')
-      setter.set.call(field, want)
-      field.dispatchEvent(new Event('input', { bubbles: true }))
-      field.dispatchEvent(new Event('change', { bubbles: true }))
-      await wait(600)
-      const go = [...p.querySelectorAll('button')].find((b) =>
-        /^(Голосувати|Прогноз|Поставити|Vote|Predict|Place)$/i.test(text(b))
+      if (!field) return { state: 'noAmount', before: before, points: points }
+      return { state: 'typing', before: before, points: points }
+    })()`
+    )
+    if (!ready) return null
+    if (ready.state === 'noOutcome') return 'noOutcome'
+    if (ready.state === 'noAmount') return 'noAmount'
+    if (ready.state === 'modWarning') return 'modWarning'
+
+    if (ready.state === 'typing') {
+      const typed = await page.typeInto('[class*="Attached"] input[type="number"]', want)
+      if (!typed) return 'noAmount'
+      const pressed = await ask<string>(
+        channel,
+        `(async () => {
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+        ${PRED_SCRIPT}
+        const p = predPanel()
+        if (!p) return false
+        const go = [...p.querySelectorAll('button')].find((b) =>
+          /^(Голосувати|Прогноз|Поставити|Vote|Predict|Place)$/i.test(text(b))
+        )
+        if (!go || go.disabled) return 'refused'
+        go.click()
+        await wait(1300)
+        const warn = modWarning()
+        if (warn) {
+          if (!${JSON.stringify(force === true)}) {
+            dropWarning()
+            return 'modWarning'
+          }
+          warn.click()
+          await wait(1300)
+        }
+        return 'pressed'
+      })()`
       )
-      if (!go || go.disabled) return 'refused'
-      go.click()
-      await wait(1300)
-      const after = panel()
-      if (after) {
-        const shut = [...after.querySelectorAll('button')].find((b) =>
+      if (pressed === 'modWarning') return 'modWarning'
+      if (pressed !== 'pressed') return 'refused'
+    }
+
+    const went = await ask<boolean>(
+      channel,
+      `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      ${PRED_SCRIPT}
+      const name = ${JSON.stringify(label ?? '')}
+      const before = ${JSON.stringify(ready.before)}
+      const had = Number(${JSON.stringify(ready.points)} || '0')
+      for (let i = 0; i < 12; i++) {
+        await wait(400)
+        const now = balanceDigits()
+        if (before && now && now !== before) return true
+        if (name) {
+          const grown = Number(rowPoints(name) || '0')
+          if (grown > had) return true
+        }
+      }
+      return false
+    })()`
+    )
+    await ask(
+      channel,
+      `(() => {
+      const text = (e) => (e.textContent || '').trim()
+      const p = [...document.querySelectorAll('[class*="Attached"]')].find((e) => /Прогноз|Predict/i.test(text(e)))
+      if (p) {
+        const shut = [...p.querySelectorAll('button')].find((b) =>
           /Закрити|Close/i.test(b.getAttribute('aria-label') || '')
         )
         if (shut) shut.click()
       }
-      return 'placed'
+      return true
     })()`
-  ) as Promise<'placed' | 'noOutcome' | 'noAmount' | 'refused' | null>
+    )
+    return went === true ? 'placed' : 'refused'
+  })
 }
 
 /**

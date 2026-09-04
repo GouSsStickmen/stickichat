@@ -77,6 +77,15 @@ function OnePoll({
   const [stake, setStake] = useState(10)
   /** what came of the last press, when it was not simply "done" */
   const [said, setSaid] = useState<string | null>(null)
+  /**
+   * The outcome waiting on their moderator warning, or -1.
+   *
+   * Twitch stops a moderator's bet on the streamer's own prediction with "участь позбавить
+   * можливості обирати результат" and a button to go ahead anyway. Pressing that for somebody
+   * would quietly cost them the right to pick the winner, so the warning is passed on and the
+   * second press is theirs.
+   */
+  const [modAsk, setModAsk] = useState(-1)
 
   // folding and unfolding changes the height as much as the card appearing does — same signal
   useLayoutEffect(() => {
@@ -104,13 +113,20 @@ function OnePoll({
    * It used to go and never report: a prediction their page would not take simply did nothing at
    * all, which reads as a broken button rather than as "Twitch refused this".
    */
-  const commit = async (index: number): Promise<void> => {
+  const commit = async (index: number, anyway = false): Promise<void> => {
     setBusy(true)
     setSaid(null)
     const amount = Math.max(1, stake)
     const label = poll.options[index]?.label ?? ''
     if (poll.isPrediction) {
-      const res = await betPrediction(channel, index, amount, label)
+      const res = await betPrediction(channel, index, amount, label, anyway)
+      if (res === 'modWarning') {
+        setModAsk(index)
+        setSaid(t('poll.modWarn'))
+        setBusy(false)
+        return
+      }
+      setModAsk(-1)
       if (res === 'placed') {
         // the topic names only the top ten predictors, so our own stake is remembered here
         useUiStore.getState().notePagePollStake(channel, poll.id, label, amount)
@@ -332,7 +348,27 @@ function OnePoll({
           })}
         </div>
       )}
-      {said && <div className="pp-said">{said}</div>}
+      {said && (
+        <div className="pp-said">
+          {said}
+          {modAsk >= 0 && (
+            <span className="pp-mod">
+              <button className="primary" disabled={busy} onClick={() => void commit(modAsk, true)}>
+                {t('poll.modAnyway')}
+              </button>
+              <button
+                className="ghost"
+                onClick={() => {
+                  setModAsk(-1)
+                  setSaid(null)
+                }}
+              >
+                {t('misc.cancel')}
+              </button>
+            </span>
+          )}
+        </div>
+      )}
       {/* who was paid what, the way their card lists it once a prediction is resolved */}
       {poll.ended && poll.payouts.length > 0 && (
         <div className="pp-payouts">

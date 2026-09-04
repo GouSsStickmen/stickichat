@@ -7457,8 +7457,17 @@ button:has(> svg) {
 }
 /* what came of the last press, when the page would not take it */
 .page-poll .pp-said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--warn, #ffb84d);
+}
+.page-poll .pp-mod {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .page-poll .pp-fill {
   position: absolute;

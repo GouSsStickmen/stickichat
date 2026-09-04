@@ -192,6 +192,8 @@ export const en = {
   'poll.addNow': 'Add {n}',
   'poll.needPlayer': 'Open this channel’s player to take part.',
   'poll.noOutcome': 'The stream page is not showing this one. Try again in a few seconds.',
+  'poll.modWarn': 'You are a moderator: taking part in the streamer\u2019s prediction gives up your say in the outcome.',
+  'poll.modAnyway': 'Bet anyway',
   'poll.refused': 'Twitch would not take the bet: not enough points, or betting has closed.',
   'poll.payout': '{name} gets {n}',
   'poll.closed': 'submissions closed',

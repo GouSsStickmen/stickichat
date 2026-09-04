@@ -391,6 +391,18 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
           if (gone || !pred || pred.options.length < 2) return
           const ui = useUiStore.getState()
           if ((ui.pagePolls[channel] ?? []).some((c) => c.isPrediction)) return
+          /*
+           * Their countdown, turned into a clock of our own.
+           *
+           * "Подання заявок завершується за 4:21" is a string they redraw every second, and we
+           * read it once: on the card it simply froze at whatever it said when we looked. The
+           * minutes and seconds are taken out of it and turned into an end time, which the card
+           * already knows how to tick.
+           */
+          const left = /([0-9]{1,2}):([0-9]{2})/.exec(pred.timeLeft ?? '')
+          const endsAt = left
+            ? Date.now() + (Number(left[1]) * 60 + Number(left[2])) * 1000
+            : null
           ui.setPagePoll(channel, {
             id: 'prediction',
             kind: translate(useSettingsStore.getState().settings.language, 'poll.prediction'),
@@ -406,10 +418,10 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
             locked: false,
             voted: false,
             ended: false,
-            timeLeft: pred.timeLeft,
+            timeLeft: null,
             ran: null,
-            endsAt: null,
-            runsFor: null,
+            endsAt,
+            runsFor: endsAt ? Math.max(1000, endsAt - Date.now()) : null,
             isPrediction: true,
             winner: null,
             payouts: []
@@ -640,7 +652,77 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       send({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
       await rest(120)
     }
-    registerPlayerPage(channel, { ask, typeAndSend, pressAt })
+    /*
+     * Typing into one of their own fields, with real keys.
+     *
+     * Same machinery as the chat box above and for the same reason: their inputs are React
+     * controlled, so writing .value and firing an input event shows the digits and tells their
+     * component nothing. The column is made focusable-but-invisible for the few moments it takes,
+     * the field is focused and emptied, and the characters are sent as a keyboard sends them.
+     */
+    const typeInto = async (selector: string, words: string): Promise<boolean> => {
+      const rest = (ms: number): Promise<void> => new Promise((done) => window.setTimeout(done, ms))
+      const view = wvRef.current as unknown as {
+        focus?: () => void
+        sendInputEvent?: (e: Record<string, unknown>) => void
+      } | null
+      if (!view?.sendInputEvent) return false
+      const sel = JSON.stringify(selector)
+      const grab = `(() => {
+        for (const c of document.querySelectorAll('.right-column, .channel-root__right-column')) {
+          c.classList.add('sticki-typing')
+        }
+        const el = document.querySelector(${sel})
+        if (!el) return false
+        el.focus()
+        try { el.select() } catch (e) {}
+        return document.activeElement === el
+      })()`
+      const value = `(() => {
+        const el = document.querySelector(${sel})
+        return el ? String(el.value ?? '') : null
+      })()`
+      const release = `(() => {
+        for (const c of document.querySelectorAll('.sticki-typing')) c.classList.remove('sticki-typing')
+        return true
+      })()`
+      try {
+        let held = false
+        for (let i = 0; i < 5 && !held; i++) {
+          held = (await ask(grab)) === true
+          if (!held) await rest(300)
+        }
+        if (!held) return false
+        const had = document.activeElement as HTMLElement | null
+        had?.blur?.()
+        view.focus?.()
+        for (let i = 0; i < 12; i++) {
+          await rest(180)
+          const armed =
+            (await ask(`(() => {
+              const el = document.querySelector(${sel})
+              return !!el && document.activeElement === el
+            })()`)) === true
+          if (armed) break
+          view.focus?.()
+        }
+        // whatever was in it goes first: select-all then a real Backspace
+        view.sendInputEvent?.({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] })
+        view.sendInputEvent?.({ type: 'keyUp', keyCode: 'a', modifiers: ['control'] })
+        view.sendInputEvent?.({ type: 'keyDown', keyCode: 'Backspace' })
+        view.sendInputEvent?.({ type: 'keyUp', keyCode: 'Backspace' })
+        await rest(120)
+        for (const ch of words) {
+          view.sendInputEvent?.({ type: 'char', keyCode: ch })
+          await rest(35)
+        }
+        await rest(350)
+        return (await ask(value)) === words
+      } finally {
+        await ask(release)
+      }
+    }
+    registerPlayerPage(channel, { ask, typeAndSend, pressAt, typeInto })
     let stop = false
     const tick = async (): Promise<void> => {
       const now = await readPoints(channel)
