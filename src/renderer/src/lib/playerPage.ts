@@ -941,8 +941,8 @@ export function readRewards(channel: string): Promise<RewardList | null> {
  * is right immediately, where watching the number rise could only ever notice a streak taken while
  * the app happened to be running and got it wrong after every restart.
  *
- * Measured shape: the card carries a watchStreakFooter class, the groove is ScProgressBarWrapper
- * and the fill is ScProgressBarFill; full means fill width equals groove width.
+ * Measured shape: the card carries a watchStreakFooter class and holds the number, and their own
+ * streak menu behind it says in words whether tonight has been counted.
  */
 export function readStreak(channel: string): Promise<{
   streak: number | null
@@ -973,12 +973,6 @@ export function readStreak(channel: string): Promise<{
         text.match(/Ще[^0-9]{0,3}([0-9]+)[^0-9]+([0-9]+)/i) ||
         text.match(/([0-9]+)[^0-9]{0,3}more stream[^0-9]+([0-9]+)/i) ||
         []
-      const card = document.querySelector('[class*="watchStreakFooter"]')
-      const groove = card && card.querySelector('[class*="ScProgressBarWrapper"]')
-      const fill = card && card.querySelector('[class*="ScProgressBarFill"]')
-      const wide = groove ? groove.getBoundingClientRect().width : 0
-      const done = fill ? fill.getBoundingClientRect().width : 0
-      closePanel(p)
       /*
        * The share offer, out of the same footer.
        *
@@ -1011,11 +1005,69 @@ export function readStreak(channel: string): Promise<{
         return { title: said[0], note: said.slice(1).join(' '), from: 'panel' }
       }
       const share = shareOf()
+      /*
+       * Whether THIS stream has been counted, from their own streak menu.
+       *
+       * The progress bar was the old answer and it is the wrong question: it fills towards the
+       * next REWARD, so on a streak that still owes two streams it sits half empty even after
+       * tonight has been counted, and the flame never lit. Their menu says it in words — "В
+       * процесі: Поверніться до наступного стриму, щоб продовжити свою серію!" once tonight is in
+       * the bag, and how much watching is still wanted when it is not.
+       *
+       * Opened and closed again on the same pass, so this costs one press every five minutes.
+       */
+      let counted = false
+      const menuBtn = p.querySelector('[class*="watchStreak"]')
+        ? [...p.querySelector('[class*="watchStreak"]').querySelectorAll('button')].find((b) =>
+            /меню серій|streak menu/i.test(b.getAttribute('aria-label') || '')
+          )
+        : null
+      if (menuBtn) {
+        menuBtn.click()
+        for (let i = 0; i < 12; i++) {
+          await wait(250)
+          const box = panel()
+          if (box && /В процесі|In progress/i.test(box.textContent || '')) break
+        }
+        const box = panel() || p
+        /*
+         * Only their "В процесі" section, not the whole panel.
+         *
+         * The menu opens inside the same box as the rewards list, and this channel sells a reward
+         * with minutes in its name, so "does the text mention minutes" was true for the whole
+         * panel and the flame stayed dark. The section is the label's own parent, some 140
+         * characters of it.
+         */
+        const label = [...box.querySelectorAll('*')].find(
+          (e) => e.children.length === 0 && /^(В процесі|In progress)$/i.test((e.textContent || '').trim())
+        )
+        const said = label && label.parentElement ? (label.parentElement.textContent || '') : (box.textContent || '')
+        /*
+         * Counted unless they are still asking for watch time.
+         *
+         * Their menu says "Поверніться до наступного стриму" once tonight is in the bag, but only
+         * on a streak that has just paid out; on one still counting up it simply shows "Серія з 2
+         * стримів поспіль 1 / 2" and says nothing about tonight at all. What it DOES say, while
+         * tonight has not been counted, is how many more minutes are wanted — so the minutes are
+         * the test, and their absence, with a streak of at least one, means it is done.
+         */
+        const owes = /[0-9]+ ?(хв|хвилин|мін|хвилини|minutes|minute|min)/i.test(said)
+        const already = /Поверніться до наступного|Come back to the next|Повертайся до наступного/i.test(said)
+        counted = already || (!owes && Number(streak || '0') >= 1)
+        const back = [...box.querySelectorAll('button')].find((b) =>
+          /Назад|Back/i.test(b.getAttribute('aria-label') || '')
+        )
+        if (back) {
+          back.click()
+          await wait(600)
+        }
+      }
+      closePanel(panel() || p)
       return {
         streak: streak ? Number(streak) : null,
         left: ahead[1] ? Number(ahead[1]) : null,
         reward: ahead[2] ? Number(ahead[2]) : null,
-        counted: wide > 0 && done / wide > 0.99,
+        counted: counted,
         share: share
       }
     })()`
