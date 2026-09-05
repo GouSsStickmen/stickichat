@@ -198,11 +198,60 @@ export function StarIcon({ filled, size }: { filled?: boolean; size?: number }):
   )
 }
 
-export function LockIcon({ size }: { size?: number }): React.JSX.Element {
+/** the padlock, shut or with its shackle swung open */
+export function LockIcon({ open, size }: { open?: boolean; size?: number }): React.JSX.Element {
   return (
     <Glyph size={size}>
       <rect x="5" y="10.5" width="14" height="10" rx="2" />
-      <path d="M8.2 10.5 V7.8 A3.8 3.8 0 0 1 15.8 7.8 V10.5" />
+      {open ? (
+        <path d="M8.2 10.5 V7.8 A3.8 3.8 0 0 1 15.8 7.8" />
+      ) : (
+        <path d="M8.2 10.5 V7.8 A3.8 3.8 0 0 1 15.8 7.8 V10.5" />
+      )}
+    </Glyph>
+  )
+}
+
+/**
+ * Two figures: the chatters list.
+ *
+ * One person already means "account" elsewhere in the app, so the list of everyone watching is
+ * drawn as a pair, the second one half behind the first.
+ */
+export function PeopleIcon({ size }: { size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <circle cx="9.2" cy="8.6" r="3.3" />
+      <path d="M3.5 19.4 C3.5 16 6 14.2 9.2 14.2 C12.4 14.2 14.9 16 14.9 19.4" />
+      <path d="M16.2 5.8 A3.3 3.3 0 0 1 16.2 11.6" />
+      <path d="M17.4 14.6 C19.6 15.2 21 16.9 21 19.4" />
+    </Glyph>
+  )
+}
+
+/** a page with an arrow leaving it: opening this somewhere outside the app */
+export function ExternalIcon({ size }: { size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <path d="M18.6 13.8 V18.4 A1.9 1.9 0 0 1 16.7 20.3 H5.9 A1.9 1.9 0 0 1 4 18.4 V7.6 A1.9 1.9 0 0 1 5.9 5.7 H10.4" />
+      <path d="M13.6 4.4 H19.6 V10.4" />
+      <path d="M19.6 4.4 L11.4 12.6" />
+    </Glyph>
+  )
+}
+
+/**
+ * A chain, struck through when this chat scrolls on its own.
+ *
+ * Two links pulled apart read as two commas at fifteen pixels; the same slash a muted speaker
+ * wears says "not joined" at a glance and cannot be mistaken for anything else.
+ */
+export function ChainIcon({ broken, size }: { broken?: boolean; size?: number }): React.JSX.Element {
+  return (
+    <Glyph size={size}>
+      <path d="M10.2 13.8 L8.4 15.6 A3.6 3.6 0 0 1 3.3 10.5 L6.6 7.2 A3.6 3.6 0 0 1 11.7 12.3" />
+      <path d="M13.8 10.2 L15.6 8.4 A3.6 3.6 0 0 1 20.7 13.5 L17.4 16.8 A3.6 3.6 0 0 1 12.3 11.7" />
+      {broken && <path d="M4.4 19.6 L19.6 4.4" />}
     </Glyph>
   )
 }

@@ -22,7 +22,20 @@ import HighlightSidebar from './HighlightSidebar'
 import { AddPaneForm } from './SplitGrid'
 import { startPointerReorder } from '../lib/pointerReorder'
 import { useT } from '../i18n'
-import { EyeIcon, ClockIcon, GameIcon, StarIcon } from './Icons'
+import {
+  EyeIcon,
+  ClockIcon,
+  GameIcon,
+  StarIcon,
+  PlusIcon,
+  PencilIcon,
+  LockIcon,
+  PeopleIcon,
+  PlayIcon,
+  ExternalIcon,
+  CloseIcon,
+  ChainIcon
+} from './Icons'
 
 function formatUptime(startedAt: string): string {
   const ms = Date.now() - new Date(startedAt).getTime()
@@ -485,7 +498,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
               setAddPaneOpen((v) => !v)
             }}
           >
-            +
+            <PlusIcon size={15} />
           </button>
           {addPaneOpen && (
             <div
@@ -509,7 +522,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
               setEditOpen((v) => !v)
             }}
           >
-            ✎
+            <PencilIcon size={15} />
           </button>
           {editOpen && (
             <div
@@ -529,7 +542,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
               useLayoutStore.getState().updatePane(tabId, pane.id, { syncScroll: !paneSynced })
             }
           >
-            {paneSynced ? '🔗' : '⛓️‍💥'}
+            <ChainIcon broken={!paneSynced} size={15} />
           </button>
         )}
         <button
@@ -537,7 +550,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
           title={t('pane.scrollLock')}
           onClick={() => setScrollLocked((v) => !v)}
         >
-          {scrollLocked ? '🔒' : '🔓'}
+          <LockIcon open={!scrollLocked} size={15} />
         </button>
         <button
           className={`icon-btn ${showHighlightSidebar ? 'active' : ''}`}
@@ -550,7 +563,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             }
           }}
         >
-          ★
+          <StarIcon filled={showHighlightSidebar} size={15} />
         </button>
         <span style={{ position: 'relative' }}>
           <button
@@ -558,7 +571,7 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             title={t('chatters.title')}
             onClick={() => setChattersOpen((v) => !v)}
           >
-            👥
+            <PeopleIcon size={15} />
           </button>
           {chattersOpen && (
             <ChattersList
@@ -585,21 +598,21 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
             }
           }}
         >
-          ▶
+          <PlayIcon size={14} />
         </button>
         <button
           className="icon-btn"
           title={t('user.openChannel')}
           onClick={() => window.sticki.openExternal(`https://www.twitch.tv/${pane.channel}`)}
         >
-          ↗
+          <ExternalIcon size={15} />
         </button>
         <button
           className="icon-btn"
           title={t('pane.close')}
           onClick={() => useLayoutStore.getState().closePane(tabId, pane.id)}
         >
-          ✕
+          <CloseIcon size={15} />
         </button>
       </div>
       {((showStreamInfo && streamInfo?.game) || latency !== null && latency !== undefined) && (
