@@ -38,4 +38,4 @@ Bump `version` in `package.json`, add the entry to `src/renderer/src/changelog.t
 and that the changelog actually mentions this version, asks once for a GitHub token (kept
 encrypted per Windows account in the git-ignored `.gh-token`), pushes, and then builds and
 publishes. `npm run release` is the raw build+publish underneath it and needs `GH_TOKEN` set by
-hand. Current: 0.5.14.
+hand. Current: 0.5.15.
