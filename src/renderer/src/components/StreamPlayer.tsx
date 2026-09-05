@@ -92,6 +92,8 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
   const pollGone = useRef(0)
   /** when their prediction panel was last opened to read a card the topics never sent */
   const predRead = useRef(0)
+  /** the streak number last seen, and the broadcast it belonged to */
+  const lastStreak = useRef<{ n: number; of: string } | null>(null)
   /** undoes whatever the last webview element had attached to it */
   const wvWatch = useRef<(() => void) | null>(null)
 
@@ -724,10 +726,27 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
     }
     registerPlayerPage(channel, { ask, typeAndSend, pressAt, typeInto })
     let stop = false
+    /** which broadcast is on air, so a streak is remembered for that one and no other */
+    const airing = (): string => useChatStore.getState().streamInfo[channel]?.startedAt ?? ''
     const tick = async (): Promise<void> => {
       const now = await readPoints(channel)
       if (stop || !now) return
+      // whether their balance had ever been read before this reading, which is what makes a
+      // missing balance mean "the flame has taken its place" rather than "the page is still building"
+      const hadBalance = useUiStore.getState().playerPoints[channel]?.balance != null
       useUiStore.getState().setPlayerPoints(channel, now)
+      /*
+       * Their flame, which is the streak being counted, right now.
+       *
+       * Twitch takes the balance's place in the chat bar for a few seconds with a flame and the
+       * streak number the moment a stream counts. Nothing else says it that plainly: the number in
+       * their panel can be yesterday's, and reading "nothing more is being asked for" as "it is
+       * counted" is what lit the flame early and then said the same stream twice.
+       */
+      if (now.streakChip !== null && hadBalance) {
+        useUiStore.getState().noteStreakDone(channel, airing())
+        useUiStore.getState().setPlayerPoints(channel, { streak: now.streakChip })
+      }
       if (now.chest && useSettingsStore.getState().settings.playerAutoClaim) {
         await claimBonus(channel)
       }
@@ -744,6 +763,21 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
       if (document.hidden) return false
       const st = await readStreak(channel)
       if (stop || !st) return false
+      /*
+       * The number going up while we are watching is the other proof.
+       *
+       * A streak counted before the app arrived cannot be told from the page alone, and that is
+       * fine: it stays unlit rather than claiming something that may not have happened tonight.
+       */
+      const of = airing()
+      const before = lastStreak.current
+      if (st.streak !== null) {
+        if (before && before.of === of && st.streak > before.n) {
+          useUiStore.getState().noteStreakDone(channel, of)
+        }
+        lastStreak.current = { n: st.streak, of }
+      }
+      if (st.counted) useUiStore.getState().noteStreakDone(channel, of)
       useUiStore.getState().setPlayerPoints(channel, {
         streak: st.streak,
         streakLeft: st.left,

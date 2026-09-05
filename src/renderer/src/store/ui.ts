@@ -131,7 +131,7 @@ export interface PagePoints {
   streak: number | null
   streakLeft: number | null
   streakReward: number | null
-  /** this stream has been counted towards the streak, as the page's own progress bar says */
+  /** this stream has been counted, when their own streak menu says so outright */
   streakClaimed: boolean
 }
 
@@ -359,6 +359,16 @@ interface UiState {
    * Same reason as the points: a viewer's progress towards a drop exists in no API we may call,
    * only in the page, and only while a player is running there.
    */
+  /**
+   * The broadcast each channel's watch streak was counted for.
+   *
+   * Kept apart from playerPoints on purpose: that entry goes when the player closes, and closing
+   * a chat and opening it again made the app forget the streak had been taken and light the flame
+   * a second time. A streak is counted once per broadcast, so the broadcast it was counted for is
+   * what is remembered, and it stops meaning anything the moment the streamer goes live again.
+   */
+  streakDone: Record<string, string>
+  noteStreakDone: (channel: string, broadcast: string) => void
   playerDrops: Record<string, DropsInfo>
   setPlayerDrops: (channel: string, info: DropsInfo | null) => void
   /**
@@ -623,6 +633,9 @@ export const useUiStore = create<UiState>()((set) => ({
       }
       return { playerPoints: { ...s.playerPoints, [channel]: merged } }
     }),
+  streakDone: {},
+  noteStreakDone: (channel, broadcast) =>
+    set((s) => (s.streakDone[channel] === broadcast ? {} : { streakDone: { ...s.streakDone, [channel]: broadcast } })),
   playerDrops: {},
   dropsGot: {},
   playerShare: {},

@@ -119,6 +119,15 @@ export interface PointsReading {
   multiplier: string | null
   /** the page is showing this channel as live */
   live: boolean
+  /**
+   * The streak, as their own flame says it, and only while it says it.
+   *
+   * When Twitch counts a stream towards a watch streak it takes over the balance's place in the
+   * chat bar for a few seconds with a flame and the streak number. That is the moment itself, and
+   * it is the only signal here that cannot be inferred wrongly: the number in the panel can be
+   * yesterday's, and their progress bar measures the next reward rather than tonight.
+   */
+  streakChip: number | null
 }
 
 /** the balance, the channel's icon, any multiplier, and whether a bonus is sitting there */
@@ -175,13 +184,34 @@ export function readPoints(channel: string): Promise<PointsReading | null> {
       )
       const img = sum.querySelector('img')
       const live = !!document.querySelector('.live-indicator, [data-a-target="animated-channel-viewers-count"]')
+      /*
+       * Their flame, while it is up.
+       *
+       * Measured when the balance vanished from our own row: for those few seconds their labelled
+       * balance is not in the page at all and the summary shows a small number beside a flame
+       * instead. So the chip is "no labelled balance, and one short number in there", and its
+       * digits are the streak.
+       */
+      let streakChip = null
+      if (!copoText()) {
+        const flame = lines.find((l) => {
+          const bare = l.split('+')[0].trim()
+          if (!bare || bare.length > 6) return false
+          return bare.replace(/[0-9]/g, '') === ''
+        })
+        if (flame) {
+          const n = Number(flame.replace(/[^0-9]/g, ''))
+          if (Number.isFinite(n) && n > 0) streakChip = n
+        }
+      }
       return {
         balance: labelled !== null && !Number.isNaN(labelled) ? labelled : balance,
         balanceText: shown || null,
         chest,
         icon: img ? img.src : null,
         multiplier,
-        live
+        live,
+        streakChip
       }
     })()`
   )
@@ -1051,9 +1081,19 @@ export function readStreak(channel: string): Promise<{
          * tonight has not been counted, is how many more minutes are wanted — so the minutes are
          * the test, and their absence, with a streak of at least one, means it is done.
          */
-        const owes = /[0-9]+ ?(хв|хвилин|мін|хвилини|minutes|minute|min)/i.test(said)
-        const already = /Поверніться до наступного|Come back to the next|Повертайся до наступного/i.test(said)
-        counted = already || (!owes && Number(streak || '0') >= 1)
+        /*
+         * Only what their menu says outright, and nothing inferred.
+         *
+         * "No minutes asked for, so it must be counted" was wrong, and wrong in the worst
+         * direction: on a streak of 1 that had not yet taken tonight, the app lit the flame and
+         * said it was in the bag, and then Twitch counted it for real and the number went to 2 —
+         * the same stream announced twice. What their menu does say, once tonight is counted, is
+         * to come back for the next stream. Everything else is decided by the flame in their chat
+         * bar, which is the moment itself, or by the number going up while we watch.
+         */
+        counted = /Поверніться до наступного|Come back to the next|Повертайся до наступного/i.test(
+          said
+        )
         const back = [...box.querySelectorAll('button')].find((b) =>
           /Назад|Back/i.test(b.getAttribute('aria-label') || '')
         )

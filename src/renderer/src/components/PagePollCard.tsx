@@ -348,6 +348,14 @@ function OnePoll({
           })}
         </div>
       )}
+      {/*
+        The same caveat the rewards panel carries.
+
+        A vote and a bet are pressed in their own page, and their page does not always take it the
+        first time: better to say so here than to let a press that quietly did nothing look like
+        the app being broken.
+      */}
+      {!poll.ended && <p className="hint pp-hint">{t('page.mayMiss')}</p>}
       {said && (
         <div className="pp-said">
           {said}

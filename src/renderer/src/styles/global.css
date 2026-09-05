@@ -7456,6 +7456,12 @@ button:has(> svg) {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 /* what came of the last press, when the page would not take it */
+/* the caveat under the options: their page does the pressing, and it can miss */
+.page-poll .pp-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.3;
+}
 .page-poll .pp-said {
   display: flex;
   flex-wrap: wrap;

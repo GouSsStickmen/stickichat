@@ -235,6 +235,8 @@ export default function RewardsPanel({
             )}
           </div>
           <p className="hint rewards-hint">{t('points.pageHint')}</p>
+          {/* what the page cannot promise: it is their panel doing the work, not an API of ours */}
+          <p className="hint rewards-hint">{t('page.mayMiss')}</p>
         </>
       )}
     </div>

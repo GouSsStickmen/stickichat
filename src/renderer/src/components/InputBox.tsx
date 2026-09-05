@@ -85,7 +85,9 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
    * appears even when chat has never mentioned one, and the flame flares once when it goes up.
    */
   const pageStreak = useUiStore((s) => s.playerPoints[pane.channel]?.streak ?? null)
-  const pageStreakDone = useUiStore((s) => s.playerPoints[pane.channel]?.streakClaimed ?? false)
+  const pageStreakSaid = useUiStore((s) => s.playerPoints[pane.channel]?.streakClaimed ?? false)
+  /* and what was seen earlier this broadcast, which outlives the player being closed */
+  const streakDoneFor = useUiStore((s) => s.streakDone[pane.channel] ?? '')
   const streakNumber = pageStreak ?? myStreak?.n ?? null
   const [streakBumped, setStreakBumped] = useState(false)
   const lastStreak = useRef<number | null>(null)
@@ -107,7 +109,8 @@ export default function InputBox({ tabId, pane, account, channelId, replyTo, onC
    * number rising while the stream runs is the other proof, and once either says yes it stays yes
    * until the stream ends.
    */
-  const counted = pageStreakDone || streakClaimed
+  const counted =
+    pageStreakSaid || streakClaimed || (!!streamInfo?.startedAt && streakDoneFor === streamInfo.startedAt)
   // keep the draft in sync so switching tabs (which unmounts this pane) doesn't lose it
   useEffect(() => {
     inputDrafts.set(pane.id, text)

@@ -36,16 +36,22 @@ interface LayoutState {
   movePane: (tabId: string, paneId: string, toIndex: number) => void
 }
 
-/*
+/**
  * A player belongs to the chat it was opened from.
  *
  * Players are rendered above the app rather than inside their pane, so that looking at another tab
  * cannot stop the stream. That also means nothing stops one when its chat goes: closing the tab, or
- * closing one chat of a split, left a stream playing with no way to see it or stop it. Any channel
- * that no surviving pane shows loses its player here; one still open elsewhere keeps it.
+ * closing one chat of a split, left a stream playing with no way to see it or stop it.
+ *
+ * What keeps a player alive is a pane ON SCREEN showing that channel, which means the tab being
+ * looked at rather than the layout as a whole. Counting every tab kept one alive for a channel that
+ * only existed in some other, hidden tab: closing the split you were watching left the stream
+ * playing out of sight, exactly the way the pencil used to. Switching tabs is untouched, since it
+ * removes no pane at all.
  */
-function dropOrphanPlayers(surviving: Tab[], gone: Pane[]): void {
-  const stillShown = new Set(surviving.flatMap((t) => t.panes.map((p) => p.channel)))
+function dropOrphanPlayers(surviving: Tab[], gone: Pane[], activeTabId: string | null): void {
+  const shown = surviving.find((t) => t.id === activeTabId)
+  const stillShown = new Set((shown?.panes ?? []).map((p) => p.channel))
   const ui = useUiStore.getState()
   for (const pane of gone) {
     if (!stillShown.has(pane.channel) && ui.openPlayers.includes(pane.channel)) {
@@ -87,7 +93,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         ? { ...s.reopenAt, [closing.id]: s.tabs.findIndex((t) => t.id === id) }
         : s.reopenAt
     })
-    if (closing) dropOrphanPlayers(tabs, closing.panes)
+    if (closing) dropOrphanPlayers(tabs, closing.panes, activeTabId)
   },
   renameTab: (id, name) =>
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, name } : t)) })),
@@ -126,7 +132,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         return { ...t, panes, columns }
       })
     }))
-    if (gone) dropOrphanPlayers(get().tabs, [gone])
+    if (gone) dropOrphanPlayers(get().tabs, [gone], get().activeTabId)
   },
   updatePane: (tabId, paneId, patch) => {
     const before = get()
@@ -148,7 +154,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
      * player goes unless some other pane still has that channel open.
      */
     if (before && patch.channel && patch.channel !== before.channel) {
-      dropOrphanPlayers(get().tabs, [before])
+      dropOrphanPlayers(get().tabs, [before], get().activeTabId)
     }
   },
   moveTab: (tabId, toIndex) =>

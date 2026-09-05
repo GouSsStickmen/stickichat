@@ -158,6 +158,7 @@ export const en = {
   'points.redeemed': 'Sent: {name}',
   'points.tooDear': 'Not enough points for that reward.',
   'points.redeemFailed': 'The page refused the redemption. Try again.',
+  'page.mayMiss': 'All of this goes through the Twitch page itself, so it does not always land first time, or straight away. If nothing happened, try again, though it may still not work.',
   'points.pageHint': 'This is the same panel Twitch shows: the page does the redeeming, so a reward with a text field asks for it there.',
   'set.playerAutoClaim': 'Take the points bonus automatically',
   'hint.playerAutoClaim': 'The bonus chest turns up about every quarter of an hour and is gone if nobody takes it. Works only while a player is open in full page mode.',
