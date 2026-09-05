@@ -204,7 +204,7 @@ export const en = {
   'player.show': 'Show the stream',
   'player.share': 'Share',
   'player.shareSend': 'Send',
-  'player.shareWords': 'Say something to go with it',
+  'player.shareWords': 'Add a message, or send it without one',
   'player.sharing': 'Posting...',
   'player.shareFailed': 'Twitch would not take that post. Try again in a few seconds.',
   'player.shareTuck': 'Fold into the icon beside the channel rewards; you can still share later',

@@ -1868,7 +1868,30 @@ export async function sendShare(channel: string, words: string): Promise<boolean
     })()`
   )
   if (!armed) return false
-  await page.typeAndSend(words)
+  /*
+   * A message is optional: their celebration goes out with or without one.
+   *
+   * With words there is nothing else for it but to type them, since their box is a Slate editor.
+   * Without, there is nothing to type and their own send button is pressed instead — it carries
+   * the share in that state, reading "Поділитися" rather than "Чат".
+   */
+  if (!words.trim()) {
+    const pressed = await ask<boolean>(
+      channel,
+      `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      ${SHARE_PROMPT}
+      const s = sendButton()
+      if (!s || s.disabled) return false
+      s.click()
+      await wait(900)
+      return true
+    })()`
+    )
+    if (pressed !== true) return false
+  } else {
+    await page.typeAndSend(words)
+  }
   /*
    * Waited for, not glanced at.
    *

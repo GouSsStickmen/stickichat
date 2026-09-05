@@ -913,6 +913,14 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
      * this column, and a child cannot out-shine an opacity:0 parent, while visibility:visible on
      * the child does exactly that.
      *
+     * A COLLAPSED column is given a box of its own. Twitch collapses its chat when the window is
+     * narrow, or when it has been collapsed once before, and collapsed means display:none on the
+     * column and on its children: measured on a live share offer, the chat box had a zero-sized
+     * box, focus() did nothing, and the share came back refused without a character ever reaching
+     * the page. Their own arrow will not open it for us — it ignores a synthetic press and a real
+     * one alike — so the subtree is laid out here instead, fixed and 340 wide and as invisible as
+     * the rest of the column. Only while collapsed: an expanded column is left exactly as it was.
+     *
      * No comments inside this string: one in the selector list stops the whole block applying.
      */
     const css = `
@@ -931,6 +939,16 @@ export default function StreamPlayer({ channel, standalone, onClose, slot }: Pro
         visibility: hidden !important;
         pointer-events: none !important;
       }
+      .right-column--collapsed {
+        display: flex !important;
+        position: fixed !important;
+        right: 0 !important;
+        top: 0 !important;
+        width: 340px !important;
+        height: 100% !important;
+        z-index: 1 !important;
+      }
+      .right-column--collapsed > * { display: flex !important; }
       .sticki-surfaced, .sticki-surfaced * {
         visibility: visible !important;
       }

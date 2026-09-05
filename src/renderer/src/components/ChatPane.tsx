@@ -721,16 +721,17 @@ export default function ChatPane({ tabId, pane }: { tabId: string; pane: Pane })
                     placeholder={t('player.shareWords')}
                     onChange={(e) => setShareWords(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && shareWords.trim()) e.currentTarget.blur()
+                      if (e.key === 'Enter') e.currentTarget.blur()
                       if (e.key === 'Escape') {
                         void cancelShare(pane.channel)
                         setShareWords(null)
                       }
                     }}
                   />
+                  {/* the words are optional: their celebration goes out either way */}
                   <button
                     className="primary"
-                    disabled={sharing || !shareWords.trim()}
+                    disabled={sharing}
                     onClick={() => {
                       const words = shareWords.trim()
                       setSharing(true)

@@ -206,7 +206,7 @@ export const uk: Record<TranslationKey, string> = {
   'player.show': 'Показати стрім',
   'player.share': 'Поділитися',
   'player.shareSend': 'Надіслати',
-  'player.shareWords': 'Напиши, чим ділишся',
+  'player.shareWords': 'Можна щось написати, а можна й без тексту',
   'player.sharing': 'Публікую...',
   'player.shareFailed': 'Твіч не прийняв цей допис. Спробуй ще раз за кілька секунд.',
   'player.shareTuck': 'Згорнути в значок біля нагород каналу, поділитися можна буде пізніше',
